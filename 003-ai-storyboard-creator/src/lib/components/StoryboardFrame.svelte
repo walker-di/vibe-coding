@@ -20,7 +20,7 @@
   $: if (bgmAudioElement) bgmAudioElement.volume = 0.1; // Set BGM volume to 20%
 
   // Placeholder image - Use frame.mainImageUrl if available
-  const placeholderImage = 'https://via.placeholder.com/400x225.png/eee/aaa?text=Prompt+Output';
+  const placeholderImage = 'https://placehold.co/400x225';
 
   function handleImageError(event: Event) {
     // Assert the target is an HTMLImageElement

@@ -24,12 +24,12 @@
   let apiError: string | null = null; // State for API call errors
   let exportError: string | null = null; // State for export errors
 
-  // Get storyboardId from params (available in load function, passed via data)
-  const storyboardId = storyboard?.id;
+  // Removed top-level const storyboardId
 
   onMount(() => {
-    if (!storyboardId) {
-      console.error("Storyboard ID not found in page data!");
+    // Check directly from data prop inside onMount
+    if (!data.storyboard?.id) {
+      console.error("Storyboard ID not found in page data onMount!");
       // Handle error, maybe redirect or show message
     }
   });
@@ -45,7 +45,9 @@
 
   // Handles adding new frames to THIS storyboard
   async function handleAddFrames(event: CustomEvent) {
-    if (!storyboardId) {
+    // Get storyboardId directly from data when function is called
+    const currentStoryboardId = data.storyboard?.id;
+    if (!currentStoryboardId) {
       apiError = "Cannot add frames: Storyboard ID is missing.";
       return;
     }
@@ -55,8 +57,8 @@
     closeModal(); // Close modal immediately
 
     try {
-      // Use the new endpoint, passing storyboardId in the URL
-      const response = await fetch(`/api/storyboard/${storyboardId}/add-frame`, {
+      // Use the new endpoint, passing currentStoryboardId in the URL
+      const response = await fetch(`/api/storyboard/${currentStoryboardId}/add-frame`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +77,7 @@
 
       // Invalidate data for THIS page to trigger a refresh
       // Use the specific route ID for more targeted invalidation
-      await invalidate((url) => url.pathname === `/storyboard/${storyboardId}`);
+      await invalidate((url) => url.pathname === `/storyboard/${currentStoryboardId}`);
       // The 'frames' variable will automatically update reactively
 
     } catch (err: any) {
@@ -150,16 +152,7 @@
           const blob = await fetchAssetAsBlob(frame.bgmUrl);
           if (blob) zip.file(`${framePrefix}_bgm${getExtension(frame.bgmUrl, blob)}`, blob);
         }
-        // Add frame metadata (prompts, narration text) as a JSON file
-        const metadata = {
-            title: frame.title,
-            mainImagePrompt: frame.mainImagePrompt,
-            backgroundImagePrompt: frame.backgroundImagePrompt,
-            bgmPrompt: frame.bgmPrompt,
-            narration: frame.narration,
-            frameOrder: frame.frameOrder
-        };
-        zip.file(`${framePrefix}_metadata.json`, JSON.stringify(metadata, null, 2));
+        // Removed metadata JSON file creation and addition
 
       }));
 
@@ -185,7 +178,7 @@
   <!-- Header Row -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h1 class="mb-0">
-      <a href="/" class="text-decoration-none me-2" title="Back to Storyboards List"><i class="bi bi-arrow-left-circle"></i></a>
+      <a href="/" class="text-decoration-none me-2" title="Back to Storyboards List" aria-label="Back to Storyboards List"><i class="bi bi-arrow-left-circle"></i></a>
       Storyboard: {storyboard?.name || 'Loading...'}
       <!-- Add edit name button here later -->
     </h1>
