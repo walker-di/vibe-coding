@@ -28,7 +28,6 @@
   onMount(() => {
     // Check if metadata might have loaded before listener attached
     if (narrationAudioElement && narrationAudioElement.readyState >= 2) { // HAVE_CURRENT_DATA or higher
-      console.log(`DEBUG: Manually triggering metadata load check for frame ${frame.id} onMount.`);
       handleNarrationMetadataLoaded();
     }
   });
@@ -141,10 +140,8 @@
           narrationDuration = narrationAudioElement.duration;
           // Dispatch event with frame ID and duration
           dispatch('durationchange', { id: frame.id, duration: narrationDuration });
-          console.log(`DEBUG: Metadata loaded for frame ${frame.id}, duration: ${narrationDuration}`); // DEBUG LOG 1
       }
     } else {
-      console.log(`DEBUG: Metadata loaded event fired for frame ${frame.id}, but audio element not found.`); // DEBUG LOG 2
     }
   }
 
@@ -220,15 +217,19 @@
         <div class="mt-auto pt-2"> <!-- Removed flex container, handle layout internally -->
             <div class="d-flex flex-wrap gap-2 align-items-center"> <!-- Added inner flex container -->
                 <!-- Log URL before the #if block -->
-                {(() => { console.log(`DEBUG: Checking narrationAudioUrl for frame ${frame.id} before #if:`, frame.narrationAudioUrl); return ''; })()}
                 <!-- Narration Player -->
-                {#if frame.narrationAudioUrl}
-                  <div class="d-flex align-items-center">
-                     <span class="me-2 text-muted small">Narração:</span>
-                     <button class="btn btn-sm btn-outline-secondary py-0 px-1" on:click={toggleNarrationPlayback} title={isNarrationPlaying ? 'Pause Narration' : 'Play Narration'}>
-                         <i class:bi-play-fill={!isNarrationPlaying} class:bi-pause-fill={isNarrationPlaying} class="bi fs-6"></i>
-                     </button>
-                     <!-- Hidden narration audio element -->
+                 {#if frame.narrationAudioUrl}
+                   <div class="d-flex align-items-center">
+                      <span class="me-2 text-muted small">Narração:</span>
+                      <button
+                         class="btn btn-sm btn-outline-secondary py-0 px-1"
+                         on:click={toggleNarrationPlayback}
+                         title={isNarrationPlaying ? 'Pausar Narração' : 'Tocar Narração'}
+                         aria-label={isNarrationPlaying ? 'Pausar Narração' : 'Tocar Narração'}
+                      >
+                          <i class:bi-play-fill={!isNarrationPlaying} class:bi-pause-fill={isNarrationPlaying} class="bi fs-6"></i>
+                      </button>
+                      <!-- Hidden narration audio element -->
                      <audio
                          bind:this={narrationAudioElement}
                          src={frame.narrationAudioUrl}
@@ -244,18 +245,22 @@
                   </div>
                 {:else}
                    <!-- Log if the #if block is false -->
-                   {(() => { console.log(`DEBUG: narrationAudioUrl for frame ${frame.id} is falsy, not rendering audio player.`); return ''; })()}
                 {/if}
 
                 <!-- BGM Player -->
-                {#if frame.bgmUrl}
-                  <div class="d-flex align-items-center">
-                     <span class="me-2 text-muted small">BGM:</span>
-                     <!-- This is the BGM Play/Pause Button -->
-                     <button class="btn btn-sm btn-outline-secondary py-0 px-1" on:click={toggleBgmPlayback} title={isBgmPlaying ? 'Pause BGM' : 'Play BGM'}>
-                         <i class:bi-play-fill={!isBgmPlaying} class:bi-pause-fill={isBgmPlaying} class="bi fs-6"></i>
-                     </button>
-                     <!-- Hidden BGM audio element -->
+                 {#if frame.bgmUrl}
+                   <div class="d-flex align-items-center">
+                      <span class="me-2 text-muted small">BGM:</span>
+                      <!-- This is the BGM Play/Pause Button -->
+                       <button
+                          class="btn btn-sm btn-outline-secondary py-0 px-1"
+                          on:click={toggleBgmPlayback}
+                          title={isBgmPlaying ? 'Pausar BGM' : 'Tocar BGM'}
+                          aria-label={isBgmPlaying ? 'Pausar BGM' : 'Tocar BGM'}
+                       >
+                          <i class:bi-play-fill={!isBgmPlaying} class:bi-pause-fill={isBgmPlaying} class="bi fs-6"></i>
+                      </button>
+                      <!-- Hidden BGM audio element -->
                      <audio
                          bind:this={bgmAudioElement}
                          src={frame.bgmUrl}

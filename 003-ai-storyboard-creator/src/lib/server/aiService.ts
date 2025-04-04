@@ -402,37 +402,61 @@ export async function generateImageReplicate(
         // console.log(`Replicate run completed for frame ${frameId}. Raw output type: ${typeof output}`); // Removed log
 
         // Handle potential output formats based on observations
+        let replicateImageUrl: string | null = null;
         try {
             // Scenario 1: Output has a .url() method returning a URL object
             if (typeof (output as any)?.url === 'function') {
                 const urlObject = (output as any).url();
                 if (urlObject && typeof urlObject.href === 'string') {
-                    // console.log(`Extracted image URL via .url().href: ${urlObject.href}`); // Removed log
-                    return urlObject.href; // Return the string representation
+                    replicateImageUrl = urlObject.href;
                 } else {
                     console.error('Output had .url() but it did not return a valid URL object with .href:', urlObject);
                 }
             }
             // Scenario 2: Output is directly an array of strings
             else if (Array.isArray(output) && output.length > 0 && typeof output[0] === 'string') {
-                const imageUrl = output[0];
-                // console.log(`Extracted image URL directly from array: ${imageUrl}`); // Removed log
-                return imageUrl;
+                replicateImageUrl = output[0];
             }
             // Scenario 3: Add other checks if needed based on future logs
 
-            // If none of the above matched
-            console.error('Unexpected output format from Replicate. Could not extract URL.', output);
-            return null;
+            if (!replicateImageUrl) {
+                console.error('Unexpected output format from Replicate. Could not extract URL.', output);
+                return null;
+            }
+
+            console.log(`Extracted Replicate image URL: ${replicateImageUrl}`);
+
+            // Download the image
+            console.log(`Downloading image for frame ${frameId} from Replicate...`);
+            const imageResponse = await fetch(replicateImageUrl);
+            if (!imageResponse.ok) {
+                throw new Error(`Failed to download image from Replicate: ${imageResponse.status} ${imageResponse.statusText}`);
+            }
+            const imageArrayBuffer = await imageResponse.arrayBuffer();
+            const imageBuffer = Buffer.from(imageArrayBuffer);
+            console.log(`Downloaded image data (length: ${imageBuffer.byteLength}) for frame ${frameId}.`);
+
+            // Save the image buffer to a file
+            const imageDir = path.join('static', 'images'); // Ensure this matches the mkdir above
+            // Determine file extension based on output_format or default to .jpg
+            const extension = input.output_format === 'png' ? '.png' : '.jpg';
+            const filename = `${frameId}-${randomUUID()}${extension}`;
+            const outputPath = path.join(imageDir, filename);
+
+            await fsPromises.writeFile(outputPath, imageBuffer);
+            console.log(`Image file saved to: ${outputPath}`);
+            const relativeUrl = `/images/${filename}`; // Relative path for web access
+            console.log(`Returning local image URL for frame ${frameId}: ${relativeUrl}`);
+            return relativeUrl; // Return the local URL
 
         } catch (processingError) {
-             console.error('Error processing Replicate output:', processingError);
+             console.error('Error processing Replicate output or downloading/saving image:', processingError);
              console.error('Original Replicate output was:', output);
              return null;
         }
 
     } catch (err: any) {
-        console.error(`Error running Replicate model ${modelIdentifier}:`, err);
+        console.error(`Error running Replicate model ${modelIdentifier} or processing its output:`, err);
         // Return null or throw a specific error
         return null;
     }

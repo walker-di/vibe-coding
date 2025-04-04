@@ -27,14 +27,14 @@
 		"vite": "^6.0.0"
 	},
 	"dependencies": {
+		"@ffmpeg/ffmpeg": "^0.12.15",
+		"@ffmpeg/util": "^0.12.2",
 		"@google/generative-ai": "^0.24.0",
 		"@popperjs/core": "^2.11.8",
-		"@types/file-saver": "^2.0.7",
 		"@types/jszip": "^3.4.0",
 		"better-sqlite3": "^11.8.0",
 		"bootstrap": "^5.3.3",
 		"drizzle-orm": "^0.40.0",
-		"file-saver": "^2.0.5",
 		"jszip": "^3.10.1",
 		"microsoft-cognitiveservices-speech-sdk": "^1.43.0",
 		"replicate": "^1.0.1",
