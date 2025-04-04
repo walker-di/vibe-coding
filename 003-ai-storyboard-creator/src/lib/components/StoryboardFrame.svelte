@@ -2,9 +2,11 @@
   import type { StoryboardFrameDb } from '$lib/types/storyboard'; // Use the DB schema type
   import { selectedVoice } from '$lib/stores/voiceStore'; // Import the voice store
   import { get } from 'svelte/store'; // To get the current store value non-reactively
-  // import { invalidateAll } from '$app/navigation'; // To refresh data after generation (commented out as planned)
+  import { createEventDispatcher, onMount } from 'svelte'; // Import onMount
 
   export let frame: StoryboardFrameDb;
+
+  const dispatch = createEventDispatcher<{ durationchange: { id: string, duration: number } }>();
 
   // Loading state per asset type - Add bgmAudio
   let isGenerating: { [key in 'mainImage' | 'backgroundImage' | 'narrationAudio' | 'bgmAudio']?: boolean } = {};
@@ -13,6 +15,7 @@
   // Narration Audio State
   let narrationAudioElement: HTMLAudioElement | null = null; // Reference to the narration audio element
   let isNarrationPlaying = false; // Track narration playback state
+  let narrationDuration: number | null = null; // Store narration duration in seconds
 
   // BGM Audio State
   let bgmAudioElement: HTMLAudioElement | null = null; // Reference to the BGM audio element
@@ -21,6 +24,14 @@
 
   // Placeholder image - Use frame.mainImageUrl if available
   const placeholderImage = 'https://placehold.co/400x225';
+
+  onMount(() => {
+    // Check if metadata might have loaded before listener attached
+    if (narrationAudioElement && narrationAudioElement.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+      console.log(`DEBUG: Manually triggering metadata load check for frame ${frame.id} onMount.`);
+      handleNarrationMetadataLoaded();
+    }
+  });
 
   function handleImageError(event: Event) {
     // Assert the target is an HTMLImageElement
@@ -68,6 +79,7 @@
             // If audio was regenerated, reset playback state
             if (assetType === 'narrationAudio' && narrationAudioElement) {
                 isNarrationPlaying = false;
+                narrationDuration = null; // Reset duration as it needs recalculation
                 // narrationAudioElement.load(); // Optional: force reload
             }
             if (assetType === 'bgmAudio' && bgmAudioElement) {
@@ -109,6 +121,41 @@
           bgmAudioElement.pause();
       }
       // isBgmPlaying state is updated by the on:play/on:pause listeners
+  }
+
+  // Function to format seconds into MM:SS
+  function formatDuration(seconds: number | null | undefined): string {
+    if (seconds === null || seconds === undefined || !isFinite(seconds)) {
+      return '--:--';
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  // Handler for when audio metadata (including duration) is loaded
+  function handleNarrationMetadataLoaded() {
+    if (narrationAudioElement) {
+      // Check if duration is already set to avoid redundant updates/dispatches
+      if (narrationDuration !== narrationAudioElement.duration) {
+          narrationDuration = narrationAudioElement.duration;
+          // Dispatch event with frame ID and duration
+          dispatch('durationchange', { id: frame.id, duration: narrationDuration });
+          console.log(`DEBUG: Metadata loaded for frame ${frame.id}, duration: ${narrationDuration}`); // DEBUG LOG 1
+      }
+    } else {
+      console.log(`DEBUG: Metadata loaded event fired for frame ${frame.id}, but audio element not found.`); // DEBUG LOG 2
+    }
+  }
+
+  // Handler for audio loading errors
+  function handleNarrationAudioError(event: Event) {
+      console.error(`DEBUG: Error loading narration audio for frame ${frame.id}. Event:`, event);
+      const audioElement = event.target as HTMLAudioElement;
+      if (audioElement.error) {
+          console.error(`DEBUG: Audio error code: ${audioElement.error.code}, message: ${audioElement.error.message}`);
+      }
+      narrationDuration = null; // Ensure duration is reset on error
   }
 
 </script>
@@ -172,6 +219,8 @@
         <!-- Audio Controls -->
         <div class="mt-auto pt-2"> <!-- Removed flex container, handle layout internally -->
             <div class="d-flex flex-wrap gap-2 align-items-center"> <!-- Added inner flex container -->
+                <!-- Log URL before the #if block -->
+                {(() => { console.log(`DEBUG: Checking narrationAudioUrl for frame ${frame.id} before #if:`, frame.narrationAudioUrl); return ''; })()}
                 <!-- Narration Player -->
                 {#if frame.narrationAudioUrl}
                   <div class="d-flex align-items-center">
@@ -186,9 +235,16 @@
                          on:play={() => isNarrationPlaying = true}
                          on:pause={() => isNarrationPlaying = false}
                          on:ended={() => isNarrationPlaying = false}
+                         on:loadedmetadata={handleNarrationMetadataLoaded}
+                         on:error={handleNarrationAudioError}
                          preload="metadata"
                      ></audio>
+                     <!-- Display Narration Duration next to button -->
+                     <span class="text-muted small ms-1">({formatDuration(narrationDuration)})</span>
                   </div>
+                {:else}
+                   <!-- Log if the #if block is false -->
+                   {(() => { console.log(`DEBUG: narrationAudioUrl for frame ${frame.id} is falsy, not rendering audio player.`); return ''; })()}
                 {/if}
 
                 <!-- BGM Player -->

@@ -9,6 +9,7 @@
   import JSZip from 'jszip';
   import fileSaver from 'file-saver'; // Use default import
   import { onMount } from 'svelte';
+  import { tick } from 'svelte'; // Import tick for waiting for DOM updates
 
   export let data: PageData; // Receive data from load function
 
@@ -23,6 +24,12 @@
   let isExporting = false; // State for export loading
   let apiError: string | null = null; // State for API call errors
   let exportError: string | null = null; // State for export errors
+
+  // Store individual frame durations
+  let frameDurations: { [key: string]: number } = {};
+
+  // Calculate total duration reactively
+  $: totalDuration = Object.values(frameDurations).reduce((sum, duration) => sum + (duration || 0), 0);
 
   // Removed top-level const storyboardId
 
@@ -41,6 +48,25 @@
 
   function closeModal() {
     showModal = false;
+  }
+
+  // Function to handle duration change event from child components
+  function handleDurationChange(event: CustomEvent<{ id: string, duration: number }>) {
+    const { id, duration } = event.detail;
+    if (id && typeof duration === 'number' && isFinite(duration)) {
+      frameDurations = { ...frameDurations, [id]: duration };
+      console.log(`Duration updated for frame ${id}: ${duration}. Total: ${totalDuration}`);
+    }
+  }
+
+  // Function to format seconds into MM:SS (copied from child component for now)
+  function formatDuration(seconds: number | null | undefined): string {
+    if (seconds === null || seconds === undefined || !isFinite(seconds)) {
+      return '--:--';
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
   // Handles adding new frames to THIS storyboard
@@ -176,7 +202,7 @@
 
 <div class="container mt-4">
   <!-- Header Row -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-2"> <!-- Reduced bottom margin -->
     <h1 class="mb-0">
       <a href="/" class="text-decoration-none me-2" title="Back to Storyboards List" aria-label="Back to Storyboards List"><i class="bi bi-arrow-left-circle"></i></a>
       Storyboard: {storyboard?.name || 'Loading...'}
@@ -206,6 +232,12 @@
       </button>
     </div>
   </div>
+
+  <!-- Total Duration Display -->
+  <div class="text-muted mb-4"> <!-- Added margin bottom -->
+      Duração Total da Narração: <strong>{formatDuration(totalDuration)}</strong>
+  </div>
+
 
   <!-- Loading Indicator for adding frames -->
   {#if isLoading}
@@ -246,7 +278,7 @@
     {#if frames.length > 0}
       <!-- Render frames sorted by frameOrder -->
       {#each frames.sort((a, b) => (a.frameOrder ?? 0) - (b.frameOrder ?? 0)) as frame (frame.id)}
-        <StoryboardFrameComponent frame={frame} />
+        <StoryboardFrameComponent frame={frame} on:durationchange={handleDurationChange} />
       {/each}
     {:else if !loadError && !isLoading}
       <p class="text-center text-muted">Nenhum quadro criado ainda para este storyboard. Clique em "Adicionar Quadros" para começar.</p>
