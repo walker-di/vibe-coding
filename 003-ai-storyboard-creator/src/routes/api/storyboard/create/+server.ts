@@ -1,64 +1,38 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db'; // Import db instance
-import { storyboardFrames } from '$lib/server/db/schema'; // Import schema
-import { generateStoryboardFrames } from '$lib/server/aiService'; // Import AI service
+import { storyboards } from '$lib/server/db/schema'; // Import storyboards schema
 import { randomUUID } from 'crypto'; // For generating IDs
-import type { AIGeneratedFrame } from '$lib/types/storyboard';
 
+// This endpoint now creates a new storyboard entry, not frames.
 export const POST: RequestHandler = async ({ request }) => {
   let requestData;
   try {
     requestData = await request.json();
     console.log('Received data at /api/storyboard/create:', requestData);
 
-    // Validate incoming data: expect 'storyPrompt' and optional 'title'
-    if (!requestData.storyPrompt || typeof requestData.storyPrompt !== 'string') {
-        throw error(400, 'Missing or invalid "storyPrompt" in request body');
-    }
-    const storyPrompt: string = requestData.storyPrompt;
-    const title: string | null = requestData.title || null; // Get optional title
-
-    // --- Call AI Service ---
-    console.log(`Calling AI service with prompt: "${storyPrompt}"`);
-    const generatedFrames: AIGeneratedFrame[] = await generateStoryboardFrames(storyPrompt);
-    console.log(`AI service returned ${generatedFrames.length} frames.`);
-
-    if (!generatedFrames || generatedFrames.length === 0) {
-        throw error(500, 'AI failed to generate any storyboard frames.');
-    }
+    // Validate incoming data: expect optional 'name'
+    const name: string = (requestData.name && typeof requestData.name === 'string')
+      ? requestData.name
+      : 'Untitled Storyboard'; // Use default if name is missing or invalid
 
     // --- Prepare Data for Database Insert ---
-    const framesToInsert = generatedFrames.map((aiFrame, index) => ({
-      id: randomUUID(), // Generate a unique ID for each frame
-      // Use the provided title only for the first frame, or maybe add frame index?
-      title: index === 0 ? title : (title ? `${title} - Frame ${index + 1}`: `Frame ${index + 1}`),
-      // Map AI output to DB schema fields
-      mainImagePrompt: aiFrame.mainImage,
-      backgroundImagePrompt: aiFrame.backgroundImage,
-      bgmPrompt: aiFrame.bgm,
-      narration: aiFrame.narration,
-      // Placeholders for actual URLs - these would be populated by separate image generation steps later
-      mainImageUrl: null,
-      backgroundImageUrl: null,
-      bgmUrl: null,
+    const newStoryboardId = randomUUID();
+    const storyboardToInsert = {
+      id: newStoryboardId,
+      name: name,
       // createdAt will be set by the database default
-    }));
+    };
 
-    // --- Database Insert (Bulk) ---
-    // Note: better-sqlite3 driver in Drizzle might not support returning() clause well.
-    // We insert and assume success for now.
-    await db.insert(storyboardFrames).values(framesToInsert);
-    console.log(`Inserted ${framesToInsert.length} frames into DB.`);
+    // --- Database Insert ---
+    await db.insert(storyboards).values(storyboardToInsert);
+    console.log(`Inserted new storyboard with ID: ${newStoryboardId} and name: "${name}"`);
 
     // --- Return Response ---
-    // Return the number of frames created, or maybe the first frame?
-    // Returning all frames might be too large. Let's return a success message.
+    // Return the ID of the newly created storyboard
     return json({
-        message: `Successfully generated and saved ${framesToInsert.length} storyboard frames.`,
-        frameCount: framesToInsert.length,
-        // Optionally return IDs if needed by frontend for immediate update without full refresh
-        // createdIds: framesToInsert.map(f => f.id)
+        message: `Successfully created storyboard "${name}".`,
+        storyboardId: newStoryboardId
     }, { status: 201 });
 
   } catch (err: any) {
@@ -68,11 +42,11 @@ export const POST: RequestHandler = async ({ request }) => {
     if (err instanceof SyntaxError) {
       return error(400, 'Invalid JSON in request body');
     }
-    // Handle errors thrown from AI service or validation
-    if (err.status) {
+    // Handle errors thrown during DB insert or validation
+    if (err.status) { // Re-throw kit errors
         return error(err.status, err.body?.message || 'API Error');
     }
     // Generic internal server error
-    return error(500, 'Internal Server Error');
+    return error(500, 'Internal Server Error creating storyboard');
   }
 };

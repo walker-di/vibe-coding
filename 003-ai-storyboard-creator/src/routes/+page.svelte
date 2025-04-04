@@ -1,38 +1,26 @@
 <script lang="ts">
-  import StoryboardFrameComponent from '$lib/components/StoryboardFrame.svelte';
-  import CreationModal from '$lib/components/CreationModal.svelte';
-  import type { StoryboardFrameDb } from '$lib/types/storyboard'; // Use the DB schema type
-  import type { PageData } from './$types'; // Import PageData type
-  import { invalidateAll } from '$app/navigation'; // For refreshing data
-  import { selectedVoice, ptBRVoices } from '$lib/stores/voiceStore'; // Import voice store and list
-  import JSZip from 'jszip';
-  import fileSaver from 'file-saver'; // Use default import
+  import type { PageData } from './$types'; // Import PageData type for load function result
+  import { goto } from '$app/navigation'; // For navigation after creation
+  import { onMount } from 'svelte';
 
   export let data: PageData; // Receive data from load function
-  // data.frames should already be StoryboardFrameDb[] from the load function
-  $: frames = data.frames || [];
+  // data.storyboards should be { id: string, name: string, createdAt: string | null }[]
+  $: storyboards = data.storyboards || [];
   $: loadError = data.error; // Get potential error message from load
 
-  let showModal = false;
   let isLoading = false; // State for API call loading
-  let isExporting = false; // State for export loading
   let apiError: string | null = null; // State for API call errors
-  let exportError: string | null = null; // State for export errors
+  let newStoryboardName: string = ''; // Input for new storyboard name
 
-  function openModal() {
-    apiError = null; // Clear previous errors when opening modal
-    showModal = true;
-  }
+  // Function to handle creating a new storyboard
+  async function handleCreateStoryboard() {
+    if (!newStoryboardName.trim()) {
+      apiError = 'Please enter a name for the new storyboard.';
+      return;
+    }
 
-  function closeModal() {
-    showModal = false;
-  }
-
-  async function handleCreateFrame(event: CustomEvent) {
-    console.log('Create frame event received:', event.detail);
     isLoading = true;
     apiError = null;
-    closeModal(); // Close modal immediately
 
     try {
       const response = await fetch('/api/storyboard/create', {
@@ -40,7 +28,7 @@
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(event.detail), // Send prompts from modal
+        body: JSON.stringify({ name: newStoryboardName }), // Send the name
       });
 
       if (!response.ok) {
@@ -48,169 +36,82 @@
         throw new Error(errorData.message || `API Error: ${response.statusText}`);
       }
 
-      // API now returns a success message, not the frame data
-      const result = await response.json(); // Read the success message
+      const result = await response.json(); // Read the success message and new ID
       console.log('API Response:', result);
 
-      // Invalidate all loaded data to trigger a refresh from the server load function
-      await invalidateAll();
-      // The 'frames' variable will automatically update reactively when 'data' changes
+      if (result.storyboardId) {
+        // Navigate to the newly created storyboard's page
+        await goto(`/storyboard/${result.storyboardId}`);
+      } else {
+        throw new Error('API did not return a storyboard ID.');
+      }
 
     } catch (err: any) {
       console.error('Failed to create storyboard:', err);
-      apiError = err.message || 'An unknown error occurred while creating the frame.';
-      // Optionally re-open modal on error? Or show error message elsewhere.
-      // showModal = true;
+      apiError = err.message || 'An unknown error occurred while creating the storyboard.';
     } finally {
       isLoading = false;
+      newStoryboardName = ''; // Clear input field
     }
   }
 
-  // Helper function to fetch asset and return as Blob
-  async function fetchAssetAsBlob(url: string): Promise<Blob | null> {
+  // Optional: Function to format date nicely
+  function formatDate(dateString: string | null | undefined): string {
+    if (!dateString) return 'N/A';
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.warn(`Failed to fetch asset: ${url}, Status: ${response.status}`);
-        return null; // Skip if fetch fails
-      }
-      return await response.blob();
-    } catch (error) {
-      console.error(`Error fetching asset ${url}:`, error);
-      return null; // Skip on network or other errors
-    }
-  }
-
-  // Helper function to get extension from URL or MIME type
-  function getExtension(url: string | null, blob: Blob | null): string {
-      if (blob?.type) {
-          const parts = blob.type.split('/');
-          if (parts.length === 2) {
-              // Basic mapping, can be expanded
-              if (parts[1] === 'mpeg') return '.mp3';
-              if (parts[1] === 'jpeg') return '.jpg';
-              return `.${parts[1]}`; // e.g., .png, .gif
-          }
-      }
-      // Fallback: try guessing from URL
-      if (url) {
-          const match = url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/);
-          if (match) return `.${match[1]}`;
-      }
-      // Default if unable to determine
-      return '.bin';
-  }
-
-
-  async function exportAllFrames() {
-    if (isExporting || !frames || frames.length === 0) return;
-
-    isExporting = true;
-    exportError = null;
-    const zip = new JSZip();
-
-    try {
-      // Use Promise.all to fetch assets concurrently for efficiency
-      await Promise.all(frames.map(async (frame, index) => {
-        const frameNumber = index + 1;
-
-        // Fetch and add background image
-        if (frame.backgroundImageUrl) {
-          const blob = await fetchAssetAsBlob(frame.backgroundImageUrl);
-          if (blob) {
-            const extension = getExtension(frame.backgroundImageUrl, blob);
-            zip.file(`Frame_${frameNumber}_bg${extension}`, blob);
-          }
-        }
-
-        // Fetch and add main image
-        if (frame.mainImageUrl) {
-          const blob = await fetchAssetAsBlob(frame.mainImageUrl);
-          if (blob) {
-             const extension = getExtension(frame.mainImageUrl, blob);
-             zip.file(`Frame_${frameNumber}_main${extension}`, blob);
-          }
-        }
-
-        // Fetch and add narration audio
-        if (frame.narrationAudioUrl) {
-          const blob = await fetchAssetAsBlob(frame.narrationAudioUrl);
-           if (blob) {
-             const extension = getExtension(frame.narrationAudioUrl, blob); // Assume mp3 if unknown
-             zip.file(`Frame_${frameNumber}_narration${extension}`, blob);
-           }
-        }
-
-        // Fetch and add BGM audio
-        if (frame.bgmUrl) {
-          const blob = await fetchAssetAsBlob(frame.bgmUrl);
-           if (blob) {
-             const extension = getExtension(frame.bgmUrl, blob); // Assume mp3 if unknown
-             zip.file(`Frame_${frameNumber}_bgm${extension}`, blob);
-           }
-        }
-      }));
-
-      // Generate the zip file and trigger download
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      fileSaver.saveAs(zipBlob, 'storyboard_export.zip'); // Use default import object
-
-    } catch (err: any) {
-      console.error('Failed to export storyboard:', err);
-      exportError = `Export failed: ${err.message || 'Unknown error'}`;
-    } finally {
-      isExporting = false;
+      return new Date(dateString).toLocaleDateString('pt-BR', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    } catch (e) {
+      return 'Invalid Date';
     }
   }
 
 </script>
 
+<svelte:head>
+  <title>My Storyboards</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+</svelte:head>
+
 <div class="container mt-4">
   <!-- Header Row -->
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">AI Storyboard Creator</h1>
-    <div class="d-flex align-items-center"> <!-- Wrap controls for alignment -->
-      <!-- Voice Selection Dropdown -->
-      <div class="me-3"> <!-- Add margin to the right -->
-        <label for="voiceSelect" class="form-label visually-hidden">Voz da Narração</label> <!-- Hidden label for accessibility -->
-        <select id="voiceSelect" class="form-select form-select-sm" bind:value={$selectedVoice}>
-          {#each ptBRVoices as voice}
-            <option value={voice.value}>{voice.name}</option>
-          {/each}
-        </select>
-      </div>
+    <h1 class="mb-0">Meus Storyboards</h1>
+    <!-- Removed voice selection and export button -->
+  </div>
 
-      <button class="btn btn-primary me-2" on:click={openModal} disabled={isLoading || isExporting}>
-        <i class="bi bi-plus-lg me-1"></i> Criar Novo
-      </button>
-      <button class="btn btn-outline-secondary" on:click={exportAllFrames} disabled={isExporting || isLoading || frames.length === 0}>
-        {#if isExporting}
-          <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-          Exportando...
-        {:else}
-          <i class="bi bi-box-arrow-up me-1"></i> Exportar Tudo
-        {/if}
-      </button>
+  <!-- Create New Storyboard Section -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">Criar Novo Storyboard</h5>
+      <div class="input-group">
+        <input
+          type="text"
+          class="form-control"
+          placeholder="Nome do novo storyboard..."
+          bind:value={newStoryboardName}
+          on:keydown={(e) => e.key === 'Enter' && handleCreateStoryboard()}
+          disabled={isLoading}
+        />
+        <button
+          class="btn btn-primary"
+          on:click={handleCreateStoryboard}
+          disabled={isLoading || !newStoryboardName.trim()}
+        >
+          {#if isLoading}
+            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            Criando...
+          {:else}
+            <i class="bi bi-plus-lg me-1"></i> Criar
+          {/if}
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Loading Indicator -->
-  {#if isLoading}
-    <div class="d-flex justify-content-center my-3">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-       <span class="ms-2">Gerando quadro...</span>
-    </div>
-  {/if}
 
-  <!-- Export Error Display -->
-   {#if exportError}
-       <div class="alert alert-danger alert-dismissible fade show" role="alert">
-         {exportError}
-         <button type="button" class="btn-close" on:click={() => exportError = null} aria-label="Close"></button>
-       </div>
-   {/if}
+  <!-- Loading Indicator for initial load (if needed, handled by load function) -->
 
   <!-- API Error Display -->
    {#if apiError}
@@ -228,30 +129,24 @@
    {/if}
 
 
-  <!-- Storyboard Frames List -->
-  <div class="mb-3">
-    {#if frames.length > 0}
-      {#each frames as frame (frame.id)} <!-- Use frame.id for the key -->
-        <StoryboardFrameComponent frame={frame} /> <!-- Pass frame data as prop -->
+  <!-- Storyboards List -->
+  <div class="list-group">
+    {#if storyboards.length > 0}
+      {#each storyboards as storyboard (storyboard.id)}
+        <a href="/storyboard/{storyboard.id}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <i class="bi bi-journal-richtext me-2"></i>
+            {storyboard.name || 'Storyboard Sem Título'}
+          </span>
+          <small class="text-muted">Criado em: {formatDate(storyboard.createdAt)}</small>
+          <!-- Add Edit/Delete buttons here later if needed -->
+        </a>
       {/each}
-    {:else}
-      <p class="text-center text-muted">Nenhum quadro criado ainda. Clique em "Criar Novo" para começar.</p>
+    {:else if !loadError}
+      <p class="text-center text-muted mt-4">Nenhum storyboard encontrado. Crie um novo para começar!</p>
     {/if}
   </div>
 
-  <!-- Add Button (alternative trigger) -->
-   <div class="text-center mb-4">
-     <button class="btn btn-outline-primary" on:click={openModal}>
-       + Adicionar Quadro
-     </button>
-   </div>
-
 </div>
 
-<!-- Creation Modal -->
-<CreationModal bind:show={showModal} on:close={closeModal} on:create={handleCreateFrame} />
-
-<!-- Add Bootstrap Icons CSS (if not already globally included) -->
-<svelte:head>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-</svelte:head>
+<!-- Removed CreationModal -->

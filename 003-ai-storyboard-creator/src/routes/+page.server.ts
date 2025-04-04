@@ -1,34 +1,40 @@
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { storyboardFrames } from '$lib/server/db/schema';
+import { storyboards } from '$lib/server/db/schema'; // Import the storyboards table schema
 import { desc } from 'drizzle-orm';
-import type { StoryboardFrame } from '$lib/types/storyboard';
+// Remove unused StoryboardFrame type import
+// import type { StoryboardFrame } from '$lib/types/storyboard';
 
 export const load: PageServerLoad = async () => {
   try {
-    // Fetch frames directly from the database on the server
-    const framesFromDb = await db.select().from(storyboardFrames).orderBy(desc(storyboardFrames.createdAt));
+    // Fetch storyboards directly from the database on the server
+    const storyboardList = await db.select({
+        id: storyboards.id,
+        name: storyboards.name,
+        createdAt: storyboards.createdAt
+      })
+      .from(storyboards)
+      .orderBy(desc(storyboards.createdAt));
 
-    console.log(`Fetched ${framesFromDb.length} frames from DB in +page.server.ts`);
+    console.log(`Fetched ${storyboardList.length} storyboards from DB in +page.server.ts`);
 
-    // Ensure dates are serializable (though they should be Date objects from Drizzle)
-    // Map to the StoryboardFrame type for type safety, converting date if needed
-    const frames: StoryboardFrame[] = framesFromDb.map(frame => ({
-        ...frame,
-        // Drizzle returns Date objects for timestamp_ms, no conversion needed for passing to page
-        // createdAt: frame.createdAt ? frame.createdAt.toISOString() : undefined
+    // Convert dates to ISO strings for consistent handling in the frontend component
+    const storyboardsForPage = storyboardList.map(sb => ({
+        ...sb,
+        createdAt: sb.createdAt ? sb.createdAt.toISOString() : null
     }));
 
+
     return {
-      frames // Pass the fetched frames to the +page.svelte component
+      storyboards: storyboardsForPage // Pass the fetched storyboards (with string dates) to the +page.svelte component
     };
 
   } catch (err: any) {
-    console.error('Error fetching storyboard frames in +page.server.ts:', err);
+    console.error('Error fetching storyboards in +page.server.ts:', err);
     // Return an empty array or an error state to the page
     return {
-        frames: [],
-        error: 'Failed to load storyboard frames.'
+        storyboards: [],
+        error: 'Failed to load storyboards.'
     };
   }
 };
