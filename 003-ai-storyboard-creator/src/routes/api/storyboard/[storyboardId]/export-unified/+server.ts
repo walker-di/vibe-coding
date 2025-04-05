@@ -355,7 +355,8 @@ export const GET: RequestHandler = async (event) => {
                         }
 
                         const offset = Math.max(0, previousDuration - transitionDuration);
-                        const filterComplex = `[0:v][1:v]xfade=transition=${safeTransitionType}:duration=${transitionDuration.toFixed(3)}:offset=${offset.toFixed(3)}[vout];[0:a][1:a]concat=n=2:v=0:a=1[aout]`;
+                        // Use acrossfade for audio when using xfade for video
+                        const filterComplex = `[0:v][1:v]xfade=transition=${safeTransitionType}:duration=${transitionDuration.toFixed(3)}:offset=${offset.toFixed(3)}[vout];[0:a][1:a]acrossfade=d=${transitionDuration.toFixed(3)}:o=1[aout]`;
 
                         concatCommand = [
                             ...inputs,
