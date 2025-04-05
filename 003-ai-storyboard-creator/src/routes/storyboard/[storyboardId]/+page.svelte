@@ -23,12 +23,13 @@
 
   let showModal = false;
   let isLoading = false; // State for API call loading (adding frames)
-  let isExportingVideo = false; // Renamed state for video export loading
+  let isExportingFrames = false; // State for individual frame export loading
   let isExportingZip = false; // Added state for ZIP export loading
+  let isExportingUnified = false; // State for unified video export loading
   let apiError: string | null = null; // State for API call errors
   let exportError: string | null = null; // State for export errors (can be shared or separated)
-  let exportProgress = 0; // Generic progress for backend export (0 to 1)
-  let exportLogMessages: string[] = []; // Generic logs for backend export
+  let exportProgress = 0; // Generic progress for backend frame export (0 to 1)
+  let exportLogMessages: string[] = []; // Generic logs for backend frame export
 
   // FFmpeg state REMOVED
 
@@ -223,24 +224,24 @@
   }
 
 
-  // Function to export frames using the backend API
-  async function exportAllFrames() {
-    console.log("--- exportAllFrames START (Backend) ---");
-    exportLogMessages = ['--- exportAllFrames START (Backend) ---'];
+  // Function to export individual frames using the backend API
+  async function exportIndividualFrames() {
+    console.log("--- exportIndividualFrames START (Backend) ---");
+    exportLogMessages = ['--- exportIndividualFrames START (Backend) ---'];
 
     // Check basic conditions
-    if (isExportingVideo || !frames || frames.length === 0 || !storyboard) {
-        console.log(`Frame export skipped: isExportingVideo=${isExportingVideo}, frames=${frames?.length}, storyboard=${!!storyboard}`);
+    if (isExportingFrames || !frames || frames.length === 0 || !storyboard) { // Use isExportingFrames
+        console.log(`Frame export skipped: isExportingFrames=${isExportingFrames}, frames=${frames?.length}, storyboard=${!!storyboard}`);
         if (!frames || frames.length === 0) {
-            exportError = "No frames to export.";
+            exportError = "No frames to export."; // Keep error message generic
         }
         return;
     }
 
-    isExportingVideo = true;
+    isExportingFrames = true; // Use isExportingFrames
     exportError = null;
     exportProgress = 0;
-    exportLogMessages = ['Starting backend video export...'];
+    exportLogMessages = ['Starting backend individual frame export...']; // Update log message
     const safeStoryboardName = storyboard.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'storyboard';
 
     try {
@@ -312,12 +313,73 @@
 
     } catch (err: any) {
       console.error('Failed during frame export process:', err);
-      exportError = `Video export failed: ${err.message || 'Unknown error'}`;
+      exportError = `Individual frame export failed: ${err.message || 'Unknown error'}`; // Update error message
       exportLogMessages = [...exportLogMessages, `Error: ${exportError}`];
     } finally {
-      isExportingVideo = false; // Use correct state variable
-      console.log("--- exportAllFrames END (Backend) ---");
-      exportLogMessages = [...exportLogMessages, '--- exportAllFrames END (Backend) ---'];
+      isExportingFrames = false; // Use isExportingFrames
+      console.log("--- exportIndividualFrames END (Backend) ---"); // Update log message
+      exportLogMessages = [...exportLogMessages, '--- exportIndividualFrames END (Backend) ---']; // Update log message
+    }
+  }
+
+  // Function to export the unified video using the backend API
+  async function exportUnifiedVideo() {
+    console.log("--- exportUnifiedVideo START (Backend) ---");
+
+    // Check basic conditions
+    if (isExportingUnified || isExportingFrames || isExportingZip || !frames || frames.length === 0 || !storyboard) {
+      console.log(`Unified export skipped: isExportingUnified=${isExportingUnified}, isExportingFrames=${isExportingFrames}, isExportingZip=${isExportingZip}, frames=${frames?.length}, storyboard=${!!storyboard}`);
+      if (!frames || frames.length === 0) {
+        exportError = "No frames to export.";
+      }
+      return;
+    }
+
+    isExportingUnified = true;
+    exportError = null;
+    // Note: Progress tracking for unified export is not implemented on the backend yet
+    // exportProgress = 0;
+    // exportLogMessages = ['Starting unified video export...'];
+    const safeStoryboardName = storyboard.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'storyboard';
+
+    try {
+      console.log(`Calling API: /api/storyboard/${storyboard.id}/export-unified`);
+      const response = await fetch(`/api/storyboard/${storyboard.id}/export-unified`);
+
+      if (!response.ok) {
+        let errorMsg = `API Error (${response.status}): ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (e) { /* Ignore if response is not JSON */ }
+        throw new Error(errorMsg);
+      }
+
+      // Get video data as Blob
+      const videoBlob = await response.blob();
+      console.log(`Received unified video blob from backend (size: ${videoBlob.size})`);
+
+      // Trigger download
+      const outputFilename = `${safeStoryboardName}_unified.mp4`;
+      const url = URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = outputFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      console.log(`Download initiated for ${outputFilename}.`);
+
+    } catch (err: any) {
+      console.error('Failed during unified video export process:', err);
+      exportError = `Unified Video export failed: ${err.message || 'Unknown error'}`;
+      // exportLogMessages = [...exportLogMessages, `Error: ${exportError}`];
+    } finally {
+      isExportingUnified = false;
+      console.log("--- exportUnifiedVideo END (Backend) ---");
+      // exportLogMessages = [...exportLogMessages, '--- exportUnifiedVideo END (Backend) ---'];
     }
   }
 
@@ -347,27 +409,36 @@
         </select>
       </div>
 
-      <button class="btn btn-success me-2" on:click={openModal} disabled={isLoading || isExportingVideo || isExportingZip}>
-        <i class="bi bi-film me-1"></i> Adicionar Quadros
+      <button class="btn btn-success me-2" on:click={openModal} disabled={isLoading || isExportingFrames || isExportingZip || isExportingUnified}>
+        <i class="bi bi-plus-circle me-1"></i> Adicionar Quadros
       </button>
-      <!-- Add ZIP Export Button Back -->
-      <button class="btn btn-outline-secondary me-2" on:click={exportStoryboardFrames} disabled={isExportingZip || isLoading || frames.length === 0 || isExportingVideo}>
+      <!-- ZIP Export Button -->
+      <button class="btn btn-outline-secondary me-2" on:click={exportStoryboardFrames} disabled={isExportingZip || isLoading || frames.length === 0 || isExportingFrames || isExportingUnified}>
         {#if isExportingZip}
           <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
           Exportando ZIP...
         {:else}
-          <i class="bi bi-box-arrow-up me-1"></i> Exportar Arquivos
+          <i class="bi bi-file-earmark-zip me-1"></i> Exportar Arquivos
         {/if}
       </button>
-      <!-- Frame Export Button -->
-      <button class="btn btn-primary" on:click={exportAllFrames} disabled={isExportingVideo || isLoading || frames.length === 0 || isExportingZip}>
-        {#if isExportingVideo}
+      <!-- Individual Frame Export Button -->
+      <button class="btn btn-outline-primary me-2" on:click={exportIndividualFrames} disabled={isExportingFrames || isLoading || frames.length === 0 || isExportingZip || isExportingUnified}>
+        {#if isExportingFrames}
           <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-          Exportando Quadros ({ (exportProgress * 100).toFixed(0) }%) <!-- Use exportProgress -->
+          Exportando Quadros ({ (exportProgress * 100).toFixed(0) }%)
         {:else}
-          <i class="bi bi-film me-1"></i> Exportar Quadros
+          <i class="bi bi-film me-1"></i> Exportar Quadros (Separados)
         {/if}
       </button>
+       <!-- Unified Video Export Button -->
+       <button class="btn btn-primary" on:click={exportUnifiedVideo} disabled={isExportingUnified || isLoading || frames.length === 0 || isExportingZip || isExportingFrames}>
+         {#if isExportingUnified}
+           <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+           Exportando Vídeo...
+         {:else}
+           <i class="bi bi-collection-play me-1"></i> Exportar Vídeo Unificado
+         {/if}
+       </button>
     </div>
   </div>
 
@@ -391,16 +462,16 @@
 
   <!-- Export Error Display -->
    <!-- Export Status/Error Display -->
-   {#if isExportingVideo || isExportingZip || exportError}
+   {#if isExportingFrames || isExportingZip || isExportingUnified || exportError}
        <div class="alert {exportError ? 'alert-danger' : 'alert-info'} alert-dismissible fade show mt-3" role="alert">
-         {#if isExportingVideo} <!-- Still using isExportingVideo state -->
+         {#if isExportingFrames}
             <div>
-                <strong>Exportando quadros...</strong> ({ (exportProgress * 100).toFixed(0) }%) <!-- Use exportProgress -->
+                <strong>Exportando quadros separados...</strong> ({ (exportProgress * 100).toFixed(0) }%)
                 <div class="progress mt-2" style="height: 5px;">
-                    <div class="progress-bar" role="progressbar" style="width: {exportProgress * 100}%" aria-valuenow={exportProgress * 100} aria-valuemin="0" aria-valuemax="100"></div> <!-- Use exportProgress -->
+                    <div class="progress-bar" role="progressbar" style="width: {exportProgress * 100}%" aria-valuenow={exportProgress * 100} aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
-                {#if exportLogMessages.length > 0} <!-- Use exportLogMessages -->
-                    <pre class="mt-2 small bg-light p-2 rounded" style="max-height: 100px; overflow-y: auto;"><code>{exportLogMessages[exportLogMessages.length - 1]}</code></pre> <!-- Use exportLogMessages -->
+                {#if exportLogMessages.length > 0}
+                    <pre class="mt-2 small bg-light p-2 rounded" style="max-height: 100px; overflow-y: auto;"><code>{exportLogMessages[exportLogMessages.length - 1]}</code></pre>
                 {/if}
             </div>
          {:else if isExportingZip}
@@ -410,6 +481,15 @@
                      <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
                  </div>
              </div>
+          {:else if isExportingUnified}
+              <div>
+                  <strong>Exportando vídeo unificado...</strong>
+                  <!-- Progress bar for unified export (indeterminate for now) -->
+                  <div class="progress mt-2" style="height: 5px;">
+                      <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+                  </div>
+                  <!-- Could add logs here later if backend provides them -->
+              </div>
          {:else if exportError}
             {exportError}
             <button type="button" class="btn-close" on:click={() => exportError = null} aria-label="Close"></button>
@@ -447,7 +527,7 @@
 
   <!-- Add Button (alternative trigger) -->
    <div class="text-center mb-4">
-     <button class="btn btn-outline-success" on:click={openModal} disabled={isLoading || isExportingVideo || isExportingZip}>
+     <button class="btn btn-outline-success" on:click={openModal} disabled={isLoading || isExportingFrames || isExportingZip || isExportingUnified}>
        + Adicionar Quadros
      </button>
    </div>
@@ -455,5 +535,4 @@
 </div>
 
 <!-- Creation Modal (used for adding frames now) -->
-<!-- Pass storyboardId or other context if modal needs it -->
 <CreationModal bind:show={showModal} on:close={closeModal} on:create={handleAddFrames} />
