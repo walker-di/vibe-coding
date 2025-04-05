@@ -12,21 +12,36 @@ import { v4 as uuidv4 } from 'uuid'; // For unique temp filenames
 import { pipeline } from 'node:stream/promises'; // Use pipeline for robust streaming
 import { Readable } from 'node:stream'; // Use Readable from node:stream
 
-// Helper to download a file using stream pipeline
-// Add fetchFn parameter (from event.fetch)
+// Helper to download a file using stream pipeline (Simplified)
 async function downloadFile(url: string, destPath: string, fetchFn: typeof fetch): Promise<void> {
-    // Use the passed fetchFn instead of global fetch
-    const response = await fetchFn(url);
-    if (!response.ok) {
-        throw new Error(`Failed to download ${url}: ${response.statusText}`);
+    console.log(`Attempting to download: ${url} to ${destPath}`);
+    let response: Response | null = null; // Define response variable outside try
+    try {
+        response = await fetchFn(url); // Use event.fetch
+        console.log(`Download response status for ${url}: ${response.status} ${response.statusText}`);
+
+        if (!response.ok) {
+            let errorBody = '';
+            try { errorBody = await response.text(); } catch (e) { /* Ignore */ }
+            throw new Error(`Status ${response.status}: ${response.statusText}. Body: ${errorBody}`);
+        }
+        if (!response.body) {
+            throw new Error(`Response body missing`);
+        }
+
+        // Stream directly using pipeline
+        await pipeline(
+            Readable.fromWeb(response.body as import('node:stream/web').ReadableStream<Uint8Array>),
+            createWriteStream(destPath)
+        );
+        console.log(`Successfully downloaded and saved ${url} to ${destPath}`);
+
+    } catch (downloadError: any) {
+        console.error(`Error downloading ${url}:`, downloadError);
+        // Construct a more informative error message
+        const statusText = response ? `${response.status} ${response.statusText}` : 'N/A';
+        throw new Error(`Download failed for ${url} (Status: ${statusText}): ${downloadError.message}`);
     }
-    if (!response.body) {
-        throw new Error(`Response body missing for ${url}`);
-    }
-    // Convert web stream to Node.js Readable stream
-    const bodyStream = Readable.fromWeb(response.body as import('node:stream/web').ReadableStream<Uint8Array>);
-    const fileStream = createWriteStream(destPath);
-    await pipeline(bodyStream, fileStream); // Use pipeline for reliable piping and error handling
 }
 
 // Helper to run FFmpeg
@@ -180,6 +195,18 @@ export const GET: RequestHandler = async (event) => { // Destructure event to ge
             mainInputArg = `-i ${mainImagePath}`;
             console.log(`Downloaded main image to ${mainImagePath}`);
         }
+
+        // Download BGM if URL exists
+        let bgmPath: string | null = null;
+        if (frame.bgmUrl) {
+            const bgmFileName = `bgm_${uuidv4()}.mp3`; // Assume mp3
+            bgmPath = path.join(tempDir, bgmFileName);
+            tempFiles.push(bgmPath);
+            // Pass eventFetch to downloadFile
+            await downloadFile(frame.bgmUrl, bgmPath, eventFetch);
+            console.log(`Downloaded BGM to ${bgmPath}`);
+        }
+
         console.log('Assets downloaded.');
 
         // 3. Prepare FFmpeg commands (similar logic to frontend, but with server paths)
@@ -224,22 +251,52 @@ export const GET: RequestHandler = async (event) => { // Destructure event to ge
             console.log('No main image provided, skipping overlay.');
         }
 
-        // --- Combined Command: Create base video + overlay + add narration ---
+        // --- Combined Command: Create base video + overlay + mix narration & BGM ---
         console.log('Preparing combined FFmpeg command...');
-        // If baseVideoInputPath is an image (only happens if bgImagePath exists), add -loop 1
         const isBaseImage = bgImagePath && /\.(png|jpe?g|webp)$/i.test(baseVideoInputPath);
+
+        // Input mapping:
+        // 0: Base image/video
+        // 1: Main image (if exists)
+        // N: Narration audio (index depends on main image)
+        // N+1: BGM audio (if exists)
+        const mainImageInputIndex = mainImagePath ? 1 : -1; // -1 if no main image
+        const narrationInputIndex = mainImageInputIndex + 1;
+        const bgmInputIndex = bgmPath ? narrationInputIndex + 1 : -1;
+
+        // Build filter complex string
+        let filterComplexParts: string[] = [];
+        let videoMapTarget = '0:v'; // Default map target for video
+        let audioMapTarget = `${narrationInputIndex}:a:0`; // Default map target for audio (narration only)
+
+        // Add overlay filter if needed
+        if (overlayFilter) {
+            filterComplexParts.push(overlayFilter + `[vidout]`);
+            videoMapTarget = '[vidout]'; // Map from overlay output
+        }
+
+        // Add audio mixing filter if BGM exists
+        if (bgmPath) {
+            // Mix narration and BGM. Adjust volume: narration normal (1.0), BGM quieter (0.3)
+            filterComplexParts.push(`[${narrationInputIndex}:a][${bgmInputIndex}:a]amix=inputs=2:duration=first:dropout_transition=1:weights='1 0.3'[aout]`);
+            audioMapTarget = '[aout]'; // Map from amix output
+        }
+
+        const filterComplexArg = filterComplexParts.length > 0 ? ['-filter_complex', filterComplexParts.join(';')] : [];
+
         const combinedCommand = [
              ...(isBaseImage ? ['-loop', '1'] : []), // Loop if base is image
-             '-i', baseVideoInputPath, // Input 0: Base image/video
-             ...(mainImagePath ? ['-i', mainImagePath] : []), // Input 1 (optional): Main image
-             '-i', narrationPath, // Input N: Narration audio
-             ...(overlayFilter ? ['-filter_complex', overlayFilter + `[vidout]`] : []), // Add filter if exists, name output [vidout]
-             '-map', overlayFilter ? '[vidout]' : '0:v', // Map video output from filter or base
-             '-map', mainImagePath ? '2:a:0' : '1:a:0', // Map audio (adjust index based on main image presence)
+             '-i', baseVideoInputPath, // Input 0
+             ...(mainImagePath ? ['-i', mainImagePath] : []), // Input 1 (optional)
+             '-i', narrationPath, // Input N
+             ...(bgmPath ? ['-i', bgmPath] : []), // Input N+1 (optional)
+             ...filterComplexArg, // Add filter complex if needed
+             '-map', videoMapTarget, // Map video output
+             '-map', audioMapTarget, // Map audio output (narration or mixed)
              '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-             '-c:a', 'aac',
+             '-c:a', 'aac', // Encode final audio to AAC
              '-movflags', '+faststart',
-             '-t', duration.toString(), // Use detected duration EXPLICITLY
+             '-t', duration.toString(), // Use detected narration duration EXPLICITLY
              // '-shortest', // REMOVED - Replaced by explicit -t
              finalOutputPath // Final output path directly
         ];
