@@ -6,22 +6,31 @@ import os from 'os';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { v4 as uuidv4 } from 'uuid'; // Keep for potential future use in helpers
+import type { error as ErrorHelper } from '@sveltejs/kit'; // Import the type for the error helper
 
 // Helper to download a file using stream pipeline
-export async function downloadFile(url: string, destPath: string, fetchFn: typeof fetch): Promise<void> {
+export async function downloadFile(
+    url: string,
+    destPath: string,
+    fetchFn: typeof fetch, // Re-added fetchFn parameter
+    errorHelper: typeof ErrorHelper // Use 'typeof' to get the type of the function
+): Promise<void> {
     console.log(`Attempting to download: ${url} to ${destPath}`);
     let response: Response | null = null;
     try {
+        // Use the passed fetchFn again
         response = await fetchFn(url);
         console.log(`Download response status for ${url}: ${response.status} ${response.statusText}`);
 
         if (!response.ok) {
             let errorBody = '';
             try { errorBody = await response.text(); } catch (e) { /* Ignore */ }
-            throw new Error(`Status ${response.status}: ${response.statusText}. Body: ${errorBody}`);
+            // Use the passed error helper to throw a SvelteKit HttpError
+            throw errorHelper(response.status, `Download failed for ${url}. Status ${response.status}: ${response.statusText}. Body: ${errorBody}`);
         }
         if (!response.body) {
-            throw new Error(`Response body missing`);
+            // Use the error helper for this case too
+            throw errorHelper(500, `Response body missing for ${url}`);
         }
 
         await pipeline(
@@ -31,9 +40,14 @@ export async function downloadFile(url: string, destPath: string, fetchFn: typeo
         console.log(`Successfully downloaded and saved ${url} to ${destPath}`);
 
     } catch (downloadError: any) {
-        console.error(`Error downloading ${url}:`, downloadError);
-        const statusText = response ? `${response.status} ${response.statusText}` : 'N/A';
-        throw new Error(`Download failed for ${url} (Status: ${statusText}): ${downloadError.message}`);
+        // If the error is already an HttpError (likely from the helper above), rethrow it directly
+        if (downloadError.status && typeof downloadError.status === 'number') {
+            throw downloadError;
+        }
+        // Otherwise, wrap unexpected errors in a generic 500 using the helper
+        console.error(`Unexpected error during download of ${url}:`, downloadError);
+        // Use the passed error helper for unexpected errors
+        throw errorHelper(500, `Download failed for ${url} (Internal Error: ${downloadError.message})`);
     }
 }
 

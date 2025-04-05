@@ -93,10 +93,17 @@ export const GET: RequestHandler = async (event) => {
                 const frameLogPrefix = `SegmentGen ${i + 1}/${validFrames.length}:`;
                 console.log(`${frameLogPrefix} Processing Frame ID ${frame.id.substring(0, 6)}...`);
 
-                // --- Download assets & Get Duration ---
+                // --- Copy assets from static dir & Get Duration ---
                 const narrationFileName = `narration_${i}_${uuidv4()}.mp3`;
-                const narrationPath = path.join(tempDir, narrationFileName);
-                await downloadFile(frame.narrationAudioUrl!, narrationPath, eventFetch);
+                const narrationPath = path.join(tempDir, narrationFileName); // Destination in temp dir
+                const narrationSourcePath = path.join('static', frame.narrationAudioUrl!); // Source in static dir
+                try {
+                    console.log(`Copying narration from ${narrationSourcePath} to ${narrationPath}`);
+                    await fs.copyFile(narrationSourcePath, narrationPath);
+                } catch (copyError: any) {
+                    console.error(`Failed to copy narration file ${narrationSourcePath}: ${copyError.message}`);
+                    throw error(500, `Failed to access narration asset for frame ${i + 1}. File not found or inaccessible: ${frame.narrationAudioUrl}`);
+                }
 
                 let originalNarrationDuration: number;
                 let totalSegmentDuration: number;
@@ -115,23 +122,45 @@ export const GET: RequestHandler = async (event) => {
 
                 let bgImagePath: string | null = null;
                 if (frame.backgroundImageUrl) {
-                    const bgFileName = `bg_${i}_${uuidv4()}.png`;
-                    bgImagePath = path.join(tempDir, bgFileName);
-                    await downloadFile(frame.backgroundImageUrl, bgImagePath, eventFetch);
+                    const bgFileName = `bg_${i}_${uuidv4()}${path.extname(frame.backgroundImageUrl)}`; // Use original extension
+                    bgImagePath = path.join(tempDir, bgFileName); // Destination
+                    const bgImageSourcePath = path.join('static', frame.backgroundImageUrl); // Source
+                    try {
+                        console.log(`Copying background image from ${bgImageSourcePath} to ${bgImagePath}`);
+                        await fs.copyFile(bgImageSourcePath, bgImagePath);
+                    } catch (copyError: any) {
+                        console.error(`Failed to copy background image file ${bgImageSourcePath}: ${copyError.message}`);
+                        throw error(500, `Failed to access background image asset for frame ${i + 1}. File not found or inaccessible: ${frame.backgroundImageUrl}`);
+                    }
                  }
                 let mainImagePath: string | null = null;
                 if (frame.mainImageUrl) {
-                    const mainFileName = `main_${i}_${uuidv4()}.png`;
-                    mainImagePath = path.join(tempDir, mainFileName);
-                    await downloadFile(frame.mainImageUrl, mainImagePath, eventFetch);
+                    const mainFileName = `main_${i}_${uuidv4()}${path.extname(frame.mainImageUrl)}`; // Use original extension
+                    mainImagePath = path.join(tempDir, mainFileName); // Destination
+                    const mainImageSourcePath = path.join('static', frame.mainImageUrl); // Source
+                     try {
+                        console.log(`Copying main image from ${mainImageSourcePath} to ${mainImagePath}`);
+                        await fs.copyFile(mainImageSourcePath, mainImagePath);
+                    } catch (copyError: any) {
+                        console.error(`Failed to copy main image file ${mainImageSourcePath}: ${copyError.message}`);
+                        throw error(500, `Failed to access main image asset for frame ${i + 1}. File not found or inaccessible: ${frame.mainImageUrl}`);
+                    }
                  }
                 let bgmPath: string | null = null;
                 if (frame.bgmUrl) {
                     const bgmFileName = `bgm_${i}_${uuidv4()}.mp3`;
-                    bgmPath = path.join(tempDir, bgmFileName);
-                    await downloadFile(frame.bgmUrl, bgmPath, eventFetch);
+                    bgmPath = path.join(tempDir, bgmFileName); // Destination
+                    const bgmSourcePath = path.join('static', frame.bgmUrl); // Source
+                    try {
+                        console.log(`Copying BGM from ${bgmSourcePath} to ${bgmPath}`);
+                        await fs.copyFile(bgmSourcePath, bgmPath);
+                    } catch (copyError: any) {
+                        console.error(`Failed to copy BGM file ${bgmSourcePath}: ${copyError.message}`);
+                        // Allow export to continue without BGM if it fails? Or throw? Let's throw for now.
+                        throw error(500, `Failed to access BGM asset for frame ${i + 1}. File not found or inaccessible: ${frame.bgmUrl}`);
+                    }
                  }
-                console.log(`${frameLogPrefix} Assets downloaded.`);
+                console.log(`${frameLogPrefix} Assets copied locally.`);
 
                 // --- Segment Generation (Precision Filter Strategy) ---
                 const segmentOutputFile = `segment_${i}_${uuidv4()}.ts`;
@@ -168,9 +197,17 @@ export const GET: RequestHandler = async (event) => {
                 const finalAudioLabel = '[aout]';
 
                 // --- Video Chain ---
+                let currentVideoLabel = baseVideoInputLabel; // Start with the base input label
+
+                // Scale base video if it's an image input (not lavfi color) and set SAR
+                if (bgImagePath) {
+                    filterComplexParts.push(`${currentVideoLabel}scale=1280:720,setsar=1/1[v_scaled_sar]`);
+                    currentVideoLabel = '[v_scaled_sar]'; // Update label after scaling and SAR set
+                }
+
                 // Trim video source to the total segment duration
-                filterComplexParts.push(`${baseVideoInputLabel}trim=duration=${totalSegmentDuration.toFixed(3)},setpts=PTS-STARTPTS[v_trimmed]`);
-                let currentVideoLabel = '[v_trimmed]'; // Start with trimmed video
+                filterComplexParts.push(`${currentVideoLabel}trim=duration=${totalSegmentDuration.toFixed(3)},setpts=PTS-STARTPTS[v_trimmed]`);
+                currentVideoLabel = '[v_trimmed]'; // Update label after trimming
 
                 // Apply overlay if main image exists
                 if (mainImagePath && inputMapping['mainImage'] !== undefined) {
@@ -185,8 +222,9 @@ export const GET: RequestHandler = async (event) => {
                     );
                     currentVideoLabel = overlayOutputLabel; // Update label after overlay
                  }
-                 // Assign the final video label to the *last* label used in the video chain
-                 filterComplexParts[filterComplexParts.length - 1] = filterComplexParts[filterComplexParts.length - 1].replace(/\[[^\]]+\]$/, finalVideoLabel);
+
+                 // Ensure final pixel format is yuv420p before output mapping
+                 filterComplexParts.push(`${currentVideoLabel}format=pix_fmts=yuv420p${finalVideoLabel}`);
 
 
                  // --- Audio Chain ---
