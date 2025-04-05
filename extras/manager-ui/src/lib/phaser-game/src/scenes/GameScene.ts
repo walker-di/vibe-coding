@@ -71,7 +71,7 @@ export default class GameScene extends Phaser.Scene {
 
     }
 
-    // --- Drag and Drop Handling (Simplified) ---
+    // --- Drag and Drop Handling (Simplified for Stack Dragging) ---
     setupDragAndDrop(): void {
 
         this.input.on('dragstart', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject) => {
@@ -87,9 +87,8 @@ export default class GameScene extends Phaser.Scene {
                 gameObject.setData('startPos', { x: gameObject.x, y: gameObject.y });
                 this.children.bringToTop(gameObject);
             } else if (cardInstance) { // Dragging an individual card container
-                 // Check if this card is ALREADY in a stack (it shouldn't be interactive if so, but double check)
                  const parentStack = this.gameState.findStackContainingCard(cardInstance.id);
-                 if (!parentStack) {
+                 if (!parentStack) { // Only allow dragging if not in a stack
                      console.log('Start dragging individual card:', cardInstance.cardName);
                      gameObject.setData('dragType', 'card');
                      gameObject.setData('startPos', { x: gameObject.x, y: gameObject.y });
@@ -126,9 +125,10 @@ export default class GameScene extends Phaser.Scene {
                 this.handlePotentialStack(gameObject as Phaser.GameObjects.Container);
             } else if (dragType === 'stack') {
                  // Just finished dragging a whole stack
-                 if (!dropped && startPos) { // Snap back if not dropped on anything (if drop zones existed)
-                     gameObject.setPosition(startPos.x, startPos.y);
-                 }
+                 // Cline: Commented out snap-back logic for stacks. They will now stay where dropped.
+                 // if (!dropped && startPos) { // Snap back if not dropped on anything
+                 //     gameObject.setPosition(startPos.x, startPos.y);
+                 // }
             }
             // REMOVED split/unstack logic from dragend
 
@@ -170,25 +170,29 @@ export default class GameScene extends Phaser.Scene {
                 // Target card's visual is adopted by stack, disable its input
                 targetFound.phaserGameObject?.disableInteractive();
                 // Dropped card's visual is adopted by stack, disable its input
-                droppedObject.disableInteractive();
+                // Let addCard handle disabling droppedObject input
                 const newStack = new CardStack(this, targetFound); // Creates stack container, adds target card
                 newStack.addCard(droppedCard); // Adds dropped card (and disables its input)
                 this.gameState.addStack(newStack);
                 this.checkStackAbilities(newStack);
+                 // Destroy the original individual container of the dropped card
+                 // droppedObject.destroy(); // Cline: Commented out to prevent potential visual issues
             } else if (targetFound instanceof CardStack) {
                 console.log(`Adding ${droppedCard.cardName} to existing stack ${targetFound.id}`);
-                 // Dropped card's visual is adopted by stack, disable its input
-                droppedObject.disableInteractive();
+                 // Let addCard handle disabling droppedObject input
                 targetFound.addCard(droppedCard); // Adds dropped card (and disables its input)
                 this.checkStackAbilities(targetFound);
+                 // Destroy the original individual container of the dropped card
+                 // droppedObject.destroy(); // Cline: Commented out to prevent potential visual issues
             }
         } else {
              console.log(`No valid stack target found for ${droppedCard.cardName}, leaving at drop position.`);
+             // Re-enable input if not stacked? No, BaseCard handles its own input setup.
         }
     }
 
-    // REMOVED: handleUnstack function (needs different trigger now)
-    // REMOVED: handleSplitStack function (needs different trigger now)
+    // REMOVED: handleUnstack function
+    // REMOVED: handleSplitStack function
 
 
     // Helper to check abilities on a stack
