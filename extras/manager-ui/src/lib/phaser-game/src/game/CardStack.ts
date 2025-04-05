@@ -24,6 +24,8 @@ export default class CardStack {
         // Create a container for the stack visuals at the initial card's position
         const initialPos = initialCard.getPosition();
         this.phaserContainer = scene.add.container(initialPos.x, initialPos.y);
+        // REMOVED: Explicitly set origin (default is 0,0)
+        // this.phaserContainer.setOrigin(0, 0);
 
         // --- Set size and interaction BEFORE adding children ---
         // Set initial size based on the first card
@@ -32,14 +34,19 @@ export default class CardStack {
         this.phaserContainer.setSize(initialWidth, initialHeight);
 
         // Make the container interactive for dragging the whole stack
-        this.phaserContainer.setInteractive(); // Now size is set
+        // Define the hit area explicitly using the calculated size, relative to top-left (0,0) origin
+        const hitArea = new Phaser.Geom.Rectangle(0, 0, initialWidth, initialHeight);
+        this.phaserContainer.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains); // Use the rectangle for hit detection
+
         scene.input.setDraggable(this.phaserContainer); // Should work now
         this.phaserContainer.setData('stackInstance', this); // Link container back to stack instance
         // --- End Interaction Setup ---
 
 
-        // Add the first card (which will also update container size if needed)
+        // Add the first card
         this.addCard(initialCard);
+        // Explicitly update size/hitArea *after* adding the first card
+        this.updateContainerSize();
     }
 
     public addCard(card: BaseCard): void {
@@ -58,6 +65,9 @@ export default class CardStack {
         const newY = (this.cards.length - 1) * CardStack.STACK_OFFSET_Y;
         card.phaserGameObject.setPosition(0, newY); // Position relative to container
         this.phaserContainer.add(card.phaserGameObject); // Add visual to container
+        // --- Disable input on the card now that it's in the stack ---
+        card.phaserGameObject.disableInteractive();
+        // --- End disable input ---
 
         // Adjust container size (optional, might be needed for interaction bounds)
         this.updateContainerSize();
@@ -128,7 +138,16 @@ export default class CardStack {
         const cardWidth = this.cards[0].phaserGameObject?.width ?? 100; // Default width
         const totalHeight = (this.cards.length - 1) * CardStack.STACK_OFFSET_Y + (this.cards[0].phaserGameObject?.height ?? 140); // Default height
         this.phaserContainer.setSize(cardWidth, totalHeight);
-        // Note: setSize on container might not automatically adjust hit area, may need custom shape
+        // Update hit area when size changes, relative to top-left (0,0) origin
+        if (this.phaserContainer.input?.hitArea instanceof Phaser.Geom.Rectangle) {
+             this.phaserContainer.input.hitArea.setTo(0, 0, cardWidth, totalHeight);
+        } else {
+             // If input was somehow removed or hitArea is not a Rectangle, log error.
+             console.warn(`Stack ${this.id} container lost input settings during updateContainerSize.`);
+             // Re-apply interactive settings if needed:
+             // const hitArea = new Phaser.Geom.Rectangle(0, 0, cardWidth, totalHeight);
+             // this.phaserContainer.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+        }
     }
 
     // Method to check and trigger abilities (might be called from GameScene)
@@ -146,9 +165,40 @@ export default class CardStack {
         }
     }
 
+    /**
+     * Removes cards from the specified index to the top of the stack.
+     * Updates the container and returns the removed cards.
+     * @param index The index of the first card to remove (inclusive).
+     * @returns An array of the removed BaseCard instances, in their original order.
+     */
+    public splitAtIndex(index: number): BaseCard[] {
+        if (index <= 0 || index >= this.cards.length) {
+            // Cannot split at the base card (index 0) or beyond the top
+            return [];
+        }
+
+        const removedCards = this.cards.splice(index); // Removes cards from index to end
+
+        console.log(`Splitting stack ${this.id} at index ${index}. Removed:`, removedCards.map(c => c.cardName));
+
+        // Remove visuals from the container
+        removedCards.forEach(card => {
+            if (card.phaserGameObject) {
+                this.phaserContainer.remove(card.phaserGameObject, false); // Don't destroy yet
+                card.onRemovedFromStack(this); // Notify card
+            }
+        });
+
+        // Update the size of the remaining stack container
+        this.updateContainerSize();
+
+        return removedCards;
+    }
+
+
     public destroy(): void {
         // Remove all cards first (optional, depends if they should be destroyed with stack)
-        // while(this.removeCard()){}
+        // We should probably let GameState handle card removal/destruction
 
         this.phaserContainer.destroy(); // Destroy the visual container
         this.cards = []; // Clear internal array
