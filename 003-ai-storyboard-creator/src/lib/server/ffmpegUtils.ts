@@ -124,6 +124,95 @@ export async function getAudioDuration(filePath: string): Promise<number> {
     });
 }
 
+// Helper to run ffprobe and get duration for a specific stream type
+export async function getStreamDuration(filePath: string, streamType: 'format' | 'video' | 'audio'): Promise<number> {
+    return new Promise((resolve, reject) => {
+        let showEntriesArg = '';
+        let selectStreamsArg: string[] = [];
+
+        switch (streamType) {
+            case 'format':
+                showEntriesArg = 'format=duration';
+                break;
+            case 'video':
+                showEntriesArg = 'stream=duration';
+                selectStreamsArg = ['-select_streams', 'v:0']; // Select first video stream
+                break;
+            case 'audio':
+                showEntriesArg = 'stream=duration';
+                selectStreamsArg = ['-select_streams', 'a:0']; // Select first audio stream
+                break;
+            default:
+                return reject(new Error(`Invalid streamType: ${streamType}`));
+        }
+
+        const args = [
+            '-v', 'error',
+            ...selectStreamsArg, // Add stream selection if needed
+            '-show_entries', showEntriesArg,
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            filePath
+        ];
+        console.log(`Executing ffprobe (${streamType} duration) with args:`, args.join(' '));
+        const ffprobePath = process.env.FFPROBE_PATH || 'ffprobe';
+        const ffprobeProcess = spawn(ffprobePath, args, { stdio: 'pipe' });
+
+        let stdout = '';
+        let stderr = '';
+
+        ffprobeProcess.stdout.on('data', (data) => {
+            stdout += data.toString();
+        });
+
+        ffprobeProcess.stderr.on('data', (data) => {
+            stderr += data.toString();
+            console.log(`ffprobe (${streamType}) stderr: ${data.toString()}`);
+        });
+
+        ffprobeProcess.on('close', (code) => {
+            console.log(`ffprobe (${streamType}) process exited with code ${code}`);
+            if (code === 0 && stdout.trim()) {
+                try {
+                    const duration = parseFloat(stdout.trim());
+                    // Handle cases where ffprobe might return N/A or invalid output for a stream
+                    if (isNaN(duration)) {
+                         // If duration is NaN, it might mean the stream doesn't exist or has no duration info.
+                         // For format duration, this is an error. For streams, it might be okay if the stream is absent.
+                         if (streamType === 'format') {
+                            reject(new Error(`ffprobe (${streamType}) output was not a valid number: ${stdout.trim()}`));
+                         } else {
+                            console.warn(`ffprobe (${streamType}) did not return a valid duration for ${filePath}. Stream might be missing or lack duration info. Resolving as 0.`);
+                            resolve(0); // Resolve as 0 if a specific stream duration is invalid/missing
+                         }
+                    } else if (duration < 0) { // Duration shouldn't be negative
+                         reject(new Error(`ffprobe (${streamType}) output was negative: ${stdout.trim()}`));
+                    }
+                    else {
+                         resolve(duration);
+                    }
+                } catch (parseError) {
+                     reject(new Error(`Failed to parse ffprobe (${streamType}) duration output: ${stdout.trim()}. Error: ${parseError}`));
+                }
+            } else {
+                 // If ffprobe fails or stdout is empty, reject.
+                 // Empty stdout often means the selected stream didn't exist.
+                 if (!stdout.trim() && streamType !== 'format') {
+                     console.warn(`ffprobe (${streamType}) returned empty output for ${filePath}. Stream might be missing. Resolving as 0.`);
+                     resolve(0); // Resolve as 0 if a specific stream is missing
+                 } else {
+                    reject(new Error(`ffprobe (${streamType}) exited with code ${code}. Stderr: ${stderr || 'No stderr output'}`));
+                 }
+            }
+        });
+
+         ffprobeProcess.on('error', (err) => {
+            console.error(`Failed to start ffprobe (${streamType}) process:`, err);
+            reject(new Error(`Failed to start ffprobe (${streamType}): ${err.message}. Is ffprobe installed and in PATH (or FFPROBE_PATH set)?`));
+        });
+    });
+}
+
+
 // Helper for temporary directory management and cleanup
 export async function withTemporaryDirectory<T>(prefix: string, operation: (tempDir: string) => Promise<T>): Promise<T> {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
