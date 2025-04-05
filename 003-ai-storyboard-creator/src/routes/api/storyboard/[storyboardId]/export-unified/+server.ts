@@ -14,6 +14,10 @@ import {
     withTemporaryDirectory
 } from '$lib/server/ffmpegUtils';
 
+const START_PADDING_SECONDS = 0.5;
+const END_PADDING_SECONDS = 0.5;
+const TOTAL_PADDING_SECONDS = START_PADDING_SECONDS + END_PADDING_SECONDS;
+
 // Types and constants remain the same...
 type FrameData = {
     id: string;
@@ -94,15 +98,18 @@ export const GET: RequestHandler = async (event) => {
                 const narrationPath = path.join(tempDir, narrationFileName);
                 await downloadFile(frame.narrationAudioUrl!, narrationPath, eventFetch);
 
-                let duration: number;
+                let originalNarrationDuration: number;
+                let totalSegmentDuration: number;
                 try {
-                    duration = await getAudioDuration(narrationPath); // Or getStreamDuration(narrationPath, 'audio')
-                    if (!duration || duration <= 0) throw new Error(`Invalid duration: ${duration}`);
-                    console.log(`${frameLogPrefix} Narration duration: ${duration}s`);
-                    segmentOriginalDurations.push(duration); // Store original duration
+                    originalNarrationDuration = await getAudioDuration(narrationPath);
+                    if (!originalNarrationDuration || originalNarrationDuration <= 0) throw new Error(`Invalid original duration: ${originalNarrationDuration}`);
+                    totalSegmentDuration = originalNarrationDuration + TOTAL_PADDING_SECONDS;
+                    console.log(`${frameLogPrefix} Original Narration Duration: ${originalNarrationDuration.toFixed(3)}s`);
+                    console.log(`${frameLogPrefix} Total Segment Duration (with padding): ${totalSegmentDuration.toFixed(3)}s`);
+                    segmentOriginalDurations.push(totalSegmentDuration); // Store TOTAL duration for transitions
                 } catch (durationError: any) {
-                     console.warn(`${frameLogPrefix} Error getting duration: ${durationError.message}. Disabling transitions.`);
-                     useTransitions = false;
+                     console.warn(`${frameLogPrefix} Error getting original duration: ${durationError.message}. Disabling transitions.`);
+                     useTransitions = false; // Keep this fallback
                      throw error(500, `Failed to get duration for frame ${i + 1}.`);
                 }
 
@@ -157,13 +164,15 @@ export const GET: RequestHandler = async (event) => {
                 const filterComplexParts: string[] = [];
                 const baseVideoInputLabel = `[${inputMapping['baseVideo']}:v]`;
                 const narrationInputLabel = `[${inputMapping['narration']}:a]`;
-                const trimmedVideoLabel = '[v_trimmed]';
-                const trimmedAudioLabel = '[a_trimmed]';
-                // Use toFixed(3) for potentially better precision handling in filters
-                filterComplexParts.push(`${baseVideoInputLabel}trim=duration=${duration.toFixed(3)},setpts=PTS-STARTPTS${trimmedVideoLabel}`);
-                filterComplexParts.push(`${narrationInputLabel}atrim=duration=${duration.toFixed(3)},asetpts=PTS-STARTPTS${trimmedAudioLabel}`);
-                let currentVideoLabel = trimmedVideoLabel;
-                let currentAudioLabel = trimmedAudioLabel;
+                const finalVideoLabel = '[vout]'; // Use consistent final labels
+                const finalAudioLabel = '[aout]';
+
+                // --- Video Chain ---
+                // Trim video source to the total segment duration
+                filterComplexParts.push(`${baseVideoInputLabel}trim=duration=${totalSegmentDuration.toFixed(3)},setpts=PTS-STARTPTS[v_trimmed]`);
+                let currentVideoLabel = '[v_trimmed]'; // Start with trimmed video
+
+                // Apply overlay if main image exists
                 if (mainImagePath && inputMapping['mainImage'] !== undefined) {
                     const mainImageInputLabel = `[${inputMapping['mainImage']}:v]`;
                     const scaledOverlayLabel = '[ovrl_scaled]';
@@ -174,30 +183,46 @@ export const GET: RequestHandler = async (event) => {
                     filterComplexParts.push(
                         `${currentVideoLabel}${scaledOverlayLabel}overlay=x=352:y=72:shortest=0${overlayOutputLabel}`
                     );
-                    currentVideoLabel = overlayOutputLabel;
+                    currentVideoLabel = overlayOutputLabel; // Update label after overlay
                  }
-                if (bgmPath && inputMapping['bgm'] !== undefined) {
+                 // Assign the final video label to the *last* label used in the video chain
+                 filterComplexParts[filterComplexParts.length - 1] = filterComplexParts[filterComplexParts.length - 1].replace(/\[[^\]]+\]$/, finalVideoLabel);
+
+
+                 // --- Audio Chain ---
+                 // 1. Add start delay, 2. Pad end to total duration
+                 const startDelayMs = START_PADDING_SECONDS * 1000;
+                 filterComplexParts.push(
+                     `${narrationInputLabel}adelay=delays=${startDelayMs}|${startDelayMs},apad=whole_dur=${totalSegmentDuration.toFixed(3)}[a_padded]`
+                 );
+                 let currentAudioLabel = '[a_padded]'; // Start with padded narration
+
+                 // Mix with BGM if it exists
+                 if (bgmPath && inputMapping['bgm'] !== undefined) {
                     const bgmInputLabel = `[${inputMapping['bgm']}:a]`;
-                    const mixedAudioOutputLabel = '[audio_mixed]';
+                    // Mix padded narration with BGM. Ensure BGM also respects total duration if needed, amix 'first' should handle this.
                     filterComplexParts.push(
-                        `${currentAudioLabel}${bgmInputLabel}amix=inputs=2:duration=first:dropout_transition=1:weights='1 0.3'${mixedAudioOutputLabel}`
+                        `${currentAudioLabel}${bgmInputLabel}amix=inputs=2:duration=first:dropout_transition=1:weights='1 0.3'[a_mixed]`
                     );
-                    currentAudioLabel = mixedAudioOutputLabel;
+                    currentAudioLabel = '[a_mixed]'; // Update label after mixing
                  }
+                 // Assign the final audio label to the *last* label used in the audio chain
+                 filterComplexParts[filterComplexParts.length - 1] = filterComplexParts[filterComplexParts.length - 1].replace(/\[[^\]]+\]$/, finalAudioLabel);
+
 
                  // --- Assemble Final Segment Command ---
                 const segmentCommandArgs: string[] = [ ...segmentCommandInputs ];
                 segmentCommandArgs.push('-filter_complex', filterComplexParts.join(';'));
-                segmentCommandArgs.push('-map', currentVideoLabel, '-map', currentAudioLabel);
+                // Map the final labels
+                segmentCommandArgs.push('-map', finalVideoLabel, '-map', finalAudioLabel);
                 const segmentAudioCodecArgs = ['-c:a', 'aac', '-ar', '48000', '-b:a', '192k'];
                  segmentCommandArgs.push(
                      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'stillimage',
                      '-pix_fmt', 'yuv420p',
-                     '-r', '25', // <-- ADD EXPLICIT FRAME RATE HERE
+                     '-r', '25',
                      ...segmentAudioCodecArgs,
-                     // ---> ADD THIS LINE <---
-                     '-t', duration.toFixed(3), // Explicitly set segment duration
-                     // ---> END ADDITION <---
+                     // Use the TOTAL segment duration for the -t flag
+                     '-t', totalSegmentDuration.toFixed(3),
                      '-bsf:v', 'h264_mp4toannexb',
                      '-f', 'mpegts',
                     segmentOutputPath
@@ -219,10 +244,11 @@ export const GET: RequestHandler = async (event) => {
                 try {
                     const actualVideoDuration = await getStreamDuration(segmentOutputPath, 'video');
                     const actualAudioDuration = await getStreamDuration(segmentOutputPath, 'audio');
-                    console.log(`${frameLogPrefix} Expected: ${duration.toFixed(3)}, Actual Video: ${actualVideoDuration.toFixed(3)}, Actual Audio: ${actualAudioDuration.toFixed(3)}`);
+                    // Verify against the totalSegmentDuration now
+                    console.log(`${frameLogPrefix} Target: ${totalSegmentDuration.toFixed(3)}, Actual Video: ${actualVideoDuration.toFixed(3)}, Actual Audio: ${actualAudioDuration.toFixed(3)}`);
 
                     const durationDiff = actualVideoDuration - actualAudioDuration;
-                    const paddingThreshold = 0.02; // Pad if audio is shorter by more than 20ms
+                    const paddingThreshold = 0.02; // Pad if audio is shorter than video by more than 20ms
 
                     if (actualVideoDuration > 0 && actualAudioDuration > 0 && durationDiff > paddingThreshold) {
                         console.warn(`${frameLogPrefix} Audio is shorter than video by ${durationDiff.toFixed(3)}s. Padding audio...`);
@@ -231,10 +257,11 @@ export const GET: RequestHandler = async (event) => {
 
                         const paddingCommand = [
                             '-i', segmentOutputPath,
-                            '-filter_complex', `[0:a]apad=pad_dur=${durationDiff.toFixed(3)}[aout]`, // Pad audio to match video
+                            // Pad the difference needed to match the *actual* video duration
+                            '-filter_complex', `[0:a]apad=pad_dur=${durationDiff.toFixed(3)}[aout]`,
                             '-map', '0:v', // Map original video stream
                             '-map', '[aout]', // Map padded audio stream
-                            '-c:v', 'copy', // Copy video stream directly
+                            '-c:v', 'copy', // Copy video stream directly (it should already be the correct length)
                             '-c:a', 'aac', '-ar', '48000', '-b:a', '192k', // Re-encode padded audio
                             '-bsf:v', 'h264_mp4toannexb', // Keep for TS
                             '-f', 'mpegts',
@@ -251,11 +278,10 @@ export const GET: RequestHandler = async (event) => {
                         // console.log(`${frameLogPrefix} Padded Audio Duration: ${paddedAudioDuration.toFixed(3)}`);
 
                     } else if (durationDiff < -paddingThreshold) {
-                         console.warn(`${frameLogPrefix} Audio is LONGER than video by ${Math.abs(durationDiff).toFixed(3)}s. This might still cause issues. Using original segment.`);
-                         // Note: Trimming audio here would be more complex and might cut actual sound.
-                         // Padding is generally safer. If this warning appears frequently, investigate segment generation.
+                         console.warn(`${frameLogPrefix} Audio is LONGER than video by ${Math.abs(durationDiff).toFixed(3)}s. This might indicate an issue. Using original segment.`);
+                         // If audio is longer, padding won't help. This shouldn't happen often with the new filters.
                     } else {
-                         console.log(`${frameLogPrefix} Segment durations are within tolerance. Using original segment.`);
+                         console.log(`${frameLogPrefix} Segment audio/video durations are within tolerance or audio is not shorter. Using original segment.`);
                     }
 
                 } catch (probeError: any) {
@@ -336,9 +362,9 @@ export const GET: RequestHandler = async (event) => {
                             console.log(`${stepLogPrefix} Duration of previous result (${path.basename(currentResultPath)}): ${previousDuration}s`);
                         } catch (e: any) {
                              console.error(`${stepLogPrefix} Failed to get duration for ${currentResultPath}. Cannot apply xfade offset correctly. Error: ${e.message}`);
-                             // Use original duration as fallback, less accurate but better than failing?
-                             previousDuration = segmentOriginalDurations[frameIndexForTransition];
-                             console.warn(`${stepLogPrefix} Using original segment duration ${previousDuration}s as fallback for offset.`);
+                             // Use total segment duration (including padding) as fallback
+                             previousDuration = segmentOriginalDurations[frameIndexForTransition]; // This now holds total duration
+                             console.warn(`${stepLogPrefix} Using calculated total segment duration ${previousDuration}s as fallback for offset.`);
                              if (!previousDuration || previousDuration <= 0) {
                                  throw error(500, `Cannot determine duration of intermediate video ${currentResultPath} and fallback failed.`);
                              }
