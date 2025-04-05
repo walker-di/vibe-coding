@@ -8,6 +8,13 @@
       "when": 1743448614747,
       "tag": "0000_petite_the_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1743812902083,
+      "tag": "0001_goofy_switch",
+      "breakpoints": true
     }
   ]
 }

@@ -21,7 +21,25 @@ type FrameData = {
     mainImageUrl: string | null;
     bgmUrl: string | null;
     frameOrder: number;
+    transitionTypeAfter: string; // Added
+    transitionDurationAfter: number; // Added
 };
+
+// Map of transition names supported by xfade (based on user's help output)
+const validXfadeTransitions: { [key: string]: boolean } = {
+    fade: true, wipeleft: true, wiperight: true, wipeup: true, wipedown: true,
+    slideleft: true, slideright: true, slideup: true, slidedown: true, circlecrop: true,
+    rectcrop: true, distance: true, fadeblack: true, fadewhite: true, radial: true,
+    smoothleft: true, smoothright: true, smoothup: true, smoothdown: true, circleopen: true,
+    circleclose: true, vertopen: true, vertclose: true, horzopen: true, horzclose: true,
+    dissolve: true, pixelize: true, diagtl: true, diagtr: true, diagbl: true, diagbr: true,
+    hlslice: true, hrslice: true, vuslice: true, vdslice: true, hblur: true, fadegrays: true,
+    wipetl: true, wipetr: true, wipebl: true, wipebr: true, squeezeh: true, squeezev: true,
+    zoomin: true, fadefast: true, fadeslow: true, hlwind: true, hrwind: true, vuwind: true,
+    vdwind: true, coverleft: true, coverright: true, coverup: true, coverdown: true,
+    revealleft: true, revealright: true, revealup: true, revealdown: true
+};
+
 
 export const GET: RequestHandler = async (event) => {
     const { params, fetch: eventFetch } = event;
@@ -47,14 +65,9 @@ export const GET: RequestHandler = async (event) => {
             const frames: FrameData[] = await db.query.storyboardFrames.findMany({
                 where: eq(storyboardFrames.storyboardId, storyboardId),
                 orderBy: [asc(storyboardFrames.frameOrder)],
-                // Select only necessary columns
                 columns: {
-                    id: true,
-                    narrationAudioUrl: true,
-                    backgroundImageUrl: true,
-                    mainImageUrl: true,
-                    bgmUrl: true,
-                    frameOrder: true
+                    id: true, narrationAudioUrl: true, backgroundImageUrl: true, mainImageUrl: true,
+                    bgmUrl: true, frameOrder: true, transitionTypeAfter: true, transitionDurationAfter: true
                 }
             });
 
@@ -70,7 +83,12 @@ export const GET: RequestHandler = async (event) => {
             }
             console.log(`Processing ${validFrames.length} frames with narration.`);
 
+            // Check if any frame has a transition defined
+            let useTransitions = validFrames.some(f => f.transitionTypeAfter && f.transitionTypeAfter !== 'none');
+            console.log(`Transitions will be ${useTransitions ? 'ENABLED (using xfade/concat filter)' : 'DISABLED (using concat demuxer)'}.`); // Updated log message
+
             const segmentFiles: string[] = []; // Store paths to generated .ts segment files
+            const segmentDurations: number[] = []; // Store durations for transition offset calculation
 
             // 3. Process each frame to generate a video segment (.ts format recommended for concat)
             for (let i = 0; i < validFrames.length; i++) {
@@ -78,18 +96,24 @@ export const GET: RequestHandler = async (event) => {
                 const frameLogPrefix = `Frame ${i + 1}/${validFrames.length} (ID: ${frame.id.substring(0, 6)}):`;
                 console.log(`${frameLogPrefix} Processing...`);
 
-                // --- Download assets for this frame ---
+                // --- Download assets ---
                 console.log(`${frameLogPrefix} Downloading assets...`);
                 const narrationFileName = `narration_${i}_${uuidv4()}.mp3`;
                 const narrationPath = path.join(tempDir, narrationFileName);
-                await downloadFile(frame.narrationAudioUrl!, narrationPath, eventFetch); // Not null asserted due to filter
+                await downloadFile(frame.narrationAudioUrl!, narrationPath, eventFetch);
 
-                const duration = await getAudioDuration(narrationPath);
-                if (!duration || duration <= 0) {
-                    console.warn(`${frameLogPrefix} Skipping frame - Could not determine valid duration for narration: ${narrationPath}`);
-                    continue; // Skip this frame if duration is invalid
+                let duration: number;
+                try {
+                    duration = await getAudioDuration(narrationPath);
+                    if (!duration || duration <= 0) throw new Error(`Invalid duration detected: ${duration}`);
+                    console.log(`${frameLogPrefix} Detected narration duration: ${duration} seconds`);
+                    segmentDurations.push(duration);
+                } catch (durationError: any) {
+                     console.warn(`${frameLogPrefix} Skipping frame - Could not determine valid duration for narration: ${narrationPath}. Error: ${durationError.message}`);
+                     useTransitions = false; // Disable transitions if any segment fails
+                     console.log("Disabling transitions due to duration error in one segment.");
+                     throw error(500, `Failed to get duration for frame ${i + 1}. Cannot proceed with export.`);
                 }
-                console.log(`${frameLogPrefix} Detected narration duration: ${duration} seconds`);
 
                 let bgImagePath: string | null = null;
                 if (frame.backgroundImageUrl) {
@@ -113,107 +137,211 @@ export const GET: RequestHandler = async (event) => {
                 }
                 console.log(`${frameLogPrefix} Assets downloaded.`);
 
-                // --- Generate video segment using FFmpeg ---
-                const segmentOutputFile = `segment_${i}_${uuidv4()}.ts`; // Use .ts for concat
+                // --- Generate video segment ---
+                const segmentOutputFile = `segment_${i}_${uuidv4()}.ts`;
                 const segmentOutputPath = path.join(tempDir, segmentOutputFile);
 
-                let overlayFilter = '';
                 let baseVideoInputPath = '';
+                let isBaseImage = false;
 
+                // --- Corrected Input Handling ---
+                const segmentCommandInputs: string[] = [];
+                const inputMapping: { [key: string]: number } = {};
+                let inputIndex = 0;
+
+                // Base input (image or black video)
                 if (!bgImagePath) {
-                    // Generate black background segment
-                    const blackBgFile = `black_bg_${i}_${uuidv4()}.ts`; // Output .ts
+                    const blackBgFile = `black_bg_${i}_${uuidv4()}.ts`;
                     const blackBgPath = path.join(tempDir, blackBgFile);
+                    const segmentAudioCodecArgs = ['-c:a', 'aac', '-ar', '48000', '-b:a', '192k'];
                     const blackBgCmd = [
-                        '-f', 'lavfi', '-i', `color=c=black:s=1280x720:r=25`,
+                        '-f', 'lavfi', '-i', `color=c=black:s=1280x720:r=25`, // Input 0: Video
+                        '-f', 'lavfi', '-i', 'anullsrc=channel_layout=mono:sample_rate=48000', // Input 1: Audio
+                        '-map', '0:v', '-map', '1:a',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-tune', 'stillimage',
+                        ...segmentAudioCodecArgs,
                         '-t', duration.toString(),
-                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                        '-tune', 'stillimage',
-                        '-c:a', 'aac', '-ar', '48000', '-b:a', '192k', // Ensure consistent audio codec for concat
-                        '-bsf:v', 'h264_mp4toannexb', // Needed for .ts output
-                        '-f', 'mpegts', // Output format
+                        '-bsf:v', 'h264_mp4toannexb', '-f', 'mpegts',
                         blackBgPath
                     ];
+                    console.log(`Executing FFmpeg for black background: ${blackBgCmd.join(' ')}`);
                     await runFFmpeg(blackBgCmd);
                     baseVideoInputPath = blackBgPath;
+                    isBaseImage = false;
                 } else {
                     baseVideoInputPath = bgImagePath;
+                    isBaseImage = /\.(png|jpe?g|webp)$/i.test(baseVideoInputPath);
                 }
+                segmentCommandInputs.push(...(isBaseImage ? ['-loop', '1'] : []), '-i', baseVideoInputPath);
+                inputMapping['baseVideo'] = inputIndex++;
 
                 if (mainImagePath) {
-                    overlayFilter = `[1:v]scale=576:576[ovrl];[0:v][ovrl]overlay=x=352:y=72`;
+                    segmentCommandInputs.push('-i', mainImagePath);
+                    inputMapping['mainImage'] = inputIndex++;
                 }
-
-                const isBaseImage = /\.(png|jpe?g|webp)$/i.test(baseVideoInputPath);
-                const mainImageInputIndex = mainImagePath ? 1 : -1;
-                const narrationInputIndex = mainImageInputIndex + 1;
-                const bgmInputIndex = bgmPath ? narrationInputIndex + 1 : -1;
-
-                let filterComplexParts: string[] = [];
-                let videoMapTarget = '0:v';
-                let audioMapTarget = `${narrationInputIndex}:a:0`;
-
-                if (overlayFilter) {
-                    filterComplexParts.push(overlayFilter + `[vidout]`);
-                    videoMapTarget = '[vidout]';
-                }
+                segmentCommandInputs.push('-i', narrationPath);
+                inputMapping['narration'] = inputIndex++;
                 if (bgmPath) {
-                    filterComplexParts.push(`[${narrationInputIndex}:a][${bgmInputIndex}:a]amix=inputs=2:duration=first:dropout_transition=1:weights='1 0.3'[aout]`);
-                    audioMapTarget = '[aout]';
+                    segmentCommandInputs.push('-i', bgmPath);
+                    inputMapping['bgm'] = inputIndex++;
+                }
+                // --- End Corrected Input Handling ---
+
+
+                // --- Build filter complex and map using corrected inputMapping ---
+                const filterComplexParts: string[] = [];
+                const initialVideoLabel = `[${inputMapping['baseVideo']}:v]`;
+                const initialAudioLabel = `[${inputMapping['narration']}:a]`;
+                let videoMapLabel = initialVideoLabel;
+                let audioMapLabel = initialAudioLabel;
+
+                if (mainImagePath) {
+                    const overlayOutputLabel = '[vid_overlayed]';
+                    filterComplexParts.push(
+                        `[${inputMapping['mainImage']}:v]scale=576:576[ovrl];${videoMapLabel}[ovrl]overlay=x=352:y=72${overlayOutputLabel}`
+                    );
+                    videoMapLabel = overlayOutputLabel;
                 }
 
-                const filterComplexArg = filterComplexParts.length > 0 ? ['-filter_complex', filterComplexParts.join(';')] : [];
+                if (bgmPath) {
+                    const mixOutputLabel = '[audio_mixed]';
+                    filterComplexParts.push(
+                        `${audioMapLabel}[${inputMapping['bgm']}:a]amix=inputs=2:duration=first:dropout_transition=1:weights='1 0.3'${mixOutputLabel}`
+                    );
+                    audioMapLabel = mixOutputLabel;
+                } else if (!bgImagePath && inputMapping['baseVideo'] !== undefined) {
+                    audioMapLabel = `[${inputMapping['narration']}:a]`;
+                }
 
-                const segmentCommand = [
-                    ...(isBaseImage ? ['-loop', '1'] : []),
-                    '-i', baseVideoInputPath,
-                    ...(mainImagePath ? ['-i', mainImagePath] : []),
-                    '-i', narrationPath,
-                    ...(bgmPath ? ['-i', bgmPath] : []),
-                    ...filterComplexArg,
-                    '-map', videoMapTarget,
-                    '-map', audioMapTarget,
+                // --- Assemble the command ---
+                const segmentCommandArgs: string[] = [...segmentCommandInputs];
+                let finalVideoMapArg = videoMapLabel;
+                let finalAudioMapArg = audioMapLabel;
+
+                if (filterComplexParts.length > 0) {
+                    // A filter graph is being used. Check if passthrough filters are needed.
+                    const wasVideoFiltered = videoMapLabel !== initialVideoLabel;
+                    const wasAudioFiltered = audioMapLabel !== initialAudioLabel;
+
+                    const videoPassthroughLabel = '[v_passthrough]';
+                    const audioPassthroughLabel = '[a_passthrough]';
+
+                    if (!wasVideoFiltered) {
+                        filterComplexParts.push(`${initialVideoLabel}null${videoPassthroughLabel}`);
+                        finalVideoMapArg = videoPassthroughLabel;
+                    }
+
+                    if (!wasAudioFiltered) {
+                        filterComplexParts.push(`${initialAudioLabel}anull${audioPassthroughLabel}`);
+                        finalAudioMapArg = audioPassthroughLabel;
+                    }
+
+                    segmentCommandArgs.push('-filter_complex', filterComplexParts.join(';'));
+                }
+
+                // Add mapping arguments
+                segmentCommandArgs.push('-map', finalVideoMapArg);
+                segmentCommandArgs.push('-map', finalAudioMapArg);
+
+                // Add encoding options and output file
+                const segmentAudioCodecArgs = ['-c:a', 'aac', '-ar', '48000', '-b:a', '192k'];
+                segmentCommandArgs.push(
                     '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                    '-c:a', 'aac', '-ar', '48000', '-b:a', '192k', // Consistent audio codec
+                    ...segmentAudioCodecArgs,
                     '-t', duration.toString(),
-                    '-bsf:v', 'h264_mp4toannexb', // Bitstream filter for TS
-                    '-f', 'mpegts', // Output format TS
+                    '-bsf:v', 'h264_mp4toannexb',
+                    '-f', 'mpegts',
                     segmentOutputPath
-                ];
+                );
 
-                await runFFmpeg(segmentCommand.filter(Boolean) as string[]);
+                console.log(`${frameLogPrefix} Executing FFmpeg segment command: ${segmentCommandArgs.join(' ')}`);
+                await runFFmpeg(segmentCommandArgs.filter(Boolean) as string[]);
                 console.log(`${frameLogPrefix} Generated segment: ${segmentOutputPath}`);
-                segmentFiles.push(segmentOutputPath); // Add successfully generated segment path
+                segmentFiles.push(segmentOutputPath);
             } // End frame loop
 
-            // 4. Concatenate segments if any were generated
+            // 4. Concatenate segments
             if (segmentFiles.length === 0) {
-                throw error(500, `No video segments could be generated for storyboard ${storyboardId}.`);
+                throw error(500, `No valid video segments could be generated for storyboard ${storyboardId}.`);
             }
-            console.log(`Generated ${segmentFiles.length} segments. Concatenating...`);
-
-            const fileListPath = path.join(tempDir, 'filelist.txt');
-            // Ensure paths in filelist.txt are properly escaped for ffmpeg if they contain special characters
-            // For simplicity, assuming basic paths generated by uuidv4 are safe here.
-            // Use forward slashes even on Windows for ffmpeg concat demuxer.
-            const fileListContent = segmentFiles.map(f => `file '${f.replace(/\\/g, '/')}'`).join('\n');
-            await fs.writeFile(fileListPath, fileListContent);
-            console.log(`Created filelist.txt at ${fileListPath}`);
+            console.log(`Generated ${segmentFiles.length} segments.`);
 
             const finalOutputFile = `${safeStoryboardName}_unified_${uuidv4()}.mp4`;
             const finalOutputPath = path.join(tempDir, finalOutputFile);
 
-            const concatCommand = [
-                '-f', 'concat',
-                '-safe', '0', // Allows relative paths in filelist.txt within the temp dir
-                '-i', fileListPath,
-                '-c', 'copy', // Crucial: avoids re-encoding, much faster
-                '-movflags', '+faststart', // Good practice for web video
-                finalOutputPath
-            ];
+            // Re-evaluate useTransitions based on actual segments generated and check count
+            useTransitions = useTransitions && segmentFiles.length > 1;
 
-            await runFFmpeg(concatCommand);
-            console.log(`Concatenated video created: ${finalOutputPath}`);
+            if (useTransitions) {
+                // --- Use xfade filter for VIDEO transitions, concat filter for AUDIO ---
+                console.log('Building complex filter graph: xfade (video) + concat (audio)...');
+                const inputs = segmentFiles.map(f => ['-i', f]).flat();
+
+                let videoFilterChain = '';
+                let lastVideoOutputLabel = '[0:v]'; // Start with the video stream of the first input
+
+                // 1. Build the sequential VIDEO chain using xfade
+                for (let i = 0; i < segmentFiles.length - 1; i++) {
+                    const transitionType = validFrames[i].transitionTypeAfter || 'none';
+                    let safeTransitionType = validXfadeTransitions[transitionType] ? transitionType : 'fade';
+                    let transitionDuration = validFrames[i].transitionDurationAfter ?? 1.0;
+                    const segmentDuration = segmentDurations[i];
+                    const nextInputVideo = `[${i + 1}:v]`;
+                    const outputLabel = `[v${i}]`;
+
+                    // If type is 'none', simulate a cut with a very short fade
+                    if (transitionType === 'none') {
+                        safeTransitionType = 'fade';
+                        transitionDuration = 0.01; // Simulate cut
+                        console.log(`  - Simulating video cut with short fade between segment ${i} and ${i + 1}`);
+                    }
+
+                    const offset = Math.max(0, segmentDuration - transitionDuration);
+                    videoFilterChain += `${lastVideoOutputLabel}${nextInputVideo}xfade=transition=${safeTransitionType}:duration=${transitionDuration}:offset=${offset}${outputLabel};`;
+                    lastVideoOutputLabel = outputLabel; // Chain the output
+                    console.log(`  - Added video xfade: ${safeTransitionType} (${transitionDuration}s) between segment ${i} and ${i + 1} starting at ${offset}s within segment ${i}`);
+                }
+
+                // 2. Build the sequential AUDIO chain using concat filter
+                const audioInputs = segmentFiles.map((_, i) => `[${i}:a]`).join('');
+                const audioFilterChain = `${audioInputs}concat=n=${segmentFiles.length}:v=0:a=1[aout]`;
+                console.log(`  - Added audio concatenation for ${segmentFiles.length} segments.`);
+
+                // 3. Combine video and audio filter chains
+                const filterComplex = `${videoFilterChain}${audioFilterChain}`;
+
+                // 4. Build the final command
+                const transitionCommand = [
+                    ...inputs,
+                    '-filter_complex', filterComplex,
+                    '-map', lastVideoOutputLabel, // Map the final video label from the xfade chain
+                    '-map', '[aout]',         // Map the final audio label from the concat chain
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                    '-c:a', 'aac', '-ar', '48000', '-b:a', '192k', // Ensure consistent audio encoding
+                    '-movflags', '+faststart',
+                    finalOutputPath
+                ];
+                console.log('Executing FFmpeg command with xfade (video) / concat (audio)...');
+                await runFFmpeg(transitionCommand);
+                console.log(`Video with transitions created: ${finalOutputPath}`);
+
+            } else {
+                // --- Use concat demuxer (fast, no transitions or only one segment) ---
+                console.log('Using concat demuxer (no transitions or single segment)...');
+                const fileListPath = path.join(tempDir, 'filelist.txt');
+                const fileListContent = segmentFiles.map(f => `file '${f.replace(/\\/g, '/')}'`).join('\n');
+                await fs.writeFile(fileListPath, fileListContent);
+                console.log(`Created filelist.txt at ${fileListPath}`);
+
+                const concatCommand = [
+                    '-f', 'concat', '-safe', '0', '-i', fileListPath,
+                    '-c', 'copy', // No re-encoding
+                    '-movflags', '+faststart', finalOutputPath
+                ];
+                console.log('Executing FFmpeg command without transitions...');
+                await runFFmpeg(concatCommand);
+                console.log(`Concatenated video created (no transitions): ${finalOutputPath}`);
+            }
 
             // 5. Read and return the final video
             const videoData = await fs.readFile(finalOutputPath);

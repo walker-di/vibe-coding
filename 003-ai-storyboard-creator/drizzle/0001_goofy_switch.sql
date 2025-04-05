@@ -1,0 +1,2 @@
+ALTER TABLE `storyboard_frames` ADD `transition_type_after` text DEFAULT 'none' NOT NULL;--> statement-breakpoint
+ALTER TABLE `storyboard_frames` ADD `transition_duration_after` real DEFAULT 1 NOT NULL;

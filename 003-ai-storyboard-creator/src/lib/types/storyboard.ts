@@ -27,6 +27,11 @@ export const StoryboardFrameDbSchema = z.object({
   bgmUrl: z.string().nullable().optional(),
   narrationAudioUrl: z.string().nullable().optional(), // Added for TTS output URL
 
+  frameOrder: z.number().int().default(0), // Add frameOrder
+
+  // Add transition fields
+  transitionTypeAfter: z.string().default('none'),
+  transitionDurationAfter: z.number().default(1.0),
 
   createdAt: z.date(),
 });

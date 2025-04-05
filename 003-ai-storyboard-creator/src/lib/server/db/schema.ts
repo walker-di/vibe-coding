@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'; // Add 'real' import
 import { sql, relations } from 'drizzle-orm'; // Import relations
 
 // New table for Storyboards
@@ -37,6 +37,10 @@ export const storyboardFrames = sqliteTable('storyboard_frames', {
     .default(sql`(unixepoch('subsec') * 1000)`), // Use SQLite function for default timestamp
   // Add an order field if frame sequence matters
   frameOrder: integer('frame_order').notNull().default(0),
+
+  // Fields for transition *after* this frame
+  transitionTypeAfter: text('transition_type_after').notNull().default('none'), // e.g., 'none', 'fade', 'crossfade', 'wipeleft'
+  transitionDurationAfter: real('transition_duration_after').notNull().default(1.0), // Duration in seconds
 });
 
 // Define the relationships (optional but good practice for ORM features)
