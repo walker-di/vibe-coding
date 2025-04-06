@@ -470,6 +470,7 @@
     width: 2px;
     background-color: red;
     z-index: 10;
+    transform: translateX(-50%); /* Center the line over the calculated position */
   }
   .tracks-container {
      /* Container for tracks and playhead line */
@@ -481,6 +482,7 @@
     background-color: red;
     z-index: 5; /* Ensure it's above tracks but potentially below dragged items */
     pointer-events: none; /* Prevent interaction */
+    transform: translateX(-50%); /* Center the line over the calculated position */
   }
   .track {
      /* min-width removed, width controlled by timeline-inner */

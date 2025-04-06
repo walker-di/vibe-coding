@@ -168,7 +168,9 @@ This will start the Storybook development server, usually on port 6006.
 | API: Load Timeline State (GET /api/.../timeline)      | Backend  | Done   | Endpoint logic and DB query                                              |
 | Integration: Add `TimelineEditor` to Project Page     | Frontend | Done   | Placed component in the editor layout (`+page.svelte`)                   |
 | Integration: Save/Load Timeline State                 | Frontend | Done   | Connected component via `bind:timeline` and `$effect` for auto-save      |
-| **Fix: Media Library Thumbnails**                       | **Both** | **To Do** | **Thumbnails currently show placeholders, need backend generation & frontend update.** |
+| **Fix: Media Library Thumbnails**                       | **Both** | **Done** | **Backend generates thumbnails, frontend displays them.**                |
+| **Feature: Click Media to Add to Timeline**             | Frontend | **Done** | **Clicking item in Media Library adds it to first compatible/new track.** |
+| **Refine Clip Moving (Snapping, Cross-Track)**          | Frontend | Todo   | Implement snapping behavior and allow moving clips between tracks.       |
 
 ---
 
@@ -227,7 +229,7 @@ This section outlines the planned steps to build the application based on the de
 *   [x] **Frontend (Integration):** Implement video preview playback synchronized with timeline (`PreviewPlayer.svelte` + integration in `+page.svelte`).
 *   [x] **Frontend (Timeline):** Implement basic clip trimming via handles (`TimelineEditor.svelte`).
 *   [x] **Frontend (Timeline):** Implement basic clip splitting at playhead (`TimelineEditor.svelte`).
-*   [ ] **Frontend (Timeline):** Refine clip moving (snapping, cross-track). **<-- NEXT TASK**
+*   [ ] **Frontend (Timeline):** Refine clip moving (snapping, cross-track).
 
 ### Phase 5: AI & Audio (Future)
 
