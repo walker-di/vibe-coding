@@ -158,10 +158,10 @@
 
 
 	// --- Public API / Parent Interaction ---
-	function play() {
+	export function play() {
 		videoElement?.play();
 	}
-	function pause() {
+	export function pause() {
 		videoElement?.pause();
 	}
 

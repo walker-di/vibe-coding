@@ -61,9 +61,83 @@
      const targetTrackIndex = timeline.tracks.findIndex(t => t.id === trackId);
     if (targetTrackIndex === -1) return;
 
-    // Update the clips array for the specific track with the reordered items
-    timeline.tracks[targetTrackIndex].clips = e.detail.items;
-    console.log(`DND Finalized for track ${trackId}. New order:`, e.detail.items);
+    const droppedItem = e.detail.items[0]; // The item being dropped
+
+    console.log('Dropped Item Data:', droppedItem);
+
+    // Determine if the dropped item is a MediaItem or a Clip using structural typing
+    // MediaItems have 'sourceUrl' and 'uploadedAt', Clips have 'startTime' and 'trackId'
+    const isMediaItem = droppedItem && typeof droppedItem === 'object' && 'sourceUrl' in droppedItem && !('startTime' in droppedItem);
+    const isClip = droppedItem && typeof droppedItem === 'object' && 'startTime' in droppedItem && 'trackId' in droppedItem;
+
+    if (isMediaItem) {
+        const mediaItem = droppedItem as MediaItem; // Safer assertion now
+        // Ensure the dropped media type matches the track type
+        if (mediaItem.type !== timeline.tracks[targetTrackIndex].type) {
+            console.warn(`Cannot drop media of type ${mediaItem.type} onto a ${timeline.tracks[targetTrackIndex].type} track.`);
+            // TODO: Provide visual feedback to the user?
+            return; // Prevent drop
+        }
+
+        if (!mediaItem.duration) {
+            console.error("Cannot add media item without duration:", mediaItem);
+            return; // Prevent adding the clip
+        }
+
+        // --- Calculate Start Time (Append to End) ---
+        const targetTrackClips = timeline.tracks[targetTrackIndex].clips;
+        const lastClipEndTime = targetTrackClips.length > 0
+            ? Math.max(...targetTrackClips.map(c => c.endTime))
+            : 0;
+        const startTime = lastClipEndTime; // Start after the last clip ends
+
+        // --- Create New Clip ---
+        // Ensure duration is treated as a number
+        const duration = Number(mediaItem.duration);
+        if (isNaN(duration) || duration <= 0) {
+             console.error("Invalid duration for media item:", mediaItem);
+             return;
+        }
+        const endTime = startTime + duration;
+
+        const newClip: Clip = {
+            id: uuidv4(),
+            mediaId: mediaItem.id,
+            trackId: trackId,
+            startTime: startTime,
+            endTime: endTime,
+            sourceStartTime: 0,
+            sourceEndTime: mediaItem.duration,
+        };
+
+        console.log(`Creating new clip from MediaItem ${mediaItem.id} at ${startTime.toFixed(2)}s on track ${trackId}`, newClip);
+
+        // Add the new clip to the end of the track
+        // Note: The 'consider' handler might have already added a temporary visual element.
+        // We replace the whole array here to ensure correctness and avoid duplicates if 'consider' added the item.
+        const currentClips = timeline.tracks[targetTrackIndex].clips.filter(c => c.id !== mediaItem.id); // Remove potential placeholder from consider
+        currentClips.push(newClip);
+        // No need to sort, just append
+        timeline.tracks[targetTrackIndex].clips = currentClips; // Assign the new array
+
+        // Update total duration if necessary
+        if (endTime > timeline.totalDuration) {
+            // Ensure total duration calculation uses the numeric duration
+            timeline.totalDuration = Math.max(timeline.totalDuration || 0, endTime);
+        }
+
+    } else if (isClip) { // It's a Clip being reordered within the timeline
+        // Existing logic for reordering clips within the same track
+        // The e.detail.items already contains the reordered list from the 'consider' phase
+        timeline.tracks[targetTrackIndex].clips = e.detail.items;
+        console.log(`DND Reordered clips on track ${trackId}. New order:`, e.detail.items);
+    } else {
+		console.warn("Dropped item is neither a recognized MediaItem nor a Clip:", droppedItem);
+        // No cleanup needed here as the type check is more robust
+	}
+
+    // Trigger reactivity by reassigning the timeline object
+    timeline = timeline;
   }
 
   let zoomLevel = $state(1); // Zoom level, 1 = 100%
@@ -313,7 +387,12 @@
               <div
                 class="clips-area position-relative"
                 style="height: 50px; background-color: #eee;"
-                use:dndzone={{ items: track.clips, flipDurationMs, type: track.type }}
+                use:dndzone={{
+                    items: track.clips,
+                    flipDurationMs,
+                    type: track.type // Only accept drops matching the track type initially
+                    // We handle mediaLibraryItem drops in the finalize logic by checking item data
+                }}
                 onconsider={(e) => handleDndConsider(e, track.id)}
                 onfinalize={(e) => handleDndFinalize(e, track.id)}
               >

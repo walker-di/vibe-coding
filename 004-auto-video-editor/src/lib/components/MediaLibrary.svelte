@@ -1,13 +1,14 @@
 <script lang="ts">
 	// Import and use the shared MediaItem type
 	import type { MediaItem } from '$lib/types';
+	import { dndzone } from 'svelte-dnd-action'; // Import dndzone
 
 	let {
 		mediaItems = [] as MediaItem[],
 		onMediaSelect = (item: MediaItem) => {} // Callback when an item is selected/clicked
 	}: {
 		mediaItems?: MediaItem[];
-		onMediaSelect?: (item: MediaItem) => void;
+		onMediaSelect?: (item: MediaItem) => void; // Add back prop
 	} = $props();
 
 	// Updated function to format duration (handles number | null | undefined)
@@ -44,12 +45,14 @@
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div class="col">
 						<div
-							class="card h-100 cursor-pointer media-item"
+							class="card h-100 media-item cursor-pointer"
+							use:dndzone={{ items: [item], type: 'mediaLibraryItem' }}
 							onclick={() => onMediaSelect(item)}
 							onkeypress={(e) => e.key === 'Enter' && onMediaSelect(item)}
 							role="button"
 							tabindex="0"
-							aria-label={`Select media ${item.name}`}
+							aria-label={`Select or drag media ${item.name}`}
+							style="cursor: grab;"
 						>
 							{#if item.type === 'video'}
 								<img
@@ -90,7 +93,7 @@
 		border-color: var(--bs-primary);
 		box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
 	}
-	.cursor-pointer {
+	.cursor-pointer { /* Add back cursor pointer style */
 		cursor: pointer;
 	}
 	.object-fit-cover {

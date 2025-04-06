@@ -6,11 +6,12 @@
 	import TimelineEditor from '$lib/components/TimelineEditor.svelte';
 	import PreviewPlayer from '$lib/components/PreviewPlayer.svelte'; // Import PreviewPlayer
 	import type { MediaItem, Timeline, Track, Clip } from '$lib/types'; // Import necessary types
+	import { v4 as uuidv4 } from 'uuid'; // Import uuid
 
 	// --- Core State ---
 	let projectId = $state('');
 	let mediaItems = $state<MediaItem[]>([]);
-	let mediaMap = $state(new Map<string, MediaItem>()); // Map for quick media lookup
+	// let mediaMap = $state(new Map<string, MediaItem>()); // Replaced with $derived below
 	let isLoadingMedia = $state(true);
 	let isLoadingTimeline = $state(true);
 	let mediaError = $state<string | null>(null);
@@ -33,19 +34,20 @@
 		};
 	}
 
-	// --- Effects ---
-
-	// Populate mediaMap whenever mediaItems changes
-	$effect(() => {
-		const newMap = new Map<string, MediaItem>();
+	// --- Derived State ---
+	// Create mediaMap reactively based on mediaItems
+	let mediaMap = $derived(() => {
+		const map = new Map<string, MediaItem>();
 		for (const item of mediaItems) {
-			if (item && item.id) { // Basic check
-				newMap.set(item.id, item);
+			if (item && item.id) {
+				map.set(item.id, item);
 			}
 		}
-		mediaMap = newMap;
-		console.log('Updated mediaMap:', mediaMap);
+		console.log('Derived mediaMap updated:', map); // Log when it recomputes
+		return map;
 	});
+
+	// --- Effects ---
 
 	// Fetch media and project details when projectId changes
 	$effect(() => {
@@ -195,8 +197,57 @@
 	}
 
 	function handleMediaSelect(item: MediaItem) {
-		console.log('Media selected:', item);
-		// TODO: Implement logic (e.g., add to timeline at playhead)
+		console.log('Media selected (click):', item);
+		if (!projectTimeline) {
+			console.error('Cannot add clip: Timeline is not loaded.');
+			return;
+		}
+		if (!item.duration) {
+			console.error('Cannot add clip: Media item has no duration.', item);
+			return;
+		}
+
+		// Find the first compatible track
+		const targetTrackIndex = projectTimeline.tracks.findIndex(track => track.type === item.type);
+
+		if (targetTrackIndex === -1) {
+			console.warn(`No compatible track found for media type "${item.type}".`);
+			// TODO: Optionally create a new track? For now, do nothing.
+			return;
+		}
+
+		// Calculate start time (append to end of the target track)
+		const targetTrackClips = projectTimeline.tracks[targetTrackIndex].clips;
+		const lastClipEndTime = targetTrackClips.length > 0
+			? Math.max(...targetTrackClips.map(c => c.endTime))
+			: 0;
+		const startTime = lastClipEndTime;
+		const duration = Number(item.duration); // Ensure duration is number
+		const endTime = startTime + duration;
+
+		// Create the new clip
+		const newClip: Clip = {
+			id: uuidv4(), // Need uuid library imported
+			mediaId: item.id,
+			trackId: projectTimeline.tracks[targetTrackIndex].id,
+			startTime: startTime,
+			endTime: endTime,
+			sourceStartTime: 0,
+			sourceEndTime: duration,
+		};
+
+		console.log(`Adding new clip from click: ${item.id} to track ${newClip.trackId} at ${startTime.toFixed(2)}s`, newClip);
+
+		// Add the new clip to the track
+		projectTimeline.tracks[targetTrackIndex].clips.push(newClip);
+
+		// Update total duration if necessary
+		if (endTime > projectTimeline.totalDuration) {
+			projectTimeline.totalDuration = endTime;
+		}
+
+		// Trigger reactivity by reassigning (important for Svelte 5 state)
+		projectTimeline = projectTimeline;
 	}
 
 	// --- Debounce Utility ---
@@ -305,7 +356,7 @@
 				<p>Loading media...</p>
 			{:else if mediaError}
 				<div class="alert alert-warning alert-sm p-1" role="alert">{mediaError}</div>
-				<MediaLibrary mediaItems={[]} onMediaSelect={handleMediaSelect}/> <!-- Pass handler -->
+				<MediaLibrary mediaItems={[]} onMediaSelect={handleMediaSelect} /> <!-- Pass handler -->
 			{:else}
 				<MediaLibrary {mediaItems} onMediaSelect={handleMediaSelect} /> <!-- Pass handler -->
 			{/if}
@@ -326,7 +377,7 @@
 				bind:this={playerRef}
 				timeline={projectTimeline}
 				bind:playheadPosition
-				{mediaMap}
+				mediaMap={mediaMap()}
 			/>
 		{/if}
 	{/snippet}
@@ -347,7 +398,7 @@
 				bind:timeline={projectTimeline}
 				bind:playheadPosition
 				bind:isPlaying
-				{mediaMap}
+				mediaMap={mediaMap()}
 			/>
 		{/if}
 	{/snippet}

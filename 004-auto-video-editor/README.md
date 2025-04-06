@@ -218,13 +218,19 @@ This section outlines the planned steps to build the application based on the de
 *   [x] **Frontend (Integration):** Integrate `TimelineEditor.svelte` into the `/projects/[projectId]` route. (Done: Added to `+page.svelte`)
 *   [x] **Frontend (Integration):** Implement saving/loading timeline state to/from the backend API endpoints. (Done: Implemented fetch in `+page.svelte` and auto-save via `bind:timeline` and `$effect`)
 
-### Phase 4: AI Features & Advanced Editing (Future)
+### Phase 4: Advanced Timeline Editing & Core Features
 
 *   [x] **Frontend (Integration):** Implement video preview playback synchronized with timeline (`PreviewPlayer.svelte` + integration in `+page.svelte`).
 *   [x] **Frontend (Timeline):** Implement basic clip trimming via handles (`TimelineEditor.svelte`).
 *   [x] **Frontend (Timeline):** Implement basic clip splitting at playhead (`TimelineEditor.svelte`).
-*   [ ] **Frontend (Timeline):** Refine clip moving (snapping, cross-track).
+*   [ ] **Frontend (Timeline):** Refine clip moving (snapping, cross-track). **<-- NEXT TASK**
+
+### Phase 5: AI & Audio (Future)
+
 *   [ ] Integrate AI services for transcription, object detection, etc.
 *   [ ] Add audio waveform generation/display.
+
+### Phase 6: User Management & Polish (Future)
+
 *   [ ] User Authentication.
-*   [ ] ... more features
+*   [ ] ... more features (e.g., export, effects, transitions)
