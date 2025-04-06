@@ -71,74 +71,175 @@ export default class GameScene extends Phaser.Scene {
 
     }
 
-    // --- Drag and Drop Handling (Simplified for Stack Dragging) ---
+    // --- Drag and Drop Handling with Stack Splitting ---
     setupDragAndDrop(): void {
 
         this.input.on('dragstart', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject) => {
             if (!(gameObject instanceof Phaser.GameObjects.Container)) return;
 
-            // Check if dragging a stack container OR an individual card container
-            const stackInstance = gameObject.getData('stackInstance') as CardStack;
-            const cardInstance = gameObject.getData('cardInstance') as BaseCard;
+            const stackInstance = gameObject.getData('stackInstance') as CardStack; // Is it a stack container?
+            const cardInstance = gameObject.getData('cardInstance') as BaseCard; // Is it a card container?
 
-            if (stackInstance) { // Dragging the stack container directly
+            if (cardInstance) { // Drag started on a CARD's container
+                const parentStack = this.gameState.findStackContainingCard(cardInstance.id);
+
+                if (parentStack) { // Card is in a stack - attempt split
+                    const cardIndex = parentStack.cards.findIndex(card => card.id === cardInstance.id);
+
+                    // Allow splitting if not the bottom card (index 0)
+                    if (cardIndex > 0) {
+                        console.log(`Attempting to split stack ${parentStack.id} at card ${cardInstance.cardName} (index ${cardIndex})`);
+                        const splitCards = parentStack.splitAtIndex(cardIndex);
+
+                        if (splitCards.length > 0) {
+                            // Create the new stack for the split part
+                            const newStack = new CardStack(this, splitCards[0]); // Uses the clicked card as the base
+                            for (let i = 1; i < splitCards.length; i++) {
+                                newStack.addCard(splitCards[i]);
+                            }
+                            this.gameState.addStack(newStack); // Register the new stack
+
+                            // Position the new stack relative to the pointer click offset
+                            const dragOffsetX = pointer.x - gameObject.getBounds().x; // Offset within the original card container
+                            const dragOffsetY = pointer.y - gameObject.getBounds().y;
+                            // Calculate new stack's top-left based on pointer and offset
+                            const newStackX = pointer.x - dragOffsetX;
+                            const newStackY = pointer.y - dragOffsetY;
+                            newStack.phaserContainer.setPosition(newStackX, newStackY);
+
+
+                            // Prepare for dragging the NEW stack
+                            // Store the new container reference on the *original* dragged object (the card container)
+                            gameObject.setData('dragType', 'split-stack');
+                            gameObject.setData('newStackContainer', newStack.phaserContainer);
+                            gameObject.setData('startPos', { x: newStack.phaserContainer.x, y: newStack.phaserContainer.y }); // Store new stack's start pos
+
+                            this.children.bringToTop(newStack.phaserContainer); // Bring new stack visuals to top
+
+                            // Hide the original card container that triggered the drag, as its visual is now in the new stack
+                            gameObject.setVisible(false);
+
+                            console.log(`Split successful. Created new stack ${newStack.id}. Dragging new stack.`);
+
+                        } else {
+                            console.log(`Splitting stack ${parentStack.id} failed.`);
+                            // Prevent drag if split failed? For now, do nothing.
+                        }
+
+                    } else {
+                        // Drag started on the bottom card (index 0)
+                        // For simplicity, ignore drags starting on the bottom card of a stack for now.
+                        console.log(`Drag started on bottom card ${cardInstance.cardName} of stack ${parentStack.id}. Ignoring drag.`);
+                        // We need to prevent the drag operation from continuing for this gameObject
+                        // Setting dragType to null might work, or we might need a more robust way.
+                        gameObject.setData('dragType', null); // Try preventing drag continuation
+                    }
+
+                } else { // Card is NOT in a stack - drag individual card (original logic)
+                    console.log('Start dragging individual card:', cardInstance.cardName);
+                    gameObject.setData('dragType', 'card');
+                    gameObject.setData('startPos', { x: gameObject.x, y: gameObject.y });
+                    this.children.bringToTop(gameObject);
+                }
+
+            } else if (stackInstance) { // Drag started directly on a STACK container (original logic)
                 console.log(`Start dragging stack container ${stackInstance.id}`);
                 gameObject.setData('dragType', 'stack');
                 gameObject.setData('startPos', { x: gameObject.x, y: gameObject.y });
                 this.children.bringToTop(gameObject);
-            } else if (cardInstance) { // Dragging an individual card container
-                 const parentStack = this.gameState.findStackContainingCard(cardInstance.id);
-                 if (!parentStack) { // Only allow dragging if not in a stack
-                     console.log('Start dragging individual card:', cardInstance.cardName);
-                     gameObject.setData('dragType', 'card');
-                     gameObject.setData('startPos', { x: gameObject.x, y: gameObject.y });
-                     this.children.bringToTop(gameObject);
-                 } else {
-                     console.log(`Attempted drag on card ${cardInstance.cardName} which is already in stack ${parentStack.id}. Ignoring.`);
-                 }
             }
         });
 
         this.input.on('drag', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject, dragX: number, dragY: number) => {
-            // Move the gameObject directly (either stack container or individual card container)
-             if (!(gameObject instanceof Phaser.GameObjects.Container)) return;
-
-             // Use simplified clamping
-             const halfWidth = gameObject.width > 0 ? gameObject.width / 2 : 50;
-             const halfHeight = gameObject.height > 0 ? gameObject.height / 2 : 50;
-             const clampedX = Phaser.Math.Clamp(dragX, halfWidth, this.cameras.main.width - halfWidth);
-             const clampedY = Phaser.Math.Clamp(dragY, halfHeight, this.cameras.main.height - halfHeight);
-
-             gameObject.setPosition(clampedX, clampedY);
-        });
-
-        this.input.on('dragend', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject, dropped: boolean) => {
+            // The gameObject here is the one drag STARTED on (could be original card container)
             if (!(gameObject instanceof Phaser.GameObjects.Container)) return;
 
             const dragType = gameObject.getData('dragType');
-            const startPos = gameObject.getData('startPos');
+            let containerToMove: Phaser.GameObjects.Container | null = null;
+
+            if (dragType === 'split-stack') {
+                // We are dragging a newly split stack, move its container
+                containerToMove = gameObject.getData('newStackContainer') as Phaser.GameObjects.Container;
+            } else if (dragType === 'stack' || dragType === 'card') {
+                // We are dragging the original stack container or an individual card container
+                containerToMove = gameObject;
+            }
+
+            if (containerToMove) {
+                // Use simplified clamping - apply to the container being moved
+                const halfWidth = containerToMove.width > 0 ? containerToMove.width / 2 : 50;
+                const halfHeight = containerToMove.height > 0 ? containerToMove.height / 2 : 50;
+                // dragX/dragY are the pointer coordinates, which is what setPosition expects
+                const clampedX = Phaser.Math.Clamp(dragX, halfWidth, this.cameras.main.width - halfWidth);
+                const clampedY = Phaser.Math.Clamp(dragY, halfHeight, this.cameras.main.height - halfHeight);
+
+                containerToMove.setPosition(clampedX, clampedY);
+            }
+        });
+
+        this.input.on('dragend', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject, dropped: boolean) => {
+            // The gameObject here is the one drag STARTED on
+            if (!(gameObject instanceof Phaser.GameObjects.Container)) return;
+
+            const dragType = gameObject.getData('dragType');
+            const startPos = gameObject.getData('startPos'); // May refer to original card or original stack pos
+            const newStackContainer = gameObject.getData('newStackContainer') as Phaser.GameObjects.Container;
 
             console.log(`Drag end - Type: ${dragType}`);
 
             if (dragType === 'card') {
                 // Handle potential stacking for an individual card drop
-                this.handlePotentialStack(gameObject as Phaser.GameObjects.Container);
+                // The handlePotentialStack function needs the card's container (gameObject)
+                this.handlePotentialStack(gameObject); // Pass the original card container
+                // Ensure visibility is restored if it wasn't stacked
+                 const cardInstance = gameObject.getData('cardInstance') as BaseCard;
+                 if (cardInstance && !this.gameState.findStackContainingCard(cardInstance.id)) {
+                    gameObject.setVisible(true);
+                 }
+
+
             } else if (dragType === 'stack') {
                  // Just finished dragging a whole stack
-                 // Cline: Commented out snap-back logic for stacks. They will now stay where dropped.
-                 // if (!dropped && startPos) { // Snap back if not dropped on anything
-                 //     gameObject.setPosition(startPos.x, startPos.y);
-                 // }
-            }
-            // REMOVED split/unstack logic from dragend
+                 console.log(`Finished dragging stack ${gameObject.getData('stackInstance')?.id}`);
+                 // Future: Handle dropping stack onto something
 
-            // Clear drag data
-            gameObject.setData('dragType', null);
-            gameObject.setData('startPos', null);
+            } else if (dragType === 'split-stack' && newStackContainer) {
+                // Just finished dragging a newly split stack
+                const newStackInstance = newStackContainer.getData('stackInstance') as CardStack;
+                console.log(`Finished dragging split stack ${newStackInstance?.id}`);
+                // Future: Handle dropping this new stack onto something
+
+                // The original card container (gameObject) that initiated the drag is now obsolete
+                // Its visual representation is managed by the newStackContainer. Destroy the original.
+                gameObject.destroy();
+
+            } else if (dragType === null) {
+                 console.log('Drag end for ignored drag (e.g., bottom card)');
+                 // Ensure original card container is visible if it exists and wasn't destroyed
+                 if (gameObject.active) { // Check if not destroyed
+                    gameObject.setVisible(true);
+                 }
+            }
+
+
+            // Clear drag data from the object that *initiated* the drag
+            // Check if gameObject still exists before clearing data
+             if (gameObject.active) {
+                gameObject.setData('dragType', null);
+                gameObject.setData('startPos', null);
+                gameObject.setData('newStackContainer', null);
+             }
+
+
+            // Also clear data from the new stack container if it exists and wasn't destroyed
+            if (newStackContainer && newStackContainer.active) {
+                 newStackContainer.setData('dragType', null); // Should not have drag data anyway
+                 newStackContainer.setData('startPos', null);
+            }
         });
     }
 
-    // Handles dropping an individual card onto another card or stack
+    // Handles dropping an individual card OR a newly split stack onto another card or stack
     handlePotentialStack(droppedObject: Phaser.GameObjects.Container): void {
         const droppedCard = droppedObject.getData('cardInstance') as BaseCard;
         if (!droppedCard) return;

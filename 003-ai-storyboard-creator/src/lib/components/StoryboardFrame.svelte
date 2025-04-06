@@ -5,8 +5,35 @@
   import { createEventDispatcher, onMount } from 'svelte'; // Import onMount
 
   export let frame: StoryboardFrameDb;
+  export let storyboardId: string; // Add storyboardId prop
 
-  const dispatch = createEventDispatcher<{ durationchange: { id: string, duration: number } }>();
+  // State for active tab
+  let activeTab: 'narration' | 'mainImage' | 'background' | 'bgm' = 'narration';
+
+  // State for editable fields
+  let editedNarration = frame.narration ?? '';
+  let editedMainImagePrompt = frame.mainImagePrompt ?? '';
+  let editedBackgroundImagePrompt = frame.backgroundImagePrompt ?? '';
+  let editedBgmPrompt = frame.bgmPrompt ?? '';
+  let isDirty = false; // Track if changes have been made
+  let isSaving = false; // Track saving state
+  let saveError: string | null = null;
+
+  // Update edited fields if the frame prop changes externally
+  $: {
+      if (!isDirty) { // Only update if not currently editing
+          editedNarration = frame.narration ?? '';
+          editedMainImagePrompt = frame.mainImagePrompt ?? '';
+          editedBackgroundImagePrompt = frame.backgroundImagePrompt ?? '';
+          editedBgmPrompt = frame.bgmPrompt ?? '';
+    }
+  }
+
+  // Add 'deleteframe' to the dispatcher types
+  const dispatch = createEventDispatcher<{
+    durationchange: { id: string, duration: number };
+    deleteframe: { id: string };
+  }>();
 
   // Loading state per asset type - Add bgmAudio
   let isGenerating: { [key in 'mainImage' | 'backgroundImage' | 'narrationAudio' | 'bgmAudio']?: boolean } = {};
@@ -155,6 +182,70 @@
       narrationDuration = null; // Ensure duration is reset on error
   }
 
+  // Function to mark fields as dirty
+  function markDirty() {
+      isDirty = true;
+      saveError = null; // Clear previous save errors on new edit
+  }
+
+  // Function to save text changes
+  async function saveTextChanges() {
+      if (!isDirty || isSaving) return;
+
+      isSaving = true;
+      saveError = null;
+      console.log(`Saving text changes for frame ${frame.id} in storyboard ${storyboardId}`);
+
+      try {
+          // Use the storyboardId prop in the fetch URL
+          const response = await fetch(`/api/storyboard/${storyboardId}/frame/${frame.id}/update-text`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  narration: editedNarration,
+                  mainImagePrompt: editedMainImagePrompt,
+                  backgroundImagePrompt: editedBackgroundImagePrompt,
+                  bgmPrompt: editedBgmPrompt
+              })
+          });
+
+          if (!response.ok) {
+              const errorData = await response.json().catch(() => ({ message: `API Error: ${response.statusText}` }));
+              throw new Error(errorData.message || `API Error: ${response.statusText}`);
+          }
+
+          const result = await response.json();
+          console.log(`Save API response for frame ${frame.id}:`, result);
+
+          // Update the original frame prop with the saved data
+          // Assuming the API returns the updated frame or at least confirms success
+          if (result.updatedFrame) {
+             // Update the frame prop which will trigger the reactive block to update edited fields
+             frame = { ...frame, ...result.updatedFrame };
+             // Explicitly reset edited fields AFTER frame update if needed, though reactive block should handle it
+             editedNarration = frame.narration ?? '';
+             editedMainImagePrompt = frame.mainImagePrompt ?? '';
+             editedBackgroundImagePrompt = frame.backgroundImagePrompt ?? '';
+             editedBgmPrompt = frame.bgmPrompt ?? '';
+          } else {
+             // Fallback if API doesn't return full frame
+             frame.narration = editedNarration;
+             frame.mainImagePrompt = editedMainImagePrompt;
+             frame.backgroundImagePrompt = editedBackgroundImagePrompt;
+             frame.bgmPrompt = editedBgmPrompt;
+          }
+
+
+          isDirty = false; // Reset dirty flag after successful save
+
+      } catch (err: any) {
+          console.error(`Failed to save text changes for frame ${frame.id}:`, err);
+          saveError = `Error saving: ${err.message || 'Unknown error'}`;
+      } finally {
+          isSaving = false;
+      }
+  }
+
 </script>
 
 <div class="card mb-3">
@@ -197,24 +288,129 @@
           <h5 class="card-title">{frame.title}</h5>
         {/if}
 
-        <h6 class="card-subtitle mb-1 text-muted">Narração:</h6>
-        <p class="card-text mb-2" style="max-height: 80px; overflow-y: auto;">
-          {frame.narration || 'N/A'}
-        </p>
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs mb-2" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link {activeTab === 'narration' ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'narration'}
+              on:click={() => activeTab = 'narration'}
+            >
+              Narração
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link {activeTab === 'mainImage' ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'mainImage'}
+              on:click={() => activeTab = 'mainImage'}
+            >
+              Imagem Principal
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link {activeTab === 'background' ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'background'}
+              on:click={() => activeTab = 'background'}
+            >
+              Fundo
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link {activeTab === 'bgm' ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'bgm'}
+              on:click={() => activeTab = 'bgm'}
+            >
+              BGM
+            </button>
+          </li>
+        </ul>
 
-        <h6 class="card-subtitle mb-1 text-muted">Prompt Imagem Principal:</h6>
-        <p class="card-text small mb-2" style="max-height: 60px; overflow-y: auto;">
-            <code style="white-space: pre-wrap;">{frame.mainImagePrompt || 'N/A'}</code>
-        </p>
+        <!-- Tab Content -->
+        <div class="tab-content mb-2" style="min-height: 120px;"> <!-- Increased min-height for textarea -->
+          {#if activeTab === 'narration'}
+            <div class="tab-pane fade show active" role="tabpanel">
+              <h6 class="card-subtitle mb-1 text-muted visually-hidden">Narração:</h6>
+              <textarea
+                class="form-control form-control-sm"
+                rows="4"
+                bind:value={editedNarration}
+                on:input={markDirty}
+                placeholder="Digite a narração aqui..."
+              ></textarea>
+            </div>
+          {/if}
+          {#if activeTab === 'mainImage'}
+            <div class="tab-pane fade show active" role="tabpanel">
+              <h6 class="card-subtitle mb-1 text-muted visually-hidden">Prompt Imagem Principal:</h6>
+               <textarea
+                 class="form-control form-control-sm font-monospace small"
+                 rows="4"
+                 bind:value={editedMainImagePrompt}
+                 on:input={markDirty}
+                 placeholder="Digite o prompt da imagem principal..."
+               ></textarea>
+            </div>
+          {/if}
+          {#if activeTab === 'background'}
+            <div class="tab-pane fade show active" role="tabpanel">
+               <h6 class="card-subtitle mb-1 text-muted visually-hidden">Prompt Fundo:</h6>
+               <textarea
+                 class="form-control form-control-sm font-monospace small"
+                 rows="4"
+                 bind:value={editedBackgroundImagePrompt}
+                 on:input={markDirty}
+                 placeholder="Digite o prompt da imagem de fundo..."
+               ></textarea>
+            </div>
+          {/if}
+          {#if activeTab === 'bgm'}
+            <div class="tab-pane fade show active" role="tabpanel">
+               <h6 class="card-subtitle mb-1 text-muted visually-hidden">Prompt BGM:</h6>
+                <textarea
+                  class="form-control form-control-sm font-monospace small"
+                  rows="4"
+                  bind:value={editedBgmPrompt}
+                  on:input={markDirty}
+                  placeholder="Digite o prompt da música de fundo..."
+                ></textarea>
+            </div>
+          {/if}
+        </div>
 
-        <p class="card-text small mb-2">
-          <strong class="text-muted">Prompt Fundo:</strong> <code style="white-space: pre-wrap;">{frame.backgroundImagePrompt || 'N/A'}</code>
-          <br />
-          <strong class="text-muted">Prompt BGM:</strong> <code style="white-space: pre-wrap;">{frame.bgmPrompt || 'N/A'}</code>
-        </p>
+         <!-- Save Button & Error -->
+         {#if isDirty || saveError}
+            <div class="mb-2 text-end">
+                 {#if saveError}
+                    <small class="text-danger me-2">{saveError}</small>
+                 {/if}
+                 <button
+                    class="btn btn-primary btn-sm"
+                    on:click={saveTextChanges}
+                    disabled={!isDirty || isSaving}
+                 >
+                    {#if isSaving}
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Salvando...
+                    {:else}
+                        Salvar Alterações
+                    {/if}
+                 </button>
+            </div>
+         {/if}
 
         <!-- Audio Controls -->
-        <div class="mt-auto pt-2"> <!-- Removed flex container, handle layout internally -->
+        <div class="mt-auto pt-2">
             <div class="d-flex flex-wrap gap-2 align-items-center"> <!-- Added inner flex container -->
                 <!-- Log URL before the #if block -->
                 <!-- Narration Player -->
@@ -333,11 +529,22 @@
                 </button>
             </div>
              {#if generationError}
-                <small class="text-danger d-block mt-1">{generationError}</small>
-             {/if}
-        </div>
-        <!-- TODO: Add Edit/Delete buttons later -->
-      </div>
-    </div>
-  </div>
+                 <small class="text-danger d-block mt-1">{generationError}</small>
+              {/if}
+         </div>
+         <!-- Delete Button -->
+         <div class="mt-2 text-end">
+             <button
+                 type="button"
+                 class="btn btn-sm btn-outline-danger"
+                 on:click={() => dispatch('deleteframe', { id: frame.id })}
+                 title="Excluir este quadro"
+                 disabled={Object.values(isGenerating).some(val => val) || isSaving}
+             >
+                 <i class="bi bi-trash3"></i> Excluir Quadro
+             </button>
+         </div>
+       </div>
+     </div>
+   </div>
 </div>

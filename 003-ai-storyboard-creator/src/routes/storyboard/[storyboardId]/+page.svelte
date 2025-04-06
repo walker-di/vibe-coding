@@ -26,7 +26,9 @@
 
   let showCreationModal = false; // Renamed for clarity
   let showTransitionModal = false; // State for the new modal
-  let isLoading = false; // State for API call loading (adding frames)
+  let isLoading = false; // State for AI frame generation/addition
+  let isInsertingFrame = false; // State for inserting a single blank frame
+  let isDeletingFrame = false; // State for deleting a frame
   let isSavingTransition = false; // State for saving transition API call
   let isExportingFrames = false; // State for individual frame export loading
   let isExportingZip = false; // Added state for ZIP export loading
@@ -89,6 +91,85 @@
       frameDurations = { ...frameDurations, [id]: duration };
     }
   }
+
+  // Function to handle deleting a specific frame
+  async function handleDeleteFrame(event: CustomEvent<{ id: string }>) {
+    const frameIdToDelete = event.detail.id;
+    const currentStoryboardId = data.storyboard?.id;
+
+    if (!frameIdToDelete || !currentStoryboardId) {
+      apiError = "Cannot delete frame: Frame ID or Storyboard ID is missing.";
+      return;
+    }
+
+    // Simple confirmation dialog
+    if (!window.confirm(`Tem certeza que deseja excluir o quadro ${frameIdToDelete.substring(0, 8)}...? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    console.log(`Requesting to delete frame: ${frameIdToDelete}`);
+    isDeletingFrame = true;
+    apiError = null;
+
+    try {
+      const response = await fetch(`/api/storyboard/${currentStoryboardId}/frame/${frameIdToDelete}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: `API Error: ${response.statusText}` }));
+        throw new Error(errorData.message || `API Error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('API Response (Delete Frame):', result);
+      // Invalidate data for this page to refresh the frame list
+      await invalidate((url) => url.pathname === `/storyboard/${currentStoryboardId}`);
+
+    } catch (err: any) {
+      console.error('Failed to delete frame:', err);
+      apiError = err.message || 'An unknown error occurred while deleting the frame.';
+    } finally {
+      isDeletingFrame = false;
+    }
+  }
+
+  // Function to handle inserting a blank frame after a specific frame
+  async function handleAddFrameAfter(frameIdToInsertAfter: string) {
+    const currentStoryboardId = data.storyboard?.id;
+    if (!currentStoryboardId || !frameIdToInsertAfter) {
+      apiError = "Cannot insert frame: Storyboard ID or previous Frame ID is missing.";
+      return;
+    }
+    console.log(`Requesting to insert blank frame after: ${frameIdToInsertAfter}`);
+    isInsertingFrame = true;
+    apiError = null;
+
+    try {
+      const response = await fetch(`/api/storyboard/${currentStoryboardId}/add-frame`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insertAfterFrameId: frameIdToInsertAfter }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: `API Error: ${response.statusText}` }));
+        throw new Error(errorData.message || `API Error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('API Response (Insert Blank Frame):', result);
+      // Invalidate data for this page to refresh the frame list
+      await invalidate((url) => url.pathname === `/storyboard/${currentStoryboardId}`);
+
+    } catch (err: any) {
+      console.error('Failed to insert blank frame:', err);
+      apiError = err.message || 'An unknown error occurred while inserting the frame.';
+    } finally {
+      isInsertingFrame = false;
+    }
+  }
+
 
   // Function to format seconds into MM:SS
   function formatDuration(seconds: number | null | undefined): string {
@@ -426,11 +507,11 @@
         </select>
       </div>
 
-      <button class="btn btn-success me-2" on:click={openCreationModal} disabled={isLoading || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
+      <button class="btn btn-success me-2" on:click={openCreationModal} disabled={isLoading || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
         <i class="bi bi-plus-circle me-1"></i> Adicionar Quadros
       </button>
       <!-- ZIP Export Button -->
-      <button class="btn btn-outline-secondary me-2" on:click={exportStoryboardFrames} disabled={isExportingZip || isLoading || frames.length === 0 || isExportingFrames || isExportingUnified || isSavingTransition}>
+      <button class="btn btn-outline-secondary me-2" on:click={exportStoryboardFrames} disabled={isExportingZip || isLoading || isInsertingFrame || isDeletingFrame || frames.length === 0 || isExportingFrames || isExportingUnified || isSavingTransition}>
         {#if isExportingZip}
           <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
           Exportando Arquivos...
@@ -439,7 +520,7 @@
         {/if}
       </button>
       <!-- Individual Frame Export Button -->
-      <button class="btn btn-outline-primary me-2" on:click={exportIndividualFrames} disabled={isExportingFrames || isLoading || frames.length === 0 || isExportingZip || isExportingUnified || isSavingTransition}>
+      <button class="btn btn-outline-primary me-2" on:click={exportIndividualFrames} disabled={isExportingFrames || isLoading || isInsertingFrame || isDeletingFrame || frames.length === 0 || isExportingZip || isExportingUnified || isSavingTransition}>
         {#if isExportingFrames}
           <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
           Exportando Quadros... ({ (exportProgress * 100).toFixed(0) }%)
@@ -448,7 +529,7 @@
         {/if}
       </button>
        <!-- Unified Video Export Button -->
-       <button class="btn btn-primary" on:click={exportUnifiedVideo} disabled={isExportingUnified || isLoading || frames.length === 0 || isExportingZip || isExportingFrames || isSavingTransition}>
+       <button class="btn btn-primary" on:click={exportUnifiedVideo} disabled={isExportingUnified || isLoading || isInsertingFrame || isDeletingFrame || frames.length === 0 || isExportingZip || isExportingFrames || isSavingTransition}>
          {#if isExportingUnified}
            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
            Exportando Vídeo Unificado...
@@ -465,12 +546,14 @@
   </div>
 
   <!-- Loading/Saving Indicators -->
-  {#if isLoading || isSavingTransition}
+  {#if isLoading || isSavingTransition || isInsertingFrame || isDeletingFrame}
     <div class="d-flex justify-content-center my-3">
       <div class="spinner-border text-primary" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
-       <span class="ms-2">{isLoading ? 'Gerando e adicionando quadros...' : 'Salvando transição...'}</span>
+       <span class="ms-2">
+         {#if isLoading}Gerando e adicionando quadros...{:else if isSavingTransition}Salvando transição...{:else if isInsertingFrame}Inserindo quadro...{:else if isDeletingFrame}Excluindo quadro...{/if}
+       </span>
     </div>
   {/if}
 
@@ -531,10 +614,15 @@
 
   <!-- Storyboard Frames List -->
   <div class="mb-3">
-    {#if frames.length > 0}
+    {#if frames.length > 0 && storyboard?.id} <!-- Ensure storyboard.id exists -->
       <!-- Render frames sorted by frameOrder -->
       {#each frames.sort((a, b) => (a.frameOrder ?? 0) - (b.frameOrder ?? 0)) as frame, i (frame.id)}
-        <StoryboardFrameComponent {frame} on:durationchange={handleDurationChange} />
+        <StoryboardFrameComponent
+          {frame}
+          storyboardId={storyboard.id}
+          on:durationchange={handleDurationChange}
+          on:deleteframe={handleDeleteFrame}
+        />
 
         <!-- Transition Button Area (between frames) -->
         {#if i < frames.length - 1}
@@ -546,10 +634,19 @@
                class="btn btn-sm btn-outline-secondary"
                title="Configurar transição para o próximo quadro"
                on:click={() => openTransitionModal(frame, nextFrame)}
-               disabled={isSavingTransition}
+               disabled={isSavingTransition || isLoading || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified}
              >
                <i class="bi bi-arrow-left-right me-1"></i>
                Transição: {currentTransitionType === 'none' ? 'Nenhuma' : `${currentTransitionType} (${currentTransitionDuration}s)`}
+             </button>
+             <!-- Add New Frame Button -->
+             <button
+               class="btn btn-sm btn-outline-success ms-2"
+               title="Adicionar quadro em branco após este"
+               on:click={() => handleAddFrameAfter(frame.id)}
+               disabled={isLoading || isSavingTransition || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified}
+             >
+               <i class="bi bi-plus-lg"></i>
              </button>
           </div>
         {/if}
@@ -561,7 +658,7 @@
 
   <!-- Add Button (alternative trigger) -->
    <div class="text-center mb-4">
-     <button class="btn btn-outline-success" on:click={openCreationModal} disabled={isLoading || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
+     <button class="btn btn-outline-success" on:click={openCreationModal} disabled={isLoading || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
        + Adicionar Quadros
      </button>
    </div>

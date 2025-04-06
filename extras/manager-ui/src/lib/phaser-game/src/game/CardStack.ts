@@ -59,7 +59,7 @@ export default class CardStack {
         card.phaserGameObject.setPosition(0, newY); // Position relative to container
         this.phaserContainer.add(card.phaserGameObject); // Add visual to container
         // --- Disable input on the card now that it's in the stack ---
-        card.phaserGameObject.disableInteractive();
+        // card.phaserGameObject.disableInteractive(); // Cline: Keep card interactive for splitting
         // --- End disable input ---
 
         // Adjust container size
