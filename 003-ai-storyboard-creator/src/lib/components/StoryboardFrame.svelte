@@ -6,6 +6,8 @@
 
   export let frame: StoryboardFrameDb;
   export let storyboardId: string; // Add storyboardId prop
+  export let isFirst: boolean = false; // Is this the first frame?
+  export let isLast: boolean = false; // Is this the last frame?
 
   // State for active tab
   let activeTab: 'narration' | 'mainImage' | 'background' | 'bgm' = 'narration';
@@ -29,10 +31,12 @@
     }
   }
 
-  // Add 'deleteframe' to the dispatcher types
+  // Add 'deleteframe', 'moveframeup', 'moveframedown' to the dispatcher types
   const dispatch = createEventDispatcher<{
     durationchange: { id: string, duration: number };
     deleteframe: { id: string };
+    moveframeup: { id: string };
+    moveframedown: { id: string };
   }>();
 
   // Loading state per asset type - Add bgmAudio
@@ -539,12 +543,33 @@
                  class="btn btn-sm btn-outline-danger"
                  on:click={() => dispatch('deleteframe', { id: frame.id })}
                  title="Excluir este quadro"
-                 disabled={Object.values(isGenerating).some(val => val) || isSaving}
-             >
-                 <i class="bi bi-trash3"></i> Excluir Quadro
-             </button>
-         </div>
-       </div>
+                  disabled={Object.values(isGenerating).some(val => val) || isSaving}
+              >
+                  <i class="bi bi-trash3"></i> Excluir Quadro
+              </button>
+          </div>
+          <!-- Reorder Buttons -->
+          <div class="mt-2 text-end">
+              <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary me-1"
+                  on:click={() => dispatch('moveframeup', { id: frame.id })}
+                  title="Mover quadro para cima"
+                  disabled={isFirst || Object.values(isGenerating).some(val => val) || isSaving}
+              >
+                  <i class="bi bi-arrow-up"></i>
+              </button>
+              <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  on:click={() => dispatch('moveframedown', { id: frame.id })}
+                  title="Mover quadro para baixo"
+                  disabled={isLast || Object.values(isGenerating).some(val => val) || isSaving}
+              >
+                  <i class="bi bi-arrow-down"></i>
+              </button>
+          </div>
+        </div>
      </div>
    </div>
 </div>

@@ -29,6 +29,7 @@
   let isLoading = false; // State for AI frame generation/addition
   let isInsertingFrame = false; // State for inserting a single blank frame
   let isDeletingFrame = false; // State for deleting a frame
+  let isReorderingFrame = false; // State for reordering a frame
   let isSavingTransition = false; // State for saving transition API call
   let isExportingFrames = false; // State for individual frame export loading
   let isExportingZip = false; // Added state for ZIP export loading
@@ -89,6 +90,48 @@
     const { id, duration } = event.detail;
     if (id && typeof duration === 'number' && isFinite(duration)) {
       frameDurations = { ...frameDurations, [id]: duration };
+    }
+  }
+
+   // Function to handle reordering a frame (up or down)
+  async function handleReorderFrame(frameId: string, direction: 'up' | 'down') {
+    const currentStoryboardId = data.storyboard?.id;
+    if (!currentStoryboardId || !frameId) {
+      apiError = "Cannot reorder frame: Storyboard ID or Frame ID is missing.";
+      return;
+    }
+    console.log(`Requesting to reorder frame ${frameId} ${direction}`);
+    isReorderingFrame = true;
+    apiError = null;
+
+    try {
+      const response = await fetch(`/api/storyboard/${currentStoryboardId}/frame/${frameId}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction }),
+      });
+
+      const result = await response.json(); // Always parse JSON first
+
+      if (!response.ok) {
+        // Check if it was a 'no operation' response from the API (status 200 but with specific message)
+        if (response.status === 200 && result.message?.includes('already at')) {
+             console.log(result.message); // Log the specific message
+             // No UI error needed, just don't invalidate
+             return; // Exit the function gracefully
+        }
+        throw new Error(result.message || `API Error: ${response.statusText}`);
+      }
+
+      console.log('API Response (Reorder Frame):', result);
+      // Invalidate the specific dependency to refresh the frame list
+      await invalidate(`app:storyboard-frames:${currentStoryboardId}`);
+
+    } catch (err: any) {
+      console.error(`Failed to reorder frame ${frameId} ${direction}:`, err);
+      apiError = err.message || `An unknown error occurred while reordering the frame ${direction}.`;
+    } finally {
+      isReorderingFrame = false;
     }
   }
 
@@ -508,11 +551,11 @@
         </select>
       </div>
 
-      <button class="btn btn-success me-2" on:click={openCreationModal} disabled={isLoading || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
+      <button class="btn btn-success me-2" on:click={openCreationModal} disabled={isLoading || isInsertingFrame || isDeletingFrame || isReorderingFrame || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
         <i class="bi bi-plus-circle me-1"></i> Adicionar Quadros
       </button>
       <!-- ZIP Export Button -->
-      <button class="btn btn-outline-secondary me-2" on:click={exportStoryboardFrames} disabled={isExportingZip || isLoading || isInsertingFrame || isDeletingFrame || frames.length === 0 || isExportingFrames || isExportingUnified || isSavingTransition}>
+      <button class="btn btn-outline-secondary me-2" on:click={exportStoryboardFrames} disabled={isExportingZip || isLoading || isInsertingFrame || isDeletingFrame || isReorderingFrame || frames.length === 0 || isExportingFrames || isExportingUnified || isSavingTransition}>
         {#if isExportingZip}
           <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
           Exportando Arquivos...
@@ -521,7 +564,7 @@
         {/if}
       </button>
       <!-- Individual Frame Export Button -->
-      <button class="btn btn-outline-primary me-2" on:click={exportIndividualFrames} disabled={isExportingFrames || isLoading || isInsertingFrame || isDeletingFrame || frames.length === 0 || isExportingZip || isExportingUnified || isSavingTransition}>
+      <button class="btn btn-outline-primary me-2" on:click={exportIndividualFrames} disabled={isExportingFrames || isLoading || isInsertingFrame || isDeletingFrame || isReorderingFrame || frames.length === 0 || isExportingZip || isExportingUnified || isSavingTransition}>
         {#if isExportingFrames}
           <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
           Exportando Quadros... ({ (exportProgress * 100).toFixed(0) }%)
@@ -530,7 +573,7 @@
         {/if}
       </button>
        <!-- Unified Video Export Button -->
-       <button class="btn btn-primary" on:click={exportUnifiedVideo} disabled={isExportingUnified || isLoading || isInsertingFrame || isDeletingFrame || frames.length === 0 || isExportingZip || isExportingFrames || isSavingTransition}>
+       <button class="btn btn-primary" on:click={exportUnifiedVideo} disabled={isExportingUnified || isLoading || isInsertingFrame || isDeletingFrame || isReorderingFrame || frames.length === 0 || isExportingZip || isExportingFrames || isSavingTransition}>
          {#if isExportingUnified}
            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
            Exportando Vídeo Unificado...
@@ -547,13 +590,13 @@
   </div>
 
   <!-- Loading/Saving Indicators -->
-  {#if isLoading || isSavingTransition || isInsertingFrame || isDeletingFrame}
+  {#if isLoading || isSavingTransition || isInsertingFrame || isDeletingFrame || isReorderingFrame}
     <div class="d-flex justify-content-center my-3">
       <div class="spinner-border text-primary" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
        <span class="ms-2">
-         {#if isLoading}Gerando e adicionando quadros...{:else if isSavingTransition}Salvando transição...{:else if isInsertingFrame}Inserindo quadro...{:else if isDeletingFrame}Excluindo quadro...{/if}
+         {#if isLoading}Gerando e adicionando quadros...{:else if isSavingTransition}Salvando transição...{:else if isInsertingFrame}Inserindo quadro...{:else if isDeletingFrame}Excluindo quadro...{:else if isReorderingFrame}Reordenando quadro...{/if}
        </span>
     </div>
   {/if}
@@ -617,17 +660,22 @@
   <div class="mb-3">
     {#if frames.length > 0 && storyboard?.id} <!-- Ensure storyboard.id exists -->
       <!-- Render frames sorted by frameOrder -->
-      {#each frames.sort((a, b) => (a.frameOrder ?? 0) - (b.frameOrder ?? 0)) as frame, i (frame.id)}
+      {@const sortedFrames = frames.sort((a, b) => (a.frameOrder ?? 0) - (b.frameOrder ?? 0))}
+      {#each sortedFrames as frame, i (frame.id)}
         <StoryboardFrameComponent
           {frame}
           storyboardId={storyboard.id}
+          isFirst={i === 0}
+          isLast={i === sortedFrames.length - 1}
           on:durationchange={handleDurationChange}
           on:deleteframe={handleDeleteFrame}
+          on:moveframeup={(e) => handleReorderFrame(e.detail.id, 'up')}
+          on:moveframedown={(e) => handleReorderFrame(e.detail.id, 'down')}
         />
 
         <!-- Transition Button Area (between frames) -->
-        {#if i < frames.length - 1}
-          {@const nextFrame = frames[i + 1]}
+        {#if i < sortedFrames.length - 1}
+          {@const nextFrame = sortedFrames[i + 1]} <!-- Use sortedFrames here -->
           {@const currentTransitionType = frame.transitionTypeAfter || 'none'}
           {@const currentTransitionDuration = frame.transitionDurationAfter ?? 1.0}
           <div class="text-center my-2 py-1 border-top border-bottom">
@@ -635,7 +683,7 @@
                class="btn btn-sm btn-outline-secondary"
                title="Configurar transição para o próximo quadro"
                on:click={() => openTransitionModal(frame, nextFrame)}
-               disabled={isSavingTransition || isLoading || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified}
+               disabled={isSavingTransition || isLoading || isInsertingFrame || isDeletingFrame || isReorderingFrame || isExportingFrames || isExportingZip || isExportingUnified}
              >
                <i class="bi bi-arrow-left-right me-1"></i>
                Transição: {currentTransitionType === 'none' ? 'Nenhuma' : `${currentTransitionType} (${currentTransitionDuration}s)`}
@@ -645,7 +693,7 @@
                class="btn btn-sm btn-outline-success ms-2"
                title="Adicionar quadro em branco após este"
                on:click={() => handleAddFrameAfter(frame.id)}
-               disabled={isLoading || isSavingTransition || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified}
+               disabled={isLoading || isSavingTransition || isInsertingFrame || isDeletingFrame || isReorderingFrame || isExportingFrames || isExportingZip || isExportingUnified}
              >
                <i class="bi bi-plus-lg"></i>
              </button>
@@ -659,7 +707,7 @@
 
   <!-- Add Button (alternative trigger) -->
    <div class="text-center mb-4">
-     <button class="btn btn-outline-success" on:click={openCreationModal} disabled={isLoading || isInsertingFrame || isDeletingFrame || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
+     <button class="btn btn-outline-success" on:click={openCreationModal} disabled={isLoading || isInsertingFrame || isDeletingFrame || isReorderingFrame || isExportingFrames || isExportingZip || isExportingUnified || isSavingTransition}>
        + Adicionar Quadros
      </button>
    </div>
