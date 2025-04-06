@@ -100,3 +100,100 @@ We'll need data structures to represent our domain concepts, likely stored in a 
   ],
   "totalDuration": "number" // Calculated total duration of the timeline
 }
+
+---
+
+## Development Methodology
+
+We will follow a **Behavior-Driven Development (BDD)** approach, focusing on building UI components in isolation first using Storybook. This ensures components are well-defined, visually tested, and functional before integrating them into SvelteKit routes and connecting them to backend APIs.
+
+### Running Storybook
+
+To view and interact with the UI components in isolation, run Storybook:
+
+```bash
+npm run storybook
+```
+
+This will start the Storybook development server, usually on port 6006.
+
+---
+
+## Current Sprint Focus (Phase 1: Core Project Management)
+
+| Task                                       | Area     | Status | Notes                                      |
+| :----------------------------------------- | :------- | :----- | :----------------------------------------- |
+| `ProjectList.svelte` Component & Story     | Frontend | Done   | Displays list, basic styling with Bootstrap |
+| `CreateProjectModal.svelte` Component & Story | Frontend | To Do  | UI for entering new project name           |
+| Setup Database Connection                  | Backend  | To Do  | Configure Drizzle ORM                      |
+| API: Create Project (POST /api/projects)   | Backend  | To Do  | Endpoint logic and DB insertion            |
+| API: List Projects (GET /api/projects)     | Backend  | To Do  | Endpoint logic and DB query                |
+| Route: `/projects` Page                    | Frontend | To Do  | SvelteKit route setup                      |
+| Integration: Fetch & Display Projects      | Frontend | To Do  | Connect page to GET API & component        |
+| Integration: Create Project                | Frontend | To Do  | Connect modal/button to POST API           |
+| Integration: Navigation to Project Editor  | Frontend | To Do  | Link list items to `/projects/[id]`        |
+
+---
+
+## Implementation Plan / TODO List (Component-First Approach)
+
+This section outlines the planned steps to build the application based on the defined domain, UI, routes, and schema.
+
+### Phase 1: Core Project Management & Setup
+
+*   [ ] **Backend:** Set up database connection (using Drizzle ORM as configured).
+*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for creating new projects (POST).
+    *   [ ] Define request/response types.
+    *   [ ] Implement database logic to insert a new project record.
+*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for listing existing projects (GET).
+    *   [ ] Define response type.
+    *   [ ] Implement database logic to fetch projects.
+*   [x] **Frontend (Storybook):** Create `ProjectList.svelte` component and `ProjectList.stories.svelte`. (Done)
+*   [ ] **Frontend (Storybook):** Create `CreateProjectModal.svelte` component (or similar for project creation UI) and its story.
+*   [ ] **Backend:** Set up database connection (using Drizzle ORM as configured).
+*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for creating new projects (POST).
+    *   [ ] Define request/response types.
+    *   [ ] Implement database logic to insert a new project record.
+*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for listing existing projects (GET).
+    *   [ ] Define response type.
+    *   [ ] Implement database logic to fetch projects.
+*   [ ] **Frontend (Integration):** Create SvelteKit route (`/projects` or `/`) to display the project list.
+*   [ ] **Frontend (Integration):** Fetch project data from the API in the `/projects` route's load function and pass to `ProjectList.svelte`.
+*   [ ] **Frontend (Integration):** Integrate `CreateProjectModal.svelte` with the "Create New Project" button in `ProjectList.svelte` and connect to the POST `/api/projects` endpoint.
+*   [ ] **Frontend (Integration):** Implement navigation from `ProjectList.svelte` items to the project editor view (e.g., `/projects/[projectId]`).
+
+### Phase 2: Project Editor View & Media Upload
+
+*   [ ] **Frontend (Storybook):** Create `MediaUpload.svelte` component and story.
+*   [ ] **Frontend (Storybook):** Create `MediaLibrary.svelte` component and story.
+*   [ ] **Frontend (Storybook):** Create basic layout component for the editor view (`ProjectEditorLayout.svelte`?) and story.
+*   [ ] **Backend:** Set up file storage solution (e.g., local storage for dev, S3/Cloudflare R2 for prod - requires configuration).
+*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/media`) for handling file uploads (POST).
+    *   [ ] Handle multipart/form-data.
+    *   [ ] Save file to storage.
+    *   [ ] Create media record in the database linked to the project.
+*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/media`) to list media for a project (GET).
+*   [ ] **Frontend (Integration):** Create SvelteKit route (`/projects/[projectId]`) for the main editor view, using the layout component.
+*   [ ] **Frontend (Integration):** Integrate `MediaUpload.svelte` and `MediaLibrary.svelte` into the `/projects/[projectId]` route.
+*   [ ] **Frontend (Integration):** Connect `MediaUpload.svelte` to the upload API.
+*   [ ] **Frontend (Integration):** Connect `MediaLibrary.svelte` to the GET media API.
+
+### Phase 3: Timeline Editor UI (Initial)
+
+*   [ ] **Frontend (Storybook):** Research/Select a Svelte library for timeline visualization or plan custom implementation.
+*   [ ] **Frontend (Storybook):** Create `TimelineEditor.svelte` component and story with basic track/clip rendering (using dummy data).
+*   [ ] **Frontend (Storybook):** Implement drag-and-drop functionality within the `TimelineEditor.svelte` story (or between mock MediaLibrary and Timeline).
+*   [ ] **Frontend (Storybook):** Create basic playhead and time ruler display within the story.
+*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for saving timeline state (POST/PUT).
+*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for loading timeline state (GET).
+*   [ ] **Frontend (Integration):** Integrate `TimelineEditor.svelte` into the `/projects/[projectId]` route.
+*   [ ] **Frontend (Integration):** Implement saving/loading timeline state to/from the backend API endpoints.
+
+### Phase 4: AI Features & Advanced Editing (Future)
+
+*   [ ] Integrate AI services for transcription, object detection, etc.
+*   [ ] Implement clip trimming, splitting, moving.
+*   [ ] Add audio waveform generation/display.
+*   [ ] Implement video preview playback.
+*   [ ] User Authentication.
+*   [ ] ... more features

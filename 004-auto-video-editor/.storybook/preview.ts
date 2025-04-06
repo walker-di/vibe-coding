@@ -1,4 +1,6 @@
 import type { Preview } from '@storybook/svelte'
+import 'bootstrap/dist/css/bootstrap.min.css';
+
 
 const preview: Preview = {
   parameters: {
