@@ -158,16 +158,16 @@ This will start the Storybook development server, usually on port 6006.
 
 ## Current Sprint Focus (Phase 3: Timeline Editor UI - Initial)
 
-| Task                                                    | Area     | Status | Notes                                                  |
-| :------------------------------------------------------ | :------- | :----- | :----------------------------------------------------- |
-| Research/Select Timeline Library or Plan Custom Impl. | Frontend | To Do  | Decide approach for timeline visualization/editing     |
-| `TimelineEditor.svelte` Component & Story             | Frontend | To Do  | Basic component with track/clip rendering (dummy data) |
-| Implement Drag-and-Drop in Story                      | Frontend | To Do  | Drag media mock to timeline, move clips on timeline    |
-| Implement Playhead & Time Ruler in Story              | Frontend | To Do  | Basic visual representation of time and position       |
-| API: Save Timeline State (POST/PUT /api/.../timeline) | Backend  | To Do  | Endpoint logic and DB update (JSON blob or tables)     |
-| API: Load Timeline State (GET /api/.../timeline)      | Backend  | To Do  | Endpoint logic and DB query                            |
-| Integration: Add `TimelineEditor` to Project Page     | Frontend | To Do  | Place component in the editor layout                   |
-| Integration: Save/Load Timeline State                 | Frontend | To Do  | Connect component interactions to backend API calls    |
+| Task                                                    | Area     | Status | Notes                                                                    |
+| :------------------------------------------------------ | :------- | :----- | :----------------------------------------------------------------------- |
+| Research/Select Timeline Library or Plan Custom Impl. | Frontend | Done   | Selected `svelte-dnd-action`                                             |
+| `TimelineEditor.svelte` Component & Story             | Frontend | Done   | Basic component with track/clip rendering, zoom, D&D (within track)      |
+| Implement Drag-and-Drop in Story                      | Frontend | Done   | Implemented within-track D&D using `svelte-dnd-action`                   |
+| Implement Playhead & Time Ruler in Story              | Frontend | Done   | Added basic visual representation, updates with zoom                     |
+| API: Save Timeline State (POST/PUT /api/.../timeline) | Backend  | To Do  | Endpoint logic and DB update (JSON blob or tables)                       |
+| API: Load Timeline State (GET /api/.../timeline)      | Backend  | To Do  | Endpoint logic and DB query                                              |
+| Integration: Add `TimelineEditor` to Project Page     | Frontend | To Do  | Place component in the editor layout                                     |
+| Integration: Save/Load Timeline State                 | Frontend | To Do  | Connect component interactions (D&D, zoom?) to backend API calls later |
 
 ---
 
@@ -209,10 +209,10 @@ This section outlines the planned steps to build the application based on the de
 
 ### Phase 3: Timeline Editor UI (Initial)
 
-*   [ ] **Frontend (Storybook):** Research/Select a Svelte library for timeline visualization or plan custom implementation.
-*   [ ] **Frontend (Storybook):** Create `TimelineEditor.svelte` component and story with basic track/clip rendering (using dummy data).
-*   [ ] **Frontend (Storybook):** Implement drag-and-drop functionality within the `TimelineEditor.svelte` story (or between mock MediaLibrary and Timeline).
-*   [ ] **Frontend (Storybook):** Create basic playhead and time ruler display within the story.
+*   [x] **Frontend (Storybook):** Research/Select a Svelte library for timeline visualization or plan custom implementation. (Selected `svelte-dnd-action`)
+*   [x] **Frontend (Storybook):** Create `TimelineEditor.svelte` component and story with basic track/clip rendering (using dummy data).
+*   [x] **Frontend (Storybook):** Implement drag-and-drop functionality within the `TimelineEditor.svelte` story (or between mock MediaLibrary and Timeline). (Implemented within-track D&D)
+*   [x] **Frontend (Storybook):** Create basic playhead and time ruler display within the story. (Added zoom controls as well)
 *   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for saving timeline state (POST/PUT).
 *   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for loading timeline state (GET).
 *   [ ] **Frontend (Integration):** Integrate `TimelineEditor.svelte` into the `/projects/[projectId]` route.
