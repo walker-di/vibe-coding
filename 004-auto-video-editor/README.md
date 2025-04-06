@@ -161,9 +161,9 @@ This will start the Storybook development server, usually on port 6006.
 | :----------------------------------------- | :------- | :----- | :----------------------------------------- |
 | `ProjectList.svelte` Component & Story     | Frontend | Done   | Displays list, basic styling with Bootstrap |
 | `CreateProjectModal.svelte` Component & Story | Frontend | Done   | UI for entering new project name           |
-| Setup Database Connection                  | Backend  | To Do  | Configure Drizzle ORM                      |
-| API: Create Project (POST /api/projects)   | Backend  | To Do  | Endpoint logic and DB insertion            |
-| API: List Projects (GET /api/projects)     | Backend  | To Do  | Endpoint logic and DB query                |
+| Setup Database Connection                  | Backend  | Done   | Configured Drizzle ORM, ran migrations     |
+| API: Create Project (POST /api/projects)   | Backend  | Done   | Implemented POST handler in +server.ts     |
+| API: List Projects (GET /api/projects)     | Backend  | Done   | Implemented GET handler in +server.ts      |
 | Route: `/projects` Page                    | Frontend | To Do  | SvelteKit route setup                      |
 | Integration: Fetch & Display Projects      | Frontend | To Do  | Connect page to GET API & component        |
 | Integration: Create Project                | Frontend | To Do  | Connect modal/button to POST API           |
@@ -177,13 +177,13 @@ This section outlines the planned steps to build the application based on the de
 
 ### Phase 1: Core Project Management & Setup
 
-*   [ ] **Backend:** Set up database connection (using Drizzle ORM as configured).
-*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for creating new projects (POST).
-    *   [ ] Define request/response types.
-    *   [ ] Implement database logic to insert a new project record.
-*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for listing existing projects (GET).
-    *   [ ] Define response type.
-    *   [ ] Implement database logic to fetch projects.
+*   [x] **Backend:** Set up database connection (using Drizzle ORM as configured). (Done: Schema updated, migrations run)
+*   [x] **Backend:** Implement API endpoint (`/api/projects`) for creating new projects (POST).
+    *   [x] Define request/response types. (Implicitly done in +server.ts)
+    *   [x] Implement database logic to insert a new project record. (Done in +server.ts)
+*   [x] **Backend:** Implement API endpoint (`/api/projects`) for listing existing projects (GET).
+    *   [x] Define response type. (Implicitly done in +server.ts)
+    *   [x] Implement database logic to fetch projects. (Done in +server.ts)
 *   [x] **Frontend (Storybook):** Create `ProjectList.svelte` component and `ProjectList.stories.svelte`. (Done)
 *   [x] **Frontend (Storybook):** Create `CreateProjectModal.svelte` component (or similar for project creation UI) and its story. (Done)
 *   [ ] **Frontend (Integration):** Create SvelteKit route (`/projects` or `/`) to display the project list.
