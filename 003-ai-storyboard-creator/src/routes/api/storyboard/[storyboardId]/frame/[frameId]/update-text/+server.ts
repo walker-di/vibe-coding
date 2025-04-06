@@ -32,11 +32,34 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
     try {
         // Construct the update object dynamically based on provided fields
+        // Also handle setting URLs to null when prompts are cleared (set to "")
         const updateObject: Partial<typeof storyboardFrames.$inferInsert> = {};
-        if (requestData.narration !== undefined) updateObject.narration = requestData.narration;
-        if (requestData.mainImagePrompt !== undefined) updateObject.mainImagePrompt = requestData.mainImagePrompt;
-        if (requestData.backgroundImagePrompt !== undefined) updateObject.backgroundImagePrompt = requestData.backgroundImagePrompt;
-        if (requestData.bgmPrompt !== undefined) updateObject.bgmPrompt = requestData.bgmPrompt;
+
+        if (requestData.narration !== undefined) {
+            updateObject.narration = requestData.narration;
+        }
+        if (requestData.mainImagePrompt !== undefined) {
+            updateObject.mainImagePrompt = requestData.mainImagePrompt;
+            // If prompt is cleared, also clear the URL
+            if (requestData.mainImagePrompt === "") {
+                updateObject.mainImageUrl = null;
+            }
+        }
+        if (requestData.backgroundImagePrompt !== undefined) {
+            updateObject.backgroundImagePrompt = requestData.backgroundImagePrompt;
+            // If prompt is cleared, also clear the URL
+            if (requestData.backgroundImagePrompt === "") {
+                updateObject.backgroundImageUrl = null;
+            }
+        }
+        if (requestData.bgmPrompt !== undefined) {
+            updateObject.bgmPrompt = requestData.bgmPrompt;
+            // If prompt is cleared, also clear the URL
+            if (requestData.bgmPrompt === "") {
+                updateObject.bgmUrl = null;
+            }
+        }
+
 
         // Check if there's anything to update
         if (Object.keys(updateObject).length === 0) {

@@ -20,6 +20,8 @@
   let isDirty = false; // Track if changes have been made
   let isSaving = false; // Track saving state
   let saveError: string | null = null;
+  let isRemoving: { [key in "mainImage" | "background" | "bgm"]?: boolean } = {}; // Track removal state
+  let removeError: string | null = null; // Track removal errors
 
   // Update edited fields if the frame prop changes externally
   $: {
@@ -31,6 +33,89 @@
       editedBgmPrompt = frame.bgmPrompt ?? "";
     }
   }
+
+  // Function to remove a specific asset (mainImage, background, bgm)
+  async function removeAsset(assetType: "mainImage" | "background" | "bgm") {
+    const typeKey = assetType; // Use assetType directly for the key
+    if (isRemoving[typeKey]) return; // Prevent multiple clicks
+
+    isRemoving = { ...isRemoving, [typeKey]: true };
+    removeError = null;
+    console.log(
+      `Removing ${assetType} for frame ${frame.id} in storyboard ${storyboardId}`,
+    );
+
+    let body: Partial<StoryboardFrameDb> = {};
+    // Set prompt to "" (empty string) as it's required, and URL to undefined to signal removal
+    if (assetType === "mainImage") {
+      body = { mainImagePrompt: "", mainImageUrl: undefined };
+    } else if (assetType === "background") {
+      body = { backgroundImagePrompt: "", backgroundImageUrl: undefined };
+    } else if (assetType === "bgm") {
+      body = { bgmPrompt: "", bgmUrl: undefined };
+    }
+
+    try {
+      const response = await fetch(
+        `/api/storyboard/${storyboardId}/frame/${frame.id}/update-text`, // Reusing the update-text endpoint
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // Send only the fields to be nulled out
+          // The backend needs to handle merging this partial update
+          // and specifically setting the corresponding URL to null as well.
+          body: JSON.stringify(body),
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: `API Error: ${response.statusText}` }));
+        throw new Error(
+          errorData.message || `API Error: ${response.statusText}`,
+        );
+      }
+
+      const result = await response.json();
+      console.log(`Remove ${assetType} API response for frame ${frame.id}:`, result);
+
+      // Update the local frame data directly
+      if (result.updatedFrame) {
+        frame = { ...frame, ...result.updatedFrame }; // Update with the full returned frame
+        // Reset relevant edited fields if they were being edited
+        if (assetType === "mainImage") editedMainImagePrompt = "";
+        if (assetType === "background") editedBackgroundImagePrompt = "";
+        if (assetType === "bgm") editedBgmPrompt = "";
+        isDirty = false; // Assume removal also clears dirty state for that field
+      } else {
+        // Fallback if API doesn't return full frame (less ideal)
+        // Set prompt to "" and URL to null locally
+        if (assetType === "mainImage") {
+          frame.mainImagePrompt = "";
+          frame.mainImageUrl = null;
+          editedMainImagePrompt = "";
+        }
+        if (assetType === "background") {
+          frame.backgroundImagePrompt = "";
+          frame.backgroundImageUrl = null;
+          editedBackgroundImagePrompt = "";
+        }
+        if (assetType === "bgm") {
+          frame.bgmPrompt = "";
+          frame.bgmUrl = null;
+          editedBgmPrompt = "";
+        }
+        isDirty = false;
+      }
+    } catch (err: any) {
+      console.error(`Failed to remove ${assetType} for frame ${frame.id}:`, err);
+      removeError = `Error removing ${assetType}: ${err.message || "Unknown error"}`;
+    } finally {
+      isRemoving = { ...isRemoving, [typeKey]: false };
+    }
+  }
+
 
   // Add 'deleteframe', 'moveframeup', 'moveframedown' to the dispatcher types
   const dispatch = createEventDispatcher<{
@@ -411,6 +496,22 @@
                 on:input={markDirty}
                 placeholder="Digite o prompt da imagem principal..."
               ></textarea>
+              <!-- Remove Main Image Button -->
+              <div class="text-end mt-1">
+                 <button
+                   class="btn btn-outline-danger btn-sm"
+                   on:click={() => removeAsset("mainImage")}
+                   disabled={!frame.mainImagePrompt && !frame.mainImageUrl || isRemoving['mainImage']}
+                   title="Remover Imagem Principal e Prompt"
+                 >
+                   {#if isRemoving['mainImage']}
+                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                     Removendo...
+                   {:else}
+                     <i class="bi bi-x-lg"></i> Remover
+                   {/if}
+                 </button>
+               </div>
             </div>
           {/if}
           {#if activeTab === "background"}
@@ -425,6 +526,22 @@
                 on:input={markDirty}
                 placeholder="Digite o prompt da imagem de fundo..."
               ></textarea>
+               <!-- Remove Background Image Button -->
+               <div class="text-end mt-1">
+                 <button
+                   class="btn btn-outline-danger btn-sm"
+                   on:click={() => removeAsset("background")}
+                   disabled={!frame.backgroundImagePrompt && !frame.backgroundImageUrl || isRemoving['background']}
+                   title="Remover Imagem de Fundo e Prompt"
+                 >
+                   {#if isRemoving['background']}
+                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                     Removendo...
+                   {:else}
+                     <i class="bi bi-x-lg"></i> Remover
+                   {/if}
+                 </button>
+               </div>
             </div>
           {/if}
           {#if activeTab === "bgm"}
@@ -439,9 +556,32 @@
                 on:input={markDirty}
                 placeholder="Digite o prompt da música de fundo..."
               ></textarea>
+               <!-- Remove BGM Button -->
+               <div class="text-end mt-1">
+                 <button
+                   class="btn btn-outline-danger btn-sm"
+                   on:click={() => removeAsset("bgm")}
+                   disabled={!frame.bgmPrompt && !frame.bgmUrl || isRemoving['bgm']}
+                   title="Remover BGM e Prompt"
+                 >
+                   {#if isRemoving['bgm']}
+                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                     Removendo...
+                   {:else}
+                     <i class="bi bi-x-lg"></i> Remover
+                   {/if}
+                 </button>
+               </div>
             </div>
           {/if}
         </div>
+
+         <!-- Removal Error -->
+         {#if removeError}
+           <div class="alert alert-danger alert-sm p-1 small mb-2" role="alert">
+             {removeError}
+           </div>
+         {/if}
 
         <!-- Save Button & Error -->
         {#if isDirty || saveError}
@@ -651,7 +791,7 @@
               <small class="text-danger d-block mt-1">{generationError}</small>
             {/if}
           </div>
-          <div class="m-2 text-end">
+          <div class="mt-2 text-end">
             <button
               type="button"
               class="btn btn-sm btn-outline-danger"
