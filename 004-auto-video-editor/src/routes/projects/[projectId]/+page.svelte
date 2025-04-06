@@ -3,17 +3,49 @@
 	import ProjectEditorLayout from '$lib/components/ProjectEditorLayout.svelte';
 	import MediaLibrary from '$lib/components/MediaLibrary.svelte';
 	import MediaUpload from '$lib/components/MediaUpload.svelte';
-	import TimelineEditor from '$lib/components/TimelineEditor.svelte'; // Import TimelineEditor
-	import type { MediaItem, Timeline } from '$lib/types'; // Import Timeline type
+	import TimelineEditor from '$lib/components/TimelineEditor.svelte';
+	import PreviewPlayer from '$lib/components/PreviewPlayer.svelte'; // Import PreviewPlayer
+	import type { MediaItem, Timeline, Track, Clip } from '$lib/types'; // Import necessary types
 
+	// --- Core State ---
 	let projectId = $state('');
 	let mediaItems = $state<MediaItem[]>([]);
+	let mediaMap = $state(new Map<string, MediaItem>()); // Map for quick media lookup
 	let isLoadingMedia = $state(true);
-	let isLoadingTimeline = $state(true); // Separate loading state for timeline
+	let isLoadingTimeline = $state(true);
 	let mediaError = $state<string | null>(null);
-	let timelineError = $state<string | null>(null); // Separate error state for timeline
-	let projectName = $state('Loading...'); // Add state for project name
-	let projectTimeline = $state<Timeline | undefined>(undefined); // State for timeline data (use undefined)
+	let timelineError = $state<string | null>(null);
+	let projectName = $state('Loading...');
+	let projectTimeline = $state<Timeline | undefined>(undefined); // Use undefined initially
+
+	// --- Shared Playback & Timeline State ---
+	let playheadPosition = $state(0); // Current playhead time in seconds
+	let isPlaying = $state(false); // Global playback state
+	// Revert type, accept potential TS errors in effect for now
+	let playerRef: PreviewPlayer | undefined = $state();
+
+	// --- Utility Functions ---
+	function createDefaultTimeline(id: string): Timeline {
+		return {
+			projectId: id,
+			tracks: [], // Start with no tracks
+			totalDuration: 0 // Start with zero duration
+		};
+	}
+
+	// --- Effects ---
+
+	// Populate mediaMap whenever mediaItems changes
+	$effect(() => {
+		const newMap = new Map<string, MediaItem>();
+		for (const item of mediaItems) {
+			if (item && item.id) { // Basic check
+				newMap.set(item.id, item);
+			}
+		}
+		mediaMap = newMap;
+		console.log('Updated mediaMap:', mediaMap);
+	});
 
 	// Fetch media and project details when projectId changes
 	$effect(() => {
@@ -28,6 +60,8 @@
 			isLoadingTimeline = true;
 			mediaError = null;
 			timelineError = null;
+			playheadPosition = 0; // Reset playhead
+			isPlaying = false; // Reset playback state
 			// Fetch project data (media and timeline)
 			fetchProjectData(projectId);
 		} else if (!currentProjectId) {
@@ -85,22 +119,29 @@
 			if (timelineResult.status === 'fulfilled') {
 				const response = timelineResult.value;
 				if (!response.ok) {
-					// 404 might be acceptable if timeline hasn't been created yet
-					if (response.status !== 404) {
-						const errorText = await response.text();
-						throw new Error(`Timeline fetch failed: ${response.status} - ${errorText}`);
+					if (response.status === 404) {
+						console.log('No timeline found on server, creating default.');
+						projectTimeline = createDefaultTimeline(id); // Create default if 404
 					} else {
-						projectTimeline = undefined; // No timeline saved yet (use undefined)
+						const errorText = await response.text();
+						timelineError = `Timeline fetch failed: ${response.status} - ${errorText}`;
+						projectTimeline = createDefaultTimeline(id); // Use default on other errors too
 					}
 				} else {
 					const fetchedTimelineData = await response.json();
-					// Add basic validation if needed
-					projectTimeline = fetchedTimelineData.timeline; // API returns { timeline: ... }
+					// TODO: Add validation for fetchedTimelineData.timeline structure
+					if (fetchedTimelineData && fetchedTimelineData.timeline) {
+						projectTimeline = fetchedTimelineData.timeline;
+					} else {
+						console.warn('Timeline data fetched but invalid, using default.');
+						timelineError = 'Fetched timeline data was invalid.';
+						projectTimeline = createDefaultTimeline(id);
+					}
 				}
 			} else {
 				console.error('Failed to fetch timeline:', timelineResult.reason);
 				timelineError = timelineResult.reason instanceof Error ? timelineResult.reason.message : 'Failed to load timeline.';
-				projectTimeline = undefined; // Reset timeline to undefined
+				projectTimeline = createDefaultTimeline(id); // Use default on fetch failure
 			}
 
 		} catch (e) {
@@ -109,58 +150,14 @@
 			const errorMsg = e instanceof Error ? e.message : 'Failed to load project data.';
 			if (!mediaError) mediaError = errorMsg;
 			if (!timelineError) timelineError = errorMsg;
-			// Reset states on general error
 			mediaItems = [];
-			projectTimeline = undefined; // Reset timeline to undefined
+			projectTimeline = createDefaultTimeline(id); // Ensure timeline is default on error
 			projectName = 'Error Loading Project';
 		} finally {
 			isLoadingMedia = false;
 			isLoadingTimeline = false;
 		}
 	}
-/* Original fetchProjectData - replaced with parallel fetching above
-	async function fetchProjectData(id: string) {
-		if (!id) return;
-		isLoadingMedia = true; // Use this state for combined loading
-		mediaError = null;
-		try {
-			// Fetch project details (assuming GET /api/projects/:id exists or will be added)
-			// For now, we'll just fetch media and use ID in header
-			// const projectResponse = await fetch(`/api/projects/${id}`);
-			// if (!projectResponse.ok) throw new Error('Failed to load project details');
-			// const projectDetails = await projectResponse.json();
-			// projectName = projectDetails.name;
-			projectName = `Project ${id.substring(0, 8)}...`; // Placeholder name
-
-			// Fetch media
-			const mediaResponse = await fetch(`/api/projects/${id}/media`);
-			if (!mediaResponse.ok) {
-				const errorText = await mediaResponse.text();
-				throw new Error(`HTTP error! status: ${mediaResponse.status} - ${errorText}`);
-			}
-			// Ensure the fetched data matches MediaItem structure
-			const fetchedMedia = await mediaResponse.json();
-			// Basic validation/mapping if needed:
-			mediaItems = fetchedMedia.map((item: any) => ({
-				id: item.id,
-				projectId: item.projectId,
-				name: item.name,
-				type: item.type,
-				sourcePath: item.sourcePath,
-				duration: item.duration,
-				uploadedAt: item.uploadedAt
-			}));
-
-		} catch (e) {
-			console.error(`Failed to fetch data for project ${id}:`, e);
-			mediaError = e instanceof Error ? e.message : 'Failed to load project data.';
-			mediaItems = [];
-			projectName = 'Error Loading Project';
-		} finally {
-			isLoadingMedia = false;
-		}
-	}
-*/
 
 	async function handleFilesSelected(files: FileList) {
 		if (!projectId) {
@@ -199,7 +196,7 @@
 
 	function handleMediaSelect(item: MediaItem) {
 		console.log('Media selected:', item);
-		// TODO: Implement logic
+		// TODO: Implement logic (e.g., add to timeline at playhead)
 	}
 
 	// --- Debounce Utility ---
@@ -267,19 +264,36 @@
 		}
 	});
 
+	// Effect to control player playback based on shared isPlaying state
+	$effect(() => {
+		// Attempt to call methods directly on the ref obtained via bind:this
+		if (!playerRef) return;
+
+		if (isPlaying) {
+			playerRef.play();
+		} else {
+			playerRef.pause();
+		}
+	});
+
 </script>
 
 <ProjectEditorLayout>
 	<!-- Pass content via named snippets -->
 	{#snippet headerPanel()}
 		<span class="navbar-brand mb-0 h1">Editing: {projectName}</span>
+		<!-- Playback Controls -->
+		<button class="btn btn-sm btn-secondary ms-3" onclick={() => isPlaying = !isPlaying} disabled={!projectTimeline || isLoadingTimeline || isLoadingMedia}>
+			{isPlaying ? 'Pause' : 'Play'}
+		</button>
+		<span class="ms-2">Time: {playheadPosition.toFixed(2)}s</span>
+		<!-- Save Status -->
 		{#if isSaving}
-			<span class="badge bg-info ms-2">Saving...</span>
+			<span class="badge bg-info ms-3">Saving...</span>
 		{/if}
 		{#if saveError}
-			<span class="badge bg-danger ms-2" title={saveError}>Save Error!</span>
+			<span class="badge bg-danger ms-3" title={saveError}>Save Error!</span>
 		{/if}
-		<!-- Add other header controls later -->
 	{/snippet}
 
 	{#snippet mediaPanel()}
@@ -302,20 +316,39 @@
 	{/snippet}
 
 	{#snippet previewPanel()}
-		<!-- Placeholder -->
-		<p>Preview Window Area</p>
+		{#if isLoadingTimeline || isLoadingMedia}
+			<p>Loading player...</p>
+		{:else if !projectTimeline}
+			<p>Timeline not available.</p> <!-- Should not happen with default timeline logic -->
+		{:else}
+			<!-- Instantiate PreviewPlayer -->
+			<PreviewPlayer
+				bind:this={playerRef}
+				timeline={projectTimeline}
+				bind:playheadPosition
+				{mediaMap}
+			/>
+		{/if}
 	{/snippet}
 
 	{#snippet timelinePanel()}
 		{#if isLoadingTimeline}
 			<p>Loading timeline...</p>
-		{:else if timelineError}
-			<div class="alert alert-warning alert-sm p-1" role="alert">{timelineError}</div>
-			<!-- Optionally render editor with default/empty state on error -->
-			<TimelineEditor />
+		{:else if timelineError && !projectTimeline} <!-- Show error only if timeline failed AND is still undefined -->
+			<div class="alert alert-danger alert-sm p-1" role="alert">
+				Error loading timeline: {timelineError}. Cannot initialize editor.
+			</div>
+		{:else if !projectTimeline}
+			<p>Initializing timeline...</p> <!-- Should be brief as default is created -->
 		{:else}
 			<!-- Bind projectTimeline to the editor's timeline prop -->
-			<TimelineEditor bind:timeline={projectTimeline} />
+			<!-- Also pass shared playback state -->
+			<TimelineEditor
+				bind:timeline={projectTimeline}
+				bind:playheadPosition
+				bind:isPlaying
+				{mediaMap}
+			/>
 		{/if}
 	{/snippet}
 

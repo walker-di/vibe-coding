@@ -220,9 +220,11 @@ This section outlines the planned steps to build the application based on the de
 
 ### Phase 4: AI Features & Advanced Editing (Future)
 
+*   [x] **Frontend (Integration):** Implement video preview playback synchronized with timeline (`PreviewPlayer.svelte` + integration in `+page.svelte`).
+*   [x] **Frontend (Timeline):** Implement basic clip trimming via handles (`TimelineEditor.svelte`).
+*   [x] **Frontend (Timeline):** Implement basic clip splitting at playhead (`TimelineEditor.svelte`).
+*   [ ] **Frontend (Timeline):** Refine clip moving (snapping, cross-track).
 *   [ ] Integrate AI services for transcription, object detection, etc.
-*   [ ] Implement clip trimming, splitting, moving.
 *   [ ] Add audio waveform generation/display.
-*   [ ] Implement video preview playback.
 *   [ ] User Authentication.
 *   [ ] ... more features
