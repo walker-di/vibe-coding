@@ -392,7 +392,7 @@
               </h6>
               <textarea
                 class="form-control form-control-sm"
-                rows="7"
+                rows="8"
                 bind:value={editedNarration}
                 on:input={markDirty}
                 placeholder="Digite a narração aqui..."
@@ -406,7 +406,7 @@
               </h6>
               <textarea
                 class="form-control form-control-sm font-monospace small"
-                rows="4"
+                rows="8"
                 bind:value={editedMainImagePrompt}
                 on:input={markDirty}
                 placeholder="Digite o prompt da imagem principal..."
@@ -420,7 +420,7 @@
               </h6>
               <textarea
                 class="form-control form-control-sm font-monospace small"
-                rows="4"
+                rows="8"
                 bind:value={editedBackgroundImagePrompt}
                 on:input={markDirty}
                 placeholder="Digite o prompt da imagem de fundo..."
@@ -434,7 +434,7 @@
               </h6>
               <textarea
                 class="form-control form-control-sm font-monospace small"
-                rows="4"
+                rows="8"
                 bind:value={editedBgmPrompt}
                 on:input={markDirty}
                 placeholder="Digite o prompt da música de fundo..."
@@ -469,7 +469,7 @@
         {/if}
 
         <!-- Audio Controls -->
-        <div class="mt-auto pt-2">
+        <div class="mt-start mt-2 d-flex justify-content-between">
           <div class="d-flex flex-wrap gap-2 align-items-center">
             <!-- Added inner flex container -->
             <!-- Log URL before the #if block -->
@@ -543,126 +543,126 @@
               </div>
             {/if}
           </div>
-        </div>
-
-        <!-- Regeneration Buttons & Status -->
-        <div class="mt-2">
-          <!-- Adjusted margin -->
-          <div
-            class="btn-group btn-group-sm"
-            role="group"
-            aria-label="Regenerate Assets"
-          >
+          <div>
             <button
+              aria-label="up"
               type="button"
-              class="btn btn-outline-secondary"
-              on:click={() => regenerateAsset("backgroundImage")}
-              disabled={Object.values(isGenerating).some((val) => val)}
-              title="Regenerar Imagem de Fundo"
+              class="btn btn-sm btn-outline-secondary me-1"
+              on:click={() => dispatch("moveframeup", { id: frame.id })}
+              title="Mover quadro para cima"
+              disabled={isFirst ||
+                Object.values(isGenerating).some((val) => val) ||
+                isSaving}
             >
-              {#if isGenerating["backgroundImage"]}
-                <span
-                  class="spinner-border spinner-border-sm"
-                  role="status"
-                  aria-hidden="true"
-                ></span>
-              {:else}
-                <i class="bi bi-image"></i> BG
-              {/if}
+              <i class="bi bi-arrow-up"></i>
             </button>
             <button
+              aria-label="down"
               type="button"
-              class="btn btn-outline-secondary"
-              on:click={() => regenerateAsset("mainImage")}
-              disabled={Object.values(isGenerating).some((val) => val)}
-              title="Regenerar Imagem Principal"
+              class="btn btn-sm btn-outline-secondary"
+              on:click={() => dispatch("moveframedown", { id: frame.id })}
+              title="Mover quadro para baixo"
+              disabled={isLast ||
+                Object.values(isGenerating).some((val) => val) ||
+                isSaving}
             >
-              {#if isGenerating["mainImage"]}
-                <span
-                  class="spinner-border spinner-border-sm"
-                  role="status"
-                  aria-hidden="true"
-                ></span>
-              {:else}
-                <i class="bi bi-person-bounding-box"></i> Main
-              {/if}
-            </button>
-            <button
-              type="button"
-              class="btn btn-outline-secondary"
-              on:click={() => regenerateAsset("narrationAudio")}
-              disabled={Object.values(isGenerating).some((val) => val)}
-              title="Regenerar Narração"
-            >
-              {#if isGenerating["narrationAudio"]}
-                <span
-                  class="spinner-border spinner-border-sm"
-                  role="status"
-                  aria-hidden="true"
-                ></span>
-              {:else}
-                <i class="bi bi-mic-fill"></i> Audio
-              {/if}
-            </button>
-            <button
-              type="button"
-              class="btn btn-outline-secondary"
-              on:click={() => regenerateAsset("bgmAudio")}
-              disabled={Object.values(isGenerating).some((val) => val)}
-              title="Regenerar BGM"
-            >
-              {#if isGenerating["bgmAudio"]}
-                <span
-                  class="spinner-border spinner-border-sm"
-                  role="status"
-                  aria-hidden="true"
-                ></span>
-              {:else}
-                <i class="bi bi-music-note-beamed"></i> BGM
-              {/if}
+              <i class="bi bi-arrow-down"></i>
             </button>
           </div>
-          {#if generationError}
-            <small class="text-danger d-block mt-1">{generationError}</small>
-          {/if}
         </div>
-        <!-- Delete Button -->
-        <!-- Reorder Buttons -->
-        <div class="mt-2 text-end">
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-danger"
-            on:click={() => dispatch("deleteframe", { id: frame.id })}
-            title="Excluir este quadro"
-            disabled={Object.values(isGenerating).some((val) => val) ||
-              isSaving}
-          >
-            <i class="bi bi-trash3"></i> Excluir
-          </button>
-          <button
-            aria-label="up"
-            type="button"
-            class="btn btn-sm btn-outline-secondary me-1"
-            on:click={() => dispatch("moveframeup", { id: frame.id })}
-            title="Mover quadro para cima"
-            disabled={isFirst ||
-              Object.values(isGenerating).some((val) => val) ||
-              isSaving}
-          >
-            <i class="bi bi-arrow-up"></i>
-          </button>
-          <button
-            aria-label="down"
-            type="button"
-            class="btn btn-sm btn-outline-secondary"
-            on:click={() => dispatch("moveframedown", { id: frame.id })}
-            title="Mover quadro para baixo"
-            disabled={isLast ||
-              Object.values(isGenerating).some((val) => val) ||
-              isSaving}
-          >
-            <i class="bi bi-arrow-down"></i>
-          </button>
+        <!-- Regeneration Buttons & Status -->
+        <div class="d-flex justify-content-between">
+          <div class="m-2 mt-start">
+            <div
+              class="btn-group btn-group-sm"
+              role="group"
+              aria-label="Regenerate Assets"
+            >
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                on:click={() => regenerateAsset("backgroundImage")}
+                disabled={Object.values(isGenerating).some((val) => val)}
+                title="Regenerar Imagem de Fundo"
+              >
+                {#if isGenerating["backgroundImage"]}
+                  <span
+                    class="spinner-border spinner-border-sm"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
+                {:else}
+                  <i class="bi bi-image"></i> BG
+                {/if}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                on:click={() => regenerateAsset("mainImage")}
+                disabled={Object.values(isGenerating).some((val) => val)}
+                title="Regenerar Imagem Principal"
+              >
+                {#if isGenerating["mainImage"]}
+                  <span
+                    class="spinner-border spinner-border-sm"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
+                {:else}
+                  <i class="bi bi-person-bounding-box"></i> Main
+                {/if}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                on:click={() => regenerateAsset("narrationAudio")}
+                disabled={Object.values(isGenerating).some((val) => val)}
+                title="Regenerar Narração"
+              >
+                {#if isGenerating["narrationAudio"]}
+                  <span
+                    class="spinner-border spinner-border-sm"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
+                {:else}
+                  <i class="bi bi-mic-fill"></i> Audio
+                {/if}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-secondary"
+                on:click={() => regenerateAsset("bgmAudio")}
+                disabled={Object.values(isGenerating).some((val) => val)}
+                title="Regenerar BGM"
+              >
+                {#if isGenerating["bgmAudio"]}
+                  <span
+                    class="spinner-border spinner-border-sm"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
+                {:else}
+                  <i class="bi bi-music-note-beamed"></i> BGM
+                {/if}
+              </button>
+            </div>
+            {#if generationError}
+              <small class="text-danger d-block mt-1">{generationError}</small>
+            {/if}
+          </div>
+          <div class="m-2 text-end">
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-danger"
+              on:click={() => dispatch("deleteframe", { id: frame.id })}
+              title="Excluir este quadro"
+              disabled={Object.values(isGenerating).some((val) => val) ||
+                isSaving}
+            >
+              <i class="bi bi-trash3"></i> Excluir
+            </button>
+          </div>
         </div>
       </div>
     </div>
