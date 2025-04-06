@@ -59,8 +59,8 @@ export const POST: RequestHandler = async ({ request }) => {
         const newPrompt = await aiRegeneratePrompt(
             requestData.originalPrompt,
             requestData.instructions,
-            storyContext // Pass the formatted context
-            // requestData.assetType // Pass assetType if needed
+            storyContext, // Pass the formatted context
+            requestData.assetType // Pass assetType if needed
         );
 
         if (!newPrompt) {

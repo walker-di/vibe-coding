@@ -195,17 +195,39 @@ ${storyContext}
         let revisedTextLabel: string;
         let originalTextValue: string;
 
+        // --- Determine Task and Output Format based on assetType ---
+        let finalPrompt: string; // Use a single variable for the final prompt
+
         switch (assetType) {
             case 'narration':
-                taskDescription = instructions.trim()
-                    ? `Revise the following original narration text based on the provided instructions (which may be in another language).${contextBlock}`
-                    : `Generate a creative variation of the following original narration text, considering the overall story context.${contextBlock}`;
-                outputFormatInstruction = 'Output ONLY the revised narration text, without any additional explanation, formatting, or preamble.';
-                originalTextLabel = 'Original Narration';
-                revisedTextLabel = 'Revised Narration';
                 originalTextValue = originalPrompt || '(No original narration provided - generate suitable narration based on context and instructions)';
-                break;
+                const narrationInstructionsBlock = instructions.trim()
+                    ? `
+Instructions for Modification:
+"${instructions}"
+` : '';
+                // Use the new, refined prompt structure for narration
+                finalPrompt = `
+You are an AI assistant helping revise narration for a single frame within a larger storyboard.
+
+--- STORY CONTEXT (For background understanding ONLY - DO NOT REVISE THIS) ---
+${storyContext || '(No overall story context provided)'}
+--- END STORY CONTEXT ---
+
+--- TASK ---
+Your goal is to revise ONLY the "Original Narration for this Frame" text below, based on the provided "Instructions for Modification".
+Use the "STORY CONTEXT" above solely for understanding the overall narrative flow and ensuring consistency. Do NOT rewrite the context.
+Output ONLY the revised narration text for this single frame. Do not include any extra explanations, labels, or formatting.
+
+Original Narration for this Frame:
+"${originalTextValue}"
+${narrationInstructionsBlock}
+Revised Narration for this Frame:
+`;
+                break; // End case 'narration'
+
             case 'bgm':
+                // Keep existing logic for BGM, but construct the final prompt similarly
                 taskDescription = instructions.trim()
                     ? `Revise the following original English BGM prompt based on the provided instructions (which may be in another language).${contextBlock}`
                     : `Generate a creative variation of the following original English BGM prompt, considering the overall story context.${contextBlock}`;
@@ -213,7 +235,18 @@ ${storyContext}
                 originalTextLabel = 'Original BGM Prompt';
                 revisedTextLabel = 'Revised English BGM Prompt';
                 originalTextValue = originalPrompt || '(No original BGM prompt provided - generate a suitable prompt based on context and instructions)';
-                break;
+                const bgmInstructionsBlock = instructions.trim() ? `\nInstructions for Modification:\n"${instructions}"\n` : '';
+                finalPrompt = `
+${taskDescription}
+${outputFormatInstruction}
+
+${originalTextLabel}:
+"${originalTextValue}"
+${bgmInstructionsBlock}
+${revisedTextLabel}:
+`;
+                break; // End case 'bgm'
+
             case 'mainImage':
             case 'backgroundImage':
             default: // Default to image prompt generation
@@ -224,29 +257,24 @@ ${storyContext}
                 originalTextLabel = 'Original Image Prompt';
                 revisedTextLabel = 'Revised English Image Prompt';
                 originalTextValue = originalPrompt || '(No original image prompt provided - generate a suitable prompt based on context and instructions)';
-                break;
-        }
-
-        const instructionsBlock = instructions.trim()
-            ? `
-Instructions for Modification (interpret these even if not in English):
-"${instructions}"
-` : '';
-
-        const prompt = `
+                const imageInstructionsBlock = instructions.trim() ? `\nInstructions for Modification:\n"${instructions}"\n` : '';
+                finalPrompt = `
 ${taskDescription}
 ${outputFormatInstruction}
 
 ${originalTextLabel}:
 "${originalTextValue}"
-${instructionsBlock}
+${imageInstructionsBlock}
 ${revisedTextLabel}:
 `;
+                break; // End default case
+        }
 
-        console.log("Sending prompt regeneration request to Gemini:", prompt);
+
+        console.log("Sending prompt regeneration request to Gemini:", finalPrompt);
 
         const result = await model.generateContent({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
             generationConfig,
             safetySettings,
         });
