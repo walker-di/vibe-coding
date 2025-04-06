@@ -123,8 +123,8 @@
 
       const result = await response.json();
       console.log('API Response (Delete Frame):', result);
-      // Invalidate data for this page to refresh the frame list
-      await invalidate((url) => url.pathname === `/storyboard/${currentStoryboardId}`);
+      // Invalidate the specific dependency to refresh the frame list
+      await invalidate(`app:storyboard-frames:${currentStoryboardId}`);
 
     } catch (err: any) {
       console.error('Failed to delete frame:', err);
@@ -159,8 +159,8 @@
 
       const result = await response.json();
       console.log('API Response (Insert Blank Frame):', result);
-      // Invalidate data for this page to refresh the frame list
-      await invalidate((url) => url.pathname === `/storyboard/${currentStoryboardId}`);
+      // Invalidate the specific dependency to refresh the frame list
+      await invalidate(`app:storyboard-frames:${currentStoryboardId}`);
 
     } catch (err: any) {
       console.error('Failed to insert blank frame:', err);
@@ -207,7 +207,8 @@
 
       const result = await response.json();
       console.log('API Response (Add Frames):', result);
-      await invalidate((url) => url.pathname === `/storyboard/${currentStoryboardId}`);
+      // Invalidate the specific dependency to refresh the frame list
+      await invalidate(`app:storyboard-frames:${currentStoryboardId}`);
 
     } catch (err: any) {
       console.error('Failed to add frames to storyboard:', err);

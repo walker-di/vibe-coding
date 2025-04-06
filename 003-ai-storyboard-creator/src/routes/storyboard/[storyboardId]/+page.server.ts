@@ -4,8 +4,11 @@ import { storyboards, storyboardFrames } from '$lib/server/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import { error } from '@sveltejs/kit'; // Import error helper
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, depends }) => { // Add depends here
   const storyboardId = params.storyboardId;
+
+  // Declare dependency on a custom identifier for this storyboard's frames
+  depends(`app:storyboard-frames:${storyboardId}`);
 
   if (!storyboardId) {
     throw error(400, 'Storyboard ID parameter is missing.');
