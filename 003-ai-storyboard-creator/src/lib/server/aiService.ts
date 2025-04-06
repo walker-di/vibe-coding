@@ -148,6 +148,138 @@ JSON Array Output:
   }
 }
 
+// --- Gemini: Regenerate Prompt based on Instructions ---
+export async function regeneratePrompt(
+    originalPrompt: string,
+    instructions: string,
+    storyContext?: string, // Add optional storyContext parameter
+    assetType?: 'narration' | 'mainImage' | 'backgroundImage' | 'bgm' // Add assetType parameter
+): Promise<string> {
+    if (!genAI) {
+        throw error(500, 'Google AI Service is not configured. Missing GOOGLE_API_KEY.');
+    }
+
+    try {
+        // Use a model suitable for instruction following / editing
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Or gemini-1.5-pro-latest
+
+        const generationConfig = {
+            temperature: 0.7, // Allow for some creativity in revision
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 2048, // Allow sufficient length for revised prompt
+            // responseMimeType: "text/plain", // Expecting just the revised prompt text
+        };
+
+        const safetySettings = [
+           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+           { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+           { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+           { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        ];
+
+        // Construct the prompt for the AI, including context if provided
+        const contextBlock = storyContext
+            ? `
+Consider the following overall story context when revising the prompt:
+--- STORY CONTEXT ---
+${storyContext}
+--- END STORY CONTEXT ---
+`
+            : '';
+
+        // --- Determine Task and Output Format based on assetType ---
+        let taskDescription: string;
+        let outputFormatInstruction: string;
+        let originalTextLabel: string;
+        let revisedTextLabel: string;
+        let originalTextValue: string;
+
+        switch (assetType) {
+            case 'narration':
+                taskDescription = instructions.trim()
+                    ? `Revise the following original narration text based on the provided instructions (which may be in another language).${contextBlock}`
+                    : `Generate a creative variation of the following original narration text, considering the overall story context.${contextBlock}`;
+                outputFormatInstruction = 'Output ONLY the revised narration text, without any additional explanation, formatting, or preamble.';
+                originalTextLabel = 'Original Narration';
+                revisedTextLabel = 'Revised Narration';
+                originalTextValue = originalPrompt || '(No original narration provided - generate suitable narration based on context and instructions)';
+                break;
+            case 'bgm':
+                taskDescription = instructions.trim()
+                    ? `Revise the following original English BGM prompt based on the provided instructions (which may be in another language).${contextBlock}`
+                    : `Generate a creative variation of the following original English BGM prompt, considering the overall story context.${contextBlock}`;
+                outputFormatInstruction = 'Output ONLY the resulting English BGM prompt text (suitable for a music generation model like MusicGen), without any extra explanations, labels, or formatting.';
+                originalTextLabel = 'Original BGM Prompt';
+                revisedTextLabel = 'Revised English BGM Prompt';
+                originalTextValue = originalPrompt || '(No original BGM prompt provided - generate a suitable prompt based on context and instructions)';
+                break;
+            case 'mainImage':
+            case 'backgroundImage':
+            default: // Default to image prompt generation
+                taskDescription = instructions.trim()
+                    ? `Revise the following original English image prompt based on the provided instructions (which may be in another language).${contextBlock}`
+                    : `Generate a creative variation of the following original English image prompt, considering the overall story context.${contextBlock}`;
+                outputFormatInstruction = 'Output ONLY the resulting English image prompt text (suitable for an AI image generation model like Stable Diffusion or Midjourney), without any extra explanations, labels, or formatting.';
+                originalTextLabel = 'Original Image Prompt';
+                revisedTextLabel = 'Revised English Image Prompt';
+                originalTextValue = originalPrompt || '(No original image prompt provided - generate a suitable prompt based on context and instructions)';
+                break;
+        }
+
+        const instructionsBlock = instructions.trim()
+            ? `
+Instructions for Modification (interpret these even if not in English):
+"${instructions}"
+` : '';
+
+        const prompt = `
+${taskDescription}
+${outputFormatInstruction}
+
+${originalTextLabel}:
+"${originalTextValue}"
+${instructionsBlock}
+${revisedTextLabel}:
+`;
+
+        console.log("Sending prompt regeneration request to Gemini:", prompt);
+
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig,
+            safetySettings,
+        });
+
+        const response = result.response;
+        const responseText = response.text().trim();
+
+        console.log("Received raw response text from Gemini for prompt regeneration:", responseText);
+
+        if (!responseText) {
+             throw new Error('Gemini returned an empty response for prompt regeneration.');
+        }
+
+        // Basic cleaning (remove potential quotes if the model wraps the output)
+        let cleanedPrompt = responseText;
+        if (cleanedPrompt.startsWith('"') && cleanedPrompt.endsWith('"')) {
+            cleanedPrompt = cleanedPrompt.substring(1, cleanedPrompt.length - 1);
+        }
+
+        console.log(`Successfully regenerated prompt: "${cleanedPrompt}"`);
+        return cleanedPrompt;
+
+    } catch (err: any) {
+        console.error('Error calling Google Gemini for prompt regeneration:', err);
+        if (err instanceof Error && err.message.includes('SAFETY')) {
+            throw error(400, 'Gemini prompt regeneration blocked due to safety settings.');
+        }
+        if (err.status) { // Re-throw kit errors
+            throw err;
+        }
+        throw error(500, `Failed to regenerate prompt via Gemini: ${err.message || err}`);
+    }
+}
 
 // --- Azure: Generate Narration Audio (TTS) ---
 const DEFAULT_AZURE_VOICE = 'pt-BR-FranciscaNeural'; // Define default voice

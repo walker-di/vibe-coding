@@ -3,7 +3,8 @@
   import { selectedVoice } from "$lib/stores/voiceStore"; // Import the voice store
   import { get } from "svelte/store"; // To get the current store value non-reactively
   import { createEventDispatcher, onMount } from "svelte"; // Import onMount
-  import AssetSelectionModal from "./AssetSelectionModal.svelte"; // Import the new modal
+  import AssetSelectionModal from "./AssetSelectionModal.svelte";
+  import PromptRegenerationModal from "./PromptRegenerationModal.svelte"; // Import the new modal
 
   export let frame: StoryboardFrameDb;
   export let storyboardId: string; // Add storyboardId prop
@@ -28,6 +29,11 @@
   let isAssetModalOpen = false;
   let currentAssetType: 'mainImage' | 'backgroundImage' | 'bgm' | null = null;
   let assetUpdateError: string | null = null; // Error specific to updating from modal
+
+  // State for Prompt Regeneration Modal
+  let isRegenModalOpen = false;
+  let regenModalAssetType: 'narration' | 'mainImage' | 'backgroundImage' | 'bgm' | null = null; // Add narration and bgm
+  let regenModalOriginalPrompt: string = '';
 
   // Update edited fields if the frame prop changes externally
   $: {
@@ -115,6 +121,41 @@
        currentAssetType = null; // Reset after operation
     }
   }
+
+  // --- Prompt Regeneration Modal Logic ---
+  function openRegenModal(type: 'narration' | 'mainImage' | 'backgroundImage' | 'bgm') { // Add narration and bgm types
+      regenModalAssetType = type;
+      // Get the correct original text based on type
+      if (type === 'narration') {
+          regenModalOriginalPrompt = editedNarration;
+      } else if (type === 'mainImage') {
+          regenModalOriginalPrompt = editedMainImagePrompt;
+      } else if (type === 'backgroundImage') {
+          regenModalOriginalPrompt = editedBackgroundImagePrompt;
+      } else if (type === 'bgm') {
+          regenModalOriginalPrompt = editedBgmPrompt;
+      }
+      isRegenModalOpen = true;
+  }
+
+  function handlePromptRegenerated(event: CustomEvent<string>) {
+      const newText = event.detail; // Renamed for clarity
+      // Update the correct state variable based on type
+      if (regenModalAssetType === 'narration') {
+          editedNarration = newText;
+      } else if (regenModalAssetType === 'mainImage') {
+          editedMainImagePrompt = newText;
+      } else if (regenModalAssetType === 'backgroundImage') {
+          editedBackgroundImagePrompt = newText;
+      } else if (regenModalAssetType === 'bgm') {
+          editedBgmPrompt = newText;
+      }
+      isRegenModalOpen = false; // Close modal handled by modal itself, but reset state here
+      regenModalAssetType = null;
+      regenModalOriginalPrompt = '';
+      markDirty(); // Mark frame as dirty since prompt changed
+  }
+  // --- End Prompt Regeneration Modal Logic ---
 
 
   // Function to remove a specific asset (mainImage, backgroundImage, bgm)
@@ -565,6 +606,16 @@
                 on:input={markDirty}
                 placeholder="Digite a narração aqui..."
               ></textarea>
+              <!-- Action Button for Narration -->
+              <div class="d-flex justify-content-end gap-1 mt-1">
+                 <button
+                   class="btn btn-outline-info btn-sm"
+                   on:click={() => openRegenModal("narration")}
+                   title="Regenerar Narração com IA"
+                 >
+                   <i class="bi bi-magic"></i> Regenerar Narração
+                 </button>
+              </div>
             </div>
           {/if}
           {#if activeTab === "mainImage"}
@@ -588,6 +639,13 @@
                  >
                    <i class="bi bi-folder2-open"></i> Alterar
                  </button>
+                  <button
+                    class="btn btn-outline-info btn-sm"
+                    on:click={() => openRegenModal("mainImage")}
+                    title="Regenerar Prompt da Imagem Principal com IA"
+                  > <!-- Allow click even if prompt is empty -->
+                    <i class="bi bi-magic"></i> Regenerar Prompt
+                  </button>
                  <button
                    class="btn btn-outline-danger btn-sm"
                    on:click={() => removeAsset("mainImage")}
@@ -624,6 +682,13 @@
                    title="Selecionar Imagem de Fundo existente">
                    <i class="bi bi-folder2-open"></i> Alterar
                  </button>
+                  <button
+                    class="btn btn-outline-info btn-sm"
+                    on:click={() => openRegenModal("backgroundImage")}
+                    title="Regenerar Prompt da Imagem de Fundo com IA"
+                  > <!-- Allow click even if prompt is empty -->
+                    <i class="bi bi-magic"></i> Regenerar Prompt
+                  </button>
                  <button
                    class="btn btn-outline-danger btn-sm"
                    on:click={() => removeAsset("backgroundImage")}
@@ -653,6 +718,13 @@
               ></textarea>
                <!-- Action Buttons for BGM -->
                <div class="d-flex justify-content-end gap-1 mt-1">
+                  <button
+                    class="btn btn-outline-info btn-sm"
+                    on:click={() => openRegenModal("bgm")}
+                    title="Regenerar Prompt de BGM com IA"
+                  >
+                    <i class="bi bi-magic"></i> Regenerar Prompt
+                  </button>
                  <button
                    class="btn btn-outline-secondary btn-sm"
                    on:click={() => openAssetModal("bgm")}
@@ -823,6 +895,20 @@
   on:select={handleAssetSelected}
 />
 {/if}
+
+<!-- Prompt Regeneration Modal Instance -->
+{#if regenModalAssetType}
+<PromptRegenerationModal
+  bind:isOpen={isRegenModalOpen}
+  assetType={regenModalAssetType}
+  originalPrompt={regenModalOriginalPrompt}
+  storyboardId={storyboardId}
+  frameId={frame.id}
+  on:close={() => { isRegenModalOpen = false; regenModalAssetType = null; regenModalOriginalPrompt = ''; }}
+  on:regenerated={handlePromptRegenerated}
+/>
+{/if}
+
         <!-- Regeneration Buttons & Status -->
         <div class="d-flex justify-content-between">
           <div class="m-2 mt-start">
