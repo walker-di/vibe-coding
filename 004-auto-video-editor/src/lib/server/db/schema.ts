@@ -13,8 +13,10 @@ export const projects = sqliteTable('projects', {
 		.default(sql`(cast(strftime('%s', 'now') as integer) * 1000)`), // milliseconds
 	updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 		.notNull()
-		.default(sql`(cast(strftime('%s', 'now') as integer) * 1000)`) // milliseconds
-	// userId: text('user_id') // Optional: Add later if user accounts are implemented
+		.default(sql`(cast(strftime('%s', 'now') as integer) * 1000)`), // milliseconds
+	// userId: text('user_id'), // Optional: Add later if user accounts are implemented
+	// Store timeline state as a JSON string
+	timeline: text('timeline')
 });
 
 export const media = sqliteTable('media', {

@@ -164,10 +164,10 @@ This will start the Storybook development server, usually on port 6006.
 | `TimelineEditor.svelte` Component & Story             | Frontend | Done   | Basic component with track/clip rendering, zoom, D&D (within track)      |
 | Implement Drag-and-Drop in Story                      | Frontend | Done   | Implemented within-track D&D using `svelte-dnd-action`                   |
 | Implement Playhead & Time Ruler in Story              | Frontend | Done   | Added basic visual representation, updates with zoom                     |
-| API: Save Timeline State (POST/PUT /api/.../timeline) | Backend  | To Do  | Endpoint logic and DB update (JSON blob or tables)                       |
-| API: Load Timeline State (GET /api/.../timeline)      | Backend  | To Do  | Endpoint logic and DB query                                              |
-| Integration: Add `TimelineEditor` to Project Page     | Frontend | To Do  | Place component in the editor layout                                     |
-| Integration: Save/Load Timeline State                 | Frontend | To Do  | Connect component interactions (D&D, zoom?) to backend API calls later |
+| API: Save Timeline State (POST/PUT /api/.../timeline) | Backend  | Done   | Endpoint logic and DB update (JSON blob)                                 |
+| API: Load Timeline State (GET /api/.../timeline)      | Backend  | Done   | Endpoint logic and DB query                                              |
+| Integration: Add `TimelineEditor` to Project Page     | Frontend | Done   | Placed component in the editor layout (`+page.svelte`)                   |
+| Integration: Save/Load Timeline State                 | Frontend | Done   | Connected component via `bind:timeline` and `$effect` for auto-save      |
 
 ---
 
@@ -213,10 +213,10 @@ This section outlines the planned steps to build the application based on the de
 *   [x] **Frontend (Storybook):** Create `TimelineEditor.svelte` component and story with basic track/clip rendering (using dummy data).
 *   [x] **Frontend (Storybook):** Implement drag-and-drop functionality within the `TimelineEditor.svelte` story (or between mock MediaLibrary and Timeline). (Implemented within-track D&D)
 *   [x] **Frontend (Storybook):** Create basic playhead and time ruler display within the story. (Added zoom controls as well)
-*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for saving timeline state (POST/PUT).
-*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for loading timeline state (GET).
-*   [ ] **Frontend (Integration):** Integrate `TimelineEditor.svelte` into the `/projects/[projectId]` route.
-*   [ ] **Frontend (Integration):** Implement saving/loading timeline state to/from the backend API endpoints.
+*   [x] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for saving timeline state (PUT). (Done: `+server.ts` created)
+*   [x] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for loading timeline state (GET). (Done: `+server.ts` created)
+*   [x] **Frontend (Integration):** Integrate `TimelineEditor.svelte` into the `/projects/[projectId]` route. (Done: Added to `+page.svelte`)
+*   [x] **Frontend (Integration):** Implement saving/loading timeline state to/from the backend API endpoints. (Done: Implemented fetch in `+page.svelte` and auto-save via `bind:timeline` and `$effect`)
 
 ### Phase 4: AI Features & Advanced Editing (Future)
 
