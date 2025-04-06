@@ -69,11 +69,18 @@
 
 							{#if item.type === 'video'}
 								<img
-									src={getPlaceholderThumbnail(item.id)}
+									src={item.thumbnailUrl ?? getPlaceholderThumbnail(item.id)}
 									class="card-img-top object-fit-cover"
 									alt="Thumbnail for {item.name}"
 									style="height: 80px;"
-								/> <!-- Use placeholder generator -->
+									onerror={(event) => {
+										// Prevent infinite loop if placeholder also fails
+										if (event.currentTarget instanceof HTMLImageElement) {
+											event.currentTarget.onerror = null;
+											event.currentTarget.src = getPlaceholderThumbnail(item.id);
+										}
+									}}
+								/> <!-- Use actual thumbnail or placeholder -->
 							{:else if item.type === 'audio'}
 								<div
 									class="card-img-top bg-secondary d-flex align-items-center justify-content-center"

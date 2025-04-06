@@ -168,6 +168,7 @@ This will start the Storybook development server, usually on port 6006.
 | API: Load Timeline State (GET /api/.../timeline)      | Backend  | Done   | Endpoint logic and DB query                                              |
 | Integration: Add `TimelineEditor` to Project Page     | Frontend | Done   | Placed component in the editor layout (`+page.svelte`)                   |
 | Integration: Save/Load Timeline State                 | Frontend | Done   | Connected component via `bind:timeline` and `$effect` for auto-save      |
+| **Fix: Media Library Thumbnails**                       | **Both** | **To Do** | **Thumbnails currently show placeholders, need backend generation & frontend update.** |
 
 ---
 

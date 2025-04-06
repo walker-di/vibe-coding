@@ -29,6 +29,7 @@ export const media = sqliteTable('media', {
 	// Store the path relative to the static dir, e.g., '/uploads/projectId/filename.mp4'
 	// The actual storage location (local vs cloud) might change, but the path stored can remain consistent.
 	sourcePath: text('source_path').notNull(),
+	thumbnailUrl: text('thumbnail_url'), // Optional: URL to the generated thumbnail
 	duration: integer('duration'), // Duration in seconds (optional for now)
 	uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' })
 		.notNull()

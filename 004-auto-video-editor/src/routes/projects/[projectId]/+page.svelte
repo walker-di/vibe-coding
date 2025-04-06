@@ -108,6 +108,7 @@
 					name: item.name,
 					type: item.type,
 					sourcePath: item.sourcePath,
+					thumbnailUrl: item.thumbnailUrl, // Add the missing field
 					duration: item.duration,
 					uploadedAt: item.uploadedAt
 				}));

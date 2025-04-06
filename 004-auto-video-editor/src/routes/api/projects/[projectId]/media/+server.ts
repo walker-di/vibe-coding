@@ -8,6 +8,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { env } from '$env/dynamic/private'; // To potentially get base upload path if needed
 import ffprobeStatic from 'ffprobe-static';
+import ffmpegStatic from 'ffmpeg-static'; // Import ffmpeg
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -77,7 +78,10 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	}
 
 	const projectUploadDir = path.join(UPLOAD_DIR_BASE, projectId);
+	// Removed duplicate declaration of projectUploadDir here
+	const projectThumbnailDir = path.join(projectUploadDir, 'thumbnails'); // Define thumbnail directory
 	await fs.mkdir(projectUploadDir, { recursive: true }); // Ensure project-specific dir exists
+	await fs.mkdir(projectThumbnailDir, { recursive: true }); // Ensure thumbnail dir exists
 
 	const createdMediaRecords = [];
 
@@ -123,7 +127,8 @@ export const POST: RequestHandler = async ({ request, params }) => {
 			}
 			// --- End Duration Extraction ---
 
-
+			// --- Generate Thumbnail (if video) ---
+			let thumbnailUrl: string | null = null;
 			// Determine media type (basic check)
 			let mediaType: 'video' | 'audio' = 'video'; // Default assumption
 			if (file.type.startsWith('audio/')) {
@@ -131,7 +136,32 @@ export const POST: RequestHandler = async ({ request, params }) => {
 			} else if (!file.type.startsWith('video/')) {
 				// If not explicitly audio or video, log a warning or handle differently
 				console.warn(`Uploaded file "${file.name}" has unexpected MIME type: ${file.type}. Assuming video.`);
+				// Still attempt thumbnail generation for video types
 			}
+
+			if (mediaType === 'video') {
+				const thumbnailFilename = `${path.parse(uniqueFilename).name}_thumb.jpg`;
+				const thumbnailPath = path.join(projectThumbnailDir, thumbnailFilename);
+				const thumbnailRelativeUrl = `/uploads/${projectId}/thumbnails/${thumbnailFilename}`;
+
+				try {
+					const ffmpegArgs = [
+						'-i', filePath,          // Input file
+						'-ss', '00:00:01.000',   // Seek to 1 second
+						'-vframes', '1',         // Extract only one frame
+						'-vf', 'scale=150:-1',   // Scale width to 150px, maintain aspect ratio
+						'-q:v', '3',             // Output quality (1-31, lower is better)
+						thumbnailPath            // Output file path
+					];
+					await execFileAsync(ffmpegStatic!, ffmpegArgs); // Use ! to assert ffmpegStatic.path is not null
+					thumbnailUrl = thumbnailRelativeUrl;
+					console.log(`Generated thumbnail for ${uniqueFilename}: ${thumbnailUrl}`);
+				} catch (ffmpegError) {
+					console.error(`ffmpeg failed for ${uniqueFilename}:`, ffmpegError);
+					// Continue without thumbnail if generation fails
+				}
+			}
+			// --- End Thumbnail Generation ---
 
 			const newMediaId = crypto.randomUUID();
 
@@ -142,6 +172,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 				name: file.name, // Store original filename
 				type: mediaType,
 				sourcePath: relativePath, // Store relative path for serving
+				thumbnailUrl: thumbnailUrl, // Save the thumbnail URL (null if audio or failed)
 				duration: duration // Save the extracted duration
 			}).returning(); // SQLite might not support returning well here, adjust if needed
 
@@ -185,8 +216,11 @@ export const DELETE: RequestHandler = async ({ url, params }) => {
 	}
 
 	try {
-		// 1. Find the media record to get the file path
-		const mediaRecord = await db.select({ sourcePath: media.sourcePath })
+		// 1. Find the media record to get file paths
+		const mediaRecord = await db.select({
+				sourcePath: media.sourcePath,
+				thumbnailUrl: media.thumbnailUrl // Also select thumbnail URL
+			})
 			.from(media)
 			.where(eq(media.id, mediaId) && eq(media.projectId, projectId))
 			.limit(1);
@@ -196,6 +230,7 @@ export const DELETE: RequestHandler = async ({ url, params }) => {
 		}
 
 		const relativePath = mediaRecord[0].sourcePath;
+		const relativeThumbnailPath = mediaRecord[0].thumbnailUrl; // Get thumbnail path from record
 		const absolutePath = path.resolve('static', relativePath.startsWith('/') ? relativePath.substring(1) : relativePath);
 
 		// 2. Delete the database record
@@ -219,6 +254,21 @@ export const DELETE: RequestHandler = async ({ url, params }) => {
 				// Optionally re-throw or handle more critical file system errors
 			}
 		}
+
+		// 4. Delete the thumbnail file (if it exists)
+		if (relativeThumbnailPath) {
+			try {
+				const absoluteThumbnailPath = path.resolve('static', relativeThumbnailPath.startsWith('/') ? relativeThumbnailPath.substring(1) : relativeThumbnailPath);
+				await fs.unlink(absoluteThumbnailPath);
+				console.log(`Deleted thumbnail file: ${absoluteThumbnailPath}`);
+			} catch (thumbError: any) {
+				console.error(`Failed to delete thumbnail file ${relativeThumbnailPath}:`, thumbError);
+				if (thumbError.code !== 'ENOENT') {
+					// Log more critical errors
+				}
+			}
+		}
+
 
 		return json({ message: 'Media item deleted successfully' }, { status: 200 });
 

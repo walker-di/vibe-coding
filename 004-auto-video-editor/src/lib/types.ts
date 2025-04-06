@@ -17,7 +17,7 @@ export interface MediaItem {
 	sourcePath: string; // Path relative to static dir (e.g., /uploads/projectId/...)
 	duration?: number | null; // Duration in seconds
 	uploadedAt: number; // Unix timestamp (milliseconds)
-	// thumbnailUrl?: string; // Optional: Could be generated/added later
+	thumbnailUrl?: string | null; // Optional: URL to the generated thumbnail (can be null)
 	// metadata?: any; // Optional
 }
 
