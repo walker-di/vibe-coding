@@ -206,44 +206,56 @@
 		if (!item.duration) {
 			console.error('Cannot add clip: Media item has no duration.', item);
 			return;
-		}
+	}
 
-		// Find the first compatible track
-		const targetTrackIndex = projectTimeline.tracks.findIndex(track => track.type === item.type);
+	// Find the first compatible track or create one if needed
+	let targetTrackIndex = projectTimeline.tracks.findIndex(track => track.type === item.type);
+	let targetTrackId: string;
 
-		if (targetTrackIndex === -1) {
-			console.warn(`No compatible track found for media type "${item.type}".`);
-			// TODO: Optionally create a new track? For now, do nothing.
-			return;
-		}
-
-		// Calculate start time (append to end of the target track)
-		const targetTrackClips = projectTimeline.tracks[targetTrackIndex].clips;
-		const lastClipEndTime = targetTrackClips.length > 0
-			? Math.max(...targetTrackClips.map(c => c.endTime))
-			: 0;
-		const startTime = lastClipEndTime;
-		const duration = Number(item.duration); // Ensure duration is number
-		const endTime = startTime + duration;
-
-		// Create the new clip
-		const newClip: Clip = {
-			id: uuidv4(), // Need uuid library imported
-			mediaId: item.id,
-			trackId: projectTimeline.tracks[targetTrackIndex].id,
-			startTime: startTime,
-			endTime: endTime,
-			sourceStartTime: 0,
-			sourceEndTime: duration,
+	if (targetTrackIndex === -1) {
+		// No compatible track found, create a new one
+		console.log(`No compatible track found for type "${item.type}", creating a new one.`);
+		const newTrack: Track = {
+			id: uuidv4(),
+			type: item.type,
+			clips: []
 		};
+		projectTimeline.tracks.push(newTrack);
+		targetTrackIndex = projectTimeline.tracks.length - 1; // It's the last track now
+		targetTrackId = newTrack.id;
+		console.log(`Created new track with ID: ${targetTrackId}`);
+	} else {
+		targetTrackId = projectTimeline.tracks[targetTrackIndex].id;
+	}
 
-		console.log(`Adding new clip from click: ${item.id} to track ${newClip.trackId} at ${startTime.toFixed(2)}s`, newClip);
 
-		// Add the new clip to the track
-		projectTimeline.tracks[targetTrackIndex].clips.push(newClip);
+	// Calculate start time (append to end of the target track)
+	const targetTrackClips = projectTimeline.tracks[targetTrackIndex].clips;
+	const lastClipEndTime = targetTrackClips.length > 0
+		? Math.max(...targetTrackClips.map(c => c.endTime))
+		: 0;
+	const startTime = lastClipEndTime;
+	const duration = Number(item.duration); // Ensure duration is number
+	const endTime = startTime + duration;
 
-		// Update total duration if necessary
-		if (endTime > projectTimeline.totalDuration) {
+	// Create the new clip
+	const newClip: Clip = {
+		id: uuidv4(), // Need uuid library imported
+		mediaId: item.id,
+		trackId: targetTrackId, // Use the determined track ID
+		startTime: startTime,
+		endTime: endTime,
+		sourceStartTime: 0,
+		sourceEndTime: duration,
+	};
+
+	console.log(`Adding new clip from click: ${item.id} to track ${newClip.trackId} at ${startTime.toFixed(2)}s`, newClip);
+
+	// Add the new clip to the track
+	projectTimeline.tracks[targetTrackIndex].clips.push(newClip);
+
+	// Update total duration if necessary
+	if (endTime > projectTimeline.totalDuration) {
 			projectTimeline.totalDuration = endTime;
 		}
 
