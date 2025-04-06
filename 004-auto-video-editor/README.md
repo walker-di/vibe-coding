@@ -15,7 +15,7 @@ The core concepts involved in this application are:
 
 ## 2. UI Components
 
-The user interface will be built around these key components:
+The user interface will be built around these key components, utilizing **Bootstrap 5** for styling and layout.
 
 *   **Project List/Dashboard:** Displays existing projects and allows creating new ones.
 *   **Project View:** The main editor interface for a single project.

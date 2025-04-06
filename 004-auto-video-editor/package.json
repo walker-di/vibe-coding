@@ -38,6 +38,7 @@
     "vite": "^6.2.5"
   },
   "dependencies": {
+    "@popperjs/core": "^2.11.8",
     "better-sqlite3": "^11.8.0",
     "drizzle-orm": "^0.40.0"
   }
