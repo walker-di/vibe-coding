@@ -45,11 +45,13 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
         // Handle Main Image: Prompt OR URL
         if (requestData.mainImageUrl !== undefined) {
-            // If URL is provided (manual selection), set URL and clear prompt
+            // If URL is provided (manual selection), only set the URL
             updateObject.mainImageUrl = requestData.mainImageUrl;
-            updateObject.mainImagePrompt = ""; // Clear prompt when URL is set manually
-        } else if (requestData.mainImagePrompt !== undefined) {
-            // If only prompt is provided, update prompt
+            // Do NOT clear the prompt automatically
+        }
+        // Handle prompt separately (if provided)
+        if (requestData.mainImagePrompt !== undefined) {
+            // If prompt is provided, update prompt
             updateObject.mainImagePrompt = requestData.mainImagePrompt;
             // If prompt is cleared (""), also clear the URL
             if (requestData.mainImagePrompt === "") {
@@ -59,11 +61,13 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
         // Handle Background Image: Prompt OR URL
         if (requestData.backgroundImageUrl !== undefined) {
-            // If URL is provided (manual selection), set URL and clear prompt
+            // If URL is provided (manual selection), only set the URL
             updateObject.backgroundImageUrl = requestData.backgroundImageUrl;
-            updateObject.backgroundImagePrompt = ""; // Clear prompt when URL is set manually
-        } else if (requestData.backgroundImagePrompt !== undefined) {
-            // If only prompt is provided, update prompt
+             // Do NOT clear the prompt automatically
+        }
+         // Handle prompt separately (if provided)
+        if (requestData.backgroundImagePrompt !== undefined) {
+            // If prompt is provided, update prompt
             updateObject.backgroundImagePrompt = requestData.backgroundImagePrompt;
             // If prompt is cleared (""), also clear the URL
             if (requestData.backgroundImagePrompt === "") {
@@ -73,11 +77,13 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
         // Handle BGM: Prompt OR URL
         if (requestData.bgmUrl !== undefined) {
-            // If URL is provided (manual selection), set URL and clear prompt
+            // If URL is provided (manual selection), only set the URL
             updateObject.bgmUrl = requestData.bgmUrl;
-            updateObject.bgmPrompt = ""; // Clear prompt when URL is set manually
-        } else if (requestData.bgmPrompt !== undefined) {
-            // If only prompt is provided, update prompt
+            // Do NOT clear the prompt automatically
+        }
+        // Handle prompt separately (if provided)
+        if (requestData.bgmPrompt !== undefined) {
+            // If prompt is provided, update prompt
             updateObject.bgmPrompt = requestData.bgmPrompt;
             // If prompt is cleared (""), also clear the URL
             if (requestData.bgmPrompt === "") {

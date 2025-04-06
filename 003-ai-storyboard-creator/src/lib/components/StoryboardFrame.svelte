@@ -11,7 +11,7 @@
   export let isLast: boolean = false; // Is this the last frame?
 
   // State for active tab
-  let activeTab: "narration" | "mainImage" | "background" | "bgm" = "narration";
+  let activeTab: "narration" | "mainImage" | "backgroundImage" | "bgm" = "narration"; // Use backgroundImage
 
   // State for editable fields
   let editedNarration = frame.narration ?? "";
@@ -21,7 +21,7 @@
   let isDirty = false; // Track if changes have been made
   let isSaving = false; // Track saving state
   let saveError: string | null = null;
-  let isRemoving: { [key in "mainImage" | "background" | "bgm"]?: boolean } = {}; // Track removal state
+  let isRemoving: { [key in "mainImage" | "backgroundImage" | "bgm"]?: boolean } = {}; // Track removal state - Use backgroundImage
   let removeError: string | null = null; // Track removal errors
 
   // State for Asset Selection Modal
@@ -55,14 +55,14 @@
     console.log(`Asset selected for ${currentAssetType}: ${selectedPath}`);
     isAssetModalOpen = false; // Close modal immediately
 
-    // Prepare payload: set URL and clear the corresponding prompt
+    // Prepare payload: set only the URL, keep the existing prompt
     let payload: Partial<StoryboardFrameDb> = {};
     if (currentAssetType === 'mainImage') {
-      payload = { mainImageUrl: selectedPath, mainImagePrompt: "" };
-    } else if (currentAssetType === 'backgroundImage') { // Corrected type
-      payload = { backgroundImageUrl: selectedPath, backgroundImagePrompt: "" };
+      payload = { mainImageUrl: selectedPath }; // Keep existing mainImagePrompt
+    } else if (currentAssetType === 'backgroundImage') {
+      payload = { backgroundImageUrl: selectedPath }; // Keep existing backgroundImagePrompt
     } else if (currentAssetType === 'bgm') {
-      payload = { bgmUrl: selectedPath, bgmPrompt: "" };
+      payload = { bgmUrl: selectedPath }; // Keep existing bgmPrompt
     }
 
     // Reuse the update-text endpoint logic (needs backend update)
@@ -91,19 +91,20 @@
       // Update local frame data
       if (result.updatedFrame) {
         frame = { ...frame, ...result.updatedFrame };
-        // Reset relevant edited fields
-        if (currentAssetType === "mainImage") editedMainImagePrompt = "";
-        if (currentAssetType === "backgroundImage") editedBackgroundImagePrompt = ""; // Corrected type
-        if (currentAssetType === "bgm") editedBgmPrompt = "";
-        isDirty = false; // Assume update clears dirty state
+        // Do NOT reset edited fields - keep the existing prompt text
+        // if (currentAssetType === "mainImage") editedMainImagePrompt = "";
+        // if (currentAssetType === "backgroundImage") editedBackgroundImagePrompt = "";
+        // if (currentAssetType === "bgm") editedBgmPrompt = "";
+        isDirty = false; // Assume update clears dirty state for the URL change
       } else {
          // Basic fallback if needed, though API should return updated frame
+         // Update only the URL locally, keep prompts
          if (currentAssetType === 'mainImage') {
-           frame.mainImageUrl = selectedPath; frame.mainImagePrompt = ""; editedMainImagePrompt = "";
-         } else if (currentAssetType === 'backgroundImage') { // Corrected type
-           frame.backgroundImageUrl = selectedPath; frame.backgroundImagePrompt = ""; editedBackgroundImagePrompt = "";
+           frame.mainImageUrl = selectedPath; // Keep existing mainImagePrompt
+         } else if (currentAssetType === 'backgroundImage') {
+           frame.backgroundImageUrl = selectedPath; // Keep existing backgroundImagePrompt
          } else if (currentAssetType === 'bgm') {
-           frame.bgmUrl = selectedPath; frame.bgmPrompt = ""; editedBgmPrompt = "";
+           frame.bgmUrl = selectedPath; // Keep existing bgmPrompt
          }
          isDirty = false;
       }
@@ -116,8 +117,8 @@
   }
 
 
-  // Function to remove a specific asset (mainImage, background, bgm)
-  async function removeAsset(assetType: "mainImage" | "background" | "bgm") {
+  // Function to remove a specific asset (mainImage, backgroundImage, bgm)
+  async function removeAsset(assetType: "mainImage" | "backgroundImage" | "bgm") { // Use backgroundImage
     const typeKey = assetType; // Use assetType directly for the key
     if (isRemoving[typeKey]) return; // Prevent multiple clicks
 
@@ -131,7 +132,7 @@
     // Set prompt to "" (empty string) as it's required, and URL to undefined to signal removal
     if (assetType === "mainImage") {
       body = { mainImagePrompt: "", mainImageUrl: undefined };
-    } else if (assetType === "background") { // Corrected type name
+    } else if (assetType === "backgroundImage") { // Use backgroundImage
       body = { backgroundImagePrompt: "", backgroundImageUrl: undefined };
     } else if (assetType === "bgm") {
       body = { bgmPrompt: "", bgmUrl: undefined };
@@ -167,7 +168,7 @@
         frame = { ...frame, ...result.updatedFrame }; // Update with the full returned frame
         // Reset relevant edited fields if they were being edited
         if (assetType === "mainImage") editedMainImagePrompt = "";
-        if (assetType === "background") editedBackgroundImagePrompt = ""; // Corrected type name
+        if (assetType === "backgroundImage") editedBackgroundImagePrompt = ""; // Use backgroundImage
         if (assetType === "bgm") editedBgmPrompt = "";
         isDirty = false; // Assume removal also clears dirty state for that field
       } else {
@@ -178,7 +179,7 @@
           frame.mainImageUrl = null;
           editedMainImagePrompt = "";
         }
-        if (assetType === "background") { // Corrected type name
+        if (assetType === "backgroundImage") { // Use backgroundImage
           frame.backgroundImagePrompt = "";
           frame.backgroundImageUrl = null;
           editedBackgroundImagePrompt = "";
@@ -527,11 +528,11 @@
           </li>
           <li class="nav-item" role="presentation">
             <button
-              class="nav-link {activeTab === 'background' ? 'active' : ''}"
+              class="nav-link {activeTab === 'backgroundImage' ? 'active' : ''}"
               type="button"
               role="tab"
-              aria-selected={activeTab === "background"}
-              on:click={() => (activeTab = "background")}
+              aria-selected={activeTab === "backgroundImage"}
+              on:click={() => (activeTab = "backgroundImage")}
             >
               Fundo
             </button>
@@ -603,7 +604,7 @@
                </div>
             </div>
           {/if}
-          {#if activeTab === "background"}
+          {#if activeTab === "backgroundImage"}
             <div class="tab-pane fade show active" role="tabpanel">
               <h6 class="card-subtitle mb-1 text-muted visually-hidden">
                 Prompt Fundo:

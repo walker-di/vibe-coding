@@ -136,7 +136,7 @@
           <button type="button" class="btn btn-secondary" on:click={closeModal}>Cancelar</button>
         </div>
       </div>
-    </div> 
+    </div>
   </div>
   <div class="modal-backdrop fade show" transition:fade={{ duration: 150 }}></div>
 {/if}
