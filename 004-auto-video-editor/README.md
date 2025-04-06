@@ -1,3 +1,4 @@
+ies
 # AI Video Editor Project Plan
 
 This document outlines the initial plan for the AI Video Editor application.
@@ -155,19 +156,18 @@ This will start the Storybook development server, usually on port 6006.
 
 ---
 
-## Current Sprint Focus (Phase 1: Core Project Management)
+## Current Sprint Focus (Phase 3: Timeline Editor UI - Initial)
 
-| Task                                       | Area     | Status | Notes                                      |
-| :----------------------------------------- | :------- | :----- | :----------------------------------------- |
-| `ProjectList.svelte` Component & Story     | Frontend | Done   | Displays list, basic styling with Bootstrap |
-| `CreateProjectModal.svelte` Component & Story | Frontend | Done   | UI for entering new project name           |
-| Setup Database Connection                  | Backend  | Done   | Configured Drizzle ORM, ran migrations     |
-| API: Create Project (POST /api/projects)   | Backend  | Done   | Implemented POST handler in +server.ts     |
-| API: List Projects (GET /api/projects)     | Backend  | Done   | Implemented GET handler in +server.ts      |
-| Route: `/projects` Page                    | Frontend | Done   | Created `src/routes/projects/+page.svelte` |
-| Integration: Fetch & Display Projects      | Frontend | Done   | Fetched via API, passed to `ProjectList`   |
-| Integration: Create Project                | Frontend | Done   | Integrated `CreateProjectModal` w/ API     |
-| Integration: Navigation to Project Editor  | Frontend | Done   | Implemented `goto` in `+page.svelte`       |
+| Task                                                    | Area     | Status | Notes                                                  |
+| :------------------------------------------------------ | :------- | :----- | :----------------------------------------------------- |
+| Research/Select Timeline Library or Plan Custom Impl. | Frontend | To Do  | Decide approach for timeline visualization/editing     |
+| `TimelineEditor.svelte` Component & Story             | Frontend | To Do  | Basic component with track/clip rendering (dummy data) |
+| Implement Drag-and-Drop in Story                      | Frontend | To Do  | Drag media mock to timeline, move clips on timeline    |
+| Implement Playhead & Time Ruler in Story              | Frontend | To Do  | Basic visual representation of time and position       |
+| API: Save Timeline State (POST/PUT /api/.../timeline) | Backend  | To Do  | Endpoint logic and DB update (JSON blob or tables)     |
+| API: Load Timeline State (GET /api/.../timeline)      | Backend  | To Do  | Endpoint logic and DB query                            |
+| Integration: Add `TimelineEditor` to Project Page     | Frontend | To Do  | Place component in the editor layout                   |
+| Integration: Save/Load Timeline State                 | Frontend | To Do  | Connect component interactions to backend API calls    |
 
 ---
 
@@ -193,19 +193,19 @@ This section outlines the planned steps to build the application based on the de
 
 ### Phase 2: Project Editor View & Media Upload
 
-*   [ ] **Frontend (Storybook):** Create `MediaUpload.svelte` component and story.
-*   [ ] **Frontend (Storybook):** Create `MediaLibrary.svelte` component and story.
-*   [ ] **Frontend (Storybook):** Create basic layout component for the editor view (`ProjectEditorLayout.svelte`?) and story.
-*   [ ] **Backend:** Set up file storage solution (e.g., local storage for dev, S3/Cloudflare R2 for prod - requires configuration).
-*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/media`) for handling file uploads (POST).
-    *   [ ] Handle multipart/form-data.
-    *   [ ] Save file to storage.
-    *   [ ] Create media record in the database linked to the project.
-*   [ ] **Backend:** Implement API endpoint (`/api/projects/[projectId]/media`) to list media for a project (GET).
-*   [ ] **Frontend (Integration):** Create SvelteKit route (`/projects/[projectId]`) for the main editor view, using the layout component.
-*   [ ] **Frontend (Integration):** Integrate `MediaUpload.svelte` and `MediaLibrary.svelte` into the `/projects/[projectId]` route.
-*   [ ] **Frontend (Integration):** Connect `MediaUpload.svelte` to the upload API.
-*   [ ] **Frontend (Integration):** Connect `MediaLibrary.svelte` to the GET media API.
+*   [x] **Frontend (Storybook):** Create `MediaUpload.svelte` component and story. (Done)
+*   [x] **Frontend (Storybook):** Create `MediaLibrary.svelte` component and story. (Done)
+*   [x] **Frontend (Storybook):** Create basic layout component for the editor view (`ProjectEditorLayout.svelte`?) and story. (Done)
+*   [x] **Backend:** Set up file storage solution (e.g., local storage for dev, S3/Cloudflare R2 for prod - requires configuration). (Done: Local storage at `/static/uploads/`)
+*   [x] **Backend:** Implement API endpoint (`/api/projects/[projectId]/media`) for handling file uploads (POST).
+    *   [x] Handle multipart/form-data. (Done in +server.ts)
+    *   [x] Save file to storage. (Done: Saves to `/static/uploads/[projectId]/`)
+    *   [x] Create media record in the database linked to the project. (Done in +server.ts)
+*   [x] **Backend:** Implement API endpoint (`/api/projects/[projectId]/media`) to list media for a project (GET). (Done in +server.ts)
+*   [x] **Frontend (Integration):** Create SvelteKit route (`/projects/[projectId]`) for the main editor view, using the layout component. (Done: Basic page exists, uses layout)
+*   [x] **Frontend (Integration):** Integrate `MediaUpload.svelte` and `MediaLibrary.svelte` into the `/projects/[projectId]` route. (Done)
+*   [x] **Frontend (Integration):** Connect `MediaUpload.svelte` to the upload API. (Done)
+*   [x] **Frontend (Integration):** Connect `MediaLibrary.svelte` to the GET media API. (Done)
 
 ### Phase 3: Timeline Editor UI (Initial)
 

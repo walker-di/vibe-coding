@@ -1,13 +1,6 @@
 <script lang="ts">
-	// Define a type for media items (can be expanded later)
-	// This might eventually come from $lib/types if shared
-	type MediaItem = {
-		id: string;
-		name: string;
-		type: 'video' | 'audio';
-		thumbnailUrl?: string; // Optional thumbnail for videos
-		duration?: number; // Optional duration in seconds
-	};
+	// Import and use the shared MediaItem type
+	import type { MediaItem } from '$lib/types';
 
 	let {
 		mediaItems = [] as MediaItem[],
@@ -17,12 +10,25 @@
 		onMediaSelect?: (item: MediaItem) => void;
 	} = $props();
 
-	// Placeholder function to format duration (e.g., seconds to mm:ss)
-	function formatDuration(seconds: number | undefined): string {
-		if (seconds === undefined || isNaN(seconds)) return '--:--';
+	// Updated function to format duration (handles number | null | undefined)
+	function formatDuration(seconds: number | null | undefined): string {
+		if (seconds === undefined || seconds === null || isNaN(seconds)) return '--:--';
 		const minutes = Math.floor(seconds / 60);
 		const remainingSeconds = Math.floor(seconds % 60);
 		return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+	}
+
+	// Function to generate a placeholder thumbnail URL based on ID (simple hash)
+	// In a real app, thumbnails would be generated/fetched properly.
+	function getPlaceholderThumbnail(id: string): string {
+		// Simple hash function for variety
+		let hash = 0;
+		for (let i = 0; i < id.length; i++) {
+			hash = (hash << 5) - hash + id.charCodeAt(i);
+			hash |= 0; // Convert to 32bit integer
+		}
+		const color = (hash & 0x00ffffff).toString(16).padStart(6, '0');
+		return `https://via.placeholder.com/150/${color}/808080?text=Media`;
 	}
 </script>
 
@@ -45,51 +51,20 @@
 							tabindex="0"
 							aria-label={`Select media ${item.name}`}
 						>
-							{#if item.type === 'video' && item.thumbnailUrl}
+							{#if item.type === 'video'}
 								<img
-									src={item.thumbnailUrl}
+									src={getPlaceholderThumbnail(item.id)}
 									class="card-img-top object-fit-cover"
 									alt="Thumbnail for {item.name}"
 									style="height: 80px;"
-								/>
+								/> <!-- Use placeholder generator -->
 							{:else if item.type === 'audio'}
 								<div
 									class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
 									style="height: 80px;"
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="32"
-										height="32"
-										fill="white"
-										class="bi bi-music-note-beamed"
-										viewBox="0 0 16 16"
-									>
-										<path
-											d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13c0-1.104 1.12-2 2.5-2s2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"
-										/>
-										<path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z" />
-										<path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z" />
-									</svg>
-								</div>
-							{:else}
-								<!-- Fallback for video without thumbnail -->
-								<div
-									class="card-img-top bg-secondary d-flex align-items-center justify-content-center"
-									style="height: 80px;"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="32"
-										height="32"
-										fill="white"
-										class="bi bi-film"
-										viewBox="0 0 16 16"
-									>
-										<path
-											d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm4 0v6h8V1zm8 8H4v6h8zM1 1v2h2V1zm2 3H1v2h2zM1 7v2h2V7zm2 3H1v2h2zm-2 3v2h2v-2zM15 1h-2v2h2zm-2 3v2h2V4zm2 3h-2v2h2zm-2 3v2h2v-2zm2 3h-2v2h2z"
-										/>
-									</svg>
+									<!-- Audio Icon -->
+									<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="white" class="bi bi-music-note-beamed" viewBox="0 0 16 16"> <path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13c0-1.104 1.12-2 2.5-2s2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/> <path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/> <path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/> </svg>
 								</div>
 							{/if}
 							<div class="card-body p-2">
