@@ -17,7 +17,32 @@ export const projects = sqliteTable('projects', {
 	// userId: text('user_id') // Optional: Add later if user accounts are implemented
 });
 
+export const media = sqliteTable('media', {
+	id: text('id').primaryKey(), // UUID generated in code
+	projectId: text('project_id')
+		.notNull()
+		.references(() => projects.id, { onDelete: 'cascade' }), // Foreign key to projects
+	name: text('name').notNull(), // Original filename or user-defined
+	type: text('type', { enum: ['video', 'audio'] }).notNull(),
+	// Store the path relative to the static dir, e.g., '/uploads/projectId/filename.mp4'
+	// The actual storage location (local vs cloud) might change, but the path stored can remain consistent.
+	sourcePath: text('source_path').notNull(),
+	duration: integer('duration'), // Duration in seconds (optional for now)
+	uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' })
+		.notNull()
+		.default(sql`(cast(strftime('%s', 'now') as integer) * 1000)`), // milliseconds
+	// metadata: text('metadata'), // Store as JSON string if needed later
+});
+
+
 // Example of how to define relations if needed later:
-// export const usersRelations = relations(users, ({ many }) => ({
-//  posts: many(posts),
+// export const projectsRelations = relations(projects, ({ many }) => ({
+//   mediaItems: many(media),
+// }));
+
+// export const mediaRelations = relations(media, ({ one }) => ({
+//   project: one(projects, {
+//     fields: [media.projectId],
+//     references: [projects.id],
+//   }),
 // }));

@@ -164,10 +164,10 @@ This will start the Storybook development server, usually on port 6006.
 | Setup Database Connection                  | Backend  | Done   | Configured Drizzle ORM, ran migrations     |
 | API: Create Project (POST /api/projects)   | Backend  | Done   | Implemented POST handler in +server.ts     |
 | API: List Projects (GET /api/projects)     | Backend  | Done   | Implemented GET handler in +server.ts      |
-| Route: `/projects` Page                    | Frontend | To Do  | SvelteKit route setup                      |
-| Integration: Fetch & Display Projects      | Frontend | To Do  | Connect page to GET API & component        |
-| Integration: Create Project                | Frontend | To Do  | Connect modal/button to POST API           |
-| Integration: Navigation to Project Editor  | Frontend | To Do  | Link list items to `/projects/[id]`        |
+| Route: `/projects` Page                    | Frontend | Done   | Created `src/routes/projects/+page.svelte` |
+| Integration: Fetch & Display Projects      | Frontend | Done   | Fetched via API, passed to `ProjectList`   |
+| Integration: Create Project                | Frontend | Done   | Integrated `CreateProjectModal` w/ API     |
+| Integration: Navigation to Project Editor  | Frontend | Done   | Implemented `goto` in `+page.svelte`       |
 
 ---
 
@@ -186,10 +186,10 @@ This section outlines the planned steps to build the application based on the de
     *   [x] Implement database logic to fetch projects. (Done in +server.ts)
 *   [x] **Frontend (Storybook):** Create `ProjectList.svelte` component and `ProjectList.stories.svelte`. (Done)
 *   [x] **Frontend (Storybook):** Create `CreateProjectModal.svelte` component (or similar for project creation UI) and its story. (Done)
-*   [ ] **Frontend (Integration):** Create SvelteKit route (`/projects` or `/`) to display the project list.
-*   [ ] **Frontend (Integration):** Fetch project data from the API in the `/projects` route's load function and pass to `ProjectList.svelte`.
-*   [ ] **Frontend (Integration):** Integrate `CreateProjectModal.svelte` with the "Create New Project" button in `ProjectList.svelte` and connect to the POST `/api/projects` endpoint.
-*   [ ] **Frontend (Integration):** Implement navigation from `ProjectList.svelte` items to the project editor view (e.g., `/projects/[projectId]`).
+*   [x] **Frontend (Integration):** Create SvelteKit route (`/projects` or `/`) to display the project list. (Done: `src/routes/projects/+page.svelte`)
+*   [x] **Frontend (Integration):** Fetch project data from the API in the `/projects` page client-side and pass to `ProjectList.svelte`. (Done)
+*   [x] **Frontend (Integration):** Integrate `CreateProjectModal.svelte` with the "Create New Project" button in the `/projects` page and connect to the POST `/api/projects` endpoint. (Done)
+*   [x] **Frontend (Integration):** Implement navigation from `ProjectList.svelte` items to the project editor view (e.g., `/projects/[projectId]`). (Done)
 
 ### Phase 2: Project Editor View & Media Upload
 
