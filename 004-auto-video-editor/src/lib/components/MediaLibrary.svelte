@@ -5,10 +5,12 @@
 
 	let {
 		mediaItems = [] as MediaItem[],
-		onMediaSelect = (item: MediaItem) => {} // Callback when an item is selected/clicked
+		onMediaSelect = (item: MediaItem) => {}, // Callback when an item is selected/clicked
+		onMediaDelete = (item: MediaItem) => {} // Callback when delete is requested
 	}: {
 		mediaItems?: MediaItem[];
 		onMediaSelect?: (item: MediaItem) => void; // Add back prop
+		onMediaDelete?: (item: MediaItem) => void; // Add delete prop
 	} = $props();
 
 	// Updated function to format duration (handles number | null | undefined)
@@ -54,6 +56,17 @@
 							aria-label={`Select or drag media ${item.name}`}
 							style="cursor: grab;"
 						>
+							<!-- Delete Button -->
+							<button
+								type="button"
+								class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1 p-0 lh-1"
+								style="width: 1.2rem; height: 1.2rem; z-index: 1;"
+								aria-label={`Delete media ${item.name}`}
+								onclick={(e) => { e.stopPropagation(); onMediaDelete(item); }}
+							>
+								&times; <!-- Simple 'x' character -->
+							</button>
+
 							{#if item.type === 'video'}
 								<img
 									src={getPlaceholderThumbnail(item.id)}

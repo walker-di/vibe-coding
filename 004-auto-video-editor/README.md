@@ -217,6 +217,9 @@ This section outlines the planned steps to build the application based on the de
 *   [x] **Backend:** Implement API endpoint (`/api/projects/[projectId]/timeline`) for loading timeline state (GET). (Done: `+server.ts` created)
 *   [x] **Frontend (Integration):** Integrate `TimelineEditor.svelte` into the `/projects/[projectId]` route. (Done: Added to `+page.svelte`)
 *   [x] **Frontend (Integration):** Implement saving/loading timeline state to/from the backend API endpoints. (Done: Implemented fetch in `+page.svelte` and auto-save via `bind:timeline` and `$effect`)
+*   [x] **Backend:** Extract media duration on upload using `ffprobe`. (Done in `media/+server.ts`)
+*   [x] **Frontend (Integration):** Implement drag-and-drop from Media Library to Timeline. (Done in `MediaLibrary.svelte`, `TimelineEditor.svelte`, `+page.svelte`)
+*   [x] **Frontend (Integration):** Implement click-to-add from Media Library to Timeline. (Done in `MediaLibrary.svelte`, `+page.svelte`)
 
 ### Phase 4: Advanced Timeline Editing & Core Features
 

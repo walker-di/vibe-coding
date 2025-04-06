@@ -250,6 +250,60 @@
 		projectTimeline = projectTimeline;
 	}
 
+	async function handleMediaDelete(item: MediaItem) {
+		if (!projectId) {
+			console.error('Cannot delete: Project ID is missing.');
+			return;
+		}
+		if (!confirm(`Are you sure you want to delete "${item.name}"? This cannot be undone.`)) {
+			return;
+		}
+
+		console.log(`Attempting to delete media: ${item.id}`);
+		// TODO: Add loading state for deletion?
+		mediaError = null; // Clear previous errors
+
+		try {
+			const response = await fetch(`/api/projects/${projectId}/media?mediaId=${item.id}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+			}
+
+			console.log(`Media item ${item.id} deleted successfully.`);
+
+			// 1. Remove the item from the local mediaItems state
+			mediaItems = mediaItems.filter(m => m.id !== item.id);
+
+			// 2. Remove clips using this mediaId from the timeline state
+			if (projectTimeline) {
+				let changed = false;
+				projectTimeline.tracks.forEach(track => {
+					const originalLength = track.clips.length;
+					track.clips = track.clips.filter(clip => clip.mediaId !== item.id);
+					if (track.clips.length !== originalLength) {
+						changed = true;
+					}
+				});
+				// If clips were removed, trigger timeline reactivity
+				if (changed) {
+					// Recalculate total duration? For now, just reassign to trigger effects.
+					// A more robust solution might recalculate totalDuration based on remaining clips.
+					projectTimeline = projectTimeline;
+				}
+			}
+			// Removed: await fetchProjectData(projectId);
+
+		} catch (e) {
+			console.error('Error deleting media:', e);
+			mediaError = `Delete error: ${e instanceof Error ? e.message : 'Unknown error'}`;
+		}
+	}
+
+
 	// --- Debounce Utility ---
 	function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
 		let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -356,9 +410,9 @@
 				<p>Loading media...</p>
 			{:else if mediaError}
 				<div class="alert alert-warning alert-sm p-1" role="alert">{mediaError}</div>
-				<MediaLibrary mediaItems={[]} onMediaSelect={handleMediaSelect} /> <!-- Pass handler -->
+				<MediaLibrary mediaItems={[]} onMediaSelect={handleMediaSelect} onMediaDelete={handleMediaDelete} /> <!-- Pass handlers -->
 			{:else}
-				<MediaLibrary {mediaItems} onMediaSelect={handleMediaSelect} /> <!-- Pass handler -->
+				<MediaLibrary {mediaItems} onMediaSelect={handleMediaSelect} onMediaDelete={handleMediaDelete} /> <!-- Pass handlers -->
 			{/if}
 		</div>
 		<div class="p-2 border-top">
