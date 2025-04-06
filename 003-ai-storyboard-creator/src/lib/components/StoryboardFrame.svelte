@@ -3,6 +3,7 @@
   import { selectedVoice } from "$lib/stores/voiceStore"; // Import the voice store
   import { get } from "svelte/store"; // To get the current store value non-reactively
   import { createEventDispatcher, onMount } from "svelte"; // Import onMount
+  import AssetSelectionModal from "./AssetSelectionModal.svelte"; // Import the new modal
 
   export let frame: StoryboardFrameDb;
   export let storyboardId: string; // Add storyboardId prop
@@ -23,6 +24,11 @@
   let isRemoving: { [key in "mainImage" | "background" | "bgm"]?: boolean } = {}; // Track removal state
   let removeError: string | null = null; // Track removal errors
 
+  // State for Asset Selection Modal
+  let isAssetModalOpen = false;
+  let currentAssetType: 'mainImage' | 'backgroundImage' | 'bgm' | null = null;
+  let assetUpdateError: string | null = null; // Error specific to updating from modal
+
   // Update edited fields if the frame prop changes externally
   $: {
     if (!isDirty) {
@@ -33,6 +39,82 @@
       editedBgmPrompt = frame.bgmPrompt ?? "";
     }
   }
+
+  // Function to open the asset selection modal
+  function openAssetModal(type: 'mainImage' | 'backgroundImage' | 'bgm') {
+    currentAssetType = type;
+    assetUpdateError = null; // Clear previous errors
+    isAssetModalOpen = true;
+  }
+
+  // Function to handle asset selection from the modal
+  async function handleAssetSelected(event: CustomEvent<string>) {
+    const selectedPath = event.detail;
+    if (!currentAssetType) return; // Should not happen if modal opened correctly
+
+    console.log(`Asset selected for ${currentAssetType}: ${selectedPath}`);
+    isAssetModalOpen = false; // Close modal immediately
+
+    // Prepare payload: set URL and clear the corresponding prompt
+    let payload: Partial<StoryboardFrameDb> = {};
+    if (currentAssetType === 'mainImage') {
+      payload = { mainImageUrl: selectedPath, mainImagePrompt: "" };
+    } else if (currentAssetType === 'backgroundImage') { // Corrected type
+      payload = { backgroundImageUrl: selectedPath, backgroundImagePrompt: "" };
+    } else if (currentAssetType === 'bgm') {
+      payload = { bgmUrl: selectedPath, bgmPrompt: "" };
+    }
+
+    // Reuse the update-text endpoint logic (needs backend update)
+    try {
+      const response = await fetch(
+        `/api/storyboard/${storyboardId}/frame/${frame.id}/update-text`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: `API Error: ${response.statusText}` }));
+        throw new Error(
+          errorData.message || `API Error: ${response.statusText}`,
+        );
+      }
+
+      const result = await response.json();
+      console.log(`Asset update API response for frame ${frame.id}:`, result);
+
+      // Update local frame data
+      if (result.updatedFrame) {
+        frame = { ...frame, ...result.updatedFrame };
+        // Reset relevant edited fields
+        if (currentAssetType === "mainImage") editedMainImagePrompt = "";
+        if (currentAssetType === "backgroundImage") editedBackgroundImagePrompt = ""; // Corrected type
+        if (currentAssetType === "bgm") editedBgmPrompt = "";
+        isDirty = false; // Assume update clears dirty state
+      } else {
+         // Basic fallback if needed, though API should return updated frame
+         if (currentAssetType === 'mainImage') {
+           frame.mainImageUrl = selectedPath; frame.mainImagePrompt = ""; editedMainImagePrompt = "";
+         } else if (currentAssetType === 'backgroundImage') { // Corrected type
+           frame.backgroundImageUrl = selectedPath; frame.backgroundImagePrompt = ""; editedBackgroundImagePrompt = "";
+         } else if (currentAssetType === 'bgm') {
+           frame.bgmUrl = selectedPath; frame.bgmPrompt = ""; editedBgmPrompt = "";
+         }
+         isDirty = false;
+      }
+    } catch (err: any) {
+      console.error(`Failed to update frame ${frame.id} with selected asset:`, err);
+      assetUpdateError = `Erro ao atualizar ${currentAssetType}: ${err.message || "Erro desconhecido"}`;
+    } finally {
+       currentAssetType = null; // Reset after operation
+    }
+  }
+
 
   // Function to remove a specific asset (mainImage, background, bgm)
   async function removeAsset(assetType: "mainImage" | "background" | "bgm") {
@@ -49,7 +131,7 @@
     // Set prompt to "" (empty string) as it's required, and URL to undefined to signal removal
     if (assetType === "mainImage") {
       body = { mainImagePrompt: "", mainImageUrl: undefined };
-    } else if (assetType === "background") {
+    } else if (assetType === "background") { // Corrected type name
       body = { backgroundImagePrompt: "", backgroundImageUrl: undefined };
     } else if (assetType === "bgm") {
       body = { bgmPrompt: "", bgmUrl: undefined };
@@ -85,7 +167,7 @@
         frame = { ...frame, ...result.updatedFrame }; // Update with the full returned frame
         // Reset relevant edited fields if they were being edited
         if (assetType === "mainImage") editedMainImagePrompt = "";
-        if (assetType === "background") editedBackgroundImagePrompt = "";
+        if (assetType === "background") editedBackgroundImagePrompt = ""; // Corrected type name
         if (assetType === "bgm") editedBgmPrompt = "";
         isDirty = false; // Assume removal also clears dirty state for that field
       } else {
@@ -96,7 +178,7 @@
           frame.mainImageUrl = null;
           editedMainImagePrompt = "";
         }
-        if (assetType === "background") {
+        if (assetType === "background") { // Corrected type name
           frame.backgroundImagePrompt = "";
           frame.backgroundImageUrl = null;
           editedBackgroundImagePrompt = "";
@@ -496,8 +578,15 @@
                 on:input={markDirty}
                 placeholder="Digite o prompt da imagem principal..."
               ></textarea>
-              <!-- Remove Main Image Button -->
-              <div class="text-end mt-1">
+              <!-- Action Buttons for Main Image -->
+              <div class="d-flex justify-content-end gap-1 mt-1">
+                 <button
+                   class="btn btn-outline-secondary btn-sm"
+                   on:click={() => openAssetModal("mainImage")}
+                   title="Selecionar Imagem Principal existente"
+                 >
+                   <i class="bi bi-folder2-open"></i> Alterar
+                 </button>
                  <button
                    class="btn btn-outline-danger btn-sm"
                    on:click={() => removeAsset("mainImage")}
@@ -526,15 +615,20 @@
                 on:input={markDirty}
                 placeholder="Digite o prompt da imagem de fundo..."
               ></textarea>
-               <!-- Remove Background Image Button -->
-               <div class="text-end mt-1">
+               <!-- Action Buttons for Background Image -->
+               <div class="d-flex justify-content-end gap-1 mt-1">
+                 <button
+                   class="btn btn-outline-secondary btn-sm"
+                   on:click={() => openAssetModal("backgroundImage")}
+                   title="Selecionar Imagem de Fundo existente">
+                   <i class="bi bi-folder2-open"></i> Alterar
+                 </button>
                  <button
                    class="btn btn-outline-danger btn-sm"
-                   on:click={() => removeAsset("background")}
-                   disabled={!frame.backgroundImagePrompt && !frame.backgroundImageUrl || isRemoving['background']}
-                   title="Remover Imagem de Fundo e Prompt"
-                 >
-                   {#if isRemoving['background']}
+                   on:click={() => removeAsset("backgroundImage")}
+                   disabled={(!frame.backgroundImagePrompt && !frame.backgroundImageUrl) || isRemoving['backgroundImage']}
+                   title="Remover Imagem de Fundo e Prompt">
+                   {#if isRemoving['backgroundImage']}
                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                      Removendo...
                    {:else}
@@ -556,8 +650,15 @@
                 on:input={markDirty}
                 placeholder="Digite o prompt da música de fundo..."
               ></textarea>
-               <!-- Remove BGM Button -->
-               <div class="text-end mt-1">
+               <!-- Action Buttons for BGM -->
+               <div class="d-flex justify-content-end gap-1 mt-1">
+                 <button
+                   class="btn btn-outline-secondary btn-sm"
+                   on:click={() => openAssetModal("bgm")}
+                   title="Selecionar BGM existente"
+                 >
+                   <i class="bi bi-folder2-open"></i> Alterar
+                 </button>
                  <button
                    class="btn btn-outline-danger btn-sm"
                    on:click={() => removeAsset("bgm")}
@@ -576,12 +677,13 @@
           {/if}
         </div>
 
-         <!-- Removal Error -->
-         {#if removeError}
+         <!-- Errors Display -->
+         {#if removeError || assetUpdateError}
            <div class="alert alert-danger alert-sm p-1 small mb-2" role="alert">
-             {removeError}
+             {removeError || assetUpdateError}
            </div>
          {/if}
+
 
         <!-- Save Button & Error -->
         {#if isDirty || saveError}
@@ -708,8 +810,18 @@
             >
               <i class="bi bi-arrow-down"></i>
             </button>
-          </div>
-        </div>
+  </div>
+</div>
+
+<!-- Asset Selection Modal Instance -->
+{#if currentAssetType}
+<AssetSelectionModal
+  bind:isOpen={isAssetModalOpen}
+  assetType={currentAssetType}
+  on:close={() => { isAssetModalOpen = false; currentAssetType = null; }}
+  on:select={handleAssetSelected}
+/>
+{/if}
         <!-- Regeneration Buttons & Status -->
         <div class="d-flex justify-content-between">
           <div class="m-2 mt-start">

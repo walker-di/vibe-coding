@@ -11,6 +11,10 @@ const UpdateTextSchema = z.object({
     mainImagePrompt: z.string().optional(),
     backgroundImagePrompt: z.string().optional(),
     bgmPrompt: z.string().optional(),
+    // Add optional URL fields for manual asset selection
+    mainImageUrl: z.string().optional(),
+    backgroundImageUrl: z.string().optional(),
+    bgmUrl: z.string().optional(),
 });
 
 export const POST: RequestHandler = async ({ request, params }) => {
@@ -38,23 +42,44 @@ export const POST: RequestHandler = async ({ request, params }) => {
         if (requestData.narration !== undefined) {
             updateObject.narration = requestData.narration;
         }
-        if (requestData.mainImagePrompt !== undefined) {
+
+        // Handle Main Image: Prompt OR URL
+        if (requestData.mainImageUrl !== undefined) {
+            // If URL is provided (manual selection), set URL and clear prompt
+            updateObject.mainImageUrl = requestData.mainImageUrl;
+            updateObject.mainImagePrompt = ""; // Clear prompt when URL is set manually
+        } else if (requestData.mainImagePrompt !== undefined) {
+            // If only prompt is provided, update prompt
             updateObject.mainImagePrompt = requestData.mainImagePrompt;
-            // If prompt is cleared, also clear the URL
+            // If prompt is cleared (""), also clear the URL
             if (requestData.mainImagePrompt === "") {
                 updateObject.mainImageUrl = null;
             }
         }
-        if (requestData.backgroundImagePrompt !== undefined) {
+
+        // Handle Background Image: Prompt OR URL
+        if (requestData.backgroundImageUrl !== undefined) {
+            // If URL is provided (manual selection), set URL and clear prompt
+            updateObject.backgroundImageUrl = requestData.backgroundImageUrl;
+            updateObject.backgroundImagePrompt = ""; // Clear prompt when URL is set manually
+        } else if (requestData.backgroundImagePrompt !== undefined) {
+            // If only prompt is provided, update prompt
             updateObject.backgroundImagePrompt = requestData.backgroundImagePrompt;
-            // If prompt is cleared, also clear the URL
+            // If prompt is cleared (""), also clear the URL
             if (requestData.backgroundImagePrompt === "") {
                 updateObject.backgroundImageUrl = null;
             }
         }
-        if (requestData.bgmPrompt !== undefined) {
+
+        // Handle BGM: Prompt OR URL
+        if (requestData.bgmUrl !== undefined) {
+            // If URL is provided (manual selection), set URL and clear prompt
+            updateObject.bgmUrl = requestData.bgmUrl;
+            updateObject.bgmPrompt = ""; // Clear prompt when URL is set manually
+        } else if (requestData.bgmPrompt !== undefined) {
+            // If only prompt is provided, update prompt
             updateObject.bgmPrompt = requestData.bgmPrompt;
-            // If prompt is cleared, also clear the URL
+            // If prompt is cleared (""), also clear the URL
             if (requestData.bgmPrompt === "") {
                 updateObject.bgmUrl = null;
             }
