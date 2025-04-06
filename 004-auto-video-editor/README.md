@@ -13,6 +13,15 @@ The core concepts involved in this application are:
 *   **Clip:** A segment of a media file placed on a track in the timeline. It has a start time, end time, and refers back to the original media source.
 *   **User:** (Implicit) The person interacting with the editor. (We might need user accounts later).
 
+## 1.1 Technology Stack
+
+*   **Framework:** Svelte 5 / SvelteKit
+*   **Language:** TypeScript
+*   **Styling:** Bootstrap 5
+*   **Database ORM:** Drizzle ORM
+*   **Component Development:** Storybook
+*   **Package Manager:** npm
+
 ## 2. UI Components
 
 The user interface will be built around these key components, utilizing **Bootstrap 5** for styling and layout.
@@ -37,9 +46,9 @@ The application will need the following basic routes:
 *   `/` or `/projects`: Displays the list of projects (Project List/Dashboard).
 *   `/projects/new`: (Could be a modal/action on `/projects`) Handles the creation of a new project.
 *   `/projects/:projectId`: Displays the main editor interface for a specific project (Project View).
-*   `/api/projects`: API endpoint for CRUD operations on projects.
-*   `/api/projects/:projectId/media`: API endpoint for uploading and managing media files within a project.
-*   `/api/projects/:projectId/timeline`: API endpoint for saving/loading the timeline state for a project.
+*   `/api/projects` (GET, POST): API endpoint for CRUD operations on projects.
+*   `/api/projects/:projectId/media` (GET, POST): API endpoint for uploading and managing media files within a project.
+*   `/api/projects/:projectId/timeline` (GET, PUT/POST): API endpoint for saving/loading the timeline state for a project.
 
 ## 4. Schema (Conceptual Data Structures)
 
@@ -103,6 +112,30 @@ We'll need data structures to represent our domain concepts, likely stored in a 
 
 ---
 
+## Environment Setup
+
+1.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
+2.  **Configure Environment Variables:**
+    *   Copy `.env.example` to `.env`.
+    *   Fill in the required values in `.env` (e.g., database connection string).
+3.  **Database Migrations (Initial Setup & After Schema Changes):**
+    *   Generate migration files (if schema changed): `npx drizzle-kit generate`
+    *   Apply migrations: `npx drizzle-kit migrate`
+
+## Development Workflow
+
+We follow an iterative process for development:
+
+1.  **Review Plan:** Start by reading the `README.md`, paying close attention to the "Current Sprint Focus" and "Implementation Plan / TODO List" sections to understand the next required task.
+2.  **Plan:** Discuss and agree on the specific implementation steps for the next task (using Plan Mode if necessary).
+3.  **Implement:** Execute the planned steps, such as creating/modifying components, stories, API endpoints, or database schemas (using Act Mode).
+4.  **Test & Refine:** Run Storybook, tests (if applicable), or manually check functionality. Fix any bugs or address issues identified during implementation.
+5.  **Update Status:** Mark the completed task as "Done" in the "Current Sprint Focus" table and check off the corresponding item(s) in the "Implementation Plan / TODO List".
+6.  **Improve Process:** Suggest and potentially implement improvements to the `README.md` or the workflow itself to enhance clarity and efficiency for future iterations.
+
 ## Development Methodology
 
 We will follow a **Behavior-Driven Development (BDD)** approach, focusing on building UI components in isolation first using Storybook. This ensures components are well-defined, visually tested, and functional before integrating them into SvelteKit routes and connecting them to backend APIs.
@@ -117,6 +150,9 @@ npm run storybook
 
 This will start the Storybook development server, usually on port 6006.
 
+**Storybook Format:**
+> We are using the Component Story Format (CSF) 3.0 for writing stories, utilizing `<script module>` and `defineMeta` from `@storybook/addon-svelte-csf`. Please refer to existing stories like `src/stories/Button.stories.svelte` and `src/stories/ProjectList.stories.svelte` as examples when creating new stories.
+
 ---
 
 ## Current Sprint Focus (Phase 1: Core Project Management)
@@ -124,7 +160,7 @@ This will start the Storybook development server, usually on port 6006.
 | Task                                       | Area     | Status | Notes                                      |
 | :----------------------------------------- | :------- | :----- | :----------------------------------------- |
 | `ProjectList.svelte` Component & Story     | Frontend | Done   | Displays list, basic styling with Bootstrap |
-| `CreateProjectModal.svelte` Component & Story | Frontend | To Do  | UI for entering new project name           |
+| `CreateProjectModal.svelte` Component & Story | Frontend | Done   | UI for entering new project name           |
 | Setup Database Connection                  | Backend  | To Do  | Configure Drizzle ORM                      |
 | API: Create Project (POST /api/projects)   | Backend  | To Do  | Endpoint logic and DB insertion            |
 | API: List Projects (GET /api/projects)     | Backend  | To Do  | Endpoint logic and DB query                |
@@ -149,14 +185,7 @@ This section outlines the planned steps to build the application based on the de
     *   [ ] Define response type.
     *   [ ] Implement database logic to fetch projects.
 *   [x] **Frontend (Storybook):** Create `ProjectList.svelte` component and `ProjectList.stories.svelte`. (Done)
-*   [ ] **Frontend (Storybook):** Create `CreateProjectModal.svelte` component (or similar for project creation UI) and its story.
-*   [ ] **Backend:** Set up database connection (using Drizzle ORM as configured).
-*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for creating new projects (POST).
-    *   [ ] Define request/response types.
-    *   [ ] Implement database logic to insert a new project record.
-*   [ ] **Backend:** Implement API endpoint (`/api/projects`) for listing existing projects (GET).
-    *   [ ] Define response type.
-    *   [ ] Implement database logic to fetch projects.
+*   [x] **Frontend (Storybook):** Create `CreateProjectModal.svelte` component (or similar for project creation UI) and its story. (Done)
 *   [ ] **Frontend (Integration):** Create SvelteKit route (`/projects` or `/`) to display the project list.
 *   [ ] **Frontend (Integration):** Fetch project data from the API in the `/projects` route's load function and pass to `ProjectList.svelte`.
 *   [ ] **Frontend (Integration):** Integrate `CreateProjectModal.svelte` with the "Create New Project" button in `ProjectList.svelte` and connect to the POST `/api/projects` endpoint.
