@@ -254,13 +254,9 @@
 	// Add the new clip to the track
 	projectTimeline.tracks[targetTrackIndex].clips.push(newClip);
 
-	// Update total duration if necessary
-	if (endTime > projectTimeline.totalDuration) {
-			projectTimeline.totalDuration = endTime;
-		}
-
-		// Trigger reactivity by reassigning (important for Svelte 5 state)
-		projectTimeline = projectTimeline;
+	// Total duration is now handled reactively by the effect in TimelineEditor
+	// Trigger reactivity by reassigning the timeline object itself
+	projectTimeline = projectTimeline;
 	}
 
 	async function handleMediaDelete(item: MediaItem) {

@@ -170,6 +170,7 @@ This will start the Storybook development server, usually on port 6006.
 | Integration: Save/Load Timeline State                 | Frontend | Done   | Connected component via `bind:timeline` and `$effect` for auto-save      |
 | **Fix: Media Library Thumbnails**                       | **Both** | **Done** | **Backend generates thumbnails, frontend displays them.**                |
 | **Feature: Click Media to Add to Timeline**             | Frontend | **Done** | **Clicking item in Media Library adds it to first compatible/new track.** |
+| **Investigate Timeline Scaling Bug**                    | Frontend | In Progress | Check reactivity/timing of totalDuration/pixelsPerSecond effects, parent component (`+page.svelte`) data loading/interaction, initial render state. |
 | **Refine Clip Moving (Snapping, Cross-Track)**          | Frontend | Todo   | Implement snapping behavior and allow moving clips between tracks.       |
 
 ---
