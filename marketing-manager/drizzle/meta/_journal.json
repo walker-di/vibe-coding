@@ -1,13 +1,5 @@
 {
-  "version": "7",
+  "version": "5",
   "dialect": "sqlite",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "6",
-      "when": 1744064490987,
-      "tag": "0000_easy_the_executioner",
-      "breakpoints": true
-    }
-  ]
+  "entries": []
 }
