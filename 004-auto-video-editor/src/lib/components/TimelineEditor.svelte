@@ -9,7 +9,7 @@
 
   // --- Configuration Constants ---
   const MIN_DURATION_FOR_SCALING = 30; // (Option 1) Min timeline duration (seconds) used for PPS calculation when zoomed out
-  const MIN_RULER_PIXEL_SPACING = 45; // (Option 2) Target minimum pixels between ruler markers (Reduced from 60)
+  const MIN_RULER_PIXEL_SPACING = 40; // (Option 2) Target minimum pixels between ruler markers (Reduced from 45)
 
   let windowWidth = $state(0);
 
