@@ -47,6 +47,18 @@ This project is built using SvelteKit, TypeScript, Drizzle ORM for database inte
     *   Integration with ad platforms (reporting or basic management).
     *   Analytics dashboard.
 
+### Phase 5: AI-Driven Workflow Automation (Aspirational / Long-Term)
+*   **Goal:** Leverage AI to automate and enhance various stages of the marketing workflow, based on advanced concepts.
+*   **Sub-features (Examples):**
+    *   **AI-Assisted Data Analysis:** Ingest and analyze competitor data, customer information (manual input or future integration), meeting transcripts, etc., to generate insights.
+    *   **Automated Report Generation:** Create reports for competitor analysis, target audience analysis based on ingested data.
+    *   **Automated Content Generation:** Generate target lists, copy proposals, design plans, and potentially key visual concepts based on AI analysis and internal knowledge bases.
+    *   **Workflow Orchestration:** Tools to guide users through the multi-stage marketing process (Plan, Design, Check, Action) with AI assistance at each step.
+    *   **Knowledge Base Integration:** Connect AI models to internal databases containing structured information (e.g., design patterns, copy structures) to inform generation.
+    *   **URL-Based Information Gathering:** (Advanced) Initiate analysis or content generation starting from a URL (e.g., competitor website, product page).
+
+*   **Note:** Implementing this phase represents a significant R&D effort, likely requiring specialized AI/ML expertise, data engineering, and potentially integration with third-party AI platforms or custom model development.
+
 ## 3. Technology Stack
 
 *   **Framework:** SvelteKit
@@ -311,7 +323,12 @@ SvelteKit's form actions and server routes will handle data operations.
     *   Link campaigns to creatives/personas.
 5.  **Phase 4 & Beyond:**
     *   Refinement, testing, styling improvements.
-    *   Implement advanced features (video workflow simulation, AI integration).
+    *   Implement advanced features (video workflow simulation, basic AI integration like copy suggestions).
+6.  **Phase 5 & Beyond (Aspirational):**
+    *   Research and development into AI-driven workflow features.
+    *   Integration with AI models/platforms.
+    *   Development of data ingestion and analysis pipelines.
+    *   Building complex workflow automation UI/backend.
 
 ## 9. Getting Started
 
