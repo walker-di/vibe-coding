@@ -371,6 +371,11 @@
 		}
 	}
 
+	// Wrapper function for the editor prop
+	function handleEditorSave() {
+		saveTimeline(projectTimeline);
+	}
+
 	// Debounced version of the save function
 	const debouncedSaveTimeline = debounce(saveTimeline, 1500); // Wait 1.5 seconds after last change
 
@@ -543,15 +548,18 @@
 		{:else}
 			<!-- Bind projectTimeline to the editor's timeline prop -->
 			<!-- Also pass shared playback state -->
+
 			<TimelineEditor
 				bind:timeline={projectTimeline}
 				bind:playheadPosition
 				bind:isPlaying
 				mediaMap={mediaMap()}
 				bind:this={timelineEditorRef}
-				onDeleteTrack={handleDeleteTrack} 
+				onDeleteTrack={handleDeleteTrack}
+				onSaveTimeline={handleEditorSave}
 			/>
-		{/if}
+
+		{/if} <!-- Correct placement of /if -->
 	</div> <!-- Close wrapper div -->
 	{/snippet}
 

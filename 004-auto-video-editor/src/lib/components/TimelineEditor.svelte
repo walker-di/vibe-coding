@@ -18,13 +18,15 @@
 		playheadPosition = $bindable(0),
 		isPlaying = $bindable(false),
 		mediaMap = new Map<string, MediaItem>(),
-		onDeleteTrack = (trackId: string) => {} // Default no-op function
+		onDeleteTrack = (trackId: string) => {}, // Default no-op function
+		onSaveTimeline = () => {} // <-- Add new prop with default
 	}: {
 		timeline?: Timeline;
 		playheadPosition?: number;
 		isPlaying?: boolean;
 		mediaMap?: Map<string, MediaItem>;
 		onDeleteTrack?: (trackId: string) => void; // Callback prop for deleting a track
+		onSaveTimeline?: () => void; // <-- Define the type for the new prop
 	} = $props();
 
 	// No need for dummy data here if timeline is always provided or handled externally
@@ -48,17 +50,18 @@
 
 	function handleDndFinalize(e: CustomEvent<DndEvent<Clip>>, trackId: string) {
 		if (!timeline) return; // Guard against undefined timeline
-		const targetTrackIndex = timeline.tracks.findIndex(t => t.id === trackId);
+		const tracks = timeline.tracks; // Assign to local constant after check
+		const targetTrackIndex = tracks.findIndex(t => t.id === trackId);
 		if (targetTrackIndex === -1) return;
 
-		const targetTrack = timeline.tracks[targetTrackIndex];
+		const targetTrack = tracks[targetTrackIndex];
 		const finalItemsInTarget = e.detail.items as Clip[]; // This is the final state for the *target* zone
 		const movedItemId = e.detail.info.id;
 
 		// --- Find original source ---
 		let originalClipData: Clip | undefined;
 		let sourceTrackId: string | undefined;
-		for (const track of timeline.tracks) {
+		for (const track of tracks) { // Use local constant
 			// Look in the *previous state* if available, otherwise search current timeline state before modification
 			// Note: dndzone's `items` in `e.detail` *already reflect the finalized state of the target zone*.
 			// We need to find the source *before* this finalize event conceptually completed the move.
@@ -146,11 +149,14 @@
 					console.log(`Moving clip ${movedClip.id} from track ${sourceTrackId} to ${targetTrackId}`);
 
 					// 1. Remove from Source Track (if it still exists there - might have been removed by 'consider')
-					const sourceTrackIndex = timeline.tracks.findIndex(t => t.id === sourceTrackId);
+					// Use local constant
+					const sourceTrackIndex = tracks.findIndex(t => t.id === sourceTrackId);
 					if (sourceTrackIndex > -1) {
-						const clipIndexInSource = timeline.tracks[sourceTrackIndex].clips.findIndex(c => c.id === movedClip.id);
+						// Explicitly access track after index check
+						const sourceTrack = tracks[sourceTrackIndex]; // Use local constant
+						const clipIndexInSource = sourceTrack.clips.findIndex(c => c.id === movedClip.id);
 						if (clipIndexInSource > -1) {
-							timeline.tracks[sourceTrackIndex].clips.splice(clipIndexInSource, 1);
+							sourceTrack.clips.splice(clipIndexInSource, 1);
 							console.log(`Removed clip ${movedClip.id} from source track ${sourceTrackId}`);
 						} else {
 							// This can happen if 'consider' already updated the source list implicitly
@@ -168,6 +174,7 @@
 					console.log(`Finalized clips on target track ${targetTrackId}:`, targetTrack.clips);
 
 					// --- Snapping Logic (Applied after cross-track move) ---
+					// Rely on check at start of handleDndFinalize
 					applySnapping(movedClip, finalItemsInTarget.filter(c => c.id !== movedClip.id)); // Pass other clips for snapping check
 
 				}
@@ -176,6 +183,7 @@
 					targetTrack.clips = finalItemsInTarget; // Assign first to get rough position
 
 					// --- Snapping Logic (Applied after same-track reorder) ---
+					// Rely on check at start of handleDndFinalize
 					applySnapping(movedClip, finalItemsInTarget.filter(c => c.id !== movedClip.id)); // Pass other clips
 
 					console.log(`Reordered clips on track ${targetTrackId} (snapped):`, targetTrack.clips);
@@ -188,7 +196,7 @@
             targetTrack.clips = finalItemsInTarget.filter(item => {
                 // Attempt to filter out items that shouldn't be there (e.g., non-clips if source was unknown)
                 // This is a fallback, proper handling depends on expected drag sources.
-                return timeline.tracks.some(t => t.clips.some(c => c.id === item.id)) || mediaMap?.has(item.id);
+                return tracks.some(t => t.clips.some(c => c.id === item.id)) || mediaMap?.has(item.id); // Use local constant
             });
              needsReassignment = true;
         }
@@ -317,6 +325,7 @@
 
 		// Trigger reactivity
 		timeline = timeline;
+		onSaveTimeline?.(); // <-- Call the save function
 	}
 
 
@@ -677,6 +686,7 @@
 		timeline.tracks[targetTrackIndex].clips.splice(targetClipIndex, 1, clipA, clipB);
 		// Trigger reactivity
 		timeline = timeline;
+		onSaveTimeline?.(); // <-- Call the save function
 
 		console.log(`Split clip ${targetClip.id} at ${playheadPosition.toFixed(2)}s into ${clipA.id} and ${clipB.id}`);
 	}
