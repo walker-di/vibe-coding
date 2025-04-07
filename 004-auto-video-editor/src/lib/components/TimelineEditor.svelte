@@ -278,7 +278,7 @@
 		// If no snap occurred, movedClip retains its raw position from dndzone finalize
 	}
 
-	// --- NEW: Delete Clip Function ---
+	// --- NEW: Delete Clip Function (with gap closing) ---
 	function deleteClip(trackId: string, clipId: string) {
 		if (!timeline) return;
 		console.log(`Attempting to delete clip ${clipId} from track ${trackId}`);
@@ -289,18 +289,34 @@
 			return;
 		}
 
-		const targetClipIndex = timeline.tracks[targetTrackIndex].clips.findIndex(c => c.id === clipId);
+		const track = timeline.tracks[targetTrackIndex];
+		const targetClipIndex = track.clips.findIndex(c => c.id === clipId);
 		if (targetClipIndex === -1) {
 			console.error(`Delete failed: Clip ${clipId} not found in track ${trackId}.`);
 			return;
 		}
 
-		// Remove the clip
-		timeline.tracks[targetTrackIndex].clips.splice(targetClipIndex, 1);
+		// --- Gap Closing Logic ---
+		// 1. Get end time of the clip *before* the deleted one (or 0 if it's the first)
+		const previousClipEndTime = targetClipIndex > 0 ? track.clips[targetClipIndex - 1].endTime : 0;
+
+		// 2. Remove the clip
+		const deletedClip = track.clips.splice(targetClipIndex, 1)[0]; // Get the deleted clip details if needed later
+		console.log(`Deleted clip ${clipId} from track ${trackId}`);
+
+		// 3. Shift subsequent clips
+		let lastEndTime = previousClipEndTime;
+		for (let i = targetClipIndex; i < track.clips.length; i++) {
+			const currentClip = track.clips[i];
+			const duration = currentClip.endTime - currentClip.startTime;
+			currentClip.startTime = lastEndTime;
+			currentClip.endTime = lastEndTime + duration;
+			lastEndTime = currentClip.endTime; // Update for the next iteration
+			console.log(`Shifted clip ${currentClip.id} to start at ${currentClip.startTime.toFixed(2)}`);
+		}
 
 		// Trigger reactivity
 		timeline = timeline;
-		console.log(`Deleted clip ${clipId} from track ${trackId}`);
 	}
 
 
