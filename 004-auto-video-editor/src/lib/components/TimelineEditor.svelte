@@ -9,7 +9,7 @@
 
   // --- Configuration Constants ---
   const MIN_DURATION_FOR_SCALING = 30; // (Option 1) Min timeline duration (seconds) used for PPS calculation when zoomed out
-  const MIN_RULER_PIXEL_SPACING = 60; // (Option 2) Target minimum pixels between ruler markers
+  const MIN_RULER_PIXEL_SPACING = 45; // (Option 2) Target minimum pixels between ruler markers (Reduced from 60)
 
   let windowWidth = $state(0);
 
@@ -205,14 +205,11 @@
     const _ww = windowWidth; // Depend on window width changes
     const actualDuration = actualTotalDuration(); // Get the real max end time
 
-    // Determine the duration to USE for scaling calculation
-    // Use MIN_DURATION only if actual duration is less AND we are zoomed out (e.g., zoom < 1)
-    // Otherwise, use the actual duration for a tighter fit at 100% zoom and above.
-    const durationForScaling = (actualDuration < MIN_DURATION_FOR_SCALING && zoomLevel < 1)
-        ? MIN_DURATION_FOR_SCALING
-        : actualDuration;
+    // --- MODIFIED: Always use actualDuration for scaling ---
+    const durationForScaling = actualDuration;
+    // --- END MODIFIED ---
 
-    console.log(`Effect (pixelsPerSecond) - Actual Max Duration: ${actualDuration.toFixed(2)}, Duration Used for Scaling: ${durationForScaling.toFixed(2)}`);
+    console.log(`Effect (pixelsPerSecond) - Actual Max Duration: ${actualDuration.toFixed(2)}, Duration Used for Scaling: ${durationForScaling.toFixed(2)}`); // Log remains useful
 
     if (!timelineEditorElement || durationForScaling <= 0) {
         console.log('Effect (pixelsPerSecond): Using default (10) - No element or zero/negative duration');
