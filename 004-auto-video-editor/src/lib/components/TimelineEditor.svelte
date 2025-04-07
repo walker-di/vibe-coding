@@ -583,6 +583,21 @@
 	console.log(`Split clip ${targetClip.id} at ${playheadPosition.toFixed(2)}s into ${clipA.id} and ${clipB.id}`);
   }
 
+  // --- Exposed Method for Parent Interaction ---
+  export function getTimeFromXCoordinate(clientX: number): number {
+	if (!timelineEditorElement || pixelsPerSecond <= 0) {
+		console.warn('Cannot calculate time from coordinate: Missing element or invalid pixelsPerSecond.');
+		return -1; // Indicate error or invalid state
+	}
+	const rect = timelineEditorElement.getBoundingClientRect();
+	const scrollLeft = timelineEditorElement.scrollLeft;
+	const relativeX = clientX - rect.left + scrollLeft;
+	const time = relativeX / pixelsPerSecond;
+	// Ensure time is not negative and potentially clamp to total duration?
+	// For now, just ensure non-negative.
+	return Math.max(0, time);
+  }
+
 </script>
 
 <svelte:window bind:innerWidth={windowWidth} />

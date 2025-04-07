@@ -24,6 +24,7 @@
 	let isPlaying = $state(false); // Global playback state
 	// Revert type, accept potential TS errors in effect for now
 	let playerRef: PreviewPlayer | undefined = $state();
+	let timelineEditorRef: TimelineEditor | undefined = $state(); // Reference to TimelineEditor component
 
 	// --- Utility Functions ---
 	function createDefaultTimeline(id: string): Timeline {
@@ -390,6 +391,26 @@
 		}
 	});
 
+	// --- Click Handler for Timeline ---
+	function handleTimelineClick(event: MouseEvent) {
+		if (!timelineEditorRef) return;
+
+		// Ensure the click isn't on a clip or handle itself (optional, but good UX)
+		const targetElement = event.target as HTMLElement;
+		if (targetElement.closest('.clip') || targetElement.closest('.trim-handle')) {
+			return;
+		}
+
+		const clickedTime = timelineEditorRef.getTimeFromXCoordinate(event.clientX);
+		if (clickedTime >= 0) {
+			playheadPosition = clickedTime;
+			// No need to call seek explicitly, the PreviewPlayer's effect handles it.
+			// if (isPlaying && playerRef) {
+			// 	playerRef.seek(clickedTime); // Removed this line
+			// }
+		}
+	}
+
 </script>
 
 <ProjectEditorLayout>
@@ -446,6 +467,8 @@
 	{/snippet}
 
 	{#snippet timelinePanel()}
+	<!-- Add wrapper div with click handler -->
+	<div onclick={handleTimelineClick} style="cursor: pointer;">
 		{#if isLoadingTimeline}
 			<p>Loading timeline...</p>
 		{:else if timelineError && !projectTimeline} <!-- Show error only if timeline failed AND is still undefined -->
@@ -462,8 +485,10 @@
 				bind:playheadPosition
 				bind:isPlaying
 				mediaMap={mediaMap()}
+				bind:this={timelineEditorRef}
 			/>
 		{/if}
+	</div> <!-- Close wrapper div -->
 	{/snippet}
 
 </ProjectEditorLayout>
