@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Timeline, MediaItem, Clip } from '$lib/types'; // Use MediaItem
 	import { BROWSER } from 'esm-env';
+	import { tick } from 'svelte'; // Import tick
 
 	// Define the expected structure for active clip details
 	interface ActiveClipDetail {
@@ -104,13 +105,12 @@
 		// Check if seeking is needed (avoid small floating point differences)
 		// Allow seeking even if isPlaying is true, if the target time is significantly different (e.g., clip transition)
 		if (Math.abs(videoElement.currentTime - targetTimeInVideo) > 0.2) {
-			// Capture playing state *before* initiating seek
-			wasPlayingBeforeSeek = isPlaying;
-			console.log(`Seeking video to: ${targetTimeInVideo.toFixed(2)} (Playhead: ${playheadPosition.toFixed(2)}). Was playing: ${wasPlayingBeforeSeek}`);
+			// No need to capture playing state here anymore, it's captured in handleTimeUpdate
+			console.log(`Seeking video to: ${targetTimeInVideo.toFixed(2)} (Playhead: ${playheadPosition.toFixed(2)}).`);
 			isSeeking = true; // Set flag before seeking
 			videoElement.currentTime = targetTimeInVideo;
-			// isSeeking flag will be reset by the 'seeked' event listener below
-			// Playback will be potentially resumed in handleSeeked
+			// isSeeking flag will be reset by the 'seeked' event listener
+			// Playback will be potentially resumed in handleSeeked based on wasPlayingBeforeSeek
 		}
 	});
 
@@ -125,7 +125,8 @@
 			isPlaying = true;
 		};
 		const handlePause = () => {
-			console.log('Video paused');
+			// Add check if seeking to differentiate pauses
+			console.log(`Video paused. Seeking: ${isSeeking}`);
 			isPlaying = false;
 		};
 		const handleEnded = () => {
@@ -136,37 +137,39 @@
 		const handleSeeked = () => {
 			console.log('Video seeked');
 			isSeeking = false; // Reset seeking flag
-			// If the video was playing before the seek started, set the state to reflect that we *should* be playing.
-			if (wasPlayingBeforeSeek) {
-				console.log('Seek finished, setting isPlaying intent to true.');
-				isPlaying = true; // Set the desired state
-			}
-			// Reset the tracking flag
-			wasPlayingBeforeSeek = false;
-			// A separate effect will handle calling video.play() based on isPlaying state when not seeking.
+			// Only reset seeking flag. Playback control is handled elsewhere.
+			console.log('Video seeked');
+			isSeeking = false;
+			wasPlayingBeforeSeek = false; // Reset flag here too
 		};
 		const handleTimeUpdate = () => {
 			// Only process if playing, not seeking, and clip/video exist
 			if (isPlaying && !isSeeking && activeClipInfo && video) {
 				// Check if video's current time is at or beyond the source end time for this clip
-				// Use a small tolerance (e.g., 0.05s) to avoid missing the exact end due to event timing
 				const sourceEndTime = activeClipInfo.clipSourceEndTime;
-				if (video.currentTime >= sourceEndTime - 0.05) {
+				if (video.currentTime >= sourceEndTime) { // Removed tolerance
 					const clipEndTime = activeClipInfo.clipEndTime;
-					console.log(`Reached source end time near ${sourceEndTime.toFixed(2)}s. Setting playhead to clip end ${clipEndTime.toFixed(2)}s.`);
+					console.log(`Reached source end time at ${sourceEndTime.toFixed(2)}s. Setting playhead to clip end ${clipEndTime.toFixed(2)}s.`);
 
-					// Set playhead exactly to the clip's timeline end time.
-					// This will trigger the main $effect to find the next clip (if any) and handle seeking/loading.
-					// The handleSeeked function will handle resuming playback if wasPlayingBeforeSeek was true.
-					if (Math.abs(playheadPosition - clipEndTime) > 0.01) { // Avoid redundant updates
-						// Important: Capture playing state *before* changing playhead, as this might trigger effects immediately
-						wasPlayingBeforeSeek = isPlaying;
-						playheadPosition = clipEndTime;
+					// Pause the video first
+					video.pause();
+
+					// Find the next clip
+					const nextClip = findNextClip(clipEndTime);
+
+					if (nextClip) {
+						console.log(`Found next clip ${nextClip.id}. Setting playhead and attempting play.`);
+						// Set playhead to start of next clip (triggers main effect to seek)
+						playheadPosition = nextClip.startTime;
+						// Immediately signal intent to play the next clip
+						video.play().catch(e => console.error("Error playing next clip:", e));
 					} else {
-						// If playhead is already at the end, but video is still playing (somehow?), pause it.
-						console.log(`Playhead already at clip end ${clipEndTime.toFixed(2)}s, but timeupdate fired. Pausing.`);
-						video.pause();
+						console.log('No next clip found. Setting playhead to end.');
+						// Set playhead to the end of the last clip
+						playheadPosition = clipEndTime;
+						// isPlaying should already be false due to pause
 					}
+
 					// Stop further processing for this time update event after handling the end condition
 					return;
 				}
@@ -218,41 +221,18 @@
 		};
 	});
 
-	// --- NEW Effect: Sync video play/pause state with isPlaying state ---
-	$effect(() => {
-		if (!videoElement || isSeeking) {
-			// Don't interfere while seeking
-			return;
-		}
-
-		if (isPlaying) {
-			// If state says play, and we're not already playing (or pending play), play it.
-			if (videoElement.paused) {
-				console.log('Effect: isPlaying is true, calling video.play()');
-				videoElement.play().catch(error => {
-					console.error("Error attempting to play video:", error);
-					// If play fails, reset state
-					isPlaying = false;
-				});
-			}
-		} else {
-			// If state says pause, and we're not already paused, pause it.
-			if (!videoElement.paused) {
-				console.log('Effect: isPlaying is false, calling video.pause()');
-				videoElement.pause();
-			}
-		}
-	});
-
 
 	// --- Public API / Parent Interaction ---
-	// These now just update the isPlaying state, the effect handles the rest.
+	// Call video element methods directly. State is updated by event handlers.
 	export function play() {
-		console.log('API: play() called, setting isPlaying = true');
-		isPlaying = true;
+		console.log('API: play() called');
+		videoElement?.play().catch(e => console.error("API play error:", e));
 	}
 	export function pause() {
-		console.log('API: pause() called, setting isPlaying = false');
+		console.log('API: pause() called');
+		videoElement?.pause();
+		// Explicitly set isPlaying false here in case pause event doesn't fire reliably
+		// or if called while seeking
 		isPlaying = false;
 	}
 

@@ -331,6 +331,11 @@
 	let isSaving = $state(false);
 	let saveError = $state<string | null>(null);
 
+	// --- Export State ---
+	let isExporting = $state(false);
+	let exportError = $state<string | null>(null);
+	let exportUrl = $state<string | null>(null);
+
 	async function saveTimeline(timelineToSave: Timeline | undefined) {
 		if (!projectId || !timelineToSave) {
 			console.log('Skipping save: No project ID or timeline data.');
@@ -423,6 +428,37 @@
 		projectTimeline = projectTimeline; 
 	}
 
+	// --- Export Function ---
+	async function handleExport() {
+		if (!projectId || isExporting) return;
+
+		isExporting = true;
+		exportError = null;
+		exportUrl = null;
+		console.log(`Starting export for project ${projectId}...`);
+
+		try {
+			const response = await fetch(`/api/projects/${projectId}/export`, {
+				method: 'POST'
+			});
+
+			const data = await response.json();
+
+			if (!response.ok || !data.success) {
+				throw new Error(data.error || `Export failed with status ${response.status}`);
+			}
+
+			console.log('Export successful:', data.url);
+			exportUrl = data.url; // Store the URL for the download link
+
+		} catch (e) {
+			console.error('Error exporting video:', e);
+			exportError = e instanceof Error ? e.message : 'An unknown error occurred during export.';
+		} finally {
+			isExporting = false;
+		}
+	}
+
 </script>
 
 <ProjectEditorLayout>
@@ -440,6 +476,21 @@
 		{/if}
 		{#if saveError}
 			<span class="badge bg-danger ms-3" title={saveError}>Save Error!</span>
+		{/if}
+		<!-- Export Button & Status -->
+		<button class="btn btn-sm btn-success ms-3" onclick={handleExport} disabled={isExporting || !projectTimeline || isLoadingTimeline || isLoadingMedia}>
+			{#if isExporting}
+				<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+				Exporting...
+			{:else}
+				Export Video
+			{/if}
+		</button>
+		{#if exportError}
+			<span class="badge bg-danger ms-2" title={exportError}>Export Error!</span>
+		{/if}
+		{#if exportUrl}
+			<a href={exportUrl} class="btn btn-sm btn-primary ms-2" download>Download Export</a>
 		{/if}
 	{/snippet}
 

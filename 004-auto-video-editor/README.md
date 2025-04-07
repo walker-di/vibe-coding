@@ -48,8 +48,9 @@ The application will need the following basic routes:
 *   `/projects/new`: (Could be a modal/action on `/projects`) Handles the creation of a new project.
 *   `/projects/:projectId`: Displays the main editor interface for a specific project (Project View).
 *   `/api/projects` (GET, POST): API endpoint for CRUD operations on projects.
-*   `/api/projects/:projectId/media` (GET, POST): API endpoint for uploading and managing media files within a project.
-*   `/api/projects/:projectId/timeline` (GET, PUT/POST): API endpoint for saving/loading the timeline state for a project.
+*   `/api/projects/:projectId/media` (GET, POST, DELETE): API endpoint for uploading and managing media files within a project.
+*   `/api/projects/:projectId/timeline` (GET, PUT): API endpoint for saving/loading the timeline state for a project.
+*   `/api/projects/:projectId/export` (POST): API endpoint for triggering video export using FFmpeg.
 
 ## 4. Schema (Conceptual Data Structures)
 
@@ -122,7 +123,9 @@ We'll need data structures to represent our domain concepts, likely stored in a 
 2.  **Configure Environment Variables:**
     *   Copy `.env.example` to `.env`.
     *   Fill in the required values in `.env` (e.g., database connection string).
-3.  **Database Migrations (Initial Setup & After Schema Changes):**
+4.  **FFmpeg Installation (Required for Video Export):**
+    *   The video export feature relies on FFmpeg. Ensure FFmpeg is installed on the system running the backend server and that the `ffmpeg` command is accessible via the system's PATH.
+5.  **Database Migrations (Initial Setup & After Schema Changes):**
     *   Generate migration files (if schema changed): `npx drizzle-kit generate`
     *   Apply migrations: `npx drizzle-kit migrate`
 
@@ -243,4 +246,5 @@ This section outlines the planned steps to build the application based on the de
 ### Phase 6: User Management & Polish (Future)
 
 *   [ ] User Authentication.
-*   [ ] ... more features (e.g., export, effects, transitions)
+*   [x] **Video Export:** Implement backend endpoint using FFmpeg to export the timeline as a video file.
+*   [ ] ... more features (e.g., effects, transitions)
