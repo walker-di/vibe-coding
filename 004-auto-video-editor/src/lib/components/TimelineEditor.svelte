@@ -182,11 +182,31 @@
 				else {
 					targetTrack.clips = finalItemsInTarget; // Assign first to get rough position
 
-					// --- Snapping Logic (Applied after same-track reorder) ---
-					// Rely on check at start of handleDndFinalize
-					applySnapping(movedClip, finalItemsInTarget.filter(c => c.id !== movedClip.id)); // Pass other clips
+					// --- Recalculate Times Sequentially After Reorder ---
+					// This is crucial for visual positioning based on startTime
+					const movedClipIndex = targetTrack.clips.findIndex(c => c.id === movedClip.id);
+					if (movedClipIndex !== -1) {
+						// Start recalculating from the beginning of the track or the clip before the moved one
+						let lastEndTime = 0;
+						for (let i = 0; i < targetTrack.clips.length; i++) {
+							const currentClip = targetTrack.clips[i];
+							const duration = currentClip.endTime - currentClip.startTime; // Preserve original duration
+							currentClip.startTime = lastEndTime;
+							currentClip.endTime = lastEndTime + duration;
+							lastEndTime = currentClip.endTime;
+						}
+						console.log(`Recalculated times sequentially after reorder on track ${targetTrackId}`);
+					} else {
+						console.warn(`Moved clip ${movedClip.id} not found in final array for sequential time recalculation.`);
+						// Fallback: Recalculate all clips if index not found? Or log error?
+						// For now, log warning and proceed without recalculation in this edge case.
+					}
 
-					console.log(`Reordered clips on track ${targetTrackId} (snapped):`, targetTrack.clips);
+					// --- Snapping Logic (Still disabled for same-track reorder troubleshooting) ---
+					// applySnapping(movedClip, targetTrack.clips.filter(c => c.id !== movedClip.id)); // Pass other clips
+
+					console.log(`Reordered clips on track ${targetTrackId} (Sequential times recalculated, snapping disabled):`, targetTrack.clips);
+					reorderCounter++; // Force re-render of the #each block for this track
 				}
 			}
 		} else {
@@ -227,10 +247,14 @@
 		let bestSnapDelta = Infinity;
 		let finalStartTime = rawStartTime; // Start with the raw position
 
-		// Potential snap targets: playhead + other clips' starts/ends
+		// Potential snap targets: playhead + other clips' starts/ends + major ruler markers
 		const snapTargets: number[] = [playheadPosition];
 		otherClipsInTrack.forEach(clip => {
 			snapTargets.push(clip.startTime, clip.endTime);
+		});
+		// Add major ruler markers as snap targets
+		timeMarkers.filter(m => m.isMajor).forEach(marker => {
+			snapTargets.push(marker.time);
 		});
 
 		// Check snapping for movedClip's start time
@@ -275,15 +299,12 @@
 				console.log(`Snapping clip ${movedClip.id} from ${rawStartTime.toFixed(2)} to ${snappedStartTime.toFixed(2)}`);
 				movedClip.startTime = snappedStartTime;
 				movedClip.endTime = snappedEndTime;
-			} else {
-				// Revert to raw position if snap caused overlap or negative time
-                // Ensure the object reflects this if it was temporarily modified
-                movedClip.startTime = rawStartTime;
-                movedClip.endTime = rawEndTime;
-                console.log(`Snap reverted for clip ${movedClip.id}, using original drop position ${rawStartTime.toFixed(2)}`);
 			}
+            // If snap caused overlap or negative time, DO NOTHING here.
+            // The clip retains the position assigned by handleDndFinalize before this function was called.
+            // We only modify the position if a valid, non-overlapping snap occurs.
 		}
-		// If no snap occurred, movedClip retains its raw position from dndzone finalize
+		// If no snap occurred (bestSnapDelta >= snapThresholdSeconds), the clip also retains its position from handleDndFinalize.
 	}
 
 	// --- NEW: Delete Clip Function (with gap closing) ---
@@ -391,10 +412,12 @@
 	// --- State Variables ---
 	let isTrimming = $state(false);
 	let trimTarget: { clip: Clip; handle: 'start' | 'end'; initialX: number; initialClip: Clip } | null = $state(null);
+	let trimFeedback: { time: number; x: number } | null = $state(null); // State for resize feedback tooltip
 	let timelineInnerElement: HTMLDivElement | undefined = $state();
 	let timelineEditorElement: HTMLDivElement | undefined = $state();
 	let pixelsPerSecond = $state(10); // Default value, will be calculated
 	let timeMarkers: { time: number; positionPx: number; label: string; isMajor: boolean }[] = $state([]); // Enhanced marker type
+	let reorderCounter = $state(0); // Counter to force re-render on reorder
 
 	// --- Derived State ---
 	// (Option 1 Integration) Calculate the *actual* max duration based on clips
@@ -520,6 +543,7 @@
 			initialX: e.clientX,
 			initialClip: { ...clip } // Store initial state
 		};
+		trimFeedback = null; // Clear feedback on new trim start
 
 		(e.target as HTMLElement).setPointerCapture(e.pointerId);
 		document.addEventListener('pointermove', onTrimPointerMove);
@@ -539,71 +563,115 @@
 		const deltaTime = deltaX / pps;
 		const { clip, handle, initialClip } = trimTarget;
 		const media = mediaMap?.get(clip.mediaId);
-		const mediaDuration = media?.duration ?? Infinity;
+		const mediaDuration = media?.duration ?? Infinity; // Use Infinity if media/duration unknown
 		const minClipDuration = 0.1; // Minimum allowed clip duration in seconds
 
-		// Directly modify the clip object within the bound timeline state
+		let finalTime: number; // The time value we are calculating (start or end)
+
+		// --- Calculate potential new time based on drag delta ---
 		if (handle === 'start') {
-			let newStartTime = initialClip.startTime + deltaTime;
-			let newSourceStartTime = initialClip.sourceStartTime + deltaTime;
+			finalTime = initialClip.startTime + deltaTime;
+		} else { // handle === 'end'
+			finalTime = initialClip.endTime + deltaTime;
+		}
+
+		// --- Snapping Logic for Resize ---
+		const snapThresholdPx = 10; // Pixels
+		const snapThresholdSeconds = snapThresholdPx / pps;
+		let snapped = false;
+
+		// Potential snap targets: playhead + other clips' starts/ends + major ruler markers
+		const snapTargets: number[] = [playheadPosition];
+		if (timeline) {
+			timeline.tracks.forEach(track => {
+				track.clips.forEach(otherClip => {
+					// Exclude the clip being trimmed itself
+					if (otherClip.id !== clip.id) {
+						snapTargets.push(otherClip.startTime, otherClip.endTime);
+					}
+				});
+			});
+		}
+		timeMarkers.filter(m => m.isMajor).forEach(marker => {
+			snapTargets.push(marker.time);
+		});
+
+		// Check against snap targets
+		for (const targetTime of snapTargets) {
+			if (Math.abs(finalTime - targetTime) < snapThresholdSeconds) {
+				finalTime = targetTime; // Snap!
+				snapped = true;
+				console.log(`Resize snap: Handle ${handle} snapped to ${targetTime.toFixed(2)}s`);
+				break; // Stop checking once snapped
+			}
+		}
+
+		// --- Apply Constraints and Update Clip ---
+		if (handle === 'start') {
+			let newStartTime = finalTime; // Use the (potentially snapped) time
+			let newSourceStartTime = initialClip.sourceStartTime + (newStartTime - initialClip.startTime); // Recalculate source based on final timeline time
 
 			// Constraint: Cannot make clip shorter than min duration from the end
-			const maxStartTime = initialClip.endTime - minClipDuration;
+			const maxStartTime = clip.endTime - minClipDuration; // Use current end time for constraint check
 			// Constraint: Timeline start cannot be negative
 			newStartTime = Math.max(0, newStartTime);
 			// Constraint: Cannot drag start handle beyond end handle
 			newStartTime = Math.min(newStartTime, maxStartTime);
 
-
 			// Constraint: Cannot drag source start time below 0
+			// Recalculate source start based on the *constrained* newStartTime
+			newSourceStartTime = initialClip.sourceStartTime + (newStartTime - initialClip.startTime);
 			if (newSourceStartTime < 0) {
-				// How much did we try to go below zero?
-				const overshoot = 0 - newSourceStartTime;
+				// Adjust timeline start time to respect source start boundary
+				newStartTime = initialClip.startTime - initialClip.sourceStartTime;
 				newSourceStartTime = 0;
-				// Adjust timeline start time back by the overshoot amount (in seconds)
-				newStartTime = initialClip.startTime + deltaTime + overshoot;
-                // Re-apply constraints after adjustment
-                newStartTime = Math.max(0, newStartTime);
-                newStartTime = Math.min(newStartTime, maxStartTime);
+				// Re-apply other constraints after source adjustment
+				newStartTime = Math.max(0, newStartTime);
+				newStartTime = Math.min(newStartTime, maxStartTime);
 			}
 
 			// Apply constrained values
 			clip.startTime = newStartTime;
 			clip.sourceStartTime = newSourceStartTime;
-			// Ensure endTime and sourceEndTime don't change
-			clip.endTime = initialClip.endTime;
-			clip.sourceEndTime = initialClip.sourceEndTime;
+			// Ensure endTime and sourceEndTime don't change (unless end handle is moved)
+			// clip.endTime = initialClip.endTime; // End time doesn't change when moving start
+			// clip.sourceEndTime = initialClip.sourceEndTime; // Source end time doesn't change
 
+			finalTime = newStartTime; // Update finalTime for feedback
 
 		} else { // handle === 'end'
-			let newEndTime = initialClip.endTime + deltaTime;
-			let newSourceEndTime = initialClip.sourceEndTime + deltaTime;
+			let newEndTime = finalTime; // Use the (potentially snapped) time
+			let newSourceEndTime = initialClip.sourceEndTime + (newEndTime - initialClip.endTime); // Recalculate source based on final timeline time
 
 			// Constraint: Cannot make clip shorter than min duration from the start
-			const minEndTime = initialClip.startTime + minClipDuration;
+			const minEndTime = clip.startTime + minClipDuration; // Use current start time
 			// Constraint: Cannot drag end handle before start handle
             newEndTime = Math.max(newEndTime, minEndTime);
 
-
 			// Constraint: Cannot drag source end time beyond media duration
+			// Recalculate source end based on the *constrained* newEndTime
+			newSourceEndTime = initialClip.sourceEndTime + (newEndTime - initialClip.endTime);
 			if (newSourceEndTime > mediaDuration) {
-				// How much did we try to go beyond the duration?
-				const overshoot = newSourceEndTime - mediaDuration;
+				// Adjust timeline end time to respect source end boundary
+				newEndTime = initialClip.endTime + (mediaDuration - initialClip.sourceEndTime);
 				newSourceEndTime = mediaDuration;
-				// Adjust timeline end time back by the overshoot amount (in seconds)
-				newEndTime = initialClip.endTime + deltaTime - overshoot;
-                // Re-apply constraint after adjustment
-                newEndTime = Math.max(newEndTime, minEndTime);
+				// Re-apply other constraints after source adjustment
+				newEndTime = Math.max(newEndTime, minEndTime);
 			}
 
 			// Apply constrained values
 			clip.endTime = newEndTime;
 			clip.sourceEndTime = newSourceEndTime;
-			// Ensure startTime and sourceStartTime don't change
-			clip.startTime = initialClip.startTime;
-			clip.sourceStartTime = initialClip.sourceStartTime;
+			// Ensure startTime and sourceStartTime don't change (unless start handle is moved)
+			// clip.startTime = initialClip.startTime; // Start time doesn't change
+			// clip.sourceStartTime = initialClip.sourceStartTime; // Source start time doesn't change
 
+			finalTime = newEndTime; // Update finalTime for feedback
 		}
+
+		// --- Update Trim Feedback Tooltip ---
+		trimFeedback = { time: finalTime, x: e.clientX };
+
 		// Trigger reactivity explicitly as we mutated nested state
 		timeline = timeline;
 		// console.log('Trim move:', clip); // Log changes during move
@@ -623,6 +691,8 @@
 		console.log(`Trim end: ${trimTarget.handle} handle of clip ${trimTarget.clip.id}`, trimTarget.clip);
 		isTrimming = false;
 		trimTarget = null;
+		trimFeedback = null; // Clear feedback on trim end
+		onSaveTimeline?.(); // Save timeline after trim operation
 		// Timeline state is already updated due to direct mutation & reassignment in move
 	}
 
@@ -706,6 +776,15 @@
 		return Math.max(0, time);
 	}
 
+	// Helper to format time for display (e.g., in tooltip)
+	function formatTime(seconds: number): string {
+		if (isNaN(seconds) || seconds < 0) return '0:00.0';
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		const milliseconds = Math.floor((remainingSeconds - Math.floor(remainingSeconds)) * 10); // Get tenths of a second
+		return `${minutes}:${Math.floor(remainingSeconds).toString().padStart(2, '0')}.${milliseconds}`;
+	}
+
 </script>
 
 <svelte:window bind:innerWidth={windowWidth} />
@@ -745,6 +824,19 @@
 				<div class="time-ruler-background"></div>
 
 				<div class="playhead-ruler position-absolute" style:left="{`${getPlayheadLeftPx}px`}"></div>
+
+				<!-- Clickable background for seeking -->
+				<div
+					class="time-ruler-background"
+					onclick={(e) => {
+						const newTime = getTimeFromXCoordinate(e.clientX);
+						if (newTime >= 0) {
+							playheadPosition = newTime;
+							// Optional: Add logic to pause playback if seeking while playing
+							// if (isPlaying) isPlaying = false;
+						}
+					}}
+				></div>
 			</div>
 
 			<!-- Tracks Area -->
@@ -766,7 +858,7 @@
 								onconsider={(e) => handleDndConsider(e, track.id)}
 								onfinalize={(e) => handleDndFinalize(e, track.id)}
 							>
-								{#each track.clips as clip (clip.id)}
+								{#each track.clips as clip (`${clip.id}-${reorderCounter}`)}
 									{@const clipWidth = Math.max(1, (clip.endTime - clip.startTime) * pixelsPerSecond)}
 									{@const clipLeft = clip.startTime * pixelsPerSecond}
 									<div
@@ -816,6 +908,13 @@
 			</div>
 		</div>
 	</div>
+
+	<!-- Trim Feedback Tooltip -->
+	{#if trimFeedback}
+		<div class="trim-feedback-tooltip" style:left="{`${trimFeedback.x + 10}px`}">
+			{formatTime(trimFeedback.time)}
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -856,27 +955,30 @@
 		left: 0;
 		right: 0;
 		height: 25px; /* Match ruler height */
-		background-color: #f8f9fa;
-		border-bottom: 1px solid #dee2e6;
+		background-color: #f8f9fa; /* Light background */
+		border-bottom: 1px solid #dee2e6; /* Separator line */
 		z-index: 0; /* Behind markers and playhead */
+		cursor: pointer; /* Indicate clickability */
 	}
 	.time-marker {
 		position: absolute;
 		bottom: 0;
 		width: 1px;
-		background-color: #ccc; /* Minor tick color */
+		background-color: #ced4da; /* Slightly softer minor tick color */
 		z-index: 1; /* Above background */
+		pointer-events: none; /* Markers shouldn't interfere with clicks */
 	}
-	.time-marker-minor { height: 8px; } /* Minor tick height */
-	.time-marker-major { height: 15px; background-color: #999;} /* Major tick height and color */
+	.time-marker-minor { height: 6px; } /* Slightly shorter minor tick */
+	.time-marker-major { height: 12px; background-color: #adb5bd;} /* Slightly shorter, distinct major tick */
 	 .time-marker .time-label {
 		position: absolute;
 		bottom: 100%; /* Position above the tick line */
-		left: 2px; /* Slight offset from the tick */
-		transform: translateY(-2px); /* Small gap */
-		font-size: 0.7rem;
-		color: #6c757d;
+		left: 3px; /* Slightly more offset */
+		transform: translateY(-3px); /* Slightly more gap */
+		font-size: 0.65rem; /* Slightly smaller */
+		color: #495057; /* Darker label color */
 		white-space: nowrap;
+		pointer-events: none; /* Labels shouldn't interfere */
 	}
 	.playhead-ruler {
 		position: absolute;
@@ -1017,5 +1119,41 @@
 		/* margin-left is now handled by ms-1 class */
 		margin-right: 4px; /* Add some space at the end */
 		flex-shrink: 0; /* Prevent shrinking */
+	}
+
+	/* --- DND Action Styles --- */
+	/* Style for the item being dragged (ghost) */
+	:global(.dndzone-ghost) {
+		opacity: 0.7;
+		border: 2px dashed #0d6efd; /* Bootstrap primary color */
+		background-color: rgba(13, 110, 253, 0.1);
+		/* Ensure it doesn't inherit clip-specific background */
+		background-image: none !important;
+		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+	}
+
+	/* Style for the placeholder where the item might drop */
+	:global(.dndzone-placeholder) {
+		background-color: rgba(0, 0, 0, 0.1);
+		border: 1px dashed #6c757d; /* Bootstrap secondary color */
+		height: 40px; /* Match clip height */
+		margin-top: 10px; /* Match clip top position */
+		box-sizing: border-box;
+	}
+
+	/* --- Trim Feedback Tooltip Style --- */
+	.trim-feedback-tooltip {
+		position: fixed; /* Use fixed positioning relative to viewport */
+		top: 50px; /* Adjust vertical position as needed */
+		transform: translateY(-100%); /* Position above the cursor */
+		background-color: rgba(0, 0, 0, 0.7);
+		color: white;
+		padding: 3px 6px;
+		border-radius: 4px;
+		font-size: 0.75rem;
+		white-space: nowrap;
+		z-index: 100; /* Ensure it's above everything */
+		pointer-events: none; /* Don't let it interfere with mouse events */
+		box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 	}
 </style>
