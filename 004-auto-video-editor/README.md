@@ -170,8 +170,8 @@ This will start the Storybook development server, usually on port 6006.
 | Integration: Save/Load Timeline State                 | Frontend | Done   | Connected component via `bind:timeline` and `$effect` for auto-save      |
 | **Fix: Media Library Thumbnails**                       | **Both** | **Done** | **Backend generates thumbnails, frontend displays them.**                |
 | **Feature: Click Media to Add to Timeline**             | Frontend | **Done** | **Clicking item in Media Library adds it to first compatible/new track.** |
-| **Investigate Timeline Scaling Bug**                    | Frontend | In Progress | Check reactivity/timing of totalDuration/pixelsPerSecond effects, parent component (`+page.svelte`) data loading/interaction, initial render state. |
-| **Refine Clip Moving (Snapping, Cross-Track)**          | Frontend | Todo   | Implement snapping behavior and allow moving clips between tracks.       |
+| **Investigate Timeline Scaling Bug**                    | Frontend | ToDo | Check reactivity/timing of totalDuration/pixelsPerSecond effects, parent component (`+page.svelte`) data loading/interaction, initial render state. |
+| **Refine Clip Moving (Snapping, Cross-Track)**          | Frontend | In Progress | Implement snapping behavior and allow moving clips between tracks.       |
 
 ---
 
@@ -231,6 +231,9 @@ This section outlines the planned steps to build the application based on the de
 *   [x] **Frontend (Timeline):** Implement basic clip trimming via handles (`TimelineEditor.svelte`).
 *   [x] **Frontend (Timeline):** Implement basic clip splitting at playhead (`TimelineEditor.svelte`).
 *   [ ] **Frontend (Timeline):** Refine clip moving (snapping, cross-track).
+    *   [ ] **Cross-Track:** Modify `handleDndFinalize` to correctly remove the clip from its source track when moved to a different track.
+    *   [ ] **Snapping:** Implement snapping logic in `handleDndFinalize` to snap moved clips to the playhead or other clip edges on the same track.
+    *   [ ] **Overlap:** Add basic overlap detection after snapping to prevent snaps that cause collisions (revert snap if overlap occurs).
 
 ### Phase 5: AI & Audio (Future)
 

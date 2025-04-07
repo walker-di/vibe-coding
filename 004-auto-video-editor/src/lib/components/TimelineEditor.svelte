@@ -42,79 +42,210 @@
      const targetTrackIndex = timeline.tracks.findIndex(t => t.id === trackId);
     if (targetTrackIndex === -1) return;
 
-    const droppedItems = e.detail.items; // Potentially multiple items if selection is enabled
-	const targetTrack = timeline.tracks[targetTrackIndex];
-
-	// Filter out potential placeholders added by 'consider' if they came from other tracks or media library
-	const existingClipIds = new Set(targetTrack.clips.map(c => c.id));
-	const finalClips: Clip[] = [];
-	let needsReassignment = false; // Flag if we modified the array structure
-
-	for (const item of droppedItems) {
-		console.log('Dropped Item Data:', item);
-		// --- Case 1: Dropped MediaItem ---
-		const isMediaItem = item && typeof item === 'object' && 'sourceUrl' in item && !('startTime' in item);
-		if (isMediaItem) {
-			needsReassignment = true; // We are definitely changing the structure
-			const mediaItem = item as MediaItem;
-			if (mediaItem.type !== targetTrack.type) {
-				console.warn(`Cannot drop media of type ${mediaItem.type} onto a ${targetTrack.type} track.`);
-				continue; // Skip this item
-			}
-			if (!mediaItem.duration || isNaN(Number(mediaItem.duration)) || Number(mediaItem.duration) <= 0) {
-				console.error("Cannot add media item without valid duration:", mediaItem);
-				continue; // Skip this item
-			}
-
-			// Calculate append position (could be smarter later, e.g., drop position)
-			const lastClipEndTime = finalClips.length > 0
-                ? Math.max(...finalClips.map(c => c.endTime))
-                : (targetTrack.clips.length > 0 ? Math.max(...targetTrack.clips.map(c=>c.endTime)) : 0); // Consider existing if dropping first
-            const startTime = lastClipEndTime;
-			const duration = Number(mediaItem.duration);
-			const endTime = startTime + duration;
-
-			const newClip: Clip = {
-				id: uuidv4(),
-				mediaId: mediaItem.id,
-				trackId: trackId,
-				startTime: startTime,
-				endTime: endTime,
-				sourceStartTime: 0,
-				sourceEndTime: duration,
-			};
-			console.log(`Creating new clip from MediaItem ${mediaItem.id} at ${startTime.toFixed(2)}s on track ${trackId}`, newClip);
-			finalClips.push(newClip);
-
-		// --- Case 2: Dropped Clip (Reordering/Moving Track) ---
-		} else {
-             // Assume it's a Clip if it's not a MediaItem (you might add more checks)
-             // The item should already be in the format of a Clip as provided by dndzone
-             const clipItem = item as Clip;
-             // Important: If moving BETWEEN tracks, we need to update trackId!
-             // The 'consider' function might already place it visually, but 'finalize' confirms.
-             if (clipItem.trackId !== trackId) {
-                 console.log(`Moving clip ${clipItem.id} from track ${clipItem.trackId} to ${trackId}`);
-                 clipItem.trackId = trackId; // Update the trackId
-				 needsReassignment = true;
-             }
-             // If it was just reordered within the same track, 'consider' might have handled ordering,
-             // but we rebuild the array here for consistency from e.detail.items.
-             finalClips.push(clipItem);
+    const targetTrack = timeline.tracks[targetTrackIndex];
+    const finalItemsInTarget = e.detail.items as Clip[]; // This is the final state for the *target* zone
+    const movedItemId = e.detail.info.id;
+    // Find the original clip and its track ID from the current timeline state
+    let originalClipData: Clip | undefined;
+    let sourceTrackId: string | undefined;
+    for (const track of timeline.tracks) {
+        originalClipData = track.clips.find(c => c.id === movedItemId);
+        if (originalClipData) {
+            sourceTrackId = track.id; // Found it, store the track ID
+            break;
         }
-	}
+    }
+    const targetTrackId = trackId; // ID of the track where the drop occurred (passed as argument)
 
-	// If we created new clips or moved clips, update the track's clips array.
-	// If only reordering within the same track occurred, dndzone's `items` update in `consider` might suffice,
-	// but explicitly setting it here from the final list is safer.
-	// We compare with the original items list from the event detail to ensure final state.
-	timeline.tracks[targetTrackIndex].clips = e.detail.items as Clip[]; // Trust dnd-action's final list
-	console.log(`Finalized clips on track ${trackId}:`, timeline.tracks[targetTrackIndex].clips);
+    let needsReassignment = false; // Flag if we modified the timeline structure
+
+    // --- Case 1: Dropped MediaItem (Adding new clip) ---
+    // Check if the moved item ID exists in the mediaMap, indicating it's a MediaItem from the library
+    const droppedMediaItem = mediaMap?.get(movedItemId);
+    if (droppedMediaItem) {
+        needsReassignment = true;
+        if (droppedMediaItem.type !== targetTrack.type) {
+            console.warn(`Cannot drop media of type ${droppedMediaItem.type} onto a ${targetTrack.type} track.`);
+            // Remove the placeholder added by 'consider' if it's still there
+            targetTrack.clips = targetTrack.clips.filter(c => c.id !== movedItemId); // Filter by ID
+        } else if (!droppedMediaItem.duration || isNaN(Number(droppedMediaItem.duration)) || Number(droppedMediaItem.duration) <= 0) {
+            console.error("Cannot add media item without valid duration:", droppedMediaItem);
+            targetTrack.clips = targetTrack.clips.filter(c => c.id !== movedItemId);
+        } else {
+            // Find the placeholder item added by 'consider' (it might have a temporary ID or the media ID)
+            // Or, more reliably, calculate position based on drop coordinates (future enhancement)
+            // For now, append it based on the finalItemsInTarget provided by dndzone
+            const placeholderIndex = finalItemsInTarget.findIndex(item => item.id === movedItemId); // Find the placeholder by ID
+
+            // Calculate append position (simple append for now)
+            const existingClips = finalItemsInTarget.filter(c => c.id !== movedItemId); // Exclude placeholder
+            const lastClipEndTime = existingClips.length > 0
+                ? Math.max(...existingClips.map(c => c.endTime))
+                : 0;
+            const startTime = lastClipEndTime;
+            const duration = Number(droppedMediaItem.duration);
+            const endTime = startTime + duration;
+
+            const newClip: Clip = {
+                id: uuidv4(), // Generate a *new* unique ID for the clip instance
+                mediaId: droppedMediaItem.id, // Link to the original media
+                trackId: targetTrackId, // Set the correct track ID
+                startTime: startTime,
+                endTime: endTime,
+                sourceStartTime: 0,
+                sourceEndTime: duration,
+            };
+            console.log(`Creating new clip from MediaItem ${droppedMediaItem.id} at ${startTime.toFixed(2)}s on track ${targetTrackId}`, newClip);
+
+            // Replace the placeholder in the finalItems array with the new clip
+            if (placeholderIndex !== -1) {
+                finalItemsInTarget.splice(placeholderIndex, 1, newClip);
+            } else {
+                // If placeholder wasn't found (shouldn't happen often), just append
+                finalItemsInTarget.push(newClip);
+            }
+            targetTrack.clips = finalItemsInTarget; // Update the target track
+        }
+    }
+    // --- Case 2: Dropped Clip (Reordering or Moving Track) ---
+    else {
+        const movedClip = finalItemsInTarget.find(c => c.id === movedItemId); // Find the actual clip in the target list
+
+        if (!movedClip) {
+             console.error(`Finalize Error: Moved clip with ID ${movedItemId} not found in target track's final items.`);
+             // Attempt recovery? Maybe just log and don't modify state further?
+             // For now, we'll proceed assuming dndzone handles target state correctly if only reordering.
+             targetTrack.clips = finalItemsInTarget; // Trust dnd-action's list for reordering
+             needsReassignment = true; // Reordered, so update
+        } else if (originalClipData && sourceTrackId && sourceTrackId !== targetTrackId) {
+            // --- Moving Clip Between Tracks ---
+            // Ensure the clip found in the target list is the one we identified earlier
+            if (movedClip.id !== originalClipData.id) {
+                 console.error(`Finalize Error: Mismatch between identified original clip (${originalClipData.id}) and clip found in target items (${movedClip.id}). Aborting move.`);
+                 // Potentially revert target track state? For now, just log and don't proceed with move.
+                 targetTrack.clips = timeline.tracks[targetTrackIndex].clips; // Revert to state before finalize? Risky.
+            } else {
+                needsReassignment = true;
+                console.log(`Moving clip ${movedClip.id} from track ${sourceTrackId} to ${targetTrackId}`);
+
+                // 1. Remove from Source Track (using the sourceTrackId found from originalClipData)
+                const sourceTrackIndex = timeline.tracks.findIndex(t => t.id === sourceTrackId);
+                if (sourceTrackIndex > -1) { // Check if source track exists
+                    const clipIndexInSource = timeline.tracks[sourceTrackIndex].clips.findIndex(c => c.id === movedClip.id);
+                    if (clipIndexInSource > -1) { // Check if clip was found in source
+                        timeline.tracks[sourceTrackIndex].clips.splice(clipIndexInSource, 1);
+                        console.log(`Removed clip ${movedClip.id} from source track ${sourceTrackId}`);
+                    } else { // Clip wasn't found in source track
+                        console.warn(`Finalize Warning: Clip ${movedClip.id} not found in source track ${sourceTrackId} for removal.`);
+                    } // Correctly closes the inner if/else (clip found in source)
+                } else { // Source track wasn't found
+                    console.warn(`Finalize Warning: Source track ${sourceTrackId} not found.`);
+                } // Correctly closes the outer if/else (source track found)
+
+                // 2. Update Clip's Track ID in Target Track's Data
+                movedClip.trackId = targetTrackId; // Ensure the trackId property is correct
+
+                // 3. Assign final items to Target Track
+                targetTrack.clips = finalItemsInTarget;
+                console.log(`Finalized clips on target track ${targetTrackId}:`, targetTrack.clips);
+                // --- Snapping Logic (Applied after cross-track move) ---
+                applySnapping(movedClip, finalItemsInTarget);
+
+            } // Closes the 'else' for successful move (movedClip.id === originalClipData.id)
+        } else if (movedClip) { // Check movedClip exists for same-track reorder
+             // --- Reordering Within Same Track ---
+            needsReassignment = true; // Order changed
+            targetTrack.clips = finalItemsInTarget; // Assign first to get rough position
+
+            // --- Snapping Logic (Applied after same-track reorder) ---
+            applySnapping(movedClip, finalItemsInTarget);
+
+            console.log(`Reordered clips on track ${targetTrackId} (snapped):`, targetTrack.clips);
+        }
+    }
 
 
     // Trigger reactivity by reassigning the timeline object if needed
-    timeline = timeline;
+    if (needsReassignment) {
+        timeline = timeline;
+    }
   }
+
+
+  // --- Snapping Helper Function ---
+  function applySnapping(movedClip: Clip, clipsInTrack: Clip[]) {
+      if (!timeline || pixelsPerSecond <= 0) return;
+
+      const snapThresholdPx = 10; // Pixels
+      const snapThresholdSeconds = snapThresholdPx / pixelsPerSecond;
+      const movedClipDuration = movedClip.endTime - movedClip.startTime;
+
+      // Use the current position from the dnd action as the raw position
+      const rawStartTime = movedClip.startTime;
+      const rawEndTime = movedClip.endTime;
+
+      let bestSnapDelta = Infinity;
+      let finalStartTime = rawStartTime; // Start with the raw position
+
+      // Potential snap targets
+      const snapTargets: number[] = [playheadPosition];
+      clipsInTrack.forEach(clip => {
+          if (clip.id !== movedClip.id) { // Don't snap to self
+              snapTargets.push(clip.startTime, clip.endTime);
+          }
+      });
+
+      // Check snapping for movedClip's start time
+      snapTargets.forEach(targetTime => {
+          const delta = Math.abs(rawStartTime - targetTime);
+          if (delta < snapThresholdSeconds && delta < Math.abs(bestSnapDelta)) {
+              bestSnapDelta = targetTime - rawStartTime; // Keep the sign
+              finalStartTime = targetTime;
+          }
+      });
+
+      // Check snapping for movedClip's end time
+      snapTargets.forEach(targetTime => {
+          const delta = Math.abs(rawEndTime - targetTime);
+          if (delta < snapThresholdSeconds && delta < Math.abs(bestSnapDelta)) {
+              bestSnapDelta = targetTime - rawEndTime; // Keep the sign
+              finalStartTime = targetTime - movedClipDuration; // Adjust start based on end snap
+          }
+      });
+
+
+      // If a snap occurred (bestSnapDelta is not Infinity)
+      if (Math.abs(bestSnapDelta) < snapThresholdSeconds) {
+          const snappedStartTime = finalStartTime;
+          const snappedEndTime = snappedStartTime + movedClipDuration;
+
+          // --- Overlap Check ---
+          let overlaps = false;
+          for (const otherClip of clipsInTrack) {
+              if (otherClip.id === movedClip.id) continue; // Skip self
+              // Check for overlap: (StartA < EndB) and (EndA > StartB)
+              if (snappedStartTime < otherClip.endTime && snappedEndTime > otherClip.startTime) {
+                  overlaps = true;
+                  console.log(`Snap reverted: Overlap detected with clip ${otherClip.id}`);
+                  break;
+              }
+          }
+
+          // Apply snap only if no overlap
+          if (!overlaps) {
+              console.log(`Snapping clip ${movedClip.id} from ${rawStartTime.toFixed(2)} to ${snappedStartTime.toFixed(2)}`);
+              movedClip.startTime = snappedStartTime;
+              movedClip.endTime = snappedEndTime;
+          } else {
+               // Revert to raw position if snap caused overlap (already done by not assigning)
+               // Ensure the clip object reflects the raw position if it was modified temporarily
+               movedClip.startTime = rawStartTime;
+               movedClip.endTime = rawEndTime;
+          }
+      }
+      // If no snap occurred, movedClip retains its rawStartTime/rawEndTime
+  }
+
 
   let zoomLevel = $state(1);
   //Removed: const timeRulerInterval = 1; // Now dynamic
