@@ -403,12 +403,24 @@
 
 		const clickedTime = timelineEditorRef.getTimeFromXCoordinate(event.clientX);
 		if (clickedTime >= 0) {
-			playheadPosition = clickedTime;
+			playheadPosition = parseFloat(clickedTime.toFixed(2)); // Round to 2 decimal places
 			// No need to call seek explicitly, the PreviewPlayer's effect handles it.
 			// if (isPlaying && playerRef) {
 			// 	playerRef.seek(clickedTime); // Removed this line
 			// }
 		}
+	}
+
+	// --- Delete Track Handler ---
+	function handleDeleteTrack(trackId: string) {
+		if (!projectTimeline) return;
+		if (!confirm('Are you sure you want to delete this track and all its clips? This cannot be undone.')) {
+			return;
+		}
+		console.log(`Deleting track: ${trackId}`);
+		projectTimeline.tracks = projectTimeline.tracks.filter(track => track.id !== trackId);
+		// Reassign to trigger reactivity and save
+		projectTimeline = projectTimeline; 
 	}
 
 </script>
@@ -486,6 +498,7 @@
 				bind:isPlaying
 				mediaMap={mediaMap()}
 				bind:this={timelineEditorRef}
+				onDeleteTrack={handleDeleteTrack} 
 			/>
 		{/if}
 	</div> <!-- Close wrapper div -->

@@ -17,12 +17,14 @@
 	  timeline = $bindable(),
 	  playheadPosition = $bindable(0),
 	  isPlaying = $bindable(false),
-	  mediaMap = new Map<string, MediaItem>()
+	  mediaMap = new Map<string, MediaItem>(),
+	  onDeleteTrack = (trackId: string) => {} // Default no-op function
   }: {
 	  timeline?: Timeline;
 	  playheadPosition?: number;
 	  isPlaying?: boolean;
 	  mediaMap?: Map<string, MediaItem>;
+	  onDeleteTrack?: (trackId: string) => void; // Callback prop for deleting a track
   } = $props();
 
   // No need for dummy data here if timeline is always provided or handled externally
@@ -522,6 +524,7 @@
   // --- Split Logic ---
   // ... (Keep your existing splitClipAtPlayhead logic) ...
     function splitClipAtPlayhead() {
+	console.log('Splitting at playheadPosition:', playheadPosition); // <-- ADDED LOG
 	if (!timeline) return;
 	const minClipDuration = 0.1; // Minimum duration for split parts
 
@@ -646,10 +649,9 @@
 
         {#if timeline && timeline.tracks && timeline.tracks.length > 0}
           {#each timeline.tracks as track (track.id)}
-            <div class="track mb-1 border rounded bg-white" data-track-id={track.id}> 
-             <div class="track-header"> <span class="badge bg-secondary m-1">{track.type.toUpperCase()}</span></div>
+            <div class="track mb-1 border rounded bg-white d-flex align-items-center" data-track-id={track.id}> 
               <div
-                class="clips-area" 
+                class="clips-area flex-grow-1"  
                 use:dndzone={{
                     items: track.clips,
                     flipDurationMs,
@@ -682,6 +684,14 @@
                   </div>
                 {/each}
               </div>
+               <!-- Delete Track Button (Moved to end) -->
+               <button 
+                class="btn btn-sm btn-outline-danger delete-track-btn ms-1" 
+                onclick={() => onDeleteTrack(track.id)} 
+                title="Delete Track"
+              >
+                &times; <!-- Simple 'x' icon -->
+              </button>
             </div>
           {/each}
         {:else}
@@ -781,12 +791,9 @@
     transform: translateX(-1px);
   }
   .track {
-     
-     display: flex;
-	 flex-direction: row;
+     /* Removed display: flex and flex-direction */
      background-color: #f1f3f5;
-     
-     
+     /* Ensure clips-area can still fill space if needed, though block layout might suffice */
   }
   .track-header {
 	  flex: 0 0 auto;
@@ -805,8 +812,10 @@
 	  color: #495057;
   }
 
+  /* Removed .track-header CSS rules */
+
   .clips-area {
-    flex-grow: 1;
+    /* flex-grow: 1 is now on the element */
     position: relative; 
     height: 60px; 
 	background-color: #e9ecef;
@@ -871,5 +880,18 @@
     border-left: none;
     border-top-right-radius: 3px;
     border-bottom-right-radius: 3px;
+  }
+
+  .delete-track-btn {
+    /* Style the delete button */
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    line-height: 1;
+    font-size: 1rem;
+    align-self: center; /* Center vertically */
+    /* margin-left is now handled by ms-1 class */
+    margin-right: 4px; /* Add some space at the end */
+    flex-shrink: 0; /* Prevent shrinking */
   }
 </style>
