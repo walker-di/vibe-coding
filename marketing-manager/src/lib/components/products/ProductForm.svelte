@@ -1,11 +1,13 @@
 <script lang="ts">
 	import Button from '$lib/components/ui/button/Button.svelte';
+	// Removed incorrect import of buttonVariants
 	import Input from '$lib/components/ui/input/Input.svelte';
 	import Label from '$lib/components/ui/label/Label.svelte';
 	import Textarea from '$lib/components/ui/textarea/Textarea.svelte';
 	// Remove local type definitions, import from types file
 	import type { ProductInputData, ProductPayload } from '$lib/types/product.types';
-	import { AlertCircle } from 'lucide-svelte';
+	import { AlertCircle } from 'lucide-svelte'; // Keep AlertCircle for form errors
+	import AiGenerationDialog from '$lib/components/shared/AiGenerationDialog.svelte'; // Import the new component
 
 
 	// --- Props ---
@@ -68,6 +70,21 @@
 	// Determine if the form should use client-side submission or rely on a parent <form> action
 	const useClientSubmit = $derived(!!onSubmit); // Check if onSubmit prop was provided
 
+	// --- AI Dialog State & Handler ---
+	let aiDialogOpen = $state(false); // State to control the dialog visibility
+
+	function handleAiGenerated(generatedData: Partial<ProductPayload>) {
+		// Update form fields with generated data, handling potential null/undefined
+		name = generatedData.name ?? name;
+		description = generatedData.description ?? description;
+		imageUrl = generatedData.imageUrl ?? imageUrl;
+		industry = generatedData.industry ?? industry;
+		overview = generatedData.overview ?? overview;
+		details = generatedData.details ?? details;
+		featuresStrengths = generatedData.featuresStrengths ?? featuresStrengths;
+		// aiDialogOpen is automatically set to false by the child component on success
+	}
+
 </script>
 
 {#if formErrors?.server}
@@ -126,6 +143,17 @@
 
 	<!-- Actions: Use type="button" for Cancel to prevent form submission -->
 	<div class="flex justify-end gap-2 pt-4">
+		<!-- Use the new AiGenerationDialog component -->
+		<AiGenerationDialog
+			bind:open={aiDialogOpen}
+			apiUrl="/api/products/generate"
+			onGenerated={handleAiGenerated}
+			disabled={isSubmitting}
+			dialogTitle="Generate Product Details with AI"
+			dialogDescription="Enter instructions for the AI to fill out the product form fields. Be specific for better results (e.g., 'Generate details for a SaaS product that helps small businesses manage social media schedules')."
+			instructionPlaceholder="e.g., Create a product description for a new brand of eco-friendly coffee beans..."
+		/>
+
 		<Button type="button" onclick={onCancel} variant="outline" disabled={isSubmitting}>Cancel</Button>
 		<!-- Submit button type depends on whether parent form handles submission -->
 		<Button type={useClientSubmit ? 'submit' : 'submit'} disabled={isSubmitting}>

@@ -3,11 +3,13 @@
 	// TODO: Replace with actual implementation (e.g., shadcn-svelte) later
 	import type { Snippet } from 'svelte';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
+	import { melt, type Builder } from '@melt-ui/svelte'; 
 
 	type CommonProps = {
 		children: Snippet;
 		variant?: string; // Placeholder for variants like 'outline'
 		class?: string;
+		builder?: Builder; // Changed to single builder prop
 		// Add other common props if needed
 	};
 
@@ -18,7 +20,7 @@
 	type Props = AnchorProps | ButtonProps;
 
 	// Capture all props
-	let {href, class: className, children, ...restProps}: Props = $props();
+	let {href, class: className, children, builder, ...restProps}: Props = $props(); // Destructure single builder
 
 	// Derive component type and common props
 	const isAnchor = $derived(!!href);
@@ -30,6 +32,7 @@
 
 {#if isAnchor}
 	<a
+		{...builder}
 		href={href}
 		class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 {className ?? ''}"
 		{...restProps}
@@ -38,6 +41,7 @@
 	</a>
 {:else}
 	<button
+		{...builder}
 		class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 {className ?? ''}"
 		type={buttonType}
 		{...restProps}
