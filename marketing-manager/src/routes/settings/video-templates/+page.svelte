@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation'; // Import goto
 	import { Button } from '$lib/components/ui/button';
 	import type { videoTemplates as videoTemplatesTable } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
@@ -31,13 +32,32 @@
 	});
 
 	function handleEdit(id: number) {
-		// TODO: Implement navigation to edit page: goto(`/settings/video-templates/${id}/edit`);
-		alert(`Edit action for Video Template ID: ${id} (Not Implemented)`);
+		goto(`/settings/video-templates/${id}/edit`);
 	}
 
-	function handleDelete(id: number) {
-		// TODO: Implement delete confirmation and API call
-		alert(`Delete action for Video Template ID: ${id} (Not Implemented)`);
+	async function handleDelete(id: number) {
+		if (!confirm(`Are you sure you want to delete Video Template ID: ${id}? This cannot be undone.`)) {
+			return;
+		}
+
+		try {
+			const response = await fetch(`/api/video-templates/${id}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				const result = await response.json().catch(() => ({ message: 'Failed to delete template.' }));
+				throw new Error(result.message || `Failed to delete template (Status: ${response.status})`);
+			}
+
+			// Remove the template from the local list to update UI
+			templatesList = templatesList.filter(template => template.id !== id);
+			// Optionally show a success message
+
+		} catch (e: any) {
+			console.error(`Error deleting template ${id}:`, e);
+			alert(`Failed to delete template: ${e.message}`); // Simple alert for error feedback
+		}
 	}
 
 </script>

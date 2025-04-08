@@ -23,7 +23,7 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 
 **(Same as before: SvelteKit, TypeScript, Drizzle ORM, SQLite, Tailwind CSS, Svelte 5 Runes, Storybook, ESLint/Prettier)**
 
-## Current Progress (As of April 7, 2025 - Updated)
+## Current Progress (As of April 7, 2025 - Updated - End of Day)
 
 *   **Phase 0: Foundation:**
     *   Project setup with SvelteKit, TypeScript, Tailwind CSS, Drizzle ORM, SQLite.
@@ -41,16 +41,17 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
             *   `/api/personas/generate` mock endpoint created.
             *   "Generate" button added to `/personas/new` form, populating fields on mock success.
     *   **Creatives (Phase 1 - Text & Image):**
-        *   Full CRUD API endpoints implemented for core creative and Text/Image types (`/api/creatives` for GET/POST, `/api/creatives/[id]` for GET/PUT/DELETE).
-        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy for Text and Image types (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields. **Note:** Persistent errors encountered while attempting to update `/routes/creatives/new/+page.svelte` for Phase 3/4 integration (Video/LP types, Theme linking). Manual debugging required.
-    *   **Themes & Video Templates (API & Placeholders):**
+        *   Full CRUD API endpoints implemented for core creative and Text/Image types (`/api/creatives` for GET/POST, `/api/creatives/[id]` for GET/PUT/DELETE - Note: PUT/DELETE in `[id]` are not yet implemented).
+        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy for Text and Image types (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields. **Note:** Previous errors encountered while integrating Phase 3/4 features into `/routes/creatives/new/+page.svelte` are pending investigation; enhanced logging added to `POST /api/creatives` endpoint to assist debugging.
+    *   **Themes & Video Templates (Phase 3 & 4):**
         *   Full CRUD API endpoints implemented for Themes (`/api/themes`, `/api/themes/[id]`).
         *   Full CRUD API endpoints implemented for Video Templates (`/api/video-templates`, `/api/video-templates/[id]`).
-        *   Database schema updated to include `updatedAt` fields for `themes` and `videoTemplates`.
-        *   Placeholder frontend pages created for managing these entities (`/settings/themes`, `/settings/video-templates`).
+        *   Database schema updated and **migration applied** to include `updatedAt` fields for `themes` and `videoTemplates`.
+        *   Full CRUD frontend pages implemented for managing Themes (`/settings/themes`, `/settings/themes/new`, `/settings/themes/[id]/edit`).
+        *   Full CRUD frontend pages implemented for managing Video Templates (`/settings/video-templates`, `/settings/video-templates/new`, `/settings/video-templates/[id]/edit`).
 *   **Development Strategy:**
     *   Consistently using a Single-Page Application (SPA) strategy with client-side `fetch` calls to dedicated API endpoints and Svelte 5 Runes for state management.
-    *   `shadcn-svelte` initialized for UI components. **Note:** Header navigation update (`/lib/components/layout/Header.svelte`) failed due to persistent errors; component reverted to original state. Manual debugging required.
+    *   `shadcn-svelte` initialized for UI components. **Note:** Header navigation update (`/lib/components/layout/Header.svelte`) failed due to persistent errors; component reverted to original state. Re-integration requires further investigation.
 
 ## 3. Phased Development Plan
 

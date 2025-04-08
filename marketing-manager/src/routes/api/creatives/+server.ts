@@ -95,10 +95,13 @@ export const POST: RequestHandler = async ({ request }) => {
 	let requestData;
 	try {
 		requestData = await request.json();
+		console.log('API POST /api/creatives: Received request data:', JSON.stringify(requestData, null, 2)); // Log received data
 	} catch (e) {
+		console.error('API POST /api/creatives: Invalid JSON format', e); // Log error
 		return json({ message: 'Invalid JSON body' }, { status: 400 });
 	}
 
+	console.log('API POST /api/creatives: Validating request data...'); // Log before validation
 	const validationResult = createCreativeSchema.safeParse(requestData);
 
 	if (!validationResult.success) {
@@ -110,9 +113,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	const validatedData = validationResult.data;
 
 	try {
-		console.log(`API: Creating new creative of type: ${validatedData.type}`);
+		console.log(`API: Creating new creative of type: ${validatedData.type}. Starting transaction...`); // Log before transaction
 
 		const newCreativeId = await db.transaction(async (tx) => {
+			console.log('API: Inside transaction - Inserting into creatives table...'); // Log inside transaction
 			// 1. Insert into the main creatives table
 			const [newCreative] = await tx
 				.insert(creatives)
@@ -138,7 +142,7 @@ export const POST: RequestHandler = async ({ request }) => {
 						body: validatedData.textData.body,
 						callToAction: validatedData.textData.callToAction
 					});
-					console.log(`API: Inserted text data for creative ID: ${creativeId}`);
+					console.log(`API: Transaction - Inserted text data for creative ID: ${creativeId}`); // Log specific type
 					break;
 				case 'image':
 					await tx.insert(creativeImage).values({
@@ -148,7 +152,7 @@ export const POST: RequestHandler = async ({ request }) => {
 						width: validatedData.imageData.width,
 						height: validatedData.imageData.height
 					});
-					console.log(`API: Inserted image data for creative ID: ${creativeId}`);
+					console.log(`API: Transaction - Inserted image data for creative ID: ${creativeId}`); // Log specific type
 					break;
 				case 'video':
 					await tx.insert(creativeVideo).values({
@@ -161,7 +165,7 @@ export const POST: RequestHandler = async ({ request }) => {
 						emotion: validatedData.videoData.emotion,
 						templateId: validatedData.videoData.templateId
 					});
-					console.log(`API: Inserted video data for creative ID: ${creativeId}`);
+					console.log(`API: Transaction - Inserted video data for creative ID: ${creativeId}`); // Log specific type
 					break;
 				case 'lp':
 					await tx.insert(creativeLp).values({
@@ -170,23 +174,24 @@ export const POST: RequestHandler = async ({ request }) => {
 						headline: validatedData.lpData.headline,
 						keySections: validatedData.lpData.keySections // Store parsed JSON
 					});
-					console.log(`API: Inserted LP data for creative ID: ${creativeId}`);
+					console.log(`API: Transaction - Inserted LP data for creative ID: ${creativeId}`); // Log specific type
 					break;
 				default:
 					// This case should be unreachable due to Zod validation
 					// If reached, the transaction will automatically roll back.
-					console.error(`API: Unhandled creative type in transaction.`);
+					console.error(`API: Transaction - Reached default case for unhandled creative type.`); // Log unhandled type without accessing validatedData.type
 					throw new Error(`Unhandled creative type.`);
 			}
 
+			console.log(`API: Transaction completed for creative ID: ${creativeId}`); // Log transaction end
 			return creativeId; // Return the ID from the transaction
 		});
 
-		console.log(`API: New creative created successfully with ID: ${newCreativeId}`);
+		console.log(`API: New creative created successfully with ID: ${newCreativeId}. Returning response.`); // Log success
 		return json({ id: newCreativeId, name: validatedData.name, type: validatedData.type }, { status: 201 });
 
 	} catch (error: any) {
-		console.error('API: Failed to create creative:', error);
+		console.error('API: Failed to create creative (outside or after transaction):', error); // Log final catch block
 		// Check for specific DB errors if needed (e.g., foreign key constraint)
 		kitError(500, `Failed to create creative: ${error.message || 'Database error'}`);
 	}

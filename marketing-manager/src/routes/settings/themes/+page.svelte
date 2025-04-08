@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation'; // Import goto
 	import { Button } from '$lib/components/ui/button';
 	import type { themes as themesTable } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
@@ -31,13 +32,32 @@
 	});
 
 	function handleEdit(id: number) {
-		// TODO: Implement navigation to edit page: goto(`/settings/themes/${id}/edit`);
-		alert(`Edit action for Theme ID: ${id} (Not Implemented)`);
+		goto(`/settings/themes/${id}/edit`);
 	}
 
-	function handleDelete(id: number) {
-		// TODO: Implement delete confirmation and API call
-		alert(`Delete action for Theme ID: ${id} (Not Implemented)`);
+	async function handleDelete(id: number) {
+		if (!confirm(`Are you sure you want to delete Theme ID: ${id}? This cannot be undone.`)) {
+			return;
+		}
+
+		try {
+			const response = await fetch(`/api/themes/${id}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				const result = await response.json().catch(() => ({ message: 'Failed to delete theme.' }));
+				throw new Error(result.message || `Failed to delete theme (Status: ${response.status})`);
+			}
+
+			// Remove the theme from the local list to update UI
+			themesList = themesList.filter(theme => theme.id !== id);
+			// Optionally show a success message (e.g., using a toast notification library)
+
+		} catch (e: any) {
+			console.error(`Error deleting theme ${id}:`, e);
+			alert(`Failed to delete theme: ${e.message}`); // Simple alert for error feedback
+		}
 	}
 
 </script>
