@@ -54,12 +54,12 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
     *   Modify `personas` table: Make `productId` non-nullable and add `onDelete: 'cascade'`.
     *   Modify `creatives` table: Make `personaId` non-nullable and add `onDelete: 'cascade'`.
     *   Modify `products` table: Add `industry` (TEXT), `overview` (TEXT), `details` (TEXT), `featuresStrengths` (TEXT) fields (all nullable for now).
-    *   **Action:** Generate and apply a new database migration (`drizzle/0000_fancy_natasha_romanoff.sql` generated, needs successful application). *(Migration generated, application pending)*
+    *   **Action:** Generate and apply a new database migration. *(Database schema confirmed to be up-to-date, no migration needed)* **(Completed)**
 2.  **API Endpoints:**
     *   **Products:** Implement standard CRUD endpoints:
-        *   `GET, POST /api/products`
-        *   `GET, PUT, DELETE /api/products/[productId]`
-    *   **Personas:** Refactor to nest under Products:
+        *   `GET, POST /api/products` **(Completed)**
+        *   `GET, PUT, DELETE /api/products/[productId]` **(Completed)**
+    *   **Personas:** Refactor to nest under Products: *(Next Step)*
         *   `GET, POST /api/products/[productId]/personas`
         *   `GET, PUT, DELETE /api/products/[productId]/personas/[personaId]` (Handlers must verify persona belongs to product).
     *   **Creatives:** Keep top-level but enforce logic:
@@ -69,9 +69,9 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
         *   `PUT /api/creatives/[creativeId]` (Disallow changing `personaId`).
         *   `DELETE /api/creatives/[creativeId]`
 3.  **Frontend Routes & UI (Fully Nested):**
-    *   **Products:** Create new CRUD pages under `/products/...`. The detail page (`/products/[productId]`) will display product info (inspired by the second image) and list/link to associated Personas.
-    *   **Personas:** Move existing routes to `/products/[productId]/personas/...`. Update data loading to use `productId`. Remove the Product selection dropdown from forms. The detail page (`.../[personaId]`) will list/link to associated Creatives.
-    *   **Creatives:** Move existing routes to `/products/[productId]/personas/[personaId]/creatives/...`. Update data loading to use `personaId`. Remove the Persona selection dropdown from forms. API calls will target `/api/creatives`.
+    *   **Products:** Create new CRUD pages under `/products/...`. The detail page (`/products/[productId]`) will display product info (inspired by the second image) and list/link to associated Personas. **(Completed)**
+    *   **Personas:** Move existing routes to `/products/[productId]/personas/...`. Update data loading to use `productId`. Remove the Product selection dropdown from forms. The detail page (`.../[personaId]`) will list/link to associated Creatives. *(Next Step)*
+    *   **Creatives:** Move existing routes to `/products/[productId]/personas/[personaId]/creatives/...`. Update data loading to use `personaId`. Remove the Persona selection dropdown from forms. API calls will target `/api/creatives`. *(Following Personas)*
     *   **Navigation:** Update the main header navigation to feature `/products`. Implement breadcrumbs for nested routes.
 4.  **Update `README.md`:** After implementation, update this `README.md` file again to reflect the completed refactoring.
 
