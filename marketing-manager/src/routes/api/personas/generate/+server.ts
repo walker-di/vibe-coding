@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { ageRanges, genders } from '$lib/server/db/schema'; // Import enums for validation
+import { ageRanges, genders } from '$lib/constants';
 
 // Optional schema for generation inputs (can be expanded later)
 const generationInputSchema = z.object({
