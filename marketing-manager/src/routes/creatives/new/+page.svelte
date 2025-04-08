@@ -4,16 +4,16 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { AlertCircle, FileText, Image as ImageIcon } from 'lucide-svelte';
-	// Import types for dropdowns and payload
-	import type { campaigns as campaignsTable, personas as personasTable, creativeTypes as creativeTypesEnum } from '$lib/server/db/schema';
+	import { AlertCircle, FileText, Image as ImageIcon, Video as VideoIcon, Link as LinkIcon } from 'lucide-svelte';
+	import type { campaigns as campaignsTable, personas as personasTable, themes as themesTable, videoTemplates as videoTemplatesTable, creativeTypes as creativeTypesEnum, videoPlatforms, videoFormats, videoEmotions } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
 
 	// --- Types ---
 	type Campaign = Pick<InferSelectModel<typeof campaignsTable>, 'id' | 'name'>;
 	type Persona = Pick<InferSelectModel<typeof personasTable>, 'id' | 'name'>;
-	// TODO: Add Theme type when themes API exists
-	const creativeTypes = ['text', 'image'] as const; // Only implement text/image for now
+	type Theme = Pick<InferSelectModel<typeof themesTable>, 'id' | 'title'>;
+	type VideoTemplate = Pick<InferSelectModel<typeof videoTemplatesTable>, 'id' | 'name' | 'templateCode'>;
+	const creativeTypes = ['text', 'image', 'video', 'lp'] as const;
 	type CreativeType = typeof creativeTypes[number];
 
 	// --- State ---
@@ -23,7 +23,7 @@
 	let selectedType = $state<CreativeType | ''>('');
 	let selectedCampaignId = $state<number | ''>('');
 	let selectedPersonaId = $state<number | ''>('');
-	// TODO: Add selectedThemeId state later
+	let selectedThemeId = $state<number | ''>('');
 
 	// Text Fields
 	let textHeadline = $state('');
@@ -34,16 +34,31 @@
 	let imageUrl = $state('');
 	let imageAltText = $state('');
 
+	// Video Fields (Placeholders)
+	let videoUrl = $state('');
+	let videoPlatform = $state<typeof videoPlatforms[number] | ''>('');
+	let videoFormat = $state<typeof videoFormats[number] | ''>('');
+	let videoDuration = $state<number | ''>('');
+	let videoAppealFeature = $state('');
+	let videoEmotion = $state<typeof videoEmotions[number] | ''>('');
+	let videoTemplateId = $state<number | ''>('');
+
+	// LP Fields (Placeholders)
+	let lpPageUrl = $state('');
+	let lpHeadline = $state('');
+	let lpKeySections = $state('');
+
 	// Dropdown Data
 	let campaignsList = $state<Campaign[]>([]);
 	let personasList = $state<Persona[]>([]);
-	// TODO: Add themesList state later
+	let themesList = $state<Theme[]>([]);
+	let videoTemplatesList = $state<VideoTemplate[]>([]);
 
 	// UI State
 	let isLoadingDropdowns = $state(true);
 	let dropdownError = $state<string | null>(null);
 	let isSubmitting = $state(false);
-	let formErrors = $state<Record<string, any>>({}); // Can contain nested errors
+	let formErrors = $state<Record<string, any>>({});
 
 	// --- Data Fetching for Dropdowns ---
 	$effect(() => {
@@ -51,19 +66,22 @@
 			isLoadingDropdowns = true;
 			dropdownError = null;
 			try {
-				const [campaignsRes, personasRes] = await Promise.all([
+				const [campaignsRes, personasRes, themesRes, videoTemplatesRes] = await Promise.all([
 					fetch('/api/campaigns'),
-					fetch('/api/personas')
-					// TODO: Add fetch('/api/themes') later
+					fetch('/api/personas'),
+					fetch('/api/themes'),
+					fetch('/api/video-templates')
 				]);
 
-				if (!campaignsRes.ok) throw new Error('Failed to load campaigns');
-				if (!personasRes.ok) throw new Error('Failed to load personas');
-				// TODO: Check themesRes.ok later
+				if (!campaignsRes.ok) throw new Error(`Failed to load campaigns (${campaignsRes.status})`);
+				if (!personasRes.ok) throw new Error(`Failed to load personas (${personasRes.status})`);
+				if (!themesRes.ok) throw new Error(`Failed to load themes (${themesRes.status})`);
+				if (!videoTemplatesRes.ok) throw new Error(`Failed to load video templates (${videoTemplatesRes.status})`);
 
 				campaignsList = await campaignsRes.json();
 				personasList = await personasRes.json();
-				// TODO: themesList = await themesRes.json();
+				themesList = await themesRes.json();
+				videoTemplatesList = await videoTemplatesRes.json();
 
 			} catch (e: any) {
 				console.error("Failed to load dropdown data:", e);
@@ -79,63 +97,101 @@
 	async function handleSubmit() {
 		isSubmitting = true;
 		formErrors = {};
+		let parsingErrorOccurred = false;
+		let typeSpecificPayload: Record<string, any> = {};
 
-		// Construct base payload
-		let payload: Record<string, any> = {
+		const finalPayload: Record<string, any> = {
 			name: name,
 			description: description || null,
 			type: selectedType,
 			campaignId: selectedCampaignId || null,
 			personaId: selectedPersonaId || null,
-			// themeId: selectedThemeId || null, // TODO: Add later
+			themeId: selectedThemeId || null,
 		};
 
-		// Add type-specific data
-		if (selectedType === 'text') {
-			payload.textData = {
-				headline: textHeadline || null,
-				body: textBody,
-				callToAction: textCta || null
-			};
-		} else if (selectedType === 'image') {
-			payload.imageData = {
-				imageUrl: imageUrl,
-				altText: imageAltText || null
-				// width/height omitted for now
-			};
+		switch (selectedType) {
+			case 'text':
+				typeSpecificPayload = {
+					headline: textHeadline || null,
+					body: textBody,
+					callToAction: textCta || null
+				};
+				finalPayload.textData = typeSpecificPayload;
+				break;
+			case 'image':
+				typeSpecificPayload = {
+					imageUrl: imageUrl,
+					altText: imageAltText || null
+				};
+				finalPayload.imageData = typeSpecificPayload;
+				break;
+			case 'video':
+				typeSpecificPayload = {
+					videoUrl: videoUrl || null,
+					platform: videoPlatform || null,
+					format: videoFormat || null,
+					duration: videoDuration || null,
+					appealFeature: videoAppealFeature || null,
+					emotion: videoEmotion || null,
+					templateId: videoTemplateId || null,
+				};
+				finalPayload.videoData = typeSpecificPayload;
+				break;
+			case 'lp':
+				let parsedKeySections = null;
+				if (lpKeySections) {
+					try {
+						parsedKeySections = JSON.parse(lpKeySections);
+					} catch (parseError: any) {
+						formErrors = { ...formErrors, lpData: { ...(formErrors.lpData ?? {}), keySections: 'Invalid JSON format for Key Sections.' } };
+						console.error('LP Key Sections JSON parse error:', parseError);
+						parsingErrorOccurred = true;
+					}
+				}
+				if (!parsingErrorOccurred) {
+					typeSpecificPayload = {
+						pageUrl: lpPageUrl,
+						headline: lpHeadline || null,
+						keySections: parsedKeySections
+					};
+					finalPayload.lpData = typeSpecificPayload;
+				}
+				break;
 		}
-		// TODO: Add cases for video/lp later
+
+		if (parsingErrorOccurred) {
+			isSubmitting = false;
+			return;
+		}
 
 		try {
 			const response = await fetch('/api/creatives', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload)
+				body: JSON.stringify(finalPayload)
 			});
 
 			const result = await response.json();
 
 			if (!response.ok) {
 				if (response.status === 400 && result.errors) {
-					formErrors = result.errors; // API returns field-specific errors
+					formErrors = result.errors;
 				} else {
 					formErrors = { server: result.message || 'An unknown server error occurred.' };
 				}
 				console.log("Form Errors:", formErrors);
-				return; // Stop processing on error
+				return;
 			}
 
-			// Success! Navigate to the creatives list page (or detail page)
-			await goto('/creatives'); // Or `/creatives/${result.id}`
+			await goto('/creatives');
 
 		} catch (e: any) {
 			console.error('Creative submission error:', e);
-			formErrors = { server: 'Failed to submit form. Please check your connection.' };
+			formErrors = { server: 'Failed to submit form. Please check your connection or review server logs.' };
 		} finally {
 			isSubmitting = false;
 		}
 	}
-
 </script>
 
 <div class="container mx-auto max-w-2xl py-8">
@@ -161,10 +217,9 @@
 				class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.type ? 'border-red-500' : ''}`}
 			>
 				<option value="" disabled>-- Select Type --</option>
-				{#each creativeTypes as typeOption}
+				{#each creativeTypes as typeOption (typeOption)}
 					<option value={typeOption}>{typeOption.charAt(0).toUpperCase() + typeOption.slice(1)}</option>
 				{/each}
-				<!-- Add Video/LP later -->
 			</select>
 			{#if formErrors.type}<p class="mt-1 text-sm text-red-600">{formErrors.type}</p>{/if}
 		</div>
@@ -208,7 +263,17 @@
 					</select>
 					{#if formErrors.personaId}<p class="mt-1 text-sm text-red-600">{formErrors.personaId}</p>{/if}
 				</div>
-				<!-- TODO: Add Theme dropdown later -->
+				<div>
+					<Label for="themeId" class={formErrors.themeId ? 'text-red-600' : ''}>Link to Theme (Optional)</Label>
+					<select id="themeId" name="themeId" bind:value={selectedThemeId} disabled={isSubmitting || themesList.length === 0} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.themeId ? 'border-red-500' : ''}`}>
+						<option value="">-- None --</option>
+						{#each themesList as theme (theme.id)}
+							<option value={theme.id}>{theme.title}</option>
+						{/each}
+					</select>
+					{#if themesList.length === 0 && !isLoadingDropdowns}<p class="mt-1 text-sm text-gray-500">No themes available.</p>{/if}
+					{#if formErrors.themeId}<p class="mt-1 text-sm text-red-600">{formErrors.themeId}</p>{/if}
+				</div>
 			</div>
 		{/if}
 
@@ -250,8 +315,61 @@
 					{#if formErrors.imageData?.altText}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.altText}</p>{/if}
 				</div>
 			</section>
+		{:else if selectedType === 'video'}
+			<section class="space-y-4 rounded border p-4">
+				<h3 class="flex items-center text-lg font-semibold"><VideoIcon class="mr-2 h-5 w-5"/> Video Creative Details</h3>
+				<p class="text-sm text-gray-500">Detailed fields (Appeal, Emotion, Template Selection) will be added later.</p>
+				<div>
+					<Label for="videoUrl" class={formErrors.videoData?.videoUrl ? 'text-red-600' : ''}>Video URL (Optional)</Label>
+					<Input id="videoUrl" name="videoUrl" type="url" bind:value={videoUrl} disabled={isSubmitting} class={formErrors.videoData?.videoUrl ? 'border-red-500' : ''} placeholder="https://youtube.com/watch?v=..." />
+					{#if formErrors.videoData?.videoUrl}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.videoUrl}</p>{/if}
+				</div>
+				<div>
+					<Label for="videoPlatform" class={formErrors.videoData?.platform ? 'text-red-600' : ''}>Platform (Optional)</Label>
+					<select id="videoPlatform" name="videoPlatform" bind:value={videoPlatform} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.platform ? 'border-red-500' : ''}`}>
+						<option value="">-- Select Platform --</option>
+						{#each videoPlatforms as platformOption (platformOption)}
+							<option value={platformOption}>{platformOption}</option>
+						{/each}
+					</select>
+					{#if formErrors.videoData?.platform}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.platform}</p>{/if}
+				</div>
+				<!-- Add placeholders for other video fields -->
+				<div>
+					<Label for="videoDuration">Duration (seconds, Optional)</Label>
+					<Input id="videoDuration" name="videoDuration" type="number" bind:value={videoDuration} disabled={isSubmitting} />
+				</div>
+				<div>
+					<Label for="videoTemplateId">Video Template (Optional)</Label>
+					<select id="videoTemplateId" name="videoTemplateId" bind:value={videoTemplateId} disabled={isSubmitting || videoTemplatesList.length === 0} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm`}>
+						<option value="">-- None --</option>
+						{#each videoTemplatesList as template (template.id)}
+							<option value={template.id}>{template.name || template.templateCode}</option>
+						{/each}
+					</select>
+					{#if videoTemplatesList.length === 0 && !isLoadingDropdowns}<p class="mt-1 text-sm text-gray-500">No video templates available.</p>{/if}
+				</div>
+			</section>
+		{:else if selectedType === 'lp'}
+			<section class="space-y-4 rounded border p-4">
+				<h3 class="flex items-center text-lg font-semibold"><LinkIcon class="mr-2 h-5 w-5"/> Landing Page Creative Details</h3>
+				<div>
+					<Label for="lpPageUrl" class={formErrors.lpData?.pageUrl ? 'text-red-600' : ''}>Page URL *</Label>
+					<Input id="lpPageUrl" name="lpPageUrl" type="url" required bind:value={lpPageUrl} disabled={isSubmitting} class={formErrors.lpData?.pageUrl ? 'border-red-500' : ''} placeholder="https://example.com/landing" />
+					{#if formErrors.lpData?.pageUrl}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.pageUrl}</p>{/if}
+				</div>
+				<div>
+					<Label for="lpHeadline" class={formErrors.lpData?.headline ? 'text-red-600' : ''}>Headline (Optional)</Label>
+					<Input id="lpHeadline" name="lpHeadline" type="text" maxlength={200} bind:value={lpHeadline} disabled={isSubmitting} class={formErrors.lpData?.headline ? 'border-red-500' : ''} />
+					{#if formErrors.lpData?.headline}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.headline}</p>{/if}
+				</div>
+				<div>
+					<Label for="lpKeySections" class={formErrors.lpData?.keySections ? 'text-red-600' : ''}>Key Sections (JSON Array, Optional)</Label>
+					<Textarea id="lpKeySections" name="lpKeySections" rows={4} bind:value={lpKeySections} disabled={isSubmitting} class={formErrors.lpData?.keySections ? 'border-red-500' : ''} placeholder='[{"title": "Hero"}, {"title": "Features"}]' />
+					{#if formErrors.lpData?.keySections}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.keySections}</p>{/if}
+				</div>
+			</section>
 		{/if}
-		<!-- TODO: Add sections for Video/LP later -->
 
 
 		<!-- Actions -->

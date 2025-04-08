@@ -42,9 +42,15 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
             *   "Generate" button added to `/personas/new` form, populating fields on mock success.
     *   **Creatives (Phase 1 - Text & Image):**
         *   Full CRUD API endpoints implemented for core creative and Text/Image types (`/api/creatives` for GET/POST, `/api/creatives/[id]` for GET/PUT/DELETE).
-        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy for Text and Image types (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields.
+        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy for Text and Image types (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields. **Note:** Persistent errors encountered while attempting to update `/routes/creatives/new/+page.svelte` for Phase 3/4 integration (Video/LP types, Theme linking). Manual debugging required.
+    *   **Themes & Video Templates (API & Placeholders):**
+        *   Full CRUD API endpoints implemented for Themes (`/api/themes`, `/api/themes/[id]`).
+        *   Full CRUD API endpoints implemented for Video Templates (`/api/video-templates`, `/api/video-templates/[id]`).
+        *   Database schema updated to include `updatedAt` fields for `themes` and `videoTemplates`.
+        *   Placeholder frontend pages created for managing these entities (`/settings/themes`, `/settings/video-templates`).
 *   **Development Strategy:**
     *   Consistently using a Single-Page Application (SPA) strategy with client-side `fetch` calls to dedicated API endpoints and Svelte 5 Runes for state management.
+    *   `shadcn-svelte` initialized for UI components. **Note:** Header navigation update (`/lib/components/layout/Header.svelte`) failed due to persistent errors; component reverted to original state. Manual debugging required.
 
 ## 3. Phased Development Plan
 

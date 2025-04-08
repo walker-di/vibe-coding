@@ -6,8 +6,8 @@
 		{ href: '/', label: 'Home' },
 		{ href: '/campaigns', label: 'Campaigns' },
 		{ href: '/personas', label: 'Personas' },
-		{ href: '/creatives', label: 'Creatives' }
-		// { href: '/settings', label: 'Settings' } // Add later
+		{ href: '/creatives', label: 'Creatives' },
+		{ href: '/settings', label: 'Settings' } // Added Settings link
 	];
 
 	// Reactive variable to check the current path

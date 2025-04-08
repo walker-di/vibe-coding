@@ -64,6 +64,7 @@ export const themes = sqliteTable('themes', {
     associatedPainPoint: text('associated_pain_point'), // Pain Point from Image 9
     // Potential future fields: targetIndustry, associatedBenefit
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }), // Handle updates in app logic
 });
 
 // Added in Phase 4
@@ -79,6 +80,7 @@ export const videoTemplates = sqliteTable('video_templates', {
     resolution: text('resolution'), // "解像度" (Image 12)
     previewUrl: text('preview_url'), // Link to preview image/video
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }), // Handle updates in app logic
 });
 
 
