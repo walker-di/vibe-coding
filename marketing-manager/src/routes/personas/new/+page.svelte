@@ -4,21 +4,19 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	// Use import type for schema enums, define locally
-	import type { ageRanges as ageRangesType, genders as gendersType } from '$lib/server/db/schema';
+	import { ageRanges, genders } from '$lib/components/constants'; // Import constants
 	import { AlertCircle, User, Sparkles } from 'lucide-svelte'; // Added Sparkles
 
-	// Define enums locally
-	const ageRangesList = ['Unspecified', '10s', '20s', '30s', '40s', '50s', '60s', '70+', 'Custom'] as const;
-	const gendersList = ['Male', 'Female'] as const; // Removed 'Unspecified'
+	// Filter genders for UI display (keep Unspecified out of radio buttons)
+	const gendersList = genders.filter(g => g !== 'Unspecified');
 
 	// --- State for form inputs ---
 	let name = $state('');
 	let personaTitle = $state('');
 	let imageUrl = $state('');
-	let ageRangeSelection = $state<typeof ageRangesList[number] | ''>(''); // Use local list type
+	let ageRangeSelection = $state<typeof ageRanges[number] | ''>(''); // Use imported type
 	let ageRangeCustom = $state('');
-	let gender = $state<typeof gendersList[number] | ''>(''); // Use local list type
+	let gender = $state<typeof genders[number] | ''>(''); // Use imported type
 	let location = $state('');
 	let jobTitle = $state('');
 	let incomeLevel = $state('');
@@ -230,7 +228,7 @@
 			<div>
 				<Label class={formErrors.ageRangeSelection || formErrors.ageRangeCustom ? 'text-red-600' : ''}>Age Range</Label>
 				<div class="mt-1 space-y-2">
-					{#each ageRangesList as range}
+					{#each ageRanges as range}
 						<label class="flex items-center">
 							<input type="radio" name="ageRangeSelection" value={range} bind:group={ageRangeSelection} disabled={submitting} class="mr-2" />
 							{range}

@@ -5,7 +5,7 @@
 	import Input from '$lib/components/ui/input/Input.svelte';
 	import Label from '$lib/components/ui/label/Label.svelte';
 	import Textarea from '$lib/components/ui/textarea/Textarea.svelte';
-	import type { products } from '$lib/server/db/schema';
+	import type { products } from '$lib/server/db/schema'; // Use type import
 
 	type Product = typeof products.$inferSelect;
 

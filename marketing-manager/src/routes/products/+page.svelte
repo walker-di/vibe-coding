@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { products } from '$lib/server/db/schema'; // Import the type
+	import type { products } from '$lib/server/db/schema'; // Use type import
 	import Button from '$lib/components/ui/button/Button.svelte';
 	import { goto } from '$app/navigation';
 

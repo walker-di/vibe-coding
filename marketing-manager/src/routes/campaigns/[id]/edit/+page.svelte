@@ -7,22 +7,21 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	// Use import type for schema
 	import type { campaigns as campaignsTable } from '$lib/server/db/schema';
+	import { campaignStatuses } from '$lib/components/constants'; // Import statuses from constants
 	import { ArrowLeft, AlertCircle } from 'lucide-svelte';
 	import type { InferSelectModel } from 'drizzle-orm';
 
 	type Campaign = InferSelectModel<typeof campaignsTable>;
-	// Define statuses locally
-	const campaignStatusesList = ['Draft', 'Active', 'Completed', 'Archived'] as const;
-	type CampaignStatus = typeof campaignStatusesList[number];
+	// Removed local definition of campaignStatusesList and CampaignStatus type
 
 	// --- State ---
-	let campaignId: number | null = null;
+	let campaignId: number | null = $state(null);
 	let campaignName = $state('');
 	let campaignGoal = $state('');
 	let campaignStartDate = $state<string | null>(null);
 	let campaignEndDate = $state<string | null>(null);
 	let campaignTargetPlatforms = $state('');
-	let campaignStatus = $state<CampaignStatus>(campaignStatusesList[0]); // Use local type/list
+	let campaignStatus = $state<typeof campaignStatuses[number]>('Draft'); // Use imported type and default
 
 	let isLoading = $state(true);
 	let isSubmitting = $state(false);
@@ -63,7 +62,7 @@
 				campaignStartDate = data.startDate ? new Date(data.startDate).toISOString().split('T')[0] : null;
 				campaignEndDate = data.endDate ? new Date(data.endDate).toISOString().split('T')[0] : null;
 				campaignTargetPlatforms = data.targetPlatforms ?? '';
-				campaignStatus = data.status ?? campaignStatusesList[0]; // Use local list default
+				campaignStatus = data.status ?? campaignStatuses[0]; // Use imported list default
 
 			} catch (e: any) {
 				console.error('Failed to fetch campaign data:', e);
@@ -258,7 +257,7 @@
 					disabled={isSubmitting}
 					class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.status ? 'border-red-500' : ''}`}
 				>
-					{#each campaignStatusesList as statusOption}
+					{#each campaignStatuses as statusOption}
 						<option value={statusOption}>{statusOption}</option>
 					{/each}
 				</select>

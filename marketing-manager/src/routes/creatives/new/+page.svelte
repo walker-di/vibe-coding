@@ -6,9 +6,10 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { AlertCircle, FileText, Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Heart, Zap, Smile, Wind, Brain } from 'lucide-svelte'; // Added icons
 	import CardSelector from '$lib/components/shared/CardSelector.svelte'; // Import CardSelector
-	// Import constants and types from the new shared file
-	import { creativeTypes, videoPlatforms, videoFormats, videoEmotions, appealFeatures } from '$lib/constants';
-	import type { CreativeType, VideoPlatform, VideoFormat, VideoEmotion, AppealFeature } from '$lib/constants';
+	// Import constants and types from correct files
+	import { appealFeatures } from '$lib/constants'; // Keep appealFeatures here
+	import type { CreativeType, VideoPlatform, VideoFormat, VideoEmotion, AppealFeature } from '$lib/constants'; // Keep types here
+	import { creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/components/constants'; // Import only values from db constants
 	// Import types needed for dropdown data (server types are okay here as they are only types)
 	import type { campaigns, personas, themes, videoTemplates } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import type { products } from '$lib/server/db/schema';
+	import type { products } from '$lib/server/db/schema'; // Use type import
 	import Button from '$lib/components/ui/button/Button.svelte';
 
 	type Product = typeof products.$inferSelect;

@@ -7,9 +7,10 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { AlertCircle, ArrowLeft, FileText, Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Heart, Zap, Smile, Wind, Brain } from 'lucide-svelte'; // Added icons
 	import CardSelector from '$lib/components/shared/CardSelector.svelte'; // Import CardSelector
-	// Import constants and types from the new shared file
-	import { creativeTypes, videoPlatforms, videoFormats, videoEmotions, appealFeatures } from '$lib/constants';
-	import type { CreativeType, VideoPlatform, VideoFormat, VideoEmotion, AppealFeature } from '$lib/constants';
+	// Import constants and types from correct files
+	import { appealFeatures } from '$lib/constants'; // Keep appealFeatures here
+	import type { CreativeType, VideoPlatform, VideoFormat, VideoEmotion, AppealFeature } from '$lib/constants'; // Keep types here
+	import { creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/components/constants'; // Import only values from db constants
 	// Import types
 	import type {
 		creatives as creativesTable,
@@ -155,7 +156,7 @@
 					videoPlatform = data.videoData.platform ?? '';
 					videoFormat = data.videoData.format ?? '';
 					videoDuration = data.videoData.duration ?? '';
-					videoAppealFeature = data.videoData.appealFeature ?? '';
+					videoAppealFeature = (data.videoData.appealFeature as AppealFeature) ?? ''; // Assert type
 					videoEmotion = data.videoData.emotion ?? '';
 					videoTemplateId = data.videoData.templateId ?? '';
 				} else if (data.type === 'lp' && data.lpData) {
@@ -466,7 +467,7 @@
 						<CardSelector
 							label="Appeal Feature (Optional)"
 							id="videoAppealFeature"
-							options={appealFeatures.map(f => ({ value: f, label: f }))}
+							options={appealFeatures.map((f: AppealFeature) => ({ value: f, label: f }))}
 							selectedValue={videoAppealFeature}
 							onSelect={(value) => videoAppealFeature = value as AppealFeature}
 							disabled={isSubmitting}

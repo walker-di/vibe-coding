@@ -5,7 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea'; // Use Textarea for platforms
 	import { AlertCircle } from 'lucide-svelte';
-	import { videoFormats, videoPlatforms } from '$lib/constants'; // Import enums for selects
+	import { videoFormats, videoPlatforms } from '$lib/components/constants'; // Import enums for selects
 
 	// State for form fields
 	let templateCode = $state('');

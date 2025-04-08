@@ -6,7 +6,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { AlertCircle } from 'lucide-svelte';
-	import { videoFormats, videoPlatforms } from '$lib/constants';
+	import { videoFormats, videoPlatforms } from '$lib/components/constants'; // Updated path
 	import type { videoTemplates as videoTemplatesTable } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
 

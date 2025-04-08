@@ -5,19 +5,15 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import {
-		personas as personasTable,
-		ageRanges,
-		genders,
-		type campaignStatuses
-	} from '$lib/server/db/schema';
+	import { ageRanges, genders } from '$lib/components/constants'; // Import values from constants
+	import { type personas as personasTable } from '$lib/server/db/schema'; // Import types from schema (removed campaignStatuses type)
 	import { ArrowLeft, AlertCircle, User } from 'lucide-svelte';
 	import type { InferSelectModel } from 'drizzle-orm';
 
 	type Persona = InferSelectModel<typeof personasTable>;
 
 	// --- State ---
-	let personaId: number | null = null;
+	let personaId: number | null = $state(null);
 
 	// Form field states - initialize empty, populate after fetch
 	let name = $state('');

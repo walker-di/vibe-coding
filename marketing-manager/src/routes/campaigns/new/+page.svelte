@@ -4,7 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { campaignStatuses } from '$lib/server/db/schema'; // Import statuses for select options
+	import { campaignStatuses } from '$lib/components/constants'; // Import statuses from constants
 	import { AlertCircle } from 'lucide-svelte';
 
 	// --- State Management with Runes ---
@@ -13,7 +13,7 @@
 	let campaignStartDate = $state<string | null>(null); // Store as string for date input
 	let campaignEndDate = $state<string | null>(null);
 	let campaignTargetPlatforms = $state('');
-	let campaignStatus = $state(campaignStatuses[0]); // Default to 'Draft'
+	let campaignStatus = $state('Draft'); // Default to 'Draft'
 
 	let submitting = $state(false);
 	let formErrors = $state<Record<string, string | undefined>>({}); // For field-specific and server errors
