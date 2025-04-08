@@ -312,17 +312,31 @@
 				{#if formErrors.textData?.callToAction}<p class="mt-1 text-sm text-red-600">{formErrors.textData.callToAction}</p>{/if}
 			</div>
 			<!-- Added Text Appeal/Emotion/Platform -->
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div>
-					<Label for="textAppealFeature" class={formErrors.textData?.appealFeature ? 'text-red-600' : ''}>Appeal Feature (Optional)</Label>
-					<Input id="textAppealFeature" name="textAppealFeature" type="text" maxlength={150} bind:value={textAppealFeature} disabled={isSubmitting} class={formErrors.textData?.appealFeature ? 'border-red-500' : ''} />
-					{#if formErrors.textData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.textData.appealFeature}</p>{/if}
-				</div>
-				<div>
-					<Label for="textEmotion" class={formErrors.textData?.emotion ? 'text-red-600' : ''}>Stimulating Emotion (Optional)</Label>
-					<Input id="textEmotion" name="textEmotion" type="text" maxlength={100} bind:value={textEmotion} disabled={isSubmitting} class={formErrors.textData?.emotion ? 'border-red-500' : ''} />
-					{#if formErrors.textData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.textData.emotion}</p>{/if}
-				</div>
+			<div class="space-y-2">
+				<CardSelector
+					label="Appeal Feature (Optional)"
+					id="textAppealFeature"
+					options={appealFeatures.map(f => ({ value: f, label: f }))}
+					selectedValue={textAppealFeature}
+					onSelect={(value) => textAppealFeature = value as AppealFeature}
+					disabled={isSubmitting}
+					error={!!formErrors.textData?.appealFeature}
+					gridCols="grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
+				/>
+				{#if formErrors.textData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.textData.appealFeature}</p>{/if}
+			</div>
+			<div class="space-y-2">
+				<CardSelector
+					label="Stimulating Emotion (Optional)"
+					id="textEmotion"
+					options={videoEmotions.map(e => ({ value: e, label: e, icon: Brain }))}
+					selectedValue={textEmotion}
+					onSelect={(value) => textEmotion = value as VideoEmotion}
+					disabled={isSubmitting}
+					error={!!formErrors.textData?.emotion}
+					gridCols="grid-cols-2 sm:grid-cols-3"
+				/>
+				{#if formErrors.textData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.textData.emotion}</p>{/if}
 			</div>
 			<div>
 				<Label for="textPlatformNotes" class={formErrors.textData?.platformNotes ? 'text-red-600' : ''}>Platform Notes (Optional)</Label>
@@ -347,17 +361,31 @@
 				{#if formErrors.imageData?.altText}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.altText}</p>{/if}
 			</div>
 			<!-- Added Image Appeal/Emotion/Platform -->
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div>
-					<Label for="imageAppealFeature" class={formErrors.imageData?.appealFeature ? 'text-red-600' : ''}>Appeal Feature (Optional)</Label>
-					<Input id="imageAppealFeature" name="imageAppealFeature" type="text" maxlength={150} bind:value={imageAppealFeature} disabled={isSubmitting} class={formErrors.imageData?.appealFeature ? 'border-red-500' : ''} />
-					{#if formErrors.imageData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.appealFeature}</p>{/if}
-				</div>
-				<div>
-					<Label for="imageEmotion" class={formErrors.imageData?.emotion ? 'text-red-600' : ''}>Stimulating Emotion (Optional)</Label>
-					<Input id="imageEmotion" name="imageEmotion" type="text" maxlength={100} bind:value={imageEmotion} disabled={isSubmitting} class={formErrors.imageData?.emotion ? 'border-red-500' : ''} />
-					{#if formErrors.imageData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.emotion}</p>{/if}
-				</div>
+			<div class="space-y-2">
+				<CardSelector
+					label="Appeal Feature (Optional)"
+					id="imageAppealFeature"
+					options={appealFeatures.map(f => ({ value: f, label: f }))}
+					selectedValue={imageAppealFeature}
+					onSelect={(value) => imageAppealFeature = value as AppealFeature}
+					disabled={isSubmitting}
+					error={!!formErrors.imageData?.appealFeature}
+					gridCols="grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
+				/>
+				{#if formErrors.imageData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.appealFeature}</p>{/if}
+			</div>
+			<div class="space-y-2">
+				<CardSelector
+					label="Stimulating Emotion (Optional)"
+					id="imageEmotion"
+					options={videoEmotions.map(e => ({ value: e, label: e, icon: Brain }))}
+					selectedValue={imageEmotion}
+					onSelect={(value) => imageEmotion = value as VideoEmotion}
+					disabled={isSubmitting}
+					error={!!formErrors.imageData?.emotion}
+					gridCols="grid-cols-2 sm:grid-cols-3"
+				/>
+				{#if formErrors.imageData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.emotion}</p>{/if}
 			</div>
 			<div>
 				<Label for="imagePlatformNotes" class={formErrors.imageData?.platformNotes ? 'text-red-600' : ''}>Platform Notes (Optional)</Label>
