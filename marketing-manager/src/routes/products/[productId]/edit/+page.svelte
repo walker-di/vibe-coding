@@ -24,43 +24,44 @@
 	let loading = $state<boolean>(true);
 	let submitting = $state<boolean>(false);
 	let deleting = $state<boolean>(false);
-	let productId = $state<number | null>(null);
+	// let productId = $state<number | null>(null); // No longer needed
 
-	// Effect 1: Update productId state from route params and handle invalid ID
+	// Single effect to handle route parameter changes and data fetching
 	$effect(() => {
 		const idParam = $page.params.productId;
-		if (!idParam) {
-			productId = null;
-			loading = true;
-			error = null;
-			return;
-		}
-		const parsedId = parseInt(idParam, 10);
-		if (!isNaN(parsedId)) {
-			if (productId !== parsedId) {
-				productId = parsedId;
-				error = null;
-			}
-		} else {
-			productId = null;
-			error = 'Invalid Product ID in URL.';
-			loading = false;
-		}
-	});
+		console.log('Edit Effect: idParam changed to', idParam); // Debug log
 
-	// Effect 2: Fetch data when productId state changes to a valid number
-	$effect(() => {
-		const currentId = productId;
-		if (currentId !== null) {
-			loading = true;
+		// Reset state for new fetch attempt or invalid ID
+		formData.id = null; // Reset form ID
+		error = null;
+		loading = true; // Assume loading until fetch completes or fails
+
+		if (!idParam) {
+			console.log('Edit Effect: No idParam found.'); // Debug log
+			error = 'Product ID missing from URL.';
+			loading = false;
+			return; // Stop processing if no ID
+		}
+
+		const parsedId = parseInt(idParam, 10);
+
+		if (isNaN(parsedId)) {
+			console.log('Edit Effect: Invalid idParam format:', idParam); // Debug log
+			error = 'Invalid Product ID format in URL.';
+			loading = false;
+		} else {
+			console.log('Edit Effect: Valid productId parsed:', parsedId); // Debug log
+			// Valid ID, trigger fetch
 			(async () => {
-				await fetchProduct(currentId);
+				await fetchProduct(parsedId);
 			})();
 		}
 	});
 
+
 	async function fetchProduct(id: number) {
-		error = null;
+		console.log('Edit fetchProduct called for', id); // Debug log
+		// error = null; // Resetting error in $effect now
 		try {
 			const response = await fetch(`/api/products/${id}`);
 			if (response.status === 404) throw new Error('Product not found.');

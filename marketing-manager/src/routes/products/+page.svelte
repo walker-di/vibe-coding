@@ -33,9 +33,6 @@
 		goto(`/products/${id}/edit`);
 	}
 
-	function createNewProduct() {
-		goto('/products/new');
-	}
 </script>
 
 <svelte:head>
@@ -45,7 +42,7 @@
 <div class="container mx-auto p-4 md:p-8">
 	<div class="flex justify-between items-center mb-6">
 		<h1 class="text-2xl font-bold">Products</h1>
-		<Button onclick={createNewProduct}>Create New Product</Button>
+		<Button href='/products/new' >Create New Product</Button>
 	</div>
 
 	{#if loading}

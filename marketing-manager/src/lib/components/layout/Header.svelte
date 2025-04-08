@@ -8,6 +8,7 @@ import { Button } from '$lib/components/ui/button'; // Import Button
 		{ href: '/campaigns', label: 'Campaigns' },
 		{ href: '/personas', label: 'Personas' },
 		{ href: '/creatives', label: 'Creatives' },
+		{ href: '/products', label: 'Products' }, // Add Products link
 		{ href: '/settings', label: 'Settings' } // Added Settings link
 	];
 

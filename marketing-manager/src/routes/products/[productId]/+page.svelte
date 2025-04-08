@@ -10,69 +10,43 @@
 	let product = $state<Product | null>(null);
 	let error = $state<string | null>(null);
 	let loading = $state<boolean>(true);
-	let productId = $state<number | null>(null);
+	// let productId = $state<number | null>(null); // No longer needed as separate state
 
-	// Effect 1: Update productId state from route params and handle invalid ID
+	// Single effect to handle route parameter changes and data fetching
 	$effect(() => {
 		const idParam = $page.params.productId;
-		console.log('Effect 1: idParam changed to', idParam); // Debug log
+		console.log('Effect: idParam changed to', idParam); // Debug log
+
+		// Reset state for new fetch attempt or invalid ID
+		product = null;
+		error = null;
+		loading = true; // Assume loading until fetch completes or fails
 
 		if (!idParam) {
-			// Handle initial load or missing param case
-			productId = null;
-			loading = true; // Assume loading until we know more
-			error = null;
-            product = null;
-			return;
+			console.log('Effect: No idParam found.'); // Debug log
+			error = 'Product ID missing from URL.';
+			loading = false;
+			return; // Stop processing if no ID
 		}
 
 		const parsedId = parseInt(idParam, 10);
-		if (!isNaN(parsedId)) {
-			// Valid ID parsed
-			if (productId !== parsedId) { // Update state only if changed
-				console.log('Effect 1: Setting valid productId', parsedId); // Debug log
-				productId = parsedId;
-				error = null; // Clear potential previous error
-				// Loading will be set by Effect 2
-			}
+
+		if (isNaN(parsedId)) {
+			console.log('Effect: Invalid idParam format:', idParam); // Debug log
+			error = 'Invalid Product ID format in URL.';
+			loading = false;
 		} else {
-			// Invalid ID format
-			console.log('Effect 1: Setting invalid productId (null)'); // Debug log
-			productId = null;
-			error = 'Invalid Product ID in URL.';
-			loading = false; // Stop loading
-			product = null; // Clear product data
+			console.log('Effect: Valid productId parsed:', parsedId); // Debug log
+			// Valid ID, trigger fetch
+			(async () => {
+				await fetchProduct(parsedId);
+			})();
 		}
 	});
 
-	// Effect 2: Fetch data when productId state changes to a valid number
-	$effect(() => {
-		const currentId = productId; // Read the state variable
-		console.log('Effect 2: productId state is', currentId); // Debug log
-
-		if (currentId !== null) {
-			console.log('Effect 2: Triggering fetch for', currentId); // Debug log
-			loading = true; // Set loading before fetch
-			(async () => {
-				await fetchProduct(currentId);
-			})();
-		} else {
-            // If productId becomes null (e.g., invalid ID set by Effect 1),
-            // ensure loading stops if it wasn't already stopped by Effect 1 setting an error.
-            // Also clear product data if not already cleared.
-            if (!error) { // Only adjust if Effect 1 didn't set an error
-                 product = null;
-                 // loading = false; // Let fetchProduct handle final loading state
-            }
-        }
-	});
-
-
 	async function fetchProduct(id: number) {
 		console.log('fetchProduct called for', id); // Debug log
-		// error = null; // Clear previous fetch errors
-		// product = null; // Clear previous product data
-		// loading = true; // Set loading true at the start of fetch
+		// State reset is now handled in the $effect before calling fetchProduct
 		try {
 			const response = await fetch(`/api/products/${id}`);
 			if (response.status === 404) {
@@ -91,9 +65,12 @@
 	}
 
 	function editProduct() {
-		if (productId) {
-			goto(`/products/${productId}/edit`);
-		}
+        // Use the parsed ID directly from the page store params if product exists
+		if (product && $page.params.productId) {
+			goto(`/products/${$page.params.productId}/edit`);
+		} else {
+            console.warn("Attempted to edit product without a valid product loaded or ID in params.");
+        }
 	}
 
     function goToList() {
@@ -181,11 +158,24 @@
                 <h2 class="text-2xl font-semibold mb-4">Associated Personas</h2>
                 <p class="text-gray-500 italic">(Persona list will be implemented here)</p>
                 <!-- TODO: Fetch and display personas linked to this product -->
-                 <Button onclick={() => goto(`/products/${productId}/personas/new`)} class="mt-2">Create New Persona</Button>
+                 {#if product} <!-- Only show button if product loaded -->
+                    <Button
+                        onclick={() => {
+                            if (product) { // Add null check inside handler
+                                goto(`/products/${product.id}/personas/new`);
+                            }
+                        }}
+                        class="mt-2"
+                    >
+                        Create New Persona
+                    </Button>
+                 {/if}
             </div>
 		</div>
-	{:else}
-		<p>Product data could not be loaded.</p>
-         <Button onclick={goToList} variant="outline">Back to Products List</Button>
+	{:else if !loading && !error} <!-- Added condition to avoid showing this when loading or error already shown -->
+		<div class="text-center">
+            <p class="text-gray-500 mb-4">Product data could not be loaded or does not exist.</p>
+            <Button onclick={goToList} variant="outline">Back to Products List</Button>
+        </div>
 	{/if}
 </div>

@@ -38,9 +38,13 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 *   **UI Refinements (Should Haves - Pre-Refactor):**
     *   Persona forms (`new`, `edit`): Gender input UI updated to remove 'Unspecified' option.
     *   Creative forms (`new`, `edit`): Video-specific fields use `CardSelector`.
-*   **Development Strategy:**
+    *   **Development Strategy:**
     *   Consistently using a Single-Page Application (SPA) strategy with client-side `fetch` calls to dedicated API endpoints and Svelte 5 Runes for state management.
     *   `shadcn-svelte` initialized for UI components.
+*   **Refactoring Progress (Product -> Persona -> Creative Hierarchy):**
+    *   Database schema updated and migrated. **(Completed)**
+    *   Product API endpoints implemented. **(Completed)**
+    *   Product Frontend routes (`/products/...`) implemented and refactored (View/Edit pages use simplified `$effect` logic). **(Completed)**
 
 ## **NEW: Refactoring Plan: Product -> Persona -> Creative Hierarchy**
 
@@ -69,10 +73,10 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
         *   `PUT /api/creatives/[creativeId]` (Disallow changing `personaId`).
         *   `DELETE /api/creatives/[creativeId]`
 3.  **Frontend Routes & UI (Fully Nested):**
-    *   **Products:** Create new CRUD pages under `/products/...`. The detail page (`/products/[productId]`) will display product info (inspired by the second image) and list/link to associated Personas. **(Completed)**
+    *   **Products:** Create new CRUD pages under `/products/...`. The detail page (`/products/[productId]`) and edit page (`/products/[productId]/edit`) display product info and allow editing. View/Edit pages refactored to use simplified `$effect` logic. **(Completed)**
     *   **Personas:** Move existing routes to `/products/[productId]/personas/...`. Update data loading to use `productId`. Remove the Product selection dropdown from forms. The detail page (`.../[personaId]`) will list/link to associated Creatives. *(Next Step)*
     *   **Creatives:** Move existing routes to `/products/[productId]/personas/[personaId]/creatives/...`. Update data loading to use `personaId`. Remove the Persona selection dropdown from forms. API calls will target `/api/creatives`. *(Following Personas)*
-    *   **Navigation:** Update the main header navigation to feature `/products`. Implement breadcrumbs for nested routes.
+    *   **Navigation:** Update the main header navigation to feature `/products`. Implement breadcrumbs for nested routes. *(Partially done - Header updated, breadcrumbs pending)*
 4.  **Update `README.md`:** After implementation, update this `README.md` file again to reflect the completed refactoring.
 
 ---

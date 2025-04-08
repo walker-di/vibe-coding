@@ -17,49 +17,30 @@
 
 	type Props = AnchorProps | ButtonProps;
 
-	let props: Props = $props();
+	// Capture all props
+	let {href, class: className, children, ...restProps}: Props = $props();
 
-	// Use $derived for computed values
-	const isAnchor = $derived(!!props.href);
-	const componentType = $derived(isAnchor ? 'a' : 'button');
+	// Derive component type and common props
+	const isAnchor = $derived(!!href);
 
-	const { children, class: className, ...rest } = $derived.by(() => {
-		const { children, class: cn, ...restAll } = props;
-		return { children, class: cn, rest: restAll };
-	});
-
-	// Correctly type and filter restProps for each case
-	const anchorRestProps = $derived(() => {
-		if (!isAnchor) return {};
-		// Ensure only valid anchor props are included
-		const { type: _t, ...validRest } = rest as HTMLAnchorAttributes;
-		return validRest;
-	});
-
-	const buttonRestProps = $derived(() => {
-		if (isAnchor) return {};
-		// Ensure only valid button props are included (excluding type which is handled separately)
-		const { type: _t, ...validRest } = rest as HTMLButtonAttributes;
-		return validRest;
-	});
-
-	// Removed buttonTypeAttr derivation, will handle in template
+	// Derive button type separately
+	const buttonType = $derived(isAnchor ? undefined : (restProps as ButtonProps).type ?? 'button');
 
 </script>
 
-{#if componentType === 'a'}
+{#if isAnchor}
 	<a
-		href={props.href}
+		href={href}
 		class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 {className ?? ''}"
-		{...anchorRestProps}
+		{...restProps}
 	>
 		{@render children()}
 	</a>
 {:else}
 	<button
 		class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 {className ?? ''}"
-		{...buttonRestProps}
-		type={(props as ButtonProps).type ?? 'button'}
+		type={buttonType}
+		{...restProps}
 	>
 		{@render children()}
 	</button>
