@@ -5,8 +5,9 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { ageRanges, genders } from '$lib/components/constants'; // Import constants
-	import { AlertCircle, User, Sparkles } from 'lucide-svelte';
+	import { AlertCircle, User } from 'lucide-svelte'; // Removed Sparkles
 	import type { personas } from '$lib/server/db/schema'; // Use type import
+	import AiGenerationDialog from '$lib/components/shared/AiGenerationDialog.svelte'; // Import the dialog
 
 	type PersonaInput = Omit<typeof personas.$inferInsert, 'id' | 'productId' | 'createdAt' | 'updatedAt'>; // Base type for form data
 
@@ -53,63 +54,42 @@
 	let isGenerated = $state(personaData?.isGenerated ?? false);
 
 	let submitting = $state(false);
-	let generating = $state(false);
+	// Removed generating state
 	let formErrors = $state<Record<string, string | undefined>>({});
-	let generationError = $state<string | null>(null);
+	// Removed generationError state
+	let aiDialogOpen = $state(false); // State for dialog visibility
 
 	// Determine if we are in edit mode
 	const isEditMode = $derived(!!personaData);
 
-	// --- AI Generation Logic ---
-	async function handleGenerate() {
-		generating = true;
-		generationError = null;
-		formErrors = {};
+	// --- AI Dialog Handler ---
+	function handleAiGenerated(generatedData: Partial<PersonaInput>) {
+		// Update form fields with generated data, handling potential null/undefined
+		// Only update fields that are actually present in the response
+		if (generatedData.name !== undefined) name = generatedData.name;
+		if (generatedData.personaTitle !== undefined) personaTitle = generatedData.personaTitle ?? '';
+		if (generatedData.imageUrl !== undefined) imageUrl = generatedData.imageUrl ?? '';
+		// Don't update age/gender from AI as they might be inputs to the generation
+		// if (generatedData.ageRangeSelection !== undefined) ageRangeSelection = generatedData.ageRangeSelection ?? '';
+		// if (generatedData.ageRangeCustom !== undefined) ageRangeCustom = generatedData.ageRangeCustom ?? '';
+		// if (generatedData.gender !== undefined) gender = generatedData.gender ?? '';
+		if (generatedData.location !== undefined) location = generatedData.location ?? '';
+		if (generatedData.jobTitle !== undefined) jobTitle = generatedData.jobTitle ?? '';
+		if (generatedData.incomeLevel !== undefined) incomeLevel = generatedData.incomeLevel ?? '';
+		if (generatedData.personalityTraits !== undefined) personalityTraits = generatedData.personalityTraits ?? '';
+		if (generatedData.valuesText !== undefined) valuesText = generatedData.valuesText ?? '';
+		if (generatedData.spendingHabits !== undefined) spendingHabits = generatedData.spendingHabits ?? '';
+		if (generatedData.interestsHobbies !== undefined) interestsHobbies = generatedData.interestsHobbies ?? '';
+		if (generatedData.lifestyle !== undefined) lifestyle = generatedData.lifestyle ?? '';
+		if (generatedData.needsPainPoints !== undefined) needsPainPoints = generatedData.needsPainPoints ?? '';
+		if (generatedData.goalsExpectations !== undefined) goalsExpectations = generatedData.goalsExpectations ?? '';
+		if (generatedData.backstory !== undefined) backstory = generatedData.backstory ?? '';
+		if (generatedData.purchaseProcess !== undefined) purchaseProcess = generatedData.purchaseProcess ?? '';
+		if (generatedData.isGenerated !== undefined) isGenerated = generatedData.isGenerated ?? true; // Assume generated if AI touched it
 
-		const generationPayload = {
-			ageRange: ageRangeSelection || null,
-			gender: gender || null,
-			productId: productId // Pass product ID if available
-		};
-
-		try {
-			const response = await fetch(generateApiUrl, { // Use prop
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(generationPayload)
-			});
-
-			const result = await response.json();
-
-			if (!response.ok) {
-				throw new Error(result.message || 'Failed to generate persona details.');
-			}
-
-			// Populate form fields
-			name = result.name || '';
-			personaTitle = result.personaTitle || '';
-			imageUrl = result.imageUrl || '';
-			location = result.location || '';
-			jobTitle = result.jobTitle || '';
-			incomeLevel = result.incomeLevel || '';
-			personalityTraits = result.personalityTraits || '';
-			valuesText = result.valuesText || '';
-			spendingHabits = result.spendingHabits || '';
-			interestsHobbies = result.interestsHobbies || '';
-			lifestyle = result.lifestyle || '';
-			needsPainPoints = result.needsPainPoints || '';
-			goalsExpectations = result.goalsExpectations || '';
-			backstory = result.backstory || '';
-			purchaseProcess = result.purchaseProcess || '';
-			isGenerated = true;
-
-		} catch (e: any) {
-			console.error('Persona generation error:', e);
-			generationError = e.message || 'An error occurred during generation.';
-		} finally {
-			generating = false;
-		}
+		// aiDialogOpen is automatically set to false by the child component on success
 	}
+
 
 	// --- Form Submission Logic ---
 	async function handleSubmit() {
@@ -205,25 +185,7 @@
 {/if}
 
 <form onsubmit={handleSubmit} class="space-y-8">
-	{#if !isEditMode} <!-- Only show AI generation on create -->
-		<div class="rounded border border-blue-200 bg-blue-50 p-4">
-			<h3 class="mb-2 text-base font-semibold text-blue-800">AI Assistance</h3>
-			<p class="mb-3 text-sm text-blue-700">
-				Optionally provide Age Range and Gender below, then click Generate to get AI-suggested details for the rest of the fields. You can edit them before saving.
-			</p>
-			<Button type="button" onclick={handleGenerate} disabled={generating || submitting || disableForm} variant="outline">
-				<Sparkles class="mr-2 h-4 w-4" />
-				{#if generating}
-					Generating...
-				{:else}
-					Generate Persona Details
-				{/if}
-			</Button>
-			{#if generationError}
-				<p class="mt-2 text-sm text-red-600">{generationError}</p>
-			{/if}
-		</div>
-	{/if}
+	<!-- Removed old AI Assistance section -->
 
 	<!-- Section 1: Basic Info & Image -->
 	<section class="space-y-4 rounded border p-4">
@@ -362,6 +324,29 @@
 
 	<!-- Actions -->
 	<div class="flex justify-end gap-2 pt-4">
+		<!-- AI Trigger Button -->
+		<Button
+			variant="secondary"
+			type="button"
+			onclick={() => aiDialogOpen = true}
+			disabled={submitting || disableForm}
+		>
+			AI
+		</Button>
+		<!-- Conditionally render AiGenerationDialog only when open -->
+		{#if aiDialogOpen}
+			<AiGenerationDialog
+				bind:open={aiDialogOpen}
+				apiUrl={generateApiUrl}
+				currentData={{ name, personaTitle, imageUrl, ageRangeSelection, ageRangeCustom, gender, location, jobTitle, incomeLevel, personalityTraits, valuesText, spendingHabits, interestsHobbies, lifestyle, needsPainPoints, goalsExpectations, backstory, purchaseProcess }}
+				onGenerated={handleAiGenerated}
+				disabled={submitting || disableForm}
+				dialogTitle="Generate Persona Details with AI"
+				dialogDescription="Enter instructions for the AI to fill out or modify the persona fields. Be specific (e.g., 'Generate a persona for a budget-conscious student interested in sustainable fashion'). The AI will use the current form data as context."
+				instructionPlaceholder="e.g., Create a detailed backstory for this persona..."
+			/>
+		{/if}
+
 		<Button href={cancelUrl} variant="outline" disabled={submitting}>Cancel</Button> <!-- Use prop -->
 		<Button type="submit" disabled={submitting || disableForm}>
 			{#if submitting}

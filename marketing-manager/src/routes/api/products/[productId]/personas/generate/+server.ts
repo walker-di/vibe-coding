@@ -1,70 +1,165 @@
-import { json, error as kitError } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-import { z } from 'zod';
-import { ageRanges, genders } from '$lib/components/constants'; // Import enums from correct location
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { json, error } from '@sveltejs/kit';
+import type { RequestHandler, RequestEvent } from './$types';
+import { env } from '$env/dynamic/private';
+import { ageRanges, genders } from '$lib/components/constants'; // Import constants for schema if needed
+import { db } from '$lib/server/db'; // Import DB client
+import { products } from '$lib/server/db/schema'; // Import products schema
+import { eq } from 'drizzle-orm'; // Import eq operator
 
-// Optional schema for generation inputs (can be expanded later)
-const generationInputSchema = z.object({
-	ageRange: z.enum(ageRanges).nullable().optional(),
-	gender: z.enum(genders).nullable().optional()
-	// Add other potential inputs like industry, core_need etc. here
-}).optional(); // Allow empty body for now
+const GEMINI_API_KEY = env.GOOGLE_API_KEY; // Use env import
 
-export const POST: RequestHandler = async ({ request, params }) => {
-	const productIdParam = params.productId;
+if (!GEMINI_API_KEY) {
+	console.error('GOOGLE_API_KEY environment variable is not set.');
+	// Consider throwing an error here if the API is critical
+}
+
+// Define the JSON schema for the persona data based on PersonaForm.svelte fields
+// Note: Enum types aren't directly supported in Gemini's schema, use STRING.
+// We rely on the prompt to guide the AI towards valid enum values.
+const personaSchema = {
+	type: 'OBJECT',
+	properties: {
+		name: { type: 'STRING', description: 'Persona name (required)', nullable: false },
+		personaTitle: { type: 'STRING', description: 'A descriptive title for the persona (e.g., "Tech-Savvy Early Adopter").' },
+		// imageUrl: { type: 'STRING', description: 'URL for a representative persona image (optional).' }, // Often better generated separately or manually added
+		// ageRangeSelection: { type: 'STRING', description: `Suggested age range from the list: ${ageRanges.join(', ')} or Custom.` }, // Let AI generate text description if needed, selection is UI concern
+		// ageRangeCustom: { type: 'STRING', description: 'Specific custom age range if ageRangeSelection is Custom.' },
+		// gender: { type: 'STRING', description: `Suggested gender from the list: ${genders.filter(g => g !== 'Unspecified').join(', ')}.` }, // Selection is UI concern
+		location: { type: 'STRING', description: 'Geographic location or region.' },
+		jobTitle: { type: 'STRING', description: 'Primary job title or role.' },
+		incomeLevel: { type: 'STRING', description: 'General income level or range.' },
+		personalityTraits: { type: 'STRING', description: 'Key personality traits, potentially comma-separated or as a short paragraph.' },
+		valuesText: { type: 'STRING', description: 'Core values and beliefs.' },
+		spendingHabits: { type: 'STRING', description: 'Typical spending habits and financial behavior.' },
+		interestsHobbies: { type: 'STRING', description: 'Main interests and hobbies.' },
+		lifestyle: { type: 'STRING', description: 'Description of their lifestyle (e.g., family life, daily routine, travel habits).' },
+		needsPainPoints: { type: 'STRING', description: 'Primary needs, challenges, or pain points this product/service could address.' },
+		goalsExpectations: { type: 'STRING', description: 'Goals or expectations they have related to solutions like this product/service.' },
+		backstory: { type: 'STRING', description: 'A brief narrative or backstory for the persona.' },
+		purchaseProcess: { type: 'STRING', description: 'How they typically research and make purchase decisions in this category.' },
+		// isGenerated: { type: 'BOOLEAN', description: 'Indicates if the persona was AI-generated (set automatically).' } // Handled by frontend/backend logic, not AI
+	},
+	required: ['name', 'needsPainPoints', 'goalsExpectations'] // Define essential fields for a useful persona
+};
+
+
+export const POST: RequestHandler = async (event: RequestEvent) => {
+	const { request, params } = event;
+	const productIdParam = params.productId; // Get productId from route
+
+	if (!GEMINI_API_KEY) {
+		throw error(500, 'Server configuration error: API key missing.');
+	}
+
+	if (!productIdParam) {
+		throw error(400, 'Bad Request: Product ID is required in the URL.');
+	}
+
 	const productId = parseInt(productIdParam, 10);
-
 	if (isNaN(productId)) {
-		kitError(400, 'Invalid Product ID');
+		throw error(400, 'Bad Request: Invalid Product ID format.');
 	}
 
-	let inputData = {};
+	let instructions: string;
+	let currentPersonaData: Record<string, any> | null = null;
+	let productDetails: typeof products.$inferSelect | null = null;
+
 	try {
-		// Try parsing body, but allow it to be empty for basic mock
-		if (request.headers.get('content-length') !== '0') {
-			const rawData = await request.json();
-			const validationResult = generationInputSchema.safeParse(rawData);
-			if (validationResult.success) {
-				inputData = validationResult.data ?? {};
-			} else {
-				// Optional: Log validation error but proceed with generic mock
-				console.warn(`API: Persona generation input validation failed for product ${productId}, using generic mock.`, validationResult.error.flatten());
-			}
+		const body = await request.json();
+		instructions = body.instructions;
+		currentPersonaData = body.currentData ?? null;
+
+		if (!instructions || typeof instructions !== 'string') {
+			throw new Error('Invalid instructions provided.');
 		}
-	} catch (e) {
-		console.warn(`API: Could not parse persona generation input body for product ${productId}, using generic mock.`, e);
+		if (currentPersonaData && typeof currentPersonaData !== 'object') {
+			throw new Error('Invalid currentData format provided.');
+		}
+
+	} catch (err: any) {
+		console.error('Error parsing request body:', err);
+		throw error(400, `Bad Request: Could not parse request body. ${err.message}`);
 	}
 
-	console.log(`API: Generating mock persona details for product ${productId} based on input:`, inputData);
+	// --- Fetch Product Details ---
+	try {
+		const result = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+		if (result.length > 0) {
+			productDetails = result[0];
+		} else {
+			// Optional: Decide if you want to error out if product not found,
+			// or proceed without product context. Let's proceed for now.
+			console.warn(`Product with ID ${productId} not found. Generating persona without product context.`);
+		}
+	} catch (dbError: any) {
+		console.error(`Database error fetching product ${productId}:`, dbError);
+		// Decide if this should be a fatal error or just a warning
+		throw error(500, `Database error fetching product details: ${dbError.message}`);
+	}
+	// --- End Fetch Product Details ---
 
-	// --- MOCK AI RESPONSE ---
-	// Replace this with actual AI call in Phase 2 (Real AI Integration)
-	// This mock doesn't currently use productId, but a real implementation might
-	const mockPersona = {
-		name: 'Generated Persona Example',
-		personaTitle: 'AI-Suggested Title',
-		imageUrl: `https://avatar.iran.liara.run/public/${Math.random() > 0.5 ? 'boy' : 'girl'}?username=Generated${Date.now()}`, // Random placeholder avatar
-		// ageRangeSelection: '30s', // Keep user selection if provided
-		// ageRangeCustom: null,
-		// gender: 'Female', // Keep user selection if provided
-		location: 'Tokyo, Japan (Mock)',
-		jobTitle: 'Software Engineer (Mock)',
-		incomeLevel: '¥6M - ¥8M (Mock)',
-		personalityTraits: 'Analytical, Introverted, Detail-oriented (Mock)',
-		valuesText: 'Efficiency, Continuous Learning, Work-life Balance (Mock)',
-		spendingHabits: 'Invests in tech gadgets, saves moderately, prefers online shopping (Mock)',
-		interestsHobbies: 'Programming, Video Games, Reading Sci-Fi (Mock)',
-		lifestyle: 'Works from home, enjoys quiet weekends, occasionally attends tech meetups (Mock)',
-		needsPainPoints: 'Needs better tools for project management, feels overwhelmed by notifications (Mock)',
-		goalsExpectations: 'Wants to improve productivity, expects software to be intuitive and reliable (Mock)',
-		backstory: 'Studied computer science and has been working in the tech industry for 5 years. Always looking for ways to optimize workflows. (Mock)',
-		purchaseProcess: 'Researches extensively online, reads reviews, compares features before making a purchase decision. Values free trials. (Mock)',
-		isGenerated: true // Mark as generated
-	};
-	// --- END MOCK ---
 
-	// Simulate a short delay
-	await new Promise(resolve => setTimeout(resolve, 500));
+	try {
+		const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+		const model = genAI.getGenerativeModel({
+			model: 'gemini-1.5-flash', // Use a capable model
+			generationConfig: {
+				temperature: 0.8, // Slightly creative but grounded
+				responseMimeType: 'application/json',
+				// Use type assertion for the schema
+				responseSchema: personaSchema as any
+			},
+		});
 
-	return json(mockPersona, { status: 200 });
+		// Construct the prompt with Product Details
+		const productContextString = productDetails
+			? `Product Name: ${productDetails.name}\nProduct Overview: ${productDetails.overview}\nProduct Industry: ${productDetails.industry}\nProduct Details: ${productDetails.details}\nProduct Features/Strengths: ${productDetails.featuresStrengths}`
+			: 'Product details not available.';
+
+		const prompt = `Generate or update persona details in JSON format based on the schema provided below.
+This persona is being created for the following product:
+--- START PRODUCT CONTEXT ---
+${productContextString}
+--- END PRODUCT CONTEXT ---
+
+Use the product context to create a relevant and targeted persona.
+Respect the user's language. Focus on creating helpful output in JSON matching the schema.
+If the 'Current Persona Data' is empty or minimal, generate a comprehensive persona based on the 'User Instructions' and the 'Product Context'.
+If 'Current Persona Data' exists, strictly apply only the changes requested in the 'User Instructions' to the existing data. Do not overwrite fields unless specifically asked.
+
+User Instructions:
+"${instructions}"
+
+Current Persona Data:
+${currentPersonaData ? JSON.stringify(currentPersonaData, null, 2) : 'None (creating new persona).'}
+
+Required JSON Output Schema:
+${JSON.stringify(personaSchema, null, 2)}
+
+Output JSON:`;
+
+
+		console.log("Sending prompt to Gemini for Persona Generation (Product ID: " + productId + "):", prompt); // Log prompt
+
+		const result = await model.generateContent(prompt);
+		const response = result.response;
+		const text = response.text();
+
+		// Parse the JSON response defensively
+		try {
+			const generatedData = JSON.parse(text);
+			// Add isGenerated flag manually
+			generatedData.isGenerated = true;
+			return json(generatedData);
+		} catch (parseError) {
+			console.error('Error parsing Gemini JSON response for Persona:', parseError);
+			console.error('Raw Gemini response text:', text);
+			throw error(500, 'Failed to parse AI response.');
+		}
+
+	} catch (err: any) {
+		console.error('Error calling Gemini API for Persona:', err);
+		throw error(500, `Failed to generate persona data: ${err.message || 'Unknown error'}`);
+	}
 };
