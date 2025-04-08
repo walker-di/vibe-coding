@@ -27,7 +27,8 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 
 *   **Phase 0: Foundation:**
     *   Project setup with SvelteKit, TypeScript, Tailwind CSS, Drizzle ORM, SQLite.
-    *   Basic layout and navigation structure established.
+    *   Basic layout structure established (`src/routes/+layout.svelte`).
+    *   Added global header navigation (`src/lib/components/layout/Header.svelte`) with links to major sections (Home, Campaigns, Personas, Creatives).
     *   Database schema defined (`schema.ts`) and initial database state confirmed.
 *   **Phase 1 & 2: Core Entities & Detailed Personas (SPA Strategy):**
     *   **Campaigns:**
@@ -39,9 +40,9 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
         *   Mock AI Persona Generation implemented:
             *   `/api/personas/generate` mock endpoint created.
             *   "Generate" button added to `/personas/new` form, populating fields on mock success.
-    *   **Creatives:**
-        *   API endpoint (`/api/creatives`) created for GET requests (listing).
-        *   List page (`/creatives`) implemented using client-side fetching (SPA).
+    *   **Creatives (Phase 1 - Text & Image):**
+        *   Full CRUD API endpoints implemented for core creative and Text/Image types (`/api/creatives` for GET/POST, `/api/creatives/[id]` for GET/PUT/DELETE).
+        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy for Text and Image types (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields.
 *   **Development Strategy:**
     *   Consistently using a Single-Page Application (SPA) strategy with client-side `fetch` calls to dedicated API endpoints and Svelte 5 Runes for state management.
 
