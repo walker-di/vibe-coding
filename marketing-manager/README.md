@@ -23,7 +23,7 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 
 **(Same as before: SvelteKit, TypeScript, Drizzle ORM, SQLite, Tailwind CSS, Svelte 5 Runes, Storybook, ESLint/Prettier)**
 
-## Current Progress (As of April 8, 2025 - Start of Day)
+## Current Progress (As of April 8, 2025 - End of Session)
 
 *   **Phase 0: Foundation:**
     *   Project setup with SvelteKit, TypeScript, Tailwind CSS, Drizzle ORM, SQLite.
@@ -42,13 +42,16 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
             *   "Generate" button added to `/personas/new` form, populating fields on mock success.
     *   **Creatives (Phases 1, 3 & 4 - API Complete):**
         *   Full CRUD API endpoints implemented for all creative types (`/api/creatives` for GET/POST, `/api/creatives/[id]` for GET/PUT/DELETE), including handling of `themeId` and detailed `videoData` (appeal feature, emotion, template ID, etc.). Enhanced logging remains in POST endpoint.
-        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields for all types, including Phase 3/4 video details. **Note:** Assumed functional after API fixes; thorough testing recommended.
+        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Forms include type selection and conditional fields for all types, including Phase 3/4 video details using `CardSelector` components. Edit form updated to handle all creative types.
     *   **Themes & Video Templates (Phase 3 & 4):**
         *   Full CRUD API endpoints implemented for Themes (`/api/themes`, `/api/themes/[id]`).
         *   Full CRUD API endpoints implemented for Video Templates (`/api/video-templates`, `/api/video-templates/[id]`).
         *   Database schema updated and **migration applied** to include `updatedAt` fields for `themes` and `videoTemplates`.
         *   Full CRUD frontend pages implemented for managing Themes (`/settings/themes`, `/settings/themes/new`, `/settings/themes/[id]/edit`).
         *   Full CRUD frontend pages implemented for managing Video Templates (`/settings/video-templates`, `/settings/video-templates/new`, `/settings/video-templates/[id]/edit`).
+*   **UI Refinements (Should Haves):**
+    *   Persona forms (`new`, `edit`): Gender input UI updated to remove 'Unspecified' option, aligning with Image 2.
+    *   Creative forms (`new`, `edit`): Video-specific fields (Appeal Feature, Emotion, Template) now use `CardSelector` component for improved UI, aligning with Images 8 & 11.
 *   **Development Strategy:**
     *   Consistently using a Single-Page Application (SPA) strategy with client-side `fetch` calls to dedicated API endpoints and Svelte 5 Runes for state management.
     *   `shadcn-svelte` initialized for UI components. Header navigation (`/lib/components/layout/Header.svelte`) successfully updated to use `shadcn-svelte` Button component.
