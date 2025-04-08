@@ -1,5 +1,13 @@
 {
   "version": "5",
   "dialect": "sqlite",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1744082950812,
+      "tag": "0000_fancy_natasha_romanoff",
+      "breakpoints": true
+    }
+  ]
 }

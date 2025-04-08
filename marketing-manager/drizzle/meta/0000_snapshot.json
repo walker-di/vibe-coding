@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1dc4cb5a-e3a6-4db1-8d1f-0857ce35a070",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "edd70c51-1b33-42f0-b85e-0b1db491a966",
+  "prevId": "1dc4cb5a-e3a6-4db1-8d1f-0857ce35a070",
   "tables": {
     "campaigns": {
       "name": "campaigns",
@@ -96,8 +96,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "url": {
-          "name": "url",
+        "imageUrl": {
+          "name": "imageUrl",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -170,8 +170,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "url": {
-          "name": "url",
+        "pageUrl": {
+          "name": "pageUrl",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -304,8 +304,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "url": {
-          "name": "url",
+        "videoUrl": {
+          "name": "videoUrl",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -405,6 +405,13 @@
           "notNull": true,
           "autoincrement": true
         },
+        "persona_id": {
+          "name": "persona_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -433,16 +440,37 @@
           "notNull": false,
           "autoincrement": false
         },
-        "persona_id": {
-          "name": "persona_id",
+        "theme_id": {
+          "name": "theme_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "theme_id": {
-          "name": "theme_id",
+        "strategy_id": {
+          "name": "strategy_id",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "design_notes": {
+          "name": "design_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expression_notes": {
+          "name": "expression_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "audio_notes": {
+          "name": "audio_notes",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -465,6 +493,19 @@
       },
       "indexes": {},
       "foreignKeys": {
+        "creatives_persona_id_personas_id_fk": {
+          "name": "creatives_persona_id_personas_id_fk",
+          "tableFrom": "creatives",
+          "tableTo": "personas",
+          "columnsFrom": [
+            "persona_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "creatives_campaign_id_campaigns_id_fk": {
           "name": "creatives_campaign_id_campaigns_id_fk",
           "tableFrom": "creatives",
@@ -478,12 +519,12 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "creatives_persona_id_personas_id_fk": {
-          "name": "creatives_persona_id_personas_id_fk",
+        "creatives_theme_id_themes_id_fk": {
+          "name": "creatives_theme_id_themes_id_fk",
           "tableFrom": "creatives",
-          "tableTo": "personas",
+          "tableTo": "themes",
           "columnsFrom": [
-            "persona_id"
+            "theme_id"
           ],
           "columnsTo": [
             "id"
@@ -491,12 +532,12 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "creatives_theme_id_themes_id_fk": {
-          "name": "creatives_theme_id_themes_id_fk",
+        "creatives_strategy_id_strategies_id_fk": {
+          "name": "creatives_strategy_id_strategies_id_fk",
           "tableFrom": "creatives",
-          "tableTo": "themes",
+          "tableTo": "strategies",
           "columnsFrom": [
-            "theme_id"
+            "strategy_id"
           ],
           "columnsTo": [
             "id"
@@ -519,11 +560,25 @@
           "notNull": true,
           "autoincrement": true
         },
+        "product_id": {
+          "name": "product_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "insights": {
+          "name": "insights",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "persona_title": {
@@ -672,7 +727,211 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {
+        "personas_product_id_products_id_fk": {
+          "name": "personas_product_id_products_id_fk",
+          "tableFrom": "personas",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "products": {
+      "name": "products",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "image_url": {
+          "name": "image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "industry": {
+          "name": "industry",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "overview": {
+          "name": "overview",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "details": {
+          "name": "details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "features_strengths": {
+          "name": "features_strengths",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch('now') * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "strategies": {
+      "name": "strategies",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "campaign_id": {
+          "name": "campaign_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "positioning_3c": {
+          "name": "positioning_3c",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "positioning_pod_pop": {
+          "name": "positioning_pod_pop",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "who_insights": {
+          "name": "who_insights",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "what_benefits": {
+          "name": "what_benefits",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "how_appeal_axis": {
+          "name": "how_appeal_axis",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "how_expression_axis": {
+          "name": "how_expression_axis",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "how_media_plan": {
+          "name": "how_media_plan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "how_objectives": {
+          "name": "how_objectives",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch('now') * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "strategies_campaign_id_campaigns_id_fk": {
+          "name": "strategies_campaign_id_campaigns_id_fk",
+          "tableFrom": "strategies",
+          "tableTo": "campaigns",
+          "columnsFrom": [
+            "campaign_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -715,6 +974,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(unixepoch('now') * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -803,6 +1069,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(unixepoch('now') * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
