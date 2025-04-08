@@ -5,11 +5,11 @@ import { Button } from '$lib/components/ui/button'; // Import Button
 	// Define navigation links
 	const navLinks = [
 		{ href: '/', label: 'Home' },
+		{ href: '/products', label: 'Products' },
 		{ href: '/campaigns', label: 'Campaigns' },
-		{ href: '/personas', label: 'Personas' },
-		{ href: '/creatives', label: 'Creatives' },
-		{ href: '/products', label: 'Products' }, // Add Products link
-		{ href: '/settings', label: 'Settings' } // Added Settings link
+		// { href: '/personas', label: 'Personas' },
+		// { href: '/creatives', label: 'Creatives' },
+		{ href: '/settings', label: 'Settings' }
 	];
 
 	// Reactive variable to check the current path
