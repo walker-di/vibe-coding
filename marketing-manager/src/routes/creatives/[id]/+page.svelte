@@ -10,21 +10,26 @@
 		personas as personasTable,
 		themes as themesTable,
 		creativeText as creativeTextTable,
-		creativeImage as creativeImageTable
-		// Import video/lp types later
+		creativeImage as creativeImageTable,
+		creativeVideo as creativeVideoTable, // Add import
+		creativeLp as creativeLpTable, // Add import
+		videoTemplates as videoTemplatesTable // Add import
 	} from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
+	import CreativeDetailView from '$lib/components/creatives/CreativeDetailView.svelte'; // Import the new component
 
 	// --- Types ---
-	// Define a comprehensive type for the creative detail view
+	// Define a comprehensive type for the creative detail view (matching the component's expected prop type)
 	type CreativeDetail = InferSelectModel<typeof creativesTable> & {
 		campaign: Pick<InferSelectModel<typeof campaignsTable>, 'id' | 'name'> | null;
-		persona: Pick<InferSelectModel<typeof personasTable>, 'id' | 'name'> | null;
+		persona: Pick<InferSelectModel<typeof personasTable>, 'id' | 'name' | 'productId'> | null; // Add productId
 		theme: Pick<InferSelectModel<typeof themesTable>, 'id' | 'title'> | null;
 		textData: InferSelectModel<typeof creativeTextTable> | null;
 		imageData: InferSelectModel<typeof creativeImageTable> | null;
-		// videoData: InferSelectModel<typeof creativeVideoTable> | null; // Add later
-		// lpData: InferSelectModel<typeof creativeLpTable> | null; // Add later
+		videoData: (InferSelectModel<typeof creativeVideoTable> & { // Add video type
+			videoTemplate: Pick<InferSelectModel<typeof videoTemplatesTable>, 'id' | 'name' | 'templateCode'> | null;
+		}) | null;
+		lpData: InferSelectModel<typeof creativeLpTable> | null; // Add lp type
 	};
 
 	// --- State ---
@@ -101,21 +106,7 @@
 		}
 	}
 
-	// --- Helper ---
-	function formatText(text: string | null | undefined): string {
-		return text || '-';
-	}
-
-	function getIcon(type: CreativeDetail['type'] | undefined) {
-		if (!type) return FileText;
-		switch (type) {
-			case 'text': return FileText;
-			case 'image': return ImageIcon;
-			case 'video': return Video;
-			case 'lp': return LayoutPanelLeft;
-			default: return FileText;
-		}
-	}
+	// Helper functions (formatText, getIcon) are now inside CreativeDetailView
 
 </script>
 
@@ -141,121 +132,24 @@
 		</div>
 	{:else if creative}
 		<div class="space-y-6 rounded border p-6 shadow">
-			<!-- Header -->
-			<div class="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-				<div class="flex-grow">
-					<div class="mb-1 flex items-center gap-2">
-						<svelte:component this={getIcon(creative.type)} class="h-6 w-6 text-muted-foreground" />
-						<h1 class="text-3xl font-bold">{creative.name}</h1>
-					</div>
-					<p class="text-sm text-muted-foreground">Type: {creative.type.toUpperCase()}</p>
-				</div>
-				<div class="flex flex-shrink-0 gap-2 self-start md:self-center">
-					<Button variant="outline" href={`/creatives/${creative.id}/edit`}>
-						<Edit class="mr-2 h-4 w-4" />
-						Edit
-					</Button>
-					<Button variant="destructive" onclick={handleDelete} disabled={isDeleting}>
-						{#if isDeleting}
-							Deleting...
-						{:else}
-							<Trash2 class="mr-2 h-4 w-4" />
-							Delete
-						{/if}
-					</Button>
-				</div>
+			<!-- Action buttons remain here -->
+			<div class="flex justify-end gap-2">
+				<Button variant="outline" href={`/creatives/${creative.id}/edit`}>
+					<Edit class="mr-2 h-4 w-4" />
+					Edit
+				</Button>
+				<Button variant="destructive" onclick={handleDelete} disabled={isDeleting}>
+					{#if isDeleting}
+						Deleting...
+					{:else}
+						<Trash2 class="mr-2 h-4 w-4" />
+						Delete
+					{/if}
+				</Button>
 			</div>
 
-			<!-- Common Details -->
-			<section class="space-y-3 border-t pt-4">
-				<h2 class="text-lg font-semibold">Details</h2>
-				<div>
-					<dt class="text-sm font-medium text-muted-foreground">Description</dt>
-					<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(creative.description)}</dd>
-				</div>
-				<div>
-					<dt class="text-sm font-medium text-muted-foreground">Linked Campaign</dt>
-					<dd class="mt-1 text-base">
-						{#if creative.campaign}
-							<a href={`/campaigns/${creative.campaign.id}`} class="text-blue-600 hover:underline">
-								{creative.campaign.name}
-							</a>
-						{:else}
-							-
-						{/if}
-					</dd>
-				</div>
-				<div>
-					<dt class="text-sm font-medium text-muted-foreground">Linked Persona</dt>
-					<dd class="mt-1 text-base">
-						{#if creative.persona}
-							<a href={`/personas/${creative.persona.id}`} class="text-blue-600 hover:underline">
-								{creative.persona.name}
-							</a>
-						{:else}
-							-
-						{/if}
-					</dd>
-				</div>
-				<!-- TODO: Add Linked Theme later -->
-				<!-- {#if creative.theme}
-				<div>
-					<dt class="text-sm font-medium text-muted-foreground">Linked Theme</dt>
-					<dd class="mt-1 text-base">
-						<a href={`/settings/themes/${creative.theme.id}`} class="text-blue-600 hover:underline">
-							{creative.theme.title}
-						</a>
-					</dd>
-				</div>
-				{/if} -->
-			</section>
-
-			<!-- Type-Specific Details -->
-			<section class="border-t pt-4">
-				<h2 class="mb-3 text-lg font-semibold">{creative.type.charAt(0).toUpperCase() + creative.type.slice(1)} Specific Data</h2>
-
-				{#if creative.type === 'text' && creative.textData}
-					<dl class="space-y-3">
-						<div>
-							<dt class="text-sm font-medium text-muted-foreground">Headline</dt>
-							<dd class="mt-1 text-base">{formatText(creative.textData.headline)}</dd>
-						</div>
-						<div>
-							<dt class="text-sm font-medium text-muted-foreground">Body</dt>
-							<dd class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 text-base">{formatText(creative.textData.body)}</dd>
-						</div>
-						<div>
-							<dt class="text-sm font-medium text-muted-foreground">Call to Action</dt>
-							<dd class="mt-1 text-base">{formatText(creative.textData.callToAction)}</dd>
-						</div>
-					</dl>
-				{:else if creative.type === 'image' && creative.imageData}
-					<dl class="space-y-3">
-						<div>
-							<dt class="text-sm font-medium text-muted-foreground">Image URL</dt>
-							<dd class="mt-1 text-base">
-								<a href={creative.imageData.imageUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">
-									{creative.imageData.imageUrl}
-								</a>
-							</dd>
-							<img src={creative.imageData.imageUrl} alt={creative.imageData.altText ?? 'Creative Image'} class="mt-2 max-h-60 rounded border" />
-						</div>
-						<div>
-							<dt class="text-sm font-medium text-muted-foreground">Alt Text</dt>
-							<dd class="mt-1 text-base">{formatText(creative.imageData.altText)}</dd>
-						</div>
-						{#if creative.imageData.width && creative.imageData.height}
-							<div>
-								<dt class="text-sm font-medium text-muted-foreground">Dimensions</dt>
-								<dd class="mt-1 text-base">{creative.imageData.width} x {creative.imageData.height}</dd>
-							</div>
-						{/if}
-					</dl>
-				{:else}
-					<p class="text-muted-foreground">No specific data available for this creative type yet.</p>
-				{/if}
-				<!-- TODO: Add display for Video/LP data later -->
-			</section>
+			<!-- Use the shared detail view component -->
+			<CreativeDetailView {creative} />
 
 		</div>
 	{:else}
