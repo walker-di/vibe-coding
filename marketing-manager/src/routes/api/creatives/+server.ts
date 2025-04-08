@@ -1,5 +1,6 @@
 import { db } from '$lib/server/db';
-import { creatives, creativeText, creativeImage, creativeTypes } from '$lib/server/db/schema'; // Import specific tables and types
+// Import necessary tables and enums
+import { creatives, creativeText, creativeImage, creativeVideo, creativeLp, creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/server/db/schema';
 import { json, error as kitError } from '@sveltejs/kit';
 import { desc, eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
@@ -33,13 +34,31 @@ const imageDataSchema = z.object({
 	height: z.number().int().positive().optional().nullable()
 });
 
+// Schema for Video Creative specific fields
+const videoDataSchema = z.object({
+	videoUrl: z.string().url('Invalid Video URL.').optional().nullable(),
+	platform: z.enum(videoPlatforms).optional().nullable(),
+	format: z.enum(videoFormats).optional().nullable(), // Add format validation
+	duration: z.number().int().positive('Duration must be a positive integer.').optional().nullable(),
+	appealFeature: z.string().max(255).optional().nullable(), // Keep simple string for now
+	emotion: z.enum(videoEmotions).optional().nullable(),
+	templateId: z.number().int().positive().optional().nullable()
+});
+
+// Schema for LP Creative specific fields
+const lpDataSchema = z.object({
+	pageUrl: z.string().url('Invalid Page URL.').min(1, 'Page URL is required.'),
+	headline: z.string().max(200).optional().nullable(),
+	keySections: z.array(z.object({ title: z.string() })).optional().nullable() // Validate as array of objects
+});
+
+
 // Combined schema using discriminated union based on 'type'
 const createCreativeSchema = z.discriminatedUnion("type", [
 	baseCreativeSchema.extend({ type: z.literal(creativeTypes[0]), textData: textDataSchema }), // 'text'
 	baseCreativeSchema.extend({ type: z.literal(creativeTypes[1]), imageData: imageDataSchema }), // 'image'
-	// Add schemas for 'video' and 'lp' here later
-	// baseCreativeSchema.extend({ type: z.literal(creativeTypes[2]), videoData: videoDataSchema }),
-	// baseCreativeSchema.extend({ type: z.literal(creativeTypes[3]), lpData: lpDataSchema }),
+	baseCreativeSchema.extend({ type: z.literal(creativeTypes[2]), videoData: videoDataSchema }), // 'video'
+	baseCreativeSchema.extend({ type: z.literal(creativeTypes[3]), lpData: lpDataSchema }), // 'lp'
 ]);
 
 // GET /api/creatives
@@ -131,10 +150,33 @@ export const POST: RequestHandler = async ({ request }) => {
 					});
 					console.log(`API: Inserted image data for creative ID: ${creativeId}`);
 					break;
-				// Add cases for 'video' and 'lp' later
+				case 'video':
+					await tx.insert(creativeVideo).values({
+						creativeId: creativeId,
+						videoUrl: validatedData.videoData.videoUrl,
+						platform: validatedData.videoData.platform,
+						format: validatedData.videoData.format,
+						duration: validatedData.videoData.duration,
+						appealFeature: validatedData.videoData.appealFeature,
+						emotion: validatedData.videoData.emotion,
+						templateId: validatedData.videoData.templateId
+					});
+					console.log(`API: Inserted video data for creative ID: ${creativeId}`);
+					break;
+				case 'lp':
+					await tx.insert(creativeLp).values({
+						creativeId: creativeId,
+						pageUrl: validatedData.lpData.pageUrl,
+						headline: validatedData.lpData.headline,
+						keySections: validatedData.lpData.keySections // Store parsed JSON
+					});
+					console.log(`API: Inserted LP data for creative ID: ${creativeId}`);
+					break;
 				default:
-				// This case should be unreachable due to Zod validation
-				// If reached, the transaction will automatically roll back.
+					// This case should be unreachable due to Zod validation
+					// If reached, the transaction will automatically roll back.
+					console.error(`API: Unhandled creative type in transaction.`);
+					throw new Error(`Unhandled creative type.`);
 			}
 
 			return creativeId; // Return the ID from the transaction

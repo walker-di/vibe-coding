@@ -1,152 +1,122 @@
-import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { videoTemplates, videoFormats } from '$lib/server/db/schema';
-import { eq, and, ne } from 'drizzle-orm';
+import { videoTemplates, videoFormats } from '$lib/server/db/schema'; // Import table and enum
+import { json, error as kitError } from '@sveltejs/kit';
+import { eq, sql } from 'drizzle-orm';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 
-// Schema for validating video template updates (all fields optional)
+// --- Validation Schema for Update ---
+// Note: templateCode is likely immutable after creation, so not included here.
 const updateVideoTemplateSchema = z.object({
-	templateCode: z.string().min(1, 'Template code cannot be empty').max(50).optional(),
 	name: z.string().max(150).optional().nullable(),
 	durationSeconds: z.number().int().positive().optional().nullable(),
 	materialCount: z.number().int().positive().optional().nullable(),
 	aspectRatio: z.enum(videoFormats).optional().nullable(),
 	sceneCount: z.number().int().positive().optional().nullable(),
-	recommendedPlatforms: z.array(z.string()).optional().nullable(),
+	recommendedPlatforms: z.array(z.string()).optional().nullable(), // Expecting array from frontend
 	resolution: z.string().max(50).optional().nullable(),
-	previewUrl: z.string().url('Invalid preview URL format').max(500).optional().nullable(),
-}).refine(data => Object.keys(data).length > 0, {
-    message: "At least one field must be provided for update",
+	previewUrl: z.string().url('Invalid Preview URL').optional().nullable()
 });
 
-
-/**
- * GET /api/video-templates/[id]
- * Retrieves a specific video template by its ID.
- */
-export async function GET({ params }) {
+// GET /api/video-templates/[id]
+export const GET: RequestHandler = async ({ params }) => {
 	const id = parseInt(params.id, 10);
 	if (isNaN(id)) {
-		throw error(400, 'Invalid video template ID');
+		kitError(400, 'Invalid video template ID');
 	}
 
+	console.log(`API: Loading video template with ID: ${id}`);
 	try {
-		const template = await db.select().from(videoTemplates).where(eq(videoTemplates.id, id)).get();
+		const template = await db.query.videoTemplates.findFirst({
+			where: eq(videoTemplates.id, id)
+		});
 
 		if (!template) {
-			throw error(404, 'Video template not found');
+			kitError(404, 'Video template not found');
 		}
-		// Drizzle automatically handles JSON parsing for the 'json' mode field
-		return json(template);
-	} catch (e: any) {
-        if (e.status === 404) throw e; // Re-throw known 404
-		console.error(`Failed to fetch video template ${id}:`, e);
-		throw error(500, `Failed to load video template ${id}`);
-	}
-}
 
-/**
- * PUT /api/video-templates/[id]
- * Updates an existing video template.
- */
-export async function PUT({ params, request }) {
+		console.log(`API: Found video template: ${template.name || template.templateCode}`);
+		return json(template);
+	} catch (error) {
+		console.error(`API: Failed to load video template ${id}:`, error);
+		kitError(500, 'Failed to load video template');
+	}
+};
+
+// PUT /api/video-templates/[id]
+export const PUT: RequestHandler = async ({ params, request }) => {
 	const id = parseInt(params.id, 10);
 	if (isNaN(id)) {
-		throw error(400, 'Invalid video template ID');
+		kitError(400, 'Invalid video template ID');
 	}
 
 	let requestData;
 	try {
 		requestData = await request.json();
 	} catch (e) {
-		throw error(400, 'Invalid JSON format');
+		return json({ message: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const validationResult = updateVideoTemplateSchema.safeParse(requestData);
 
 	if (!validationResult.success) {
-		return json({ errors: validationResult.error.flatten().fieldErrors }, { status: 400 });
+		const errors = validationResult.error.flatten();
+		console.error(`API Video Template Update Validation Failed (ID: ${id}):`, errors);
+		return json({ message: 'Validation failed', errors: errors.fieldErrors }, { status: 400 });
 	}
 
-	const dataToUpdate = validationResult.data;
+	const validatedData = validationResult.data;
 
 	try {
-        // Check if template exists before updating
-        const existingTemplate = await db.select({ id: videoTemplates.id }).from(videoTemplates).where(eq(videoTemplates.id, id)).get();
-        if (!existingTemplate) {
-            throw error(404, 'Video template not found');
-        }
-
-        // If templateCode is being updated, check if the new code is already taken by another template
-        if (dataToUpdate.templateCode) {
-            const conflictingTemplate = await db.select({ id: videoTemplates.id })
-                .from(videoTemplates)
-                .where(and(
-                    eq(videoTemplates.templateCode, dataToUpdate.templateCode),
-                    ne(videoTemplates.id, id) // Exclude the current template being updated
-                ))
-                .get();
-
-            if (conflictingTemplate) {
-                 return json({ errors: { templateCode: 'Template code must be unique' } }, { status: 400 });
-            }
-        }
-
-		// Manually set updatedAt timestamp
-		const updateTimestamp = new Date();
-
-		const [updatedTemplate] = await db.update(videoTemplates)
+		console.log(`API: Updating video template with ID: ${id}`);
+		const [updatedTemplate] = await db
+			.update(videoTemplates)
 			.set({
-				...dataToUpdate,
-                // Ensure recommendedPlatforms is stored correctly
-                recommendedPlatforms: dataToUpdate.recommendedPlatforms ?? undefined, // Use undefined if not present to avoid overwriting with null
-				updatedAt: updateTimestamp,
+				...validatedData, // Spread validated fields
+				updatedAt: sql`(unixepoch('now') * 1000)` // Manually set updatedAt
 			})
 			.where(eq(videoTemplates.id, id))
 			.returning();
 
-        if (!updatedTemplate) {
-            throw error(404, 'Video template not found after update attempt');
-        }
+		if (!updatedTemplate) {
+			kitError(404, 'Video template not found for update');
+		}
 
+		console.log(`API: Video template ${id} updated successfully.`);
 		return json(updatedTemplate);
 
-	} catch (e: any) {
-        if (e.status === 404) throw e; // Re-throw known 404
-		console.error(`Failed to update video template ${id}:`, e);
-		throw error(500, `Failed to update video template ${id}: ${e.message}`);
+	} catch (error: any) {
+		console.error(`API: Failed to update video template ${id}:`, error);
+		kitError(500, `Failed to update video template: ${error.message || 'Database error'}`);
 	}
-}
+};
 
-/**
- * DELETE /api/video-templates/[id]
- * Deletes a specific video template by its ID.
- */
-export async function DELETE({ params }) {
+// DELETE /api/video-templates/[id]
+export const DELETE: RequestHandler = async ({ params }) => {
 	const id = parseInt(params.id, 10);
 	if (isNaN(id)) {
-		throw error(400, 'Invalid video template ID');
+		kitError(400, 'Invalid video template ID');
 	}
 
 	try {
-        // Check if template exists before deleting
-        const existingTemplate = await db.select({ id: videoTemplates.id }).from(videoTemplates).where(eq(videoTemplates.id, id)).get();
-        if (!existingTemplate) {
-            throw error(404, 'Video template not found');
-        }
+		console.log(`API: Deleting video template with ID: ${id}`);
+		// Check if template is linked to any videos first? Optional, depends on desired behavior.
+		// For now, allow deletion. Foreign key constraint on creativeVideo.templateId is 'set null'.
 
-		const result = await db.delete(videoTemplates).where(eq(videoTemplates.id, id)).run();
+		const [deletedTemplate] = await db
+			.delete(videoTemplates)
+			.where(eq(videoTemplates.id, id))
+			.returning({ id: videoTemplates.id });
 
-		if (result.changes === 0) {
-			throw error(404, 'Video template not found, cannot delete');
+		if (!deletedTemplate) {
+			kitError(404, 'Video template not found for deletion');
 		}
 
-		return new Response(null, { status: 204 }); // 204 No Content
+		console.log(`API: Video template ${id} deleted successfully.`);
+		return json({ message: `Video template ${id} deleted successfully`, id: deletedTemplate.id }, { status: 200 });
 
-	} catch (e: any) {
-        if (e.status === 404) throw e; // Re-throw known 404
-		console.error(`Failed to delete video template ${id}:`, e);
-        // Consider potential foreign key constraint errors if videos are linked
-		throw error(500, `Failed to delete video template ${id}: ${e.message}`);
+	} catch (error: any) {
+		console.error(`API: Failed to delete video template ${id}:`, error);
+		kitError(500, `Failed to delete video template: ${error.message || 'Database error'}`);
 	}
-}
+};

@@ -1,64 +1,102 @@
 <script lang="ts">
-	// Define a type for the video template data expected from the API
-	// Based on schema.ts and Image 12
-	type VideoTemplate = {
-		id: number;
-		templateCode: string | null;
-		name: string | null;
-		durationSeconds: number | null;
-		materialCount: number | null;
-		aspectRatio: string | null; // Assuming enum comes as string
-		sceneCount: number | null;
-		recommendedPlatforms: string[] | null; // Assuming JSON array comes parsed or as string[]
-		resolution: string | null;
-		previewUrl: string | null;
-		createdAt: number | null; // Assuming timestamp comes as number
-		updatedAt?: number | null; // Optional update timestamp
-	};
+	import { Button } from '$lib/components/ui/button';
+	import type { videoTemplates as videoTemplatesTable } from '$lib/server/db/schema';
+	import type { InferSelectModel } from 'drizzle-orm';
+	import { AlertCircle, PlusCircle } from 'lucide-svelte';
 
-	// Placeholder for video template management logic
-	// TODO: Fetch templates, implement add/edit/delete functionality
-	let videoTemplates = $state<VideoTemplate[]>([]); // Use the VideoTemplate type
-	let isLoading = $state(false);
+	type VideoTemplate = InferSelectModel<typeof videoTemplatesTable>;
+
+	let templatesList = $state<VideoTemplate[]>([]);
+	let isLoading = $state(true);
 	let error = $state<string | null>(null);
 
-	console.log('Video Template settings page loaded (placeholder)');
+	$effect(() => {
+		async function loadVideoTemplates() {
+			isLoading = true;
+			error = null;
+			try {
+				const response = await fetch('/api/video-templates');
+				if (!response.ok) {
+					throw new Error(`Failed to load video templates: ${response.statusText}`);
+				}
+				templatesList = await response.json();
+			} catch (e: any) {
+				console.error("Error loading video templates:", e);
+				error = e.message || "An unknown error occurred while loading video templates.";
+			} finally {
+				isLoading = false;
+			}
+		}
+		loadVideoTemplates();
+	});
+
+	function handleEdit(id: number) {
+		// TODO: Implement navigation to edit page: goto(`/settings/video-templates/${id}/edit`);
+		alert(`Edit action for Video Template ID: ${id} (Not Implemented)`);
+	}
+
+	function handleDelete(id: number) {
+		// TODO: Implement delete confirmation and API call
+		alert(`Delete action for Video Template ID: ${id} (Not Implemented)`);
+	}
+
 </script>
 
 <div class="container mx-auto py-8">
-	<h1 class="mb-6 text-2xl font-bold">Manage Video Templates</h1>
+	<div class="mb-6 flex items-center justify-between">
+		<h1 class="text-2xl font-bold">Manage Video Templates</h1>
+		<Button href="/settings/video-templates/new">
+			<PlusCircle class="mr-2 h-4 w-4" /> Create New Template
+		</Button>
+	</div>
 
 	{#if isLoading}
 		<p>Loading video templates...</p>
 	{:else if error}
-		<p class="text-red-500">Error loading templates: {error}</p>
-	{:else}
-		<div class="mb-4">
-			<!-- TODO: Add "New Template" button -->
-			<button class="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600">
-				New Template (Not Implemented)
-			</button>
+		<div class="flex items-center rounded border border-red-500 bg-red-50 p-3 text-sm text-red-700">
+			<AlertCircle class="mr-2 h-4 w-4 flex-shrink-0" />
+			<span>Error loading video templates: {error}</span>
 		</div>
-
-		{#if videoTemplates.length === 0}
-			<p>No video templates found.</p>
-		{:else}
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-				{#each videoTemplates as template (template.id)}
-					<div class="rounded border p-4">
-						{#if template.previewUrl}
-							<img src={template.previewUrl} alt={template.name || 'Template Preview'} class="mb-2 h-32 w-full rounded object-cover" />
-						{:else}
-							<div class="mb-2 flex h-32 w-full items-center justify-center rounded bg-gray-200 text-gray-500">No Preview</div>
-						{/if}
-						<h2 class="font-semibold">{template.name || `Template ${template.templateCode || template.id}`}</h2>
-						<p class="text-sm text-gray-600">Code: {template.templateCode || 'N/A'}</p>
-						<p class="text-sm text-gray-600">Duration: {template.durationSeconds ? `${template.durationSeconds}s` : 'N/A'}</p>
-						<p class="text-sm text-gray-600">Aspect Ratio: {template.aspectRatio || 'N/A'}</p>
-						<!-- TODO: Add Edit/Delete buttons -->
-					</div>
-				{/each}
-			</div>
-		{/if}
+	{:else if templatesList.length === 0}
+		<p>No video templates found. Create one to get started!</p>
+	{:else}
+		<div class="overflow-x-auto rounded border">
+			<table class="min-w-full divide-y divide-gray-200">
+				<thead class="bg-gray-50">
+					<tr>
+						<th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ID</th>
+						<th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Code</th>
+						<th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
+						<th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Duration</th>
+						<th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Aspect Ratio</th>
+						<th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Preview</th>
+						<th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-gray-200 bg-white">
+					{#each templatesList as template (template.id)}
+						<tr>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{template.id}</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{template.templateCode}</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{template.name}</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{template.durationSeconds}s</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{template.aspectRatio}</td>
+							<td class="px-6 py-4 text-sm text-gray-500">
+								{#if template.previewUrl}
+									<a href={template.previewUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">View</a>
+								{:else}
+									<span>N/A</span>
+								{/if}
+							</td>
+							<td class="whitespace-nowrap px-6 py-4 text-sm font-medium">
+								<!-- Placeholder Actions -->
+								<button onclick={() => handleEdit(template.id)} class="text-indigo-600 hover:text-indigo-900">Edit</button>
+								<button onclick={() => handleDelete(template.id)} class="ml-4 text-red-600 hover:text-red-900">Delete</button>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	{/if}
 </div>

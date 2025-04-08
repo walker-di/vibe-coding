@@ -5,7 +5,8 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { AlertCircle, FileText, Image as ImageIcon, Video as VideoIcon, Link as LinkIcon } from 'lucide-svelte';
-	import type { campaigns as campaignsTable, personas as personasTable, themes as themesTable, videoTemplates as videoTemplatesTable, creativeTypes as creativeTypesEnum, videoPlatforms, videoFormats, videoEmotions } from '$lib/server/db/schema';
+	// Import videoEmotions enum directly
+	import { campaigns as campaignsTable, personas as personasTable, themes as themesTable, videoTemplates as videoTemplatesTable, creativeTypes as creativeTypesEnum, videoPlatforms, videoFormats, videoEmotions } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
 
 	// --- Types ---
@@ -39,9 +40,12 @@
 	let videoPlatform = $state<typeof videoPlatforms[number] | ''>('');
 	let videoFormat = $state<typeof videoFormats[number] | ''>('');
 	let videoDuration = $state<number | ''>('');
-	let videoAppealFeature = $state('');
+	let videoAppealFeature = $state(''); // Keep as string for now, could be enum later
 	let videoEmotion = $state<typeof videoEmotions[number] | ''>('');
 	let videoTemplateId = $state<number | ''>('');
+
+	// Options for Video Fields
+	const appealFeatures = ['Product Feature Focus', 'Benefit Focus', 'Problem/Solution', 'Testimonial/Social Proof', 'Comparison', 'Storytelling', 'Humor', 'Educational'] as const; // Example options
 
 	// LP Fields (Placeholders)
 	let lpPageUrl = $state('');
@@ -318,30 +322,53 @@
 		{:else if selectedType === 'video'}
 			<section class="space-y-4 rounded border p-4">
 				<h3 class="flex items-center text-lg font-semibold"><VideoIcon class="mr-2 h-5 w-5"/> Video Creative Details</h3>
-				<p class="text-sm text-gray-500">Detailed fields (Appeal, Emotion, Template Selection) will be added later.</p>
 				<div>
 					<Label for="videoUrl" class={formErrors.videoData?.videoUrl ? 'text-red-600' : ''}>Video URL (Optional)</Label>
 					<Input id="videoUrl" name="videoUrl" type="url" bind:value={videoUrl} disabled={isSubmitting} class={formErrors.videoData?.videoUrl ? 'border-red-500' : ''} placeholder="https://youtube.com/watch?v=..." />
 					{#if formErrors.videoData?.videoUrl}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.videoUrl}</p>{/if}
 				</div>
-				<div>
-					<Label for="videoPlatform" class={formErrors.videoData?.platform ? 'text-red-600' : ''}>Platform (Optional)</Label>
-					<select id="videoPlatform" name="videoPlatform" bind:value={videoPlatform} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.platform ? 'border-red-500' : ''}`}>
-						<option value="">-- Select Platform --</option>
-						{#each videoPlatforms as platformOption (platformOption)}
-							<option value={platformOption}>{platformOption}</option>
-						{/each}
-					</select>
-					{#if formErrors.videoData?.platform}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.platform}</p>{/if}
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<div>
+						<Label for="videoPlatform" class={formErrors.videoData?.platform ? 'text-red-600' : ''}>Platform (Optional)</Label>
+						<select id="videoPlatform" name="videoPlatform" bind:value={videoPlatform} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.platform ? 'border-red-500' : ''}`}>
+							<option value="">-- Select Platform --</option>
+							{#each videoPlatforms as platformOption (platformOption)}
+								<option value={platformOption}>{platformOption}</option>
+							{/each}
+						</select>
+						{#if formErrors.videoData?.platform}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.platform}</p>{/if}
+					</div>
+					<div>
+						<Label for="videoDuration" class={formErrors.videoData?.duration ? 'text-red-600' : ''}>Duration (seconds, Optional)</Label>
+						<Input id="videoDuration" name="videoDuration" type="number" bind:value={videoDuration} disabled={isSubmitting} class={formErrors.videoData?.duration ? 'border-red-500' : ''} />
+						{#if formErrors.videoData?.duration}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.duration}</p>{/if}
+					</div>
 				</div>
-				<!-- Add placeholders for other video fields -->
-				<div>
-					<Label for="videoDuration">Duration (seconds, Optional)</Label>
-					<Input id="videoDuration" name="videoDuration" type="number" bind:value={videoDuration} disabled={isSubmitting} />
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<div>
+						<Label for="videoAppealFeature" class={formErrors.videoData?.appealFeature ? 'text-red-600' : ''}>Appeal Feature (Optional)</Label>
+						<select id="videoAppealFeature" name="videoAppealFeature" bind:value={videoAppealFeature} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.appealFeature ? 'border-red-500' : ''}`}>
+							<option value="">-- Select Appeal --</option>
+							{#each appealFeatures as feature (feature)}
+								<option value={feature}>{feature}</option>
+							{/each}
+						</select>
+						{#if formErrors.videoData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.appealFeature}</p>{/if}
+					</div>
+					<div>
+						<Label for="videoEmotion" class={formErrors.videoData?.emotion ? 'text-red-600' : ''}>Stimulating Emotion (Optional)</Label>
+						<select id="videoEmotion" name="videoEmotion" bind:value={videoEmotion} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.emotion ? 'border-red-500' : ''}`}>
+							<option value="">-- Select Emotion --</option>
+							{#each videoEmotions as emotionOption (emotionOption)}
+								<option value={emotionOption}>{emotionOption}</option>
+							{/each}
+						</select>
+						{#if formErrors.videoData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.emotion}</p>{/if}
+					</div>
 				</div>
 				<div>
-					<Label for="videoTemplateId">Video Template (Optional)</Label>
-					<select id="videoTemplateId" name="videoTemplateId" bind:value={videoTemplateId} disabled={isSubmitting || videoTemplatesList.length === 0} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm`}>
+					<Label for="videoTemplateId" class={formErrors.videoData?.templateId ? 'text-red-600' : ''}>Video Template (Optional)</Label>
+					<select id="videoTemplateId" name="videoTemplateId" bind:value={videoTemplateId} disabled={isSubmitting || videoTemplatesList.length === 0} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.templateId ? 'border-red-500' : ''}`}>
 						<option value="">-- None --</option>
 						{#each videoTemplatesList as template (template.id)}
 							<option value={template.id}>{template.name || template.templateCode}</option>

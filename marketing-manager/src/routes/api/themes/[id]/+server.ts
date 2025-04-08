@@ -1,131 +1,116 @@
-import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { themes } from '$lib/server/db/schema';
+import { json, error as kitError } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
+import type { RequestHandler } from './$types';
 import { z } from 'zod';
 
-// Schema for validating theme updates (all fields optional)
+// --- Validation Schema for Update ---
 const updateThemeSchema = z.object({
-	title: z.string().min(1, 'Title cannot be empty').max(150).optional(),
+	title: z.string().min(1, 'Title is required.').max(150),
 	description: z.string().max(500).optional().nullable(),
-	associatedPainPoint: z.string().max(255).optional().nullable(),
-}).refine(data => Object.keys(data).length > 0, {
-    message: "At least one field must be provided for update", // Ensure at least one field is being updated
+	associatedPainPoint: z.string().max(255).optional().nullable()
 });
 
-
-/**
- * GET /api/themes/[id]
- * Retrieves a specific theme by its ID.
- */
-export async function GET({ params }) {
+// GET /api/themes/[id]
+export const GET: RequestHandler = async ({ params }) => {
 	const id = parseInt(params.id, 10);
 	if (isNaN(id)) {
-		throw error(400, 'Invalid theme ID');
+		kitError(400, 'Invalid theme ID');
 	}
 
+	console.log(`API: Loading theme with ID: ${id}`);
 	try {
-		const theme = await db.select().from(themes).where(eq(themes.id, id)).get();
+		const theme = await db.query.themes.findFirst({
+			where: eq(themes.id, id)
+		});
 
 		if (!theme) {
-			throw error(404, 'Theme not found');
+			kitError(404, 'Theme not found');
 		}
-		return json(theme);
-	} catch (e: any) {
-        if (e.status === 404) throw e; // Re-throw known 404
-		console.error(`Failed to fetch theme ${id}:`, e);
-		throw error(500, `Failed to load theme ${id}`);
-	}
-}
 
-/**
- * PUT /api/themes/[id]
- * Updates an existing theme.
- */
-export async function PUT({ params, request }) {
+		console.log(`API: Found theme: ${theme.title}`);
+		return json(theme);
+	} catch (error) {
+		console.error(`API: Failed to load theme ${id}:`, error);
+		kitError(500, 'Failed to load theme');
+	}
+};
+
+// PUT /api/themes/[id]
+export const PUT: RequestHandler = async ({ params, request }) => {
 	const id = parseInt(params.id, 10);
 	if (isNaN(id)) {
-		throw error(400, 'Invalid theme ID');
+		kitError(400, 'Invalid theme ID');
 	}
 
 	let requestData;
 	try {
 		requestData = await request.json();
 	} catch (e) {
-		throw error(400, 'Invalid JSON format');
+		return json({ message: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const validationResult = updateThemeSchema.safeParse(requestData);
 
 	if (!validationResult.success) {
-		return json({ errors: validationResult.error.flatten().fieldErrors }, { status: 400 });
+		const errors = validationResult.error.flatten();
+		console.error(`API Theme Update Validation Failed (ID: ${id}):`, errors);
+		return json({ message: 'Validation failed', errors: errors.fieldErrors }, { status: 400 });
 	}
 
-	const dataToUpdate = validationResult.data;
+	const validatedData = validationResult.data;
 
 	try {
-        // Check if theme exists before updating
-        const existingTheme = await db.select({ id: themes.id }).from(themes).where(eq(themes.id, id)).get();
-        if (!existingTheme) {
-            throw error(404, 'Theme not found');
-        }
-
-		// Manually set updatedAt timestamp
-		const updateTimestamp = new Date();
-
-		const [updatedTheme] = await db.update(themes)
+		console.log(`API: Updating theme with ID: ${id}`);
+		const [updatedTheme] = await db
+			.update(themes)
 			.set({
-				...dataToUpdate,
-				updatedAt: updateTimestamp, // Manually set update time
+				title: validatedData.title,
+				description: validatedData.description,
+				associatedPainPoint: validatedData.associatedPainPoint,
+				updatedAt: sql`(unixepoch('now') * 1000)` // Manually set updatedAt
 			})
 			.where(eq(themes.id, id))
-			.returning(); // Return the full updated object
+			.returning();
 
-        if (!updatedTheme) {
-             // This case might be redundant due to the check above, but good for safety
-            throw error(404, 'Theme not found after update attempt');
-        }
+		if (!updatedTheme) {
+			kitError(404, 'Theme not found for update');
+		}
 
+		console.log(`API: Theme ${id} updated successfully.`);
 		return json(updatedTheme);
 
-	} catch (e: any) {
-        if (e.status === 404) throw e; // Re-throw known 404
-		console.error(`Failed to update theme ${id}:`, e);
-        // Could add check for unique constraint errors if title needs to be unique
-		throw error(500, `Failed to update theme ${id}: ${e.message}`);
+	} catch (error: any) {
+		console.error(`API: Failed to update theme ${id}:`, error);
+		kitError(500, `Failed to update theme: ${error.message || 'Database error'}`);
 	}
-}
+};
 
-/**
- * DELETE /api/themes/[id]
- * Deletes a specific theme by its ID.
- */
-export async function DELETE({ params }) {
+// DELETE /api/themes/[id]
+export const DELETE: RequestHandler = async ({ params }) => {
 	const id = parseInt(params.id, 10);
 	if (isNaN(id)) {
-		throw error(400, 'Invalid theme ID');
+		kitError(400, 'Invalid theme ID');
 	}
 
 	try {
-        // Check if theme exists before deleting
-        const existingTheme = await db.select({ id: themes.id }).from(themes).where(eq(themes.id, id)).get();
-        if (!existingTheme) {
-            throw error(404, 'Theme not found');
-        }
+		console.log(`API: Deleting theme with ID: ${id}`);
+		const [deletedTheme] = await db
+			.delete(themes)
+			.where(eq(themes.id, id))
+			.returning({ id: themes.id }); // Return the ID to confirm deletion
 
-		const result = await db.delete(themes).where(eq(themes.id, id)).run();
-
-        // better-sqlite3 driver might return changes: 0 if not found, though we check above
-		if (result.changes === 0) {
-            // This case might be redundant due to the check above, but good for safety
-			throw error(404, 'Theme not found, cannot delete');
+		if (!deletedTheme) {
+			kitError(404, 'Theme not found for deletion');
 		}
 
-		return new Response(null, { status: 204 }); // 204 No Content on successful deletion
+		console.log(`API: Theme ${id} deleted successfully.`);
+		return json({ message: `Theme ${id} deleted successfully`, id: deletedTheme.id }, { status: 200 }); // Use 200 OK for DELETE success with body
 
-	} catch (e: any) {
-        if (e.status === 404) throw e; // Re-throw known 404
-		console.error(`Failed to delete theme ${id}:`, e);
-		throw error(500, `Failed to delete theme ${id}: ${e.message}`);
+	} catch (error: any) {
+		console.error(`API: Failed to delete theme ${id}:`, error);
+		// Consider specific error handling, e.g., foreign key constraints if themes are linked tightly
+		kitError(500, `Failed to delete theme: ${error.message || 'Database error'}`);
 	}
-}
+};
