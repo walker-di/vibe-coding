@@ -4,18 +4,23 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { AlertCircle, FileText, Image as ImageIcon, Video as VideoIcon, Link as LinkIcon } from 'lucide-svelte';
-	// Import videoEmotions enum directly
-	import { campaigns as campaignsTable, personas as personasTable, themes as themesTable, videoTemplates as videoTemplatesTable, creativeTypes as creativeTypesEnum, videoPlatforms, videoFormats, videoEmotions } from '$lib/server/db/schema';
+	import { AlertCircle, FileText, Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Heart, Zap, Smile, Wind, Brain } from 'lucide-svelte'; // Added icons
+	import CardSelector from '$lib/components/shared/CardSelector.svelte'; // Import CardSelector
+	// Import constants and types from the new shared file
+	import { creativeTypes, videoPlatforms, videoFormats, videoEmotions, appealFeatures } from '$lib/constants';
+	import type { CreativeType, VideoPlatform, VideoFormat, VideoEmotion, AppealFeature } from '$lib/constants';
+	// Import types needed for dropdown data (server types are okay here as they are only types)
+	import type { campaigns, personas, themes, videoTemplates } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
 
+
 	// --- Types ---
-	type Campaign = Pick<InferSelectModel<typeof campaignsTable>, 'id' | 'name'>;
-	type Persona = Pick<InferSelectModel<typeof personasTable>, 'id' | 'name'>;
-	type Theme = Pick<InferSelectModel<typeof themesTable>, 'id' | 'title'>;
-	type VideoTemplate = Pick<InferSelectModel<typeof videoTemplatesTable>, 'id' | 'name' | 'templateCode'>;
-	const creativeTypes = ['text', 'image', 'video', 'lp'] as const;
-	type CreativeType = typeof creativeTypes[number];
+	type Campaign = Pick<InferSelectModel<typeof campaigns>, 'id' | 'name'>;
+	type Persona = Pick<InferSelectModel<typeof personas>, 'id' | 'name'>;
+	type Theme = Pick<InferSelectModel<typeof themes>, 'id' | 'title'>;
+	// Need more fields for CardSelector options
+	type VideoTemplate = Pick<InferSelectModel<typeof videoTemplates>, 'id' | 'name' | 'templateCode' | 'previewUrl'>;
+
 
 	// --- State ---
 	// Common Fields
@@ -37,15 +42,12 @@
 
 	// Video Fields (Placeholders)
 	let videoUrl = $state('');
-	let videoPlatform = $state<typeof videoPlatforms[number] | ''>('');
-	let videoFormat = $state<typeof videoFormats[number] | ''>('');
+	let videoPlatform = $state<VideoPlatform | ''>('');
+	let videoFormat = $state<VideoFormat | ''>(''); // Note: videoFormat is not currently used in the form UI
 	let videoDuration = $state<number | ''>('');
-	let videoAppealFeature = $state(''); // Keep as string for now, could be enum later
-	let videoEmotion = $state<typeof videoEmotions[number] | ''>('');
+	let videoAppealFeature = $state<AppealFeature | ''>(''); // Use imported type
+	let videoEmotion = $state<VideoEmotion | ''>('');
 	let videoTemplateId = $state<number | ''>('');
-
-	// Options for Video Fields
-	const appealFeatures = ['Product Feature Focus', 'Benefit Focus', 'Problem/Solution', 'Testimonial/Social Proof', 'Comparison', 'Storytelling', 'Humor', 'Educational'] as const; // Example options
 
 	// LP Fields (Placeholders)
 	let lpPageUrl = $state('');
@@ -341,40 +343,70 @@
 					<div>
 						<Label for="videoDuration" class={formErrors.videoData?.duration ? 'text-red-600' : ''}>Duration (seconds, Optional)</Label>
 						<Input id="videoDuration" name="videoDuration" type="number" bind:value={videoDuration} disabled={isSubmitting} class={formErrors.videoData?.duration ? 'border-red-500' : ''} />
-						{#if formErrors.videoData?.duration}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.duration}</p>{/if}
+					{#if formErrors.videoData?.duration}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.duration}</p>{/if}
 					</div>
 				</div>
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<div>
-						<Label for="videoAppealFeature" class={formErrors.videoData?.appealFeature ? 'text-red-600' : ''}>Appeal Feature (Optional)</Label>
-						<select id="videoAppealFeature" name="videoAppealFeature" bind:value={videoAppealFeature} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.appealFeature ? 'border-red-500' : ''}`}>
-							<option value="">-- Select Appeal --</option>
-							{#each appealFeatures as feature (feature)}
-								<option value={feature}>{feature}</option>
-							{/each}
-						</select>
-						{#if formErrors.videoData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.appealFeature}</p>{/if}
-					</div>
-					<div>
-						<Label for="videoEmotion" class={formErrors.videoData?.emotion ? 'text-red-600' : ''}>Stimulating Emotion (Optional)</Label>
-						<select id="videoEmotion" name="videoEmotion" bind:value={videoEmotion} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.emotion ? 'border-red-500' : ''}`}>
-							<option value="">-- Select Emotion --</option>
-							{#each videoEmotions as emotionOption (emotionOption)}
-								<option value={emotionOption}>{emotionOption}</option>
-							{/each}
-						</select>
-						{#if formErrors.videoData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.emotion}</p>{/if}
-					</div>
+
+				<!-- Appeal Feature -->
+				<div class="space-y-2">
+						<CardSelector
+							label="Appeal Feature (Optional)"
+							id="videoAppealFeature"
+							options={appealFeatures.map(f => ({ value: f, label: f }))}
+							selectedValue={videoAppealFeature}
+							onSelect={(value) => videoAppealFeature = value as AppealFeature}
+							disabled={isSubmitting}
+							error={!!formErrors.videoData?.appealFeature}
+						gridCols="grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
+					/>
+					{#if formErrors.videoData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.appealFeature}</p>{/if}
 				</div>
-				<div>
-					<Label for="videoTemplateId" class={formErrors.videoData?.templateId ? 'text-red-600' : ''}>Video Template (Optional)</Label>
-					<select id="videoTemplateId" name="videoTemplateId" bind:value={videoTemplateId} disabled={isSubmitting || videoTemplatesList.length === 0} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.videoData?.templateId ? 'border-red-500' : ''}`}>
-						<option value="">-- None --</option>
-						{#each videoTemplatesList as template (template.id)}
-							<option value={template.id}>{template.name || template.templateCode}</option>
-						{/each}
-					</select>
+
+				<!-- Stimulating Emotion -->
+				<div class="space-y-2">
+						<CardSelector
+							label="Stimulating Emotion (Optional)"
+							id="videoEmotion"
+							options={videoEmotions.map(e => ({
+								value: e,
+								label: e,
+								// Assign icons based on emotion name (example)
+								icon: e === 'Heartwarming' ? Heart :
+								  e === 'Anxious' ? Zap : // Placeholder icon
+								  e === 'Calm' ? Wind : // Placeholder icon
+								  e === 'Awe' ? Smile : // Placeholder icon
+								  e === 'Energetic' ? Zap :
+								  Brain // Default/Unspecified
+						}))}
+							selectedValue={videoEmotion}
+							onSelect={(value) => videoEmotion = value as VideoEmotion}
+							disabled={isSubmitting}
+							error={!!formErrors.videoData?.emotion}
+						gridCols="grid-cols-2 sm:grid-cols-3"
+					/>
+					{#if formErrors.videoData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.emotion}</p>{/if}
+				</div>
+
+				<!-- Video Template -->
+				<div class="space-y-2">
+					<CardSelector
+						label="Video Template (Optional)"
+						id="videoTemplateId"
+						options={videoTemplatesList.map(t => ({
+							value: t.id,
+							label: t.name || t.templateCode || `Template ${t.id}`,
+							previewUrl: t.previewUrl || undefined, // Use preview URL if available
+							description: t.templateCode ? `Code: ${t.templateCode}` : undefined
+						}))}
+						selectedValue={videoTemplateId}
+						onSelect={(value) => videoTemplateId = value as number}
+						disabled={isSubmitting || videoTemplatesList.length === 0}
+						error={!!formErrors.videoData?.templateId}
+						gridCols="grid-cols-2 sm:grid-cols-3"
+						cardClass="min-h-[100px]"
+					/>
 					{#if videoTemplatesList.length === 0 && !isLoadingDropdowns}<p class="mt-1 text-sm text-gray-500">No video templates available.</p>{/if}
+					{#if formErrors.videoData?.templateId}<p class="mt-1 text-sm text-red-600">{formErrors.videoData.templateId}</p>{/if}
 				</div>
 			</section>
 		{:else if selectedType === 'lp'}
@@ -392,7 +424,7 @@
 				</div>
 				<div>
 					<Label for="lpKeySections" class={formErrors.lpData?.keySections ? 'text-red-600' : ''}>Key Sections (JSON Array, Optional)</Label>
-					<Textarea id="lpKeySections" name="lpKeySections" rows={4} bind:value={lpKeySections} disabled={isSubmitting} class={formErrors.lpData?.keySections ? 'border-red-500' : ''} placeholder='[{"title": "Hero"}, {"title": "Features"}]' />
+					<Textarea id="lpKeySections" name="lpKeySections" rows={4} bind:value={lpKeySections} disabled={isSubmitting} class={formErrors.lpData?.keySections ? 'border-red-500' : ''} placeholder='' />
 					{#if formErrors.lpData?.keySections}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.keySections}</p>{/if}
 				</div>
 			</section>
