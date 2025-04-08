@@ -15,6 +15,7 @@
 		dialogDescription?: string;
 		instructionPlaceholder?: string;
 		disabled?: boolean; // To disable the trigger
+		currentData?: Record<string, any> | null; // Add prop for current form data
 		onGenerated: (data: any) => void; // Event callback for generated data
 		children?: Snippet; // Optional slot for custom trigger
 	};
@@ -28,6 +29,7 @@
 		dialogDescription = 'Enter instructions for the AI to fill out the form fields.',
 		instructionPlaceholder = 'e.g., Create details for...',
 		disabled = false,
+		currentData = null, // Default currentData to null
 		onGenerated,
 		children = undefined // Default children to undefined
 	}: Props = $props();
@@ -50,7 +52,10 @@
 			const response = await fetch(apiUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ instructions: instructions })
+				body: JSON.stringify({
+					instructions: instructions,
+					currentData: currentData // Include currentData in the request body
+				})
 			});
 
 			if (!response.ok) {

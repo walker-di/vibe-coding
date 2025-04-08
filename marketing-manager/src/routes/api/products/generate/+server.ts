@@ -22,9 +22,9 @@ const productSchema = {
 		details: { type: 'STRING', description: 'More in-depth information about the product.' },
 		featuresStrengths: { type: 'STRING', description: 'List key features or strengths, potentially separated by newlines.' },
 		description: { type: 'STRING', description: 'Internal notes or description (optional).' },
-		imageUrl: { type: 'STRING', description: 'URL for the product image (optional).' }
+		// imageUrl: { type: 'STRING', description: 'URL for the product image (optional).' }
 	},
-	required: ['name'] // Only name is strictly required in the form, others can be generated as null/empty
+	required: ['name']
 };
 
 export const POST: RequestHandler = async ({ request }: RequestEvent) => { // Add RequestEvent type
@@ -33,36 +33,51 @@ export const POST: RequestHandler = async ({ request }: RequestEvent) => { // Ad
 	}
 
 	let instructions: string;
+	let currentProductData: Record<string, any> | null = null; // Variable to hold current data
+
 	try {
 		const body = await request.json();
 		instructions = body.instructions;
+		currentProductData = body.currentData ?? null; // Get currentData, default to null
+
 		if (!instructions || typeof instructions !== 'string') {
 			throw new Error('Invalid instructions provided.');
 		}
-	} catch (err) {
+		// Optional: Add validation for currentProductData if needed
+		if (currentProductData && typeof currentProductData !== 'object') {
+			throw new Error('Invalid currentData format provided.');
+		}
+
+	} catch (err: any) {
 		console.error('Error parsing request body:', err);
-		throw error(400, 'Bad Request: Could not parse instructions from request body.');
+		throw error(400, `Bad Request: Could not parse request body. ${err.message}`);
 	}
 
 	try {
 		const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 		const model = genAI.getGenerativeModel({
-			model: 'gemini-1.5-flash', // Or another suitable model
+			model: 'gemini-2.0-flash',
 			generationConfig: {
+				temperature: 1,
 				responseMimeType: 'application/json',
 				// Use type assertion to bypass strict type checking for the schema
 				responseSchema: productSchema as any
 			},
-			// Optional: Adjust safety settings if needed
-			safetySettings: [
-				{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-				{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-				{ category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-				{ category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-			]
 		});
 
-		const result = await model.generateContent(instructions);
+		// Construct the prompt including instructions and current data
+		const prompt = `respect the user language. focust on creating helpful output in JSON.
+If everything is empty, it is a new product. please fill all the fiels.
+User Instructions:
+"${instructions}"
+
+Current Product Data:
+${currentProductData ? JSON.stringify(currentProductData, null, 2) : 'None (creating new product).'}
+`;
+
+		console.log("Sending prompt to Gemini:", prompt); // Log the prompt for debugging
+
+		const result = await model.generateContent(prompt); // Send the combined prompt
 		const response = result.response;
 		const text = response.text();
 

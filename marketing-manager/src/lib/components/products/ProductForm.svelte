@@ -192,6 +192,7 @@
 			<AiGenerationDialog
 				bind:open={aiDialogOpen}
 				apiUrl="/api/products/generate"
+				currentData={{ name, description, imageUrl, industry, overview, details, featuresStrengths }}
 				onGenerated={handleAiGenerated}
 				disabled={isSubmitting}
 				dialogTitle="Generate Product Details with AI"
