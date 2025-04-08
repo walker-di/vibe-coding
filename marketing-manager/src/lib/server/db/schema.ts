@@ -163,6 +163,37 @@ export const creativeLp = sqliteTable('creative_lp', {
   platformNotes: text('platform_notes'), // Added
 });
 
+// --- Story Feature Tables ---
+
+export const stories = sqliteTable('stories', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  creativeId: integer('creative_id').notNull().references(() => creatives.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
+});
+
+export const scenes = sqliteTable('scenes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  storyId: integer('story_id').notNull().references(() => stories.id, { onDelete: 'cascade' }),
+  bgmUrl: text('bgm_url'),
+  bgmName: text('bgm_name'),
+  orderIndex: integer('order_index').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
+});
+
+export const clips = sqliteTable('clips', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sceneId: integer('scene_id').notNull().references(() => scenes.id, { onDelete: 'cascade' }),
+  canvas: text('canvas').notNull(), // JSON string for fabric.js data
+  narration: text('narration'),
+  orderIndex: integer('order_index').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
+});
+
 // --- Relations ---
 
 // NEW: Product Relations
@@ -192,7 +223,7 @@ export const strategyRelations = relations(strategies, ({ one, many }) => ({
 export const videoTemplateRelations = relations(videoTemplates, ({ many }) => ({ videoCreatives: many(creativeVideo) }));
 
 // MODIFIED: Creative Relations
-export const creativeRelations = relations(creatives, ({ one }) => ({
+export const creativeRelations = relations(creatives, ({ one, many }) => ({
   persona: one(personas, { fields: [creatives.personaId], references: [personas.id] }), // Relation is now mandatory
   campaign: one(campaigns, { fields: [creatives.campaignId], references: [campaigns.id] }),
   theme: one(themes, { fields: [creatives.themeId], references: [themes.id] }),
@@ -201,6 +232,7 @@ export const creativeRelations = relations(creatives, ({ one }) => ({
   imageData: one(creativeImage, { fields: [creatives.id], references: [creativeImage.creativeId] }),
   videoData: one(creativeVideo, { fields: [creatives.id], references: [creativeVideo.creativeId] }),
   lpData: one(creativeLp, { fields: [creatives.id], references: [creativeLp.creativeId] }),
+  stories: many(stories) // Add stories relation
 }));
 
 // Relations back from specific types (Unchanged)
@@ -211,3 +243,18 @@ export const creativeVideoRelations = relations(creativeVideo, ({ one }) => ({
     videoTemplate: one(videoTemplates, { fields: [creativeVideo.templateId], references: [videoTemplates.id] })
 }));
 export const creativeLpRelations = relations(creativeLp, ({ one }) => ({ creative: one(creatives, { fields: [creativeLp.creativeId], references: [creatives.id] }) }));
+
+// Story feature relations
+export const storyRelations = relations(stories, ({ one, many }) => ({
+  creative: one(creatives, { fields: [stories.creativeId], references: [creatives.id] }),
+  scenes: many(scenes)
+}));
+
+export const sceneRelations = relations(scenes, ({ one, many }) => ({
+  story: one(stories, { fields: [scenes.storyId], references: [stories.id] }),
+  clips: many(clips)
+}));
+
+export const clipRelations = relations(clips, ({ one }) => ({
+  scene: one(scenes, { fields: [clips.sceneId], references: [scenes.id] })
+}));

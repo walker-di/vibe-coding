@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { FileText, Image as ImageIcon, Video, LayoutPanelLeft } from 'lucide-svelte';
+	import { FileText, Image as ImageIcon, Video, LayoutPanelLeft, BookOpen } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui/button';
 	// Import base and specific types from schema
 	import type {
 		creatives as creativesTable,
@@ -136,6 +137,31 @@
 		</dd>
 	</div>
 	{/if}
+</section>
+
+<!-- Stories Section -->
+<section class="mt-6 border-t pt-4">
+	<div class="flex items-center justify-between mb-3">
+		<h2 class="text-lg font-semibold">Stories</h2>
+		<Button href={`/creatives/${creative.id}/stories`} variant="outline" class="h-8 px-3 py-1">
+			<BookOpen class="h-4 w-4 mr-2" />
+			Manage Stories
+		</Button>
+	</div>
+	
+	<div class="rounded border p-4">
+		<p class="text-sm text-muted-foreground mb-3">
+			Create interactive stories with multiple scenes and clips for this creative.
+		</p>
+		<div class="flex gap-2">
+			<Button href={`/creatives/${creative.id}/stories`} variant="outline" class="h-8 px-3 py-1">
+				View All Stories
+			</Button>
+			<Button href={`/creatives/${creative.id}/stories/new`} variant="default" class="h-8 px-3 py-1">
+				Create New Story
+			</Button>
+		</div>
+	</div>
 </section>
 
 <!-- Type-Specific Details -->

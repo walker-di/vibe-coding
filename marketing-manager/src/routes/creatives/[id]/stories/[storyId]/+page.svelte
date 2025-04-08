@@ -1,0 +1,198 @@
+<script lang="ts">
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  import { Button } from '$lib/components/ui/button';
+  import { ArrowLeft, Edit, Trash2, Plus, BookOpen } from 'lucide-svelte';
+  import SceneList from '$lib/components/story/SceneList.svelte';
+  import type { StoryWithRelations } from '$lib/types/story.types';
+
+  // State
+  let creativeId = $state<number | null>(null);
+  let storyId = $state<number | null>(null);
+  let story = $state<StoryWithRelations | null>(null);
+  let isLoading = $state(true);
+  let error = $state<string | null>(null);
+  let isDeleting = $state(false);
+
+  // Fetch story data
+  $effect(() => {
+    const cId = $page.params.id;
+    const sId = $page.params.storyId;
+    
+    if (!cId || isNaN(parseInt(cId)) || !sId || isNaN(parseInt(sId))) {
+      error = 'Invalid ID parameters';
+      isLoading = false;
+      return;
+    }
+
+    creativeId = parseInt(cId);
+    storyId = parseInt(sId);
+    fetchStory(storyId);
+  });
+
+  async function fetchStory(id: number) {
+    isLoading = true;
+    error = null;
+
+    try {
+      const response = await fetch(`/api/stories/${id}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch story. Status: ${response.status}`);
+      }
+      story = await response.json();
+    } catch (e: any) {
+      console.error('Error fetching story:', e);
+      error = e.message || 'Failed to load story';
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  // Story management functions
+  function handleEditStory() {
+    if (creativeId && storyId) {
+      goto(`/creatives/${creativeId}/stories/${storyId}/edit`);
+    }
+  }
+
+  async function handleDeleteStory() {
+    if (!storyId || isDeleting) return;
+    
+    if (!confirm('Are you sure you want to delete this story? This action cannot be undone.')) {
+      return;
+    }
+
+    isDeleting = true;
+
+    try {
+      const response = await fetch(`/api/stories/${storyId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete story. Status: ${response.status}`);
+      }
+
+      goto(`/creatives/${creativeId}/stories`);
+    } catch (e: any) {
+      console.error('Error deleting story:', e);
+      alert(`Failed to delete story: ${e.message}`);
+    } finally {
+      isDeleting = false;
+    }
+  }
+
+  // Scene management functions
+  function handleAddScene() {
+    if (creativeId && storyId) {
+      goto(`/creatives/${creativeId}/stories/${storyId}/scenes/new`);
+    }
+  }
+
+  function handleEditScene(sceneId: number) {
+    if (creativeId && storyId) {
+      goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}/edit`);
+    }
+  }
+
+  async function handleDeleteScene(sceneId: number) {
+    if (!confirm('Are you sure you want to delete this scene? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/scenes/${sceneId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete scene. Status: ${response.status}`);
+      }
+
+      // Refresh story data to update the scenes list
+      if (storyId) {
+        fetchStory(storyId);
+      }
+    } catch (e: any) {
+      console.error('Error deleting scene:', e);
+      alert(`Failed to delete scene: ${e.message}`);
+    }
+  }
+
+  function handleSelectScene(sceneId: number) {
+    if (creativeId && storyId) {
+      goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}`);
+    }
+  }
+</script>
+
+<div class="container mx-auto max-w-4xl py-8">
+  <div class="mb-6 flex justify-between items-center">
+    <Button href={`/creatives/${creativeId}/stories`} variant="outline">
+      <ArrowLeft class="mr-2 h-4 w-4" />
+      Back to Stories
+    </Button>
+    
+    <div class="flex gap-2">
+      <Button variant="outline" onclick={handleEditStory}>
+        <Edit class="mr-2 h-4 w-4" />
+        Edit Story
+      </Button>
+      <Button variant="destructive" onclick={handleDeleteStory} disabled={isDeleting}>
+        <Trash2 class="mr-2 h-4 w-4" />
+        {isDeleting ? 'Deleting...' : 'Delete Story'}
+      </Button>
+    </div>
+  </div>
+
+  {#if isLoading}
+    <div class="flex justify-center p-12">
+      <p>Loading story...</p>
+    </div>
+  {:else if error}
+    <div class="flex flex-col items-center justify-center rounded border border-dashed border-red-500 bg-red-50 p-12 text-center text-red-700">
+      <h3 class="text-xl font-semibold">Error Loading Story</h3>
+      <p class="mb-4 text-sm">{error}</p>
+      <Button href={`/creatives/${creativeId}/stories`} variant="outline">Go Back</Button>
+    </div>
+  {:else if story}
+    <div class="space-y-6">
+      <div class="rounded border p-6 shadow">
+        <h1 class="text-3xl font-bold mb-2">{story.title}</h1>
+        {#if story.description}
+          <p class="text-muted-foreground">{story.description}</p>
+        {/if}
+      </div>
+      
+      <div class="rounded border p-6 shadow">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-semibold">Scenes</h2>
+          <Button onclick={handleAddScene} variant="default">
+            <Plus class="mr-2 h-4 w-4" />
+            Add Scene
+          </Button>
+        </div>
+        
+        {#if story.scenes && story.scenes.length > 0}
+          <SceneList 
+            scenes={story.scenes} 
+            storyId={story.id}
+            onAddScene={handleAddScene}
+            onEditScene={handleEditScene}
+            onDeleteScene={handleDeleteScene}
+            onSelectScene={handleSelectScene}
+          />
+        {:else}
+          <div class="text-center py-8 border border-dashed rounded-md">
+            <BookOpen class="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <p class="text-muted-foreground mb-4">No scenes found for this story.</p>
+            <Button onclick={handleAddScene} variant="default">
+              <Plus class="mr-2 h-4 w-4" />
+              Create Your First Scene
+            </Button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+</div>
