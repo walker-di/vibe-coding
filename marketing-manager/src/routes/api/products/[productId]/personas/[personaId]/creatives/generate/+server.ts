@@ -7,7 +7,7 @@ import { products, personas, creatives, creativeText, creativeImage, creativeVid
 import { eq } from 'drizzle-orm';
 import { creativeTypes, videoPlatforms, videoFormats, videoEmotions, appealFeatures } from '$lib/components/constants'; // Import enums/constants
 
-const GEMINI_API_KEY = process.env.GOOGLE_API_KEY; // Use env import
+const GEMINI_API_KEY = process.env.GOOGLE_API_KEY; 
 
 if (!GEMINI_API_KEY) {
 	console.error('GEMINI_API_KEY environment variable is not set.');
@@ -26,15 +26,16 @@ const creativeSchema = {
 		textData: {
 			type: 'OBJECT',
 			nullable: true,
-			description: 'Fields for a Text creative (only populate if type is text)',
+			description: 'Fields for a Text creative (only populate if type is text). Generate content for ALL fields below.',
 			properties: {
-				headline: { type: 'STRING', description: 'Headline for the text ad.' },
-				body: { type: 'STRING', description: 'Main body content of the text ad.' },
-				callToAction: { type: 'STRING', description: 'Call to action text.' },
-				appealFeature: { type: 'STRING', description: `Appeal feature focus (e.g., ${appealFeatures.join(', ')}).` },
-				emotion: { type: 'STRING', description: `Emotion to evoke (e.g., ${videoEmotions.join(', ')}).` }, // Using videoEmotions as a general list
-				platformNotes: { type: 'STRING', description: 'Notes on platform suitability or adaptation.' }
-			}
+				headline: { type: 'STRING', description: 'Headline for the text ad (Generate if possible).' },
+				body: { type: 'STRING', description: 'Main body content of the text ad (Required).', nullable: false }, // Made non-nullable
+				callToAction: { type: 'STRING', description: 'Call to action text (Generate if possible).' },
+				appealFeature: { type: 'STRING', description: `Appeal feature focus (e.g., ${appealFeatures.join(', ')}) (Generate if possible).` },
+				emotion: { type: 'STRING', description: `Emotion to evoke (e.g., ${videoEmotions.join(', ')}) (Generate if possible).` }, // Using videoEmotions as a general list
+				platformNotes: { type: 'STRING', description: 'Notes on platform suitability or adaptation (Generate if possible).' }
+			},
+			required: ['body', 'callToAction', 'appealFeature', 'emotion', 'platformNotes'] // Explicitly require these fields
 		},
 		imageData: {
 			type: 'OBJECT',
@@ -171,11 +172,24 @@ export const POST: RequestHandler = async ({ request, params }: RequestEvent) =>
 Generate marketing creative content based on the provided product, target persona, and user instructions.
 Output MUST be valid JSON conforming to the provided schema.
 The creative type is '${creativeType}'. Only populate the fields relevant to this type (e.g., 'textData' for type 'text', 'imageData' for type 'image', etc.) and the common fields ('name', 'description'). Leave other type-specific objects (e.g., 'imageData', 'videoData', 'lpData' if type is 'text') as null or omit them.
-Use the info provided to create a relevant content.
-Respect the user's language.
-If the 'Current Creative Data' is empty or minimal, generate a comprehensive content filling all the fields.
-If 'Current Creative Data' exists, strictly apply only the changes requested in the 'User Instructions' to the existing data. Do not overwrite fields unless specifically asked.
 
+**IMPORTANT INSTRUCTIONS:**
+- Use the provided Product and Persona information to generate relevant and targeted content.
+- Respect the user's language in the output.
+- **If generating a new creative (Current Creative Data is empty/minimal):** You MUST generate meaningful content for ALL required fields. For text creatives, this includes: body, callToAction, appealFeature, emotion, and platformNotes. These fields are REQUIRED and cannot be omitted.
+- **If modifying an existing creative (Current Creative Data is provided):** Strictly apply only the changes requested in the 'User Instructions' to the existing data. Do not overwrite fields unless specifically asked.
+- For text creatives, ensure you generate compelling content for:
+  * Body (main content)
+  * Call to Action (what the user should do)
+  * Appeal Feature (select ONE from: ${appealFeatures.join(', ')})
+  * Stimulating Emotion (select ONE from: ${videoEmotions.join(', ')})
+  * Platform Notes (adaptation notes)
+
+**FORM FIELDS TO FILL:**
+1. Call to Action (Optional): Provide a clear, compelling action statement for the user.
+2. Appeal Feature (Optional): Select exactly ONE option from: ${appealFeatures.join(', ')}
+3. Stimulating Emotion (Optional): Select exactly ONE option from: ${videoEmotions.join(', ')}
+4. Platform Notes (Optional): Provide notes on platform suitability or adaptation.
 
 **Product Information:**
 ${JSON.stringify(product, null, 2)}
@@ -210,6 +224,49 @@ Generate the JSON output now.
 			if (creativeType === 'image' && !generatedData.imageData) console.warn("AI response missing expected imageData for type 'image'");
 			if (creativeType === 'video' && !generatedData.videoData) console.warn("AI response missing expected videoData for type 'video'");
 			if (creativeType === 'lp' && !generatedData.lpData) console.warn("AI response missing expected lpData for type 'lp'");
+			
+			// Enhanced validation for form fields
+			if (creativeType === 'text' && generatedData.textData) {
+				// Validate Appeal Feature is one of the allowed values
+				if (generatedData.textData.appealFeature && !appealFeatures.includes(generatedData.textData.appealFeature)) {
+					console.warn(`Invalid Appeal Feature value: ${generatedData.textData.appealFeature}. Using default.`);
+					generatedData.textData.appealFeature = appealFeatures[0]; // Default to first option
+				}
+				
+				// Validate Emotion is one of the allowed values
+				if (generatedData.textData.emotion && !videoEmotions.includes(generatedData.textData.emotion)) {
+					console.warn(`Invalid Emotion value: ${generatedData.textData.emotion}. Using default.`);
+					generatedData.textData.emotion = videoEmotions[0]; // Default to first option
+				}
+			}
+			
+			// Similar validation for other creative types
+			if (creativeType === 'image' && generatedData.imageData) {
+				if (generatedData.imageData.appealFeature && !appealFeatures.includes(generatedData.imageData.appealFeature)) {
+					generatedData.imageData.appealFeature = appealFeatures[0];
+				}
+				if (generatedData.imageData.emotion && !videoEmotions.includes(generatedData.imageData.emotion)) {
+					generatedData.imageData.emotion = videoEmotions[0];
+				}
+			}
+			
+			if (creativeType === 'video' && generatedData.videoData) {
+				if (generatedData.videoData.appealFeature && !appealFeatures.includes(generatedData.videoData.appealFeature)) {
+					generatedData.videoData.appealFeature = appealFeatures[0];
+				}
+				if (generatedData.videoData.emotion && !videoEmotions.includes(generatedData.videoData.emotion)) {
+					generatedData.videoData.emotion = videoEmotions[0];
+				}
+			}
+			
+			if (creativeType === 'lp' && generatedData.lpData) {
+				if (generatedData.lpData.appealFeature && !appealFeatures.includes(generatedData.lpData.appealFeature)) {
+					generatedData.lpData.appealFeature = appealFeatures[0];
+				}
+				if (generatedData.lpData.emotion && !videoEmotions.includes(generatedData.lpData.emotion)) {
+					generatedData.lpData.emotion = videoEmotions[0];
+				}
+			}
 
 			return json(generatedData);
 		} catch (parseError) {

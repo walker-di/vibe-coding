@@ -1,0 +1,30 @@
+meta {
+  name: anthropic
+  type: http
+  seq: 2
+}
+
+post {
+  url: https://api.anthropic.com/v1/messages
+  body: json
+  auth: inherit
+}
+
+headers {
+  content-type: application/json
+  x-api-key: YOUR_API_KEY
+  anthropic-version: 2023-06-01
+}
+
+body:json {
+  {
+    "model": "claude-3-opus-20240229",
+    "max_tokens": 1024,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Write a short poem about the sky."
+      }
+    ]
+  }
+}
