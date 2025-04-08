@@ -67,7 +67,7 @@ export const POST: RequestHandler = async ({ request }: RequestEvent) => { // Ad
 
 		// Construct the prompt including instructions and current data
 		const prompt = `respect the user language. focust on creating helpful output in JSON.
-If everything is empty, it is a new product. please fill all the fiels.
+If everything is empty, it is a new product. please fill all the fields. otherwise, strictly only apply the changes requested from the user.
 User Instructions:
 "${instructions}"
 

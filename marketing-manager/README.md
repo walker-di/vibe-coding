@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-A web application built with SvelteKit to manage marketing assets like campaigns, target personas, and creatives (ad copy, images, videos, landing pages). It aims to streamline the marketing workflow, potentially incorporating AI assistance in the future.
+A web application built with SvelteKit to manage marketing assets like campaigns, target personas, and creatives (ad copy, images, videos, landing pages). It aims to streamline the marketing workflow and incorporates AI assistance for generating and editing product details.
 
 **Core User Journey:**
 1.  **Define Product/Service:** Establish the core offering.
@@ -32,8 +32,9 @@ A web application built with SvelteKit to manage marketing assets like campaigns
     *   **Shared Detail View Components:** Created/verified shared detail view components (`...DetailView.svelte`) for Campaigns, Personas, Creatives, and Products, centralizing display logic.
     *   **Type Organization:** Moved shared TypeScript types for Products, Themes, and Video Templates into dedicated files within `src/lib/types/`.
     *   **Svelte 5:** Consistently using Svelte 5 Runes for state management.
-    *   **Data Fetching:** Primarily using client-side `$effect` hooks with `fetch` for data loading in list/detail pages. Edit pages for Campaigns and Products utilize SvelteKit's server `load` function and form `actions`.
+    *   **Data Fetching:** Primarily using client-side `$effect` hooks with `fetch` for data loading in list/detail pages. Edit pages utilize SvelteKit's server `load` function. Form submissions use client-side fetch or SvelteKit form actions.
 *   **UI:** Basic UI implemented using `shadcn-svelte` components. `CardSelector` used for specific video creative fields.
+*   **AI Assistance:** Integrated Google Gemini via a backend API (`/api/products/generate`) and a reusable frontend dialog (`AiGenerationDialog.svelte`) to generate or edit product details based on user instructions and current form data.
 
 ## 4. Key Architectural Decisions & Patterns
 
@@ -43,6 +44,7 @@ A web application built with SvelteKit to manage marketing assets like campaigns
     *   **Client-side (`$effect` + `fetch`):** Used for most list and detail pages for simplicity and SPA-like behavior.
     *   **Server-side (`load` + form actions):** Used for edit pages where server-side data loading and form handling provide benefits (e.g., Campaign edit, potentially Product edit in future).
 *   **State Management:** Svelte 5 Runes (`$state`, `$derived`, `$effect`) used for reactive state within components and pages.
+*   **AI Integration:** Backend API endpoint handles communication with the external AI service (Gemini), keeping API keys and complex logic server-side. A reusable frontend component provides the user interface for interaction.
 
 ## 5. Database Schema (`src/lib/server/db/schema.ts`)
 
@@ -282,7 +284,7 @@ export const creativeLpRelations = relations(creativeLp, ({ one }) => ({ creativ
 
 ## 8. API Endpoints & Data Flow
 
-*   **Products:** `/api/products`, `/api/products/[productId]`
+*   **Products:** `/api/products`, `/api/products/[productId]`, `/api/products/generate` (POST for AI generation/editing)
 *   **Personas:** `/api/products/[productId]/personas`, `/api/products/[productId]/personas/[personaId]`
 *   **Creatives:** `/api/creatives`, `/api/creatives/[creativeId]` (Requires `personaId` in POST body, supports `?personaId=` filter)
 *   **Campaigns:** `/api/campaigns`, `/api/campaigns/[id]`
@@ -295,10 +297,9 @@ export const creativeLpRelations = relations(creativeLp, ({ one }) => ({ creativ
 
 1.  **Clone the repository.**
 2.  **Install dependencies:** `npm install`
-3.  **Environment Variables:** Copy `.env.example` to `.env` and configure if necessary (e.g., database path, API keys for future AI features).
+3.  **Environment Variables:** Copy `.env.example` to `.env`. You **must** add your `GEMINI_API_KEY` for the AI product generation feature to work. Configure other variables like the database path if needed.
 4.  **Database Setup:**
     *   Run migrations: `npx drizzle-kit generate:sqlite` (if schema changes) followed by `node scripts/migrate.mjs` (or your migration script).
     *   Ensure `PRAGMA foreign_keys = ON;` is active for SQLite.
 5.  **Run Development Server:** `npm run dev`
 6.  **Open:** `http://localhost:5173` (or your configured port).
-
