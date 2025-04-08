@@ -23,23 +23,27 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 
 **(Same as before: SvelteKit, TypeScript, Drizzle ORM, SQLite, Tailwind CSS, Svelte 5 Runes, Storybook, ESLint/Prettier)**
 
-## Current Progress (As of April 7, 2025)
+## Current Progress (As of April 7, 2025 - Updated)
 
 *   **Phase 0: Foundation:**
     *   Project setup with SvelteKit, TypeScript, Tailwind CSS, Drizzle ORM, SQLite.
     *   Basic layout and navigation structure established.
     *   Database schema defined (`schema.ts`) and initial database state confirmed.
-*   **Phase 1: Core Entities & CRUD (SPA Strategy):**
+*   **Phase 1 & 2: Core Entities & Detailed Personas (SPA Strategy):**
     *   **Campaigns:**
-        *   API endpoint (`/api/campaigns`) created for GET requests (listing).
-        *   List page (`/campaigns`) implemented using client-side fetching (SPA).
-        *   *Note: Create/Edit/Delete for Campaigns not yet implemented.*
+        *   Full CRUD API endpoints implemented (`/api/campaigns` for GET/POST, `/api/campaigns/[id]` for GET/PUT/DELETE).
+        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy (`/campaigns`, `/campaigns/new`, `/campaigns/[id]`, `/campaigns/[id]/edit`).
     *   **Personas:**
-        *   API endpoint (`/api/personas`) created for GET (listing) and POST (creating) requests.
-        *   List page (`/personas`) implemented using client-side fetching (SPA).
-        *   Create page (`/personas/new`) implemented using client-side fetching and form submission to the API (SPA).
+        *   Full CRUD API endpoints implemented (`/api/personas` for GET/POST, `/api/personas/[id]` for GET/PUT/DELETE).
+        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy, including detailed fields (`/personas`, `/personas/new`, `/personas/[id]`, `/personas/[id]/edit`).
+        *   Mock AI Persona Generation implemented:
+            *   `/api/personas/generate` mock endpoint created.
+            *   "Generate" button added to `/personas/new` form, populating fields on mock success.
+    *   **Creatives:**
+        *   API endpoint (`/api/creatives`) created for GET requests (listing).
+        *   List page (`/creatives`) implemented using client-side fetching (SPA).
 *   **Development Strategy:**
-    *   Decided to use a Single-Page Application (SPA) strategy for data fetching (GET) and mutations (POST/PUT/DELETE) via client-side `fetch` calls to dedicated API endpoints, instead of SvelteKit Form Actions.
+    *   Consistently using a Single-Page Application (SPA) strategy with client-side `fetch` calls to dedicated API endpoints and Svelte 5 Runes for state management.
 
 ## 3. Phased Development Plan
 

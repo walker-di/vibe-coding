@@ -4,10 +4,32 @@ import { json, error as kitError } from '@sveltejs/kit';
 import { desc } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { z } from 'zod'; // For validation
+import { ageRanges, genders } from '$lib/server/db/schema'; // Import enums
 
-// Schema for creating a persona (Phase 1 - just name)
-const createPersonaSchema = z.object({
-	name: z.string().min(1, { message: 'Persona name is required.' }).max(100)
+// Schema for creating a persona (Phase 2 - includes all detailed fields)
+const createDetailedPersonaSchema = z.object({
+	name: z.string().min(1, { message: 'Persona name is required.' }).max(100),
+	personaTitle: z.string().max(150).optional().nullable(),
+	imageUrl: z.string().url({ message: 'Invalid URL format.' }).optional().nullable(),
+	ageRangeSelection: z.enum(ageRanges).default('Unspecified'),
+	ageRangeCustom: z.string().max(50).optional().nullable(),
+	gender: z.enum(genders).default('Unspecified'),
+	location: z.string().max(100).optional().nullable(),
+	jobTitle: z.string().max(100).optional().nullable(),
+	incomeLevel: z.string().max(100).optional().nullable(),
+	personalityTraits: z.string().optional().nullable(),
+	valuesText: z.string().optional().nullable(),
+	spendingHabits: z.string().optional().nullable(),
+	interestsHobbies: z.string().optional().nullable(),
+	lifestyle: z.string().optional().nullable(),
+	needsPainPoints: z.string().optional().nullable(),
+	goalsExpectations: z.string().optional().nullable(),
+	backstory: z.string().optional().nullable(),
+	purchaseProcess: z.string().optional().nullable(),
+	isGenerated: z.boolean().default(false).optional() // Default to false if not provided
+}).refine(data => data.ageRangeSelection !== 'Custom' || (data.ageRangeSelection === 'Custom' && data.ageRangeCustom), {
+	message: "Custom age range text is required when 'Custom' is selected.",
+	path: ["ageRangeCustom"], // Specify the path of the error
 });
 
 
@@ -43,28 +65,53 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({ message: 'Invalid JSON body' }, { status: 400 });
 	}
 
-	const validationResult = createPersonaSchema.safeParse(requestData);
+	// Use the detailed schema for validation
+	const validationResult = createDetailedPersonaSchema.safeParse(requestData);
 
 	if (!validationResult.success) {
 		const errors = validationResult.error.flatten().fieldErrors;
 		return json({ message: 'Validation failed', errors }, { status: 400 });
 	}
 
-	const validatedData = validationResult.data;
+	// Ensure ageRangeCustom is cleared if ageRangeSelection is not 'Custom'
+	// This is handled by the refine, but double-checking here before insert
+	const validatedData = { ...validationResult.data };
+	if (validatedData.ageRangeSelection !== 'Custom') {
+		validatedData.ageRangeCustom = null;
+	}
+
 
 	try {
-		console.log('API: Inserting new persona:', validatedData.name);
+		console.log('API: Inserting new detailed persona:', validatedData.name);
 		const [newPersona] = await db
 			.insert(personas)
 			.values({
-				name: validatedData.name
-				// Set other fields to defaults or null as needed by schema
+				// Insert all validated fields
+				name: validatedData.name,
+				personaTitle: validatedData.personaTitle,
+				imageUrl: validatedData.imageUrl,
+				ageRangeSelection: validatedData.ageRangeSelection,
+				ageRangeCustom: validatedData.ageRangeCustom,
+				gender: validatedData.gender,
+				location: validatedData.location,
+				jobTitle: validatedData.jobTitle,
+				incomeLevel: validatedData.incomeLevel,
+				personalityTraits: validatedData.personalityTraits,
+				valuesText: validatedData.valuesText,
+				spendingHabits: validatedData.spendingHabits,
+				interestsHobbies: validatedData.interestsHobbies,
+				lifestyle: validatedData.lifestyle,
+				needsPainPoints: validatedData.needsPainPoints,
+				goalsExpectations: validatedData.goalsExpectations,
+				backstory: validatedData.backstory,
+				purchaseProcess: validatedData.purchaseProcess,
+				isGenerated: validatedData.isGenerated
 			})
 			.returning({ id: personas.id }); // Get the ID back
 
 		console.log('API: New persona created with ID:', newPersona.id);
 
-		// Return the newly created persona (or just the ID) with a 201 status
+		// Return the newly created persona ID and name with a 201 status
 		return json({ id: newPersona.id, name: validatedData.name }, { status: 201 });
 
 	} catch (error) {
