@@ -6,6 +6,7 @@ import { ageRanges, genders } from '$lib/components/constants'; // Import consta
 import { db } from '$lib/server/db'; // Import DB client
 import { products } from '$lib/server/db/schema'; // Import products schema
 import { eq } from 'drizzle-orm'; // Import eq operator
+import { avatarPrompt } from '$lib/components/settings/ai/avagar.prompt';
 
 const GEMINI_API_KEY = env.GOOGLE_API_KEY; // Use env import
 
@@ -126,6 +127,8 @@ Use the product context to create a relevant and targeted persona.
 Respect the user's language. Focus on creating helpful output in JSON matching the schema.
 If the 'Current Persona Data' is empty or minimal, generate a comprehensive persona based on the 'User Instructions' and the 'Product Context' filling all the fields.
 If 'Current Persona Data' exists, strictly apply only the changes requested in the 'User Instructions' to the existing data. Do not overwrite fields unless specifically asked.
+info for image generation: ${avatarPrompt}
+
 
 User Instructions:
 "${instructions}"

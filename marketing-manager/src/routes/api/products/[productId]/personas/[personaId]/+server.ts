@@ -70,6 +70,11 @@ export const GET: RequestHandler = async ({ params }) => {
 
 // PUT /api/products/[productId]/personas/[personaId]
 export const PUT: RequestHandler = async ({ params, request }) => {
+	console.log(`--- API HIT: PUT /api/products/${params.productId}/personas/${params.personaId} ---`);
+	console.log(`Request Method: ${request.method}`);
+	console.log(`Request URL: ${request.url}`);
+	// console.log('Request Headers:', JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2)); // Optional: Log headers if needed
+
 	const { productId, personaId } = parseIds(params);
 
 	let requestData;

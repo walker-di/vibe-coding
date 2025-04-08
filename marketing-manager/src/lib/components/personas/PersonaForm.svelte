@@ -92,7 +92,9 @@
 
 
 	// --- Form Submission Logic ---
-	async function handleSubmit() {
+	async function handleSubmit(event: SubmitEvent) { // Accept event
+		event.preventDefault(); // Prevent default browser submission
+
 		submitting = true;
 		formErrors = {};
 
@@ -184,7 +186,7 @@
 	</div>
 {/if}
 
-<form onsubmit={handleSubmit} class="space-y-8">
+<form onsubmit={(event) => handleSubmit(event)} class="space-y-8"> // Pass event
 	<!-- Removed old AI Assistance section -->
 
 	<!-- Section 1: Basic Info & Image -->

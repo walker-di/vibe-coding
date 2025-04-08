@@ -49,6 +49,7 @@
 		error = null;
 
 		try {
+			console.log('--- AI DIALOG: Attempting to fetch from apiUrl:', apiUrl); // Log the URL
 			const response = await fetch(apiUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -116,9 +117,9 @@
 		</div>
 		<Dialog.Footer>
 			<Dialog.Close asChild let:builder>
-				<Button variant="outline" type="button" disabled={isGenerating}>Cancel</Button>
+			<Button variant="outline" type="button" disabled={isGenerating}>Cancel</Button>
 			</Dialog.Close>
-			<Button onclick={generate} disabled={isGenerating || !instructions.trim()} type="button">
+			<Button onclick={(e: MouseEvent) => { e.stopPropagation(); generate(); }} disabled={isGenerating || !instructions.trim()} type="button">
 				{#if isGenerating}
 					<Loader2 class="mr-2 h-4 w-4 animate-spin" /> Generating...
 				{:else}
