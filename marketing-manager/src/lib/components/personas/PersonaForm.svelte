@@ -5,9 +5,10 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { ageRanges, genders } from '$lib/components/constants'; // Import constants
-	import { AlertCircle, User } from 'lucide-svelte'; // Removed Sparkles
+	import { AlertCircle, User, ImagePlus } from 'lucide-svelte'; // Added ImagePlus
 	import type { personas } from '$lib/server/db/schema'; // Use type import
 	import AiGenerationDialog from '$lib/components/shared/AiGenerationDialog.svelte'; // Import the dialog
+	import AvatarSelectorModal from '$lib/components/shared/AvatarSelectorModal.svelte'; // Import the avatar modal
 
 	type PersonaInput = Omit<typeof personas.$inferInsert, 'id' | 'productId' | 'createdAt' | 'updatedAt'>; // Base type for form data
 
@@ -57,7 +58,8 @@
 	// Removed generating state
 	let formErrors = $state<Record<string, string | undefined>>({});
 	// Removed generationError state
-	let aiDialogOpen = $state(false); // State for dialog visibility
+	let aiDialogOpen = $state(false); // State for AI dialog visibility
+	let avatarModalOpen = $state(false); // State for Avatar modal visibility
 
 	// Determine if we are in edit mode
 	const isEditMode = $derived(!!personaData);
@@ -176,7 +178,7 @@
 	let showCustomAgeInput = $derived(ageRangeSelection === 'Custom');
 
 	// Disable form if product ID is required but missing (only relevant for product-specific context)
-	let disableForm = $derived(productId === null && apiBaseUrl.includes('/products/'));
+	let disableForm = $derived(productId === null && apiBaseUrl.includes('/products/')); // Removed extra semicolon
 </script>
 
 {#if formErrors.server}
@@ -184,11 +186,11 @@
 		<AlertCircle class="mr-2 h-4 w-4 flex-shrink-0" />
 		<span>{formErrors.server}</span>
 	</div>
-{/if}
-
-<form onsubmit={(event) => handleSubmit(event)} class="space-y-8"> // Pass event
-	<!-- Removed old AI Assistance section -->
-
+ {/if}
+ 
+ <form onsubmit={handleSubmit} class="space-y-8">
+ 	<!-- Removed old AI Assistance section -->
+ 
 	<!-- Section 1: Basic Info & Image -->
 	<section class="space-y-4 rounded border p-4">
 		<h2 class="text-lg font-semibold">Basic Information</h2>
@@ -202,12 +204,17 @@
 			<Input id="personaTitle" name="personaTitle" type="text" maxlength={150} bind:value={personaTitle} disabled={submitting || disableForm} class={formErrors.personaTitle ? 'border-red-500' : ''} />
 			{#if formErrors.personaTitle}<p class="mt-1 text-sm text-red-600">{formErrors.personaTitle}</p>{/if}
 		</div>
-		<div>
+		<div class="space-y-2">
 			<Label for="imageUrl" class={formErrors.imageUrl ? 'text-red-600' : ''}>Image URL (Optional)</Label>
-			<Input id="imageUrl" name="imageUrl" type="url" bind:value={imageUrl} disabled={submitting || disableForm} class={formErrors.imageUrl ? 'border-red-500' : ''} placeholder="https://..." />
+			<div class="flex items-center gap-2">
+				<Input id="imageUrl" name="imageUrl" type="url" bind:value={imageUrl} disabled={submitting || disableForm} class={`flex-grow ${formErrors.imageUrl ? 'border-red-500' : ''}`} placeholder="https://..." />
+				<Button type="button" variant="outline" onclick={() => avatarModalOpen = true} disabled={submitting || disableForm} title="Select Placeholder Avatar"> 
+					<ImagePlus class="h-4 w-4" />
+				</Button>
+			</div>
 			{#if formErrors.imageUrl}<p class="mt-1 text-sm text-red-600">{formErrors.imageUrl}</p>{/if}
 			{#if imageUrl}
-				<img src={imageUrl} alt="Preview" class="mt-2 h-24 w-24 rounded-full border object-cover" />
+				<img src={imageUrl} alt="Preview" class="h-24 w-24 rounded-full border object-cover" />
 			{:else}
 				<div class="mt-2 flex h-24 w-24 items-center justify-center rounded-full border bg-gray-100 text-gray-400">
 					<User class="h-12 w-12" />
@@ -346,6 +353,16 @@
 				dialogTitle="Generate Persona Details with AI"
 				dialogDescription="Enter instructions for the AI to fill out or modify the persona fields. Be specific (e.g., 'Generate a persona for a budget-conscious student interested in sustainable fashion'). The AI will use the current form data as context."
 				instructionPlaceholder="e.g., Create a detailed backstory for this persona..."
+			/>
+		{/if}
+
+		{#if avatarModalOpen}
+			<AvatarSelectorModal
+				bind:open={avatarModalOpen}
+				onSelect={(selectedUrl) => {
+					imageUrl = selectedUrl;
+					avatarModalOpen = false; // Close modal on selection
+				}}
 			/>
 		{/if}
 
