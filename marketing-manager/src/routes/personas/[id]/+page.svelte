@@ -5,6 +5,7 @@
 	import { ArrowLeft, AlertCircle, Trash2, Edit, User } from 'lucide-svelte';
 	import type { personas as personasTable } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
+	import PersonaDetailView from '$lib/components/personas/PersonaDetailView.svelte'; // Import the new component
 
 	type Persona = InferSelectModel<typeof personasTable>;
 
@@ -82,20 +83,6 @@
 		}
 	}
 
-	// --- Helpers ---
-	function displayAgeRange(selection: string | null | undefined, custom: string | null | undefined): string {
-		if (selection === 'Custom' && custom) {
-			return custom;
-		}
-		return selection || 'Unspecified';
-	}
-
-	function formatText(text: string | null | undefined): string {
-		// Display dash for empty fields, preserve line breaks for textareas
-		if (!text) return '-';
-		return text;
-	}
-
 </script>
 
 <div class="container mx-auto max-w-4xl py-8">
@@ -120,123 +107,24 @@
 		</div>
 	{:else if persona}
 		<div class="rounded border p-6 shadow">
-			<div class="mb-6 flex flex-col items-start gap-4 md:flex-row md:items-center">
-				{#if persona.imageUrl}
-					<img
-						src={persona.imageUrl}
-						alt={persona.name}
-						class="h-32 w-32 flex-shrink-0 rounded-full border object-cover"
-					/>
-				{:else}
-					<div class="flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border bg-gray-200 text-gray-500">
-						<User class="h-16 w-16" />
-					</div>
-				{/if}
-				<div class="flex-grow">
-					<h1 class="text-3xl font-bold">{persona.name}</h1>
-					{#if persona.personaTitle}
-						<p class="text-lg text-muted-foreground">{persona.personaTitle}</p>
+			<!-- Action Buttons (kept here for route context) -->
+			<div class="mb-6 flex justify-end gap-2">
+				<Button variant="outline" href={`/personas/${persona.id}/edit`}>
+					<Edit class="mr-2 h-4 w-4" />
+					Edit
+				</Button>
+				<Button variant="destructive" onclick={handleDelete} disabled={isDeleting}>
+					{#if isDeleting}
+						Deleting...
+					{:else}
+						<Trash2 class="mr-2 h-4 w-4" />
+						Delete
 					{/if}
-					{#if persona.isGenerated}
-						<span class="mt-1 inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-							AI Generated
-						</span>
-					{/if}
-				</div>
-				<div class="flex flex-shrink-0 gap-2 self-start md:self-center">
-					<Button variant="outline" href={`/personas/${persona.id}/edit`}> <!-- Removed disabled -->
-						<Edit class="mr-2 h-4 w-4" />
-						Edit
-					</Button>
-					<Button variant="destructive" onclick={handleDelete} disabled={isDeleting}>
-						{#if isDeleting}
-							Deleting...
-						{:else}
-							<Trash2 class="mr-2 h-4 w-4" />
-							Delete
-						{/if}
-					</Button>
-				</div>
+				</Button>
 			</div>
 
-			<!-- Details Grid -->
-			<div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 border-t pt-6 md:grid-cols-2">
-				<!-- Demographics -->
-				<div class="space-y-3">
-					<h3 class="text-lg font-semibold">Demographics</h3>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Age Range</dt>
-						<dd class="mt-1 text-base">{displayAgeRange(persona.ageRangeSelection, persona.ageRangeCustom)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Gender</dt>
-						<dd class="mt-1 text-base">{formatText(persona.gender)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Location</dt>
-						<dd class="mt-1 text-base">{formatText(persona.location)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Job Title</dt>
-						<dd class="mt-1 text-base">{formatText(persona.jobTitle)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Income Level</dt>
-						<dd class="mt-1 text-base">{formatText(persona.incomeLevel)}</dd>
-					</div>
-				</div>
-
-				<!-- Psychographics -->
-				<div class="space-y-3">
-					<h3 class="text-lg font-semibold">Psychographics</h3>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Personality Traits</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.personalityTraits)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Values</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.valuesText)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Spending Habits</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.spendingHabits)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Interests & Hobbies</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.interestsHobbies)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Lifestyle (Holiday Spending)</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.lifestyle)}</dd>
-					</div>
-				</div>
-
-				<!-- Needs & Goals -->
-				<div class="space-y-3 md:col-span-2">
-					<h3 class="text-lg font-semibold">Needs & Goals</h3>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Needs & Pain Points</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.needsPainPoints)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Goals & Expectations for Solution</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.goalsExpectations)}</dd>
-					</div>
-				</div>
-
-				<!-- Story & Behavior -->
-				<div class="space-y-3 md:col-span-2">
-					<h3 class="text-lg font-semibold">Story & Behavior</h3>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Backstory</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.backstory)}</dd>
-					</div>
-					<div>
-						<dt class="text-sm font-medium text-muted-foreground">Purchase Process</dt>
-						<dd class="mt-1 text-base whitespace-pre-wrap">{formatText(persona.purchaseProcess)}</dd>
-					</div>
-				</div>
-			</div>
+			<!-- Use the PersonaDetailView component, hiding the creatives section -->
+			<PersonaDetailView {persona} showCreativesSection={false} />
 		</div>
 	{:else}
 		<!-- Fallback if not loading and no error, but persona is null -->

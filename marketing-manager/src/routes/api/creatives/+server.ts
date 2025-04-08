@@ -1,6 +1,7 @@
 import { db } from '$lib/server/db';
 // Import necessary tables and enums
-import { creatives, creativeText, creativeImage, creativeVideo, creativeLp, creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/server/db/schema';
+import { creatives, creativeText, creativeImage, creativeVideo, creativeLp } from '$lib/server/db/schema'; // Import tables
+import { creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/components/constants'; // Import constants
 import { json, error as kitError } from '@sveltejs/kit';
 import { desc, eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
@@ -65,25 +66,40 @@ const createCreativeSchema = z.discriminatedUnion("type", [
 export const GET: RequestHandler = async ({ url }) => {
 	console.log('API: Loading creatives from database...');
 	try {
-		// TODO: Add filtering based on query params (campaignId, personaId, themeId, type) later
-		// const campaignId = url.searchParams.get('campaignId');
-		// const personaId = url.searchParams.get('personaId');
-		// const type = url.searchParams.get('type');
+		// Read query parameters
+		const personaIdParam = url.searchParams.get('personaId');
+		// TODO: Add other filters (campaignId, themeId, type) later
+		// const campaignIdParam = url.searchParams.get('campaignId');
+		// const typeParam = url.searchParams.get('type');
 
-		const allCreatives = await db.query.creatives.findMany({
+		let whereCondition = undefined;
+		if (personaIdParam) {
+			const personaId = parseInt(personaIdParam, 10);
+			if (!isNaN(personaId)) {
+				console.log(`API: Filtering creatives by personaId: ${personaId}`);
+				whereCondition = eq(creatives.personaId, personaId);
+			} else {
+				console.warn(`API: Invalid personaId parameter received: ${personaIdParam}`);
+				// Optionally return 400 Bad Request if personaId is invalid format
+			}
+		}
+		// TODO: Add conditions for other filters using `and()` if needed
+
+		const results = await db.query.creatives.findMany({
+			where: whereCondition, // Apply the where condition
 			orderBy: [desc(creatives.createdAt)],
-			// Include basic related data for list display if needed
+			// Include basic related data for list display
 			with: {
 				campaign: { columns: { id: true, name: true } },
 				persona: { columns: { id: true, name: true } },
 				theme: { columns: { id: true, title: true } }
-				// Specific type data could be fetched on detail view or conditionally here
+				// Specific type data could be fetched on detail view
 			}
-			// Add where clause here for filtering later
 		});
 
-		console.log(`API: Found ${allCreatives.length} creatives.`);
-		return json(allCreatives);
+		console.log(`API: Found ${results.length} creatives matching filter.`);
+		// If no results found for a specific filter, return empty array (not 404)
+		return json(results);
 	} catch (error) {
 		console.error('API: Failed to load creatives:', error);
 		kitError(500, 'Failed to load creatives');
