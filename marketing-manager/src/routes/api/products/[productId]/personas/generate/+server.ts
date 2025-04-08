@@ -8,7 +8,7 @@ import { products } from '$lib/server/db/schema'; // Import products schema
 import { eq } from 'drizzle-orm'; // Import eq operator
 import { avatarPrompt } from '$lib/components/settings/ai/avagar.prompt';
 
-const GEMINI_API_KEY = env.GOOGLE_API_KEY; // Use env import
+const GEMINI_API_KEY = process.env.GOOGLE_API_KEY; // Use env import
 
 if (!GEMINI_API_KEY) {
 	console.error('GOOGLE_API_KEY environment variable is not set.');
