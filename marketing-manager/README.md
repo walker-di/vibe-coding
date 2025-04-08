@@ -269,6 +269,14 @@ export const creativeLpRelations = relations(creativeLp, ({ one }) => ({ creativ
 *   `/products/[productId]/personas/[personaId]/creatives/new` (Create Form)
 *   `/products/[productId]/personas/[personaId]/creatives/[creativeId]` (Detail View)
 *   `/products/[productId]/personas/[personaId]/creatives/[creativeId]/edit` (Edit Form)
+*   `/personas` (List - *Likely active based on errors*)
+*   `/personas/new` (Create Form - *Likely active based on errors*)
+*   `/personas/[id]` (Detail View - *Likely active based on errors*)
+*   `/personas/[id]/edit` (Edit Form - *Likely active based on errors*)
+*   `/creatives` (List - *Likely active based on errors*)
+*   `/creatives/new` (Create Form - *Likely active based on errors*)
+*   `/creatives/[id]` (Detail View - *Likely active based on errors*)
+*   `/creatives/[id]/edit` (Edit Form - *Likely active based on errors*)
 *   `/campaigns` (List)
 *   `/campaigns/new` (Create Form)
 *   `/campaigns/[id]` (Detail View)
@@ -280,7 +288,7 @@ export const creativeLpRelations = relations(creativeLp, ({ one }) => ({ creativ
 *   `/settings/video-templates` (List)
 *   `/settings/video-templates/new` (Create Form)
 *   `/settings/video-templates/[id]/edit` (Edit Form)
-*   *(Removed top-level `/personas` and `/creatives` routes)*
+*   *(Note: Top-level `/personas` and `/creatives` routes seem active despite previous intention to remove)*
 
 ## 8. API Endpoints & Data Flow
 

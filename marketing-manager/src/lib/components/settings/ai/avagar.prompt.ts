@@ -1,4 +1,4 @@
-export const avatarPrompt = `Avatar Placeholder
+export const avatarPrompt = `Avatar Placeholders
 ## https://randomuser.me/
 Illustrated avatars
 Copy the links below and paste them into the src tag of your web image:
