@@ -45,6 +45,9 @@
 	let error = $state<string | null>(null); // For fetch errors
 	let formErrors = $state<Record<string, string | undefined>>({}); // For submission errors
 
+	// Filter genders for UI display
+	const gendersList = genders.filter(g => g !== 'Unspecified');
+
 	// --- Data Fetching ---
 	$effect(() => {
 		const idParam = $page.params.id;
@@ -254,12 +257,12 @@
 					{#if formErrors.ageRangeCustom}<p class="mt-1 text-sm text-red-600">{formErrors.ageRangeCustom}</p>{/if}
 				</div>
 				<div>
-					<Label class={formErrors.gender ? 'text-red-600' : ''}>Gender</Label>
-					<div class="mt-1 space-x-4">
-						{#each genders as genderOption}
-							<label class="inline-flex items-center">
-								<input type="radio" name="gender" value={genderOption} bind:group={gender} disabled={isSubmitting} class="mr-1" />
-								{genderOption}
+				<Label class={formErrors.gender ? 'text-red-600' : ''}>Gender</Label>
+				<div class="mt-1 space-x-4">
+					{#each gendersList as genderOption}
+						<label class="inline-flex items-center">
+							<input type="radio" name="gender" value={genderOption} bind:group={gender} disabled={isSubmitting} class="mr-1" />
+							{genderOption}
 							</label>
 						{/each}
 					</div>

@@ -10,7 +10,7 @@
 
 	// Define enums locally
 	const ageRangesList = ['Unspecified', '10s', '20s', '30s', '40s', '50s', '60s', '70+', 'Custom'] as const;
-	const gendersList = ['Unspecified', 'Male', 'Female'] as const;
+	const gendersList = ['Male', 'Female'] as const; // Removed 'Unspecified'
 
 	// --- State for form inputs ---
 	let name = $state('');
