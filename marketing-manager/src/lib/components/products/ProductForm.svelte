@@ -143,19 +143,29 @@
 
 	<!-- Actions: Use type="button" for Cancel to prevent form submission -->
 	<div class="flex justify-end gap-2 pt-4">
-		<!-- Use the new AiGenerationDialog component -->
-		<AiGenerationDialog
-			bind:open={aiDialogOpen}
-			apiUrl="/api/products/generate"
-			onGenerated={handleAiGenerated}
+		<!-- Explicit Trigger Button -->
+		<Button
+			variant="secondary"
+			type="button"
+			onclick={() => aiDialogOpen = true}
 			disabled={isSubmitting}
-			dialogTitle="Generate Product Details with AI"
-			dialogDescription="Enter instructions for the AI to fill out the product form fields. Be specific for better results (e.g., 'Generate details for a SaaS product that helps small businesses manage social media schedules')."
-			instructionPlaceholder="e.g., Create a product description for a new brand of eco-friendly coffee beans..."
-		/>
+		>
+			AI
+		</Button>
+		<!-- Conditionally render AiGenerationDialog only when open -->
+		{#if aiDialogOpen}
+			<AiGenerationDialog
+				bind:open={aiDialogOpen}
+				apiUrl="/api/products/generate"
+				onGenerated={handleAiGenerated}
+				disabled={isSubmitting}
+				dialogTitle="Generate Product Details with AI"
+				dialogDescription="Enter instructions for the AI to fill out the product form fields. Be specific for better results (e.g., 'Generate details for a SaaS product that helps small businesses manage social media schedules')."
+				instructionPlaceholder="e.g., Create a product description for a new brand of eco-friendly coffee beans..."
+			/>
+		{/if}
 
 		<Button type="button" onclick={onCancel} variant="outline" disabled={isSubmitting}>Cancel</Button>
-		<!-- Submit button type depends on whether parent form handles submission -->
 		<Button type={useClientSubmit ? 'submit' : 'submit'} disabled={isSubmitting}>
 			{#if isSubmitting}
 				{#if isEditMode}Saving...{:else}Creating...{/if}

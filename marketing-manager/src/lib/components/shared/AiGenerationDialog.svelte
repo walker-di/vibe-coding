@@ -87,10 +87,6 @@
 <Dialog.Root bind:open>
 	{#if children}
 		{@render children()}
-	{:else}
-		<Dialog.Trigger asChild let:builder disabled={disabled || isGenerating}>
-			<Button variant={triggerButtonVariant} type="button">{triggerButtonText}</Button>
-		</Dialog.Trigger>
 	{/if}
 	<Dialog.Content class="sm:max-w-[525px]">
 		<Dialog.Header>
