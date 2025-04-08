@@ -14,7 +14,7 @@ const baseCreativeSchema = z.object({
 	name: z.string().min(1, 'Creative name is required.').max(150),
 	description: z.string().max(500).optional().nullable(),
 	campaignId: z.number().int().positive().optional().nullable(),
-	personaId: z.number().int().positive().optional().nullable(),
+	personaId: z.number().int().positive(), // Made required (removed optional/nullable)
 	themeId: z.number().int().positive().optional().nullable(),
 	// Type will be validated specifically based on payload
 });
@@ -23,7 +23,10 @@ const baseCreativeSchema = z.object({
 const textDataSchema = z.object({
 	headline: z.string().max(200).optional().nullable(),
 	body: z.string().min(1, 'Body text is required.'),
-	callToAction: z.string().max(100).optional().nullable()
+	callToAction: z.string().max(100).optional().nullable(),
+	appealFeature: z.string().max(255).optional().nullable(), // Added
+	emotion: z.string().max(100).optional().nullable(), // Added
+	platformNotes: z.string().max(500).optional().nullable() // Added
 });
 
 // Schema for Image Creative specific fields
@@ -32,7 +35,10 @@ const imageDataSchema = z.object({
 	altText: z.string().max(200).optional().nullable(),
 	// width/height are optional, might be set later or derived
 	width: z.number().int().positive().optional().nullable(),
-	height: z.number().int().positive().optional().nullable()
+	height: z.number().int().positive().optional().nullable(),
+	appealFeature: z.string().max(255).optional().nullable(), // Added
+	emotion: z.string().max(100).optional().nullable(), // Added
+	platformNotes: z.string().max(500).optional().nullable() // Added
 });
 
 // Schema for Video Creative specific fields
@@ -50,7 +56,10 @@ const videoDataSchema = z.object({
 const lpDataSchema = z.object({
 	pageUrl: z.string().url('Invalid Page URL.').min(1, 'Page URL is required.'),
 	headline: z.string().max(200).optional().nullable(),
-	keySections: z.array(z.object({ title: z.string() })).optional().nullable() // Validate as array of objects
+	keySections: z.array(z.object({ title: z.string() })).optional().nullable(), // Validate as array of objects
+	appealFeature: z.string().max(255).optional().nullable(), // Added
+	emotion: z.string().max(100).optional().nullable(), // Added
+	platformNotes: z.string().max(500).optional().nullable() // Added
 });
 
 
@@ -156,7 +165,10 @@ export const POST: RequestHandler = async ({ request }) => {
 						creativeId: creativeId,
 						headline: validatedData.textData.headline,
 						body: validatedData.textData.body,
-						callToAction: validatedData.textData.callToAction
+						callToAction: validatedData.textData.callToAction,
+						appealFeature: validatedData.textData.appealFeature, // Added
+						emotion: validatedData.textData.emotion, // Added
+						platformNotes: validatedData.textData.platformNotes // Added
 					});
 					console.log(`API: Transaction - Inserted text data for creative ID: ${creativeId}`); // Log specific type
 					break;
@@ -166,7 +178,10 @@ export const POST: RequestHandler = async ({ request }) => {
 						imageUrl: validatedData.imageData.imageUrl,
 						altText: validatedData.imageData.altText,
 						width: validatedData.imageData.width,
-						height: validatedData.imageData.height
+						height: validatedData.imageData.height,
+						appealFeature: validatedData.imageData.appealFeature, // Added
+						emotion: validatedData.imageData.emotion, // Added
+						platformNotes: validatedData.imageData.platformNotes // Added
 					});
 					console.log(`API: Transaction - Inserted image data for creative ID: ${creativeId}`); // Log specific type
 					break;
@@ -188,7 +203,10 @@ export const POST: RequestHandler = async ({ request }) => {
 						creativeId: creativeId,
 						pageUrl: validatedData.lpData.pageUrl,
 						headline: validatedData.lpData.headline,
-						keySections: validatedData.lpData.keySections // Store parsed JSON
+						keySections: validatedData.lpData.keySections, // Store parsed JSON
+						appealFeature: validatedData.lpData.appealFeature, // Added
+						emotion: validatedData.lpData.emotion, // Added
+						platformNotes: validatedData.lpData.platformNotes // Added
 					});
 					console.log(`API: Transaction - Inserted LP data for creative ID: ${creativeId}`); // Log specific type
 					break;

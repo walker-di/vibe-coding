@@ -156,6 +156,19 @@
 				<dt class="text-sm font-medium text-muted-foreground">Call to Action</dt>
 				<dd class="mt-1 text-base">{formatText(creative.textData.callToAction)}</dd>
 			</div>
+			<!-- Added Text Appeal/Emotion/Platform Display -->
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Appeal Feature</dt>
+				<dd class="mt-1 text-base">{formatText(creative.textData.appealFeature)}</dd>
+			</div>
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Stimulating Emotion</dt>
+				<dd class="mt-1 text-base">{formatText(creative.textData.emotion)}</dd>
+			</div>
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Platform Notes</dt>
+				<dd class="mt-1 whitespace-pre-wrap text-base">{formatText(creative.textData.platformNotes)}</dd>
+			</div>
 		</dl>
 	{:else if creative.type === 'image' && creative.imageData}
 		<dl class="space-y-3">
@@ -178,6 +191,19 @@
 					<dd class="mt-1 text-base">{creative.imageData.width} x {creative.imageData.height}</dd>
 				</div>
 			{/if}
+			<!-- Added Image Appeal/Emotion/Platform Display -->
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Appeal Feature</dt>
+				<dd class="mt-1 text-base">{formatText(creative.imageData.appealFeature)}</dd>
+			</div>
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Stimulating Emotion</dt>
+				<dd class="mt-1 text-base">{formatText(creative.imageData.emotion)}</dd>
+			</div>
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Platform Notes</dt>
+				<dd class="mt-1 whitespace-pre-wrap text-base">{formatText(creative.imageData.platformNotes)}</dd>
+			</div>
 		</dl>
 	{:else if creative.type === 'video' && creative.videoData}
 		<dl class="space-y-3">
@@ -246,6 +272,19 @@
 			<div>
 				<dt class="text-sm font-medium text-muted-foreground">Key Sections</dt>
 				<dd class="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 text-sm font-mono">{formatJson(creative.lpData.keySections)}</dd>
+			</div>
+			<!-- Added LP Appeal/Emotion/Platform Display -->
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Appeal Feature</dt>
+				<dd class="mt-1 text-base">{formatText(creative.lpData.appealFeature)}</dd>
+			</div>
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Stimulating Emotion</dt>
+				<dd class="mt-1 text-base">{formatText(creative.lpData.emotion)}</dd>
+			</div>
+			<div>
+				<dt class="text-sm font-medium text-muted-foreground">Platform Notes</dt>
+				<dd class="mt-1 whitespace-pre-wrap text-base">{formatText(creative.lpData.platformNotes)}</dd>
 			</div>
 		</dl>
 	{:else}

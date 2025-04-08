@@ -123,6 +123,9 @@ export const creativeText = sqliteTable('creative_text', {
   headline: text('headline'),
   body: text('body').notNull(),
   callToAction: text('call_to_action'),
+  appealFeature: text('appeal_feature'), // Added
+  emotion: text('emotion'), // Added
+  platformNotes: text('platform_notes'), // Added
 });
 
 export const creativeImage = sqliteTable('creative_image', {
@@ -132,6 +135,9 @@ export const creativeImage = sqliteTable('creative_image', {
   altText: text('alt_text'),
   width: integer('width'),
   height: integer('height'),
+  appealFeature: text('appeal_feature'), // Added
+  emotion: text('emotion'), // Added
+  platformNotes: text('platform_notes'), // Added
 });
 
 export const creativeVideo = sqliteTable('creative_video', {
@@ -152,6 +158,9 @@ export const creativeLp = sqliteTable('creative_lp', {
   pageUrl: text('pageUrl').notNull(), // Corrected field name based on previous file content
   headline: text('headline'),
   keySections: text('key_sections', { mode: 'json' }),
+  appealFeature: text('appeal_feature'), // Added
+  emotion: text('emotion'), // Added
+  platformNotes: text('platform_notes'), // Added
 });
 
 // --- Relations ---

@@ -58,10 +58,16 @@
 	let textHeadline = $state(initialData?.textData?.headline || '');
 	let textBody = $state(initialData?.textData?.body || '');
 	let textCta = $state(initialData?.textData?.callToAction || '');
+	let textAppealFeature = $state(initialData?.textData?.appealFeature || ''); // Added
+	let textEmotion = $state(initialData?.textData?.emotion || ''); // Added
+	let textPlatformNotes = $state(initialData?.textData?.platformNotes || ''); // Added
 
 	// Image Fields
 	let imageUrl = $state(initialData?.imageData?.imageUrl || '');
 	let imageAltText = $state(initialData?.imageData?.altText || '');
+	let imageAppealFeature = $state(initialData?.imageData?.appealFeature || ''); // Added
+	let imageEmotion = $state(initialData?.imageData?.emotion || ''); // Added
+	let imagePlatformNotes = $state(initialData?.imageData?.platformNotes || ''); // Added
 
 	// Video Fields
 	let videoUrl = $state(initialData?.videoData?.videoUrl || '');
@@ -76,6 +82,9 @@
 	let lpPageUrl = $state(initialData?.lpData?.pageUrl || '');
 	let lpHeadline = $state(initialData?.lpData?.headline || '');
 	let lpKeySections = $state(initialData?.lpData?.keySections ? JSON.stringify(initialData.lpData.keySections, null, 2) : '');
+	let lpAppealFeature = $state(initialData?.lpData?.appealFeature || ''); // Added
+	let lpEmotion = $state(initialData?.lpData?.emotion || ''); // Added
+	let lpPlatformNotes = $state(initialData?.lpData?.platformNotes || ''); // Added
 
 	// --- Effect to populate from initialData (if provided) ---
 	$effect(() => {
@@ -89,8 +98,14 @@
 			textHeadline = initialData.textData?.headline || '';
 			textBody = initialData.textData?.body || '';
 			textCta = initialData.textData?.callToAction || '';
+			textAppealFeature = initialData.textData?.appealFeature || ''; // Added
+			textEmotion = initialData.textData?.emotion || ''; // Added
+			textPlatformNotes = initialData.textData?.platformNotes || ''; // Added
 			imageUrl = initialData.imageData?.imageUrl || '';
 			imageAltText = initialData.imageData?.altText || '';
+			imageAppealFeature = initialData.imageData?.appealFeature || ''; // Added
+			imageEmotion = initialData.imageData?.emotion || ''; // Added
+			imagePlatformNotes = initialData.imageData?.platformNotes || ''; // Added
 			videoUrl = initialData.videoData?.videoUrl || '';
 			videoPlatform = initialData.videoData?.platform || '';
 			videoFormat = initialData.videoData?.format || '';
@@ -101,6 +116,9 @@
 			lpPageUrl = initialData.lpData?.pageUrl || '';
 			lpHeadline = initialData.lpData?.headline || '';
 			lpKeySections = initialData.lpData?.keySections ? JSON.stringify(initialData.lpData.keySections, null, 2) : '';
+			lpAppealFeature = initialData.lpData?.appealFeature || ''; // Added
+			lpEmotion = initialData.lpData?.emotion || ''; // Added
+			lpPlatformNotes = initialData.lpData?.platformNotes || ''; // Added
 		}
 	});
 
@@ -130,7 +148,14 @@
 					if (!localFormErrors.textData) localFormErrors.textData = {};
 					localFormErrors.textData.body = 'Body is required.';
 				}
-				typeSpecificPayload = { headline: textHeadline || null, body: textBody, callToAction: textCta || null };
+				typeSpecificPayload = {
+					headline: textHeadline || null,
+					body: textBody,
+					callToAction: textCta || null,
+					appealFeature: textAppealFeature || null, // Added
+					emotion: textEmotion || null, // Added
+					platformNotes: textPlatformNotes || null // Added
+				};
 				finalPayload.textData = typeSpecificPayload;
 				break;
 			case 'image':
@@ -138,7 +163,13 @@
 					if (!localFormErrors.imageData) localFormErrors.imageData = {};
 					localFormErrors.imageData.imageUrl = 'Image URL is required.';
 				}
-				typeSpecificPayload = { imageUrl: imageUrl, altText: imageAltText || null };
+				typeSpecificPayload = {
+					imageUrl: imageUrl,
+					altText: imageAltText || null,
+					appealFeature: imageAppealFeature || null, // Added
+					emotion: imageEmotion || null, // Added
+					platformNotes: imagePlatformNotes || null // Added
+				};
 				finalPayload.imageData = typeSpecificPayload;
 				break;
 			case 'video':
@@ -160,12 +191,19 @@
 						parsedKeySections = JSON.parse(lpKeySections);
 					} catch (parseError: any) {
 						if (!localFormErrors.lpData) localFormErrors.lpData = {};
-						localFormErrors.lpData.keySections = 'Invalid JSON format for Key Sections.';
+					localFormErrors.lpData.keySections = 'Invalid JSON format for Key Sections.';
 						parsingErrorOccurred = true;
 					}
 				}
 				if (!parsingErrorOccurred) {
-					typeSpecificPayload = { pageUrl: lpPageUrl, headline: lpHeadline || null, keySections: parsedKeySections };
+					typeSpecificPayload = {
+						pageUrl: lpPageUrl,
+						headline: lpHeadline || null,
+						keySections: parsedKeySections,
+						appealFeature: lpAppealFeature || null, // Added
+						emotion: lpEmotion || null, // Added
+						platformNotes: lpPlatformNotes || null // Added
+					};
 					finalPayload.lpData = typeSpecificPayload;
 				}
 				break;
@@ -273,6 +311,24 @@
 				<Input id="textCta" name="textCta" type="text" maxlength={100} bind:value={textCta} disabled={isSubmitting} class={formErrors.textData?.callToAction ? 'border-red-500' : ''} />
 				{#if formErrors.textData?.callToAction}<p class="mt-1 text-sm text-red-600">{formErrors.textData.callToAction}</p>{/if}
 			</div>
+			<!-- Added Text Appeal/Emotion/Platform -->
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div>
+					<Label for="textAppealFeature" class={formErrors.textData?.appealFeature ? 'text-red-600' : ''}>Appeal Feature (Optional)</Label>
+					<Input id="textAppealFeature" name="textAppealFeature" type="text" maxlength={150} bind:value={textAppealFeature} disabled={isSubmitting} class={formErrors.textData?.appealFeature ? 'border-red-500' : ''} />
+					{#if formErrors.textData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.textData.appealFeature}</p>{/if}
+				</div>
+				<div>
+					<Label for="textEmotion" class={formErrors.textData?.emotion ? 'text-red-600' : ''}>Stimulating Emotion (Optional)</Label>
+					<Input id="textEmotion" name="textEmotion" type="text" maxlength={100} bind:value={textEmotion} disabled={isSubmitting} class={formErrors.textData?.emotion ? 'border-red-500' : ''} />
+					{#if formErrors.textData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.textData.emotion}</p>{/if}
+				</div>
+			</div>
+			<div>
+				<Label for="textPlatformNotes" class={formErrors.textData?.platformNotes ? 'text-red-600' : ''}>Platform Notes (Optional)</Label>
+				<Textarea id="textPlatformNotes" name="textPlatformNotes" rows={2} bind:value={textPlatformNotes} disabled={isSubmitting} class={formErrors.textData?.platformNotes ? 'border-red-500' : ''} />
+				{#if formErrors.textData?.platformNotes}<p class="mt-1 text-sm text-red-600">{formErrors.textData.platformNotes}</p>{/if}
+			</div>
 		</section>
 	{:else if selectedType === 'image'}
 		<section class="space-y-4 rounded border p-4">
@@ -289,6 +345,24 @@
 				<Label for="imageAltText" class={formErrors.imageData?.altText ? 'text-red-600' : ''}>Alt Text (Optional)</Label>
 				<Input id="imageAltText" name="imageAltText" type="text" maxlength={200} bind:value={imageAltText} disabled={isSubmitting} class={formErrors.imageData?.altText ? 'border-red-500' : ''} />
 				{#if formErrors.imageData?.altText}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.altText}</p>{/if}
+			</div>
+			<!-- Added Image Appeal/Emotion/Platform -->
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div>
+					<Label for="imageAppealFeature" class={formErrors.imageData?.appealFeature ? 'text-red-600' : ''}>Appeal Feature (Optional)</Label>
+					<Input id="imageAppealFeature" name="imageAppealFeature" type="text" maxlength={150} bind:value={imageAppealFeature} disabled={isSubmitting} class={formErrors.imageData?.appealFeature ? 'border-red-500' : ''} />
+					{#if formErrors.imageData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.appealFeature}</p>{/if}
+				</div>
+				<div>
+					<Label for="imageEmotion" class={formErrors.imageData?.emotion ? 'text-red-600' : ''}>Stimulating Emotion (Optional)</Label>
+					<Input id="imageEmotion" name="imageEmotion" type="text" maxlength={100} bind:value={imageEmotion} disabled={isSubmitting} class={formErrors.imageData?.emotion ? 'border-red-500' : ''} />
+					{#if formErrors.imageData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.emotion}</p>{/if}
+				</div>
+			</div>
+			<div>
+				<Label for="imagePlatformNotes" class={formErrors.imageData?.platformNotes ? 'text-red-600' : ''}>Platform Notes (Optional)</Label>
+				<Textarea id="imagePlatformNotes" name="imagePlatformNotes" rows={2} bind:value={imagePlatformNotes} disabled={isSubmitting} class={formErrors.imageData?.platformNotes ? 'border-red-500' : ''} />
+				{#if formErrors.imageData?.platformNotes}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.platformNotes}</p>{/if}
 			</div>
 		</section>
 	{:else if selectedType === 'video'}
@@ -356,7 +430,7 @@
 				<CardSelector
 					label="Video Template (Optional)"
 					id="videoTemplateId"
-					options={videoTemplatesList.map(t => ({
+					options={videoTemplatesList.map((t: VideoTemplate) => ({ // Explicitly type 't'
 						value: t.id,
 						label: t.name || t.templateCode || `Template ${t.id}`,
 						previewUrl: t.previewUrl || undefined,
@@ -390,6 +464,24 @@
 				<Label for="lpKeySections" class={formErrors.lpData?.keySections ? 'text-red-600' : ''}>Key Sections (JSON Array, Optional)</Label>
 				<Textarea id="lpKeySections" name="lpKeySections" rows={4} bind:value={lpKeySections} disabled={isSubmitting} class={formErrors.lpData?.keySections ? 'border-red-500' : ''} placeholder='' />
 				{#if formErrors.lpData?.keySections}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.keySections}</p>{/if}
+			</div>
+			<!-- Added LP Appeal/Emotion/Platform -->
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div>
+					<Label for="lpAppealFeature" class={formErrors.lpData?.appealFeature ? 'text-red-600' : ''}>Appeal Feature (Optional)</Label>
+					<Input id="lpAppealFeature" name="lpAppealFeature" type="text" maxlength={150} bind:value={lpAppealFeature} disabled={isSubmitting} class={formErrors.lpData?.appealFeature ? 'border-red-500' : ''} />
+					{#if formErrors.lpData?.appealFeature}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.appealFeature}</p>{/if}
+				</div>
+				<div>
+					<Label for="lpEmotion" class={formErrors.lpData?.emotion ? 'text-red-600' : ''}>Stimulating Emotion (Optional)</Label>
+					<Input id="lpEmotion" name="lpEmotion" type="text" maxlength={100} bind:value={lpEmotion} disabled={isSubmitting} class={formErrors.lpData?.emotion ? 'border-red-500' : ''} />
+					{#if formErrors.lpData?.emotion}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.emotion}</p>{/if}
+				</div>
+			</div>
+			<div>
+				<Label for="lpPlatformNotes" class={formErrors.lpData?.platformNotes ? 'text-red-600' : ''}>Platform Notes (Optional)</Label>
+				<Textarea id="lpPlatformNotes" name="lpPlatformNotes" rows={2} bind:value={lpPlatformNotes} disabled={isSubmitting} class={formErrors.lpData?.platformNotes ? 'border-red-500' : ''} />
+				{#if formErrors.lpData?.platformNotes}<p class="mt-1 text-sm text-red-600">{formErrors.lpData.platformNotes}</p>{/if}
 			</div>
 		</section>
 	{/if}

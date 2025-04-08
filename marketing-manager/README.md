@@ -163,6 +163,11 @@ export const creatives = sqliteTable('creatives', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 });
 
+// Note: While specific fields like 'appealFeature', 'emotion', and 'platform'
+// are currently defined in the creativeVideo table below for structural reasons,
+// these concepts (appeal, emotion, platform suitability) are important
+// considerations for *all* creative types (Text, Image, Video, LP).
+
 // --- Creative Type Specific Tables ---
 
 export const creativeText = sqliteTable('creative_text', {

@@ -4,13 +4,10 @@ import {
 	creativeText,
 	creativeImage,
 	creativeVideo,
-	creativeLp,
-	creativeTypes,
-	// Add missing enum imports
-	videoPlatforms,
-	videoFormats,
-	videoEmotions
+	creativeLp
 } from '$lib/server/db/schema';
+// Import constants from the correct path
+import { creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/components/constants';
 import { json, error as kitError } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
@@ -22,7 +19,7 @@ const baseCreativeSchema = z.object({
 	name: z.string().min(1).max(150).optional(),
 	description: z.string().max(500).optional().nullable(),
 	campaignId: z.number().int().positive().optional().nullable(),
-	personaId: z.number().int().positive().optional().nullable(),
+	personaId: z.number().int().positive().optional(), // Keep optional for PUT, but ensure non-null if provided
 	themeId: z.number().int().positive().optional().nullable(),
 	// Type cannot be changed via PUT
 });
@@ -30,14 +27,20 @@ const baseCreativeSchema = z.object({
 const textDataSchema = z.object({
 	headline: z.string().max(200).optional().nullable(),
 	body: z.string().min(1).optional(), // Optional for PUT if only changing headline/cta
-	callToAction: z.string().max(100).optional().nullable()
+	callToAction: z.string().max(100).optional().nullable(),
+	appealFeature: z.string().max(255).optional().nullable(), // Added
+	emotion: z.string().max(100).optional().nullable(), // Added
+	platformNotes: z.string().max(500).optional().nullable() // Added
 }).partial(); // Allow partial updates
 
 const imageDataSchema = z.object({
 	imageUrl: z.string().url().min(1).optional(),
 	altText: z.string().max(200).optional().nullable(),
 	width: z.number().int().positive().optional().nullable(),
-	height: z.number().int().positive().optional().nullable()
+	height: z.number().int().positive().optional().nullable(),
+	appealFeature: z.string().max(255).optional().nullable(), // Added
+	emotion: z.string().max(100).optional().nullable(), // Added
+	platformNotes: z.string().max(500).optional().nullable() // Added
 }).partial();
 
 // --- Add Start ---
@@ -54,7 +57,10 @@ const videoDataSchema = z.object({
 const lpDataSchema = z.object({
 	pageUrl: z.string().url('Invalid Page URL.').optional(), // Optional for PUT
 	headline: z.string().max(200).optional().nullable(),
-	keySections: z.array(z.object({ title: z.string() })).optional().nullable()
+	keySections: z.array(z.object({ title: z.string() })).optional().nullable(),
+	appealFeature: z.string().max(255).optional().nullable(), // Added
+	emotion: z.string().max(100).optional().nullable(), // Added
+	platformNotes: z.string().max(500).optional().nullable() // Added
 }).partial(); // Allow partial updates
 // --- Add End ---
 
@@ -176,15 +182,21 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		// Use transaction to update base and specific tables
 		const updatedCreativeResult = await db.transaction(async (tx) => {
 			// 1. Update base creatives table (if data provided)
-			if (Object.keys(validatedBaseData).length > 0) {
+			const baseUpdateData: Partial<typeof validatedBaseData & { updatedAt: any }> = { ...validatedBaseData };
+			// Explicitly remove personaId if it's null or undefined to avoid type error with non-nullable DB column
+			if (baseUpdateData.personaId === null || baseUpdateData.personaId === undefined) {
+				delete baseUpdateData.personaId;
+			}
+
+			let baseDataUpdated = false;
+			if (Object.keys(baseUpdateData).length > 0) {
+				baseUpdateData.updatedAt = sql`(unixepoch('now') * 1000)`; // Manual update timestamp
 				await tx
 					.update(creatives)
-					.set({
-						...validatedBaseData,
-						updatedAt: sql`(unixepoch('now') * 1000)` // Manual update timestamp
-					})
+					.set(baseUpdateData)
 					.where(eq(creatives.id, creativeId));
 				console.log(`API: Updated base data for creative ID: ${creativeId}`);
+				baseDataUpdated = true;
 			}
 
 			// 2. Update type-specific table (if data provided and valid)
@@ -210,8 +222,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 						break;
 					// --- Add End ---
 				}
-				// Also update the base table's updatedAt timestamp if only type-specific data changed
-				if (Object.keys(validatedBaseData).length === 0) {
+				// Also update the base table's updatedAt timestamp if only type-specific data changed and base data wasn't already updated
+				if (!baseDataUpdated) {
 					await tx.update(creatives).set({ updatedAt: sql`(unixepoch('now') * 1000)` }).where(eq(creatives.id, creativeId));
 				}
 			}
