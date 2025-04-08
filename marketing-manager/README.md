@@ -23,6 +23,24 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 
 **(Same as before: SvelteKit, TypeScript, Drizzle ORM, SQLite, Tailwind CSS, Svelte 5 Runes, Storybook, ESLint/Prettier)**
 
+## Current Progress (As of April 7, 2025)
+
+*   **Phase 0: Foundation:**
+    *   Project setup with SvelteKit, TypeScript, Tailwind CSS, Drizzle ORM, SQLite.
+    *   Basic layout and navigation structure established.
+    *   Database schema defined (`schema.ts`) and initial database state confirmed.
+*   **Phase 1: Core Entities & CRUD (SPA Strategy):**
+    *   **Campaigns:**
+        *   API endpoint (`/api/campaigns`) created for GET requests (listing).
+        *   List page (`/campaigns`) implemented using client-side fetching (SPA).
+        *   *Note: Create/Edit/Delete for Campaigns not yet implemented.*
+    *   **Personas:**
+        *   API endpoint (`/api/personas`) created for GET (listing) and POST (creating) requests.
+        *   List page (`/personas`) implemented using client-side fetching (SPA).
+        *   Create page (`/personas/new`) implemented using client-side fetching and form submission to the API (SPA).
+*   **Development Strategy:**
+    *   Decided to use a Single-Page Application (SPA) strategy for data fetching (GET) and mutations (POST/PUT/DELETE) via client-side `fetch` calls to dedicated API endpoints, instead of SvelteKit Form Actions.
+
 ## 3. Phased Development Plan
 
 *   **General Notes:**
@@ -296,7 +314,10 @@ export const creativeLpRelations = relations(creativeLp, ({ one }) => ({ creativ
 
 ## 7. API Endpoints & Data Flow
 
-**(Same core concepts - Form Actions, Load Functions, API Routes for AI. Remember manual `updatedAt`.)**
+*   **Data Fetching (Lists/Details):** Primarily use client-side `fetch` calls from page components (`+page.svelte`) to dedicated API GET endpoints (`/api/.../+server.ts`). Handle loading/error states within the component using `$state`.
+*   **Data Mutations (Create/Update/Delete):** Use client-side `fetch` calls (POST, PUT, DELETE) from components (e.g., within form `onsubmit` handlers) to dedicated API endpoints. API endpoints handle database interaction and return success/error status. Client-side logic handles UI updates, error display, and navigation (e.g., using `goto`).
+*   **AI Endpoints:** Dedicated API routes (`/api/.../generate`) will handle communication with external AI services.
+*   **Manual `updatedAt`:** Remember to manually set the `updatedAt` timestamp in the application logic (API route handlers) before performing database updates.
 
 ## 8. Key Considerations for Developers
 
@@ -345,7 +366,7 @@ Okay, here is the final, consolidated, and detailed development plan for the "Ma
 | 0     |                       | Shared UI Components (Basic)                      | **M**  | `/shared`: `Button`, `Input`, `Textarea`, `Select`, `Card`, `Modal`, `LoadingSpinner`, `PageHeader`. Develop via Storybook. | -                                                                                                                                                 | Reusable, styled primitives essential for consistent UI.                                                              |
 | 0     |                       | Drizzle ORM & SQLite Setup                       | **M**  | `drizzle.config.ts` for SQLite. `.env` for `DATABASE_URL="sqlite:./path/to/db.sqlite"`. Migration workflow established. | Initial `schema.ts` file.                                                                                                                         | Ensure SQLite driver installed. Confirm `PRAGMA foreign_keys = ON;` is active. Plan for manual `updatedAt` handling.      |
 | **1** | **Core Entities & CRUD** | **Campaigns (Basic CRUD)**                      | **M**  | `/campaigns` list (`Card`), `/campaigns/new`, `/[id]/edit` form (Name, Goal), `/[id]` detail view. Use Svelte 5 `$state` for forms. | `campaigns` table (id, name, goal, createdAt, updatedAt).                                                                                         | Foundational organizational unit. **(Completed)**                                                                       |
-| 1     |                       | **Personas (Basic CRUD)**                         | **M**  | `/personas` list (`Card`), `/personas/new`, `/[id]/edit` form (*only Name* field initially), `/[id]` detail view.            | `personas` table (id, name, createdAt, updatedAt - detailed fields added Phase 2).                                                              | Establishes the Persona entity; details are critical but added next.                                                    |
+| 1     |                       | **Personas (Basic CRUD)**                         | **M**  | `/personas` list (`Card`), `/personas/new`, `/[id]/edit` form (*only Name* field initially), `/[id]` detail view.            | `personas` table (id, name, createdAt, updatedAt - detailed fields added Phase 2).                                                              | Establishes the Persona entity. **(Completed - List/Create via SPA)** Details are critical but added next.             |
 | 1     |                       | **Creatives (Core Concept & CRUD)**               | **M**  | `/creatives` list (`Card`), `/creatives/new` (Select Type -> Show Fields), `/[id]/edit`, `/[id]` detail view.                | `creatives` table (id, name, type[enum], description, campaignId[FK], personaId[FK], themeId[FK, nullable], createdAt, updatedAt). Basic relations. | Central hub for assets. FKs included for structure; linking UI is basic.                                             |
 | 1     |                       | **Creative Types (Text, Image - Basic)**          | **M**  | `CreativeForm`: Conditional display (`{#if type === 'text'}`) for Text (Headline, Body, CTA), Image (URL, Alt Text). View shows data. | `creativeText`, `creativeImage` tables (basic fields). 1-to-1 relations to `creatives`.                                                           | MVP requires storing basic text/image info. **No file uploads - user pastes URLs.**                                  |
 | 1     |                       | **Creative Types (Video, LP - Basic)**            | **M**  | `CreativeForm`: Conditional display for Video (URL, Platform[text], Format[text], Duration[int]), LP (URL, Headline). View. | `creativeVideo`, `creativeLp` tables (basic fields). 1-to-1 relations to `creatives`.                                                             | Captures essential metadata provided by the user for Video/LP.                                                       |
