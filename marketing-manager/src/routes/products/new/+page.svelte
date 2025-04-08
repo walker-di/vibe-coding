@@ -1,34 +1,26 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import Button from '$lib/components/ui/button/Button.svelte';
-	import Input from '$lib/components/ui/input/Input.svelte';
-	import Label from '$lib/components/ui/label/Label.svelte';
-	import Textarea from '$lib/components/ui/textarea/Textarea.svelte';
-	import type { products } from '$lib/server/db/schema'; // Use type import
+	import Button from '$lib/components/ui/button/Button.svelte'; // Keep Button for potential use outside form
+	import ProductForm from '$lib/components/products/ProductForm.svelte'; // Import shared form
+	import type { ProductPayload } from '$lib/types/product.types'; // Import payload type from types file
+	import type { products } from '$lib/server/db/schema';
+	import type { InferSelectModel } from 'drizzle-orm'; // Import InferSelectModel
 
-	type Product = typeof products.$inferSelect;
+	type Product = InferSelectModel<typeof products>; // Use InferSelectModel
 
-	let formData = $state({
-		name: '',
-		description: '',
-		imageUrl: '',
-		industry: '',
-		overview: '',
-		details: '',
-		featuresStrengths: ''
-	});
+	// State managed by the page, passed to the form
+	let formErrors = $state<Record<string, any>>({}); // Includes potential server errors
+	let isSubmitting = $state<boolean>(false);
 
-	let error = $state<string | null>(null);
-	let submitting = $state<boolean>(false);
+	// Client-side submission logic passed to the form
+	async function handleSubmit(payload: ProductPayload) {
+		formErrors = {}; // Clear previous errors
+		isSubmitting = true;
 
-	async function handleSubmit(event: SubmitEvent) {
-		event.preventDefault(); // Prevent default form submission
-		error = null;
-		submitting = true;
-
-		if (!formData.name.trim()) {
-			error = 'Product name is required.';
-			submitting = false;
+		// Basic client-side validation (can be expanded)
+		if (!payload.name?.trim()) {
+			formErrors = { name: 'Product name is required.' };
+			isSubmitting = false;
 			return;
 		}
 
@@ -38,23 +30,37 @@
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify(formData)
+				body: JSON.stringify(payload)
 			});
 
+			const result = await response.json();
+
 			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({ message: 'Failed to create product. Please try again.' }));
-				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+				if (response.status === 400 && result.errors) {
+					// Handle potential validation errors from API
+					formErrors = result.errors;
+				} else {
+					formErrors = { server: result.message || 'Failed to create product. Please try again.' };
+				}
+				throw new Error(formErrors.server || 'Validation failed');
 			}
 
-			const newProduct: Product = await response.json();
-			goto(`/products/${newProduct.id}`); // Redirect to the new product's detail page
+			const newProduct: Product = result;
+			goto(`/products/${newProduct.id}`); // Redirect on success
 
 		} catch (e: any) {
 			console.error('Failed to create product:', e);
-			error = e.message || 'An unexpected error occurred.';
+			// Ensure server error is set if not already from response handling
+			if (!formErrors.server) {
+				formErrors = { ...formErrors, server: e.message || 'An unexpected error occurred.' };
+			}
 		} finally {
-			submitting = false;
+			isSubmitting = false;
 		}
+	}
+
+	function handleCancel() {
+		goto('/products'); // Navigate back to products list
 	}
 </script>
 
@@ -65,50 +71,12 @@
 <div class="container mx-auto p-4 md:p-8 max-w-2xl">
 	<h1 class="text-2xl font-bold mb-6">Create New Product</h1>
 
-	<form onsubmit={handleSubmit} class="space-y-4">
-		<div>
-			<Label for="name">Product Name <span class="text-red-500">*</span></Label>
-			<Input id="name" type="text" bind:value={formData.name} required disabled={submitting} />
-		</div>
-
-		<div>
-			<Label for="overview">Overview</Label>
-			<Textarea id="overview" bind:value={formData.overview} placeholder="A brief summary of the product." disabled={submitting} />
-		</div>
-
-        <div>
-			<Label for="industry">Industry</Label>
-			<Input id="industry" type="text" bind:value={formData.industry} placeholder="e.g., Business Video Media" disabled={submitting} />
-		</div>
-
-		<div>
-			<Label for="details">Detailed Description</Label>
-			<Textarea id="details" bind:value={formData.details} rows={5} placeholder="More in-depth information about the product." disabled={submitting} />
-		</div>
-
-        <div>
-			<Label for="featuresStrengths">Features / Strengths</Label>
-			<Textarea id="featuresStrengths" bind:value={formData.featuresStrengths} rows={5} placeholder="List key features or strengths, one per line." disabled={submitting} />
-		</div>
-
-		<div>
-			<Label for="description">Internal Description (Optional)</Label>
-			<Textarea id="description" bind:value={formData.description} placeholder="Internal notes or description." disabled={submitting} />
-		</div>
-
-		<div>
-			<Label for="imageUrl">Image URL (Optional)</Label>
-			<Input id="imageUrl" type="url" bind:value={formData.imageUrl} placeholder="https://example.com/image.png" disabled={submitting} />
-		</div>
-
-		{#if error}
-			<p class="text-red-500">{error}</p>
-		{/if}
-
-		<div class="flex justify-end pt-4">
-			<Button type="submit" disabled={submitting}>
-				{submitting ? 'Creating...' : 'Create Product'}
-			</Button>
-		</div>
-	</form>
+	<!-- Render the shared ProductForm -->
+	<ProductForm
+		onSubmit={handleSubmit}
+		onCancel={handleCancel}
+		{isSubmitting}
+		{formErrors}
+		initialData={null}
+	/>
 </div>

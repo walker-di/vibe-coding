@@ -2,247 +2,221 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Button from '$lib/components/ui/button/Button.svelte';
-	import Input from '$lib/components/ui/input/Input.svelte';
-	import Label from '$lib/components/ui/label/Label.svelte';
-	import Textarea from '$lib/components/ui/textarea/Textarea.svelte';
-	import type { products } from '$lib/server/db/schema'; // Use type import
+	import ProductForm from '$lib/components/products/ProductForm.svelte'; // Import shared form
+	import type { ProductPayload, ProductInputData } from '$lib/types/product.types'; // Import types
+	import { AlertCircle, ArrowLeft, Trash2 } from 'lucide-svelte'; // Import icons
 
-	type Product = typeof products.$inferSelect;
-
-	let formData = $state({
-		id: null as number | null, // Store the ID
-		name: '',
-		description: '',
-		imageUrl: '',
-		industry: '',
-		overview: '',
-		details: '',
-		featuresStrengths: ''
-	});
+	// --- State ---
+	let productId = $state<number | null>(null);
+	let initialFormData = $state<ProductInputData | null>(null); // Store fetched data for the form
+	let productName = $state<string>(''); // Store name separately for title/confirmation
 
 	let error = $state<string | null>(null);
 	let loading = $state<boolean>(true);
-	let submitting = $state<boolean>(false);
-	let deleting = $state<boolean>(false);
-	// let productId = $state<number | null>(null); // No longer needed
+	let isSubmitting = $state<boolean>(false); // For PUT request
+	let isDeleting = $state<boolean>(false); // For DELETE request
+	let formErrors = $state<Record<string, any>>({}); // Errors specifically for the form submission
 
-	// Single effect to handle route parameter changes and data fetching
+	// --- Data Fetching ---
 	$effect(() => {
 		const idParam = $page.params.productId;
-		console.log('Edit Effect: idParam changed to', idParam); // Debug log
+		const parsedId = idParam ? parseInt(idParam, 10) : NaN;
 
 		// Reset state for new fetch attempt or invalid ID
-		formData.id = null; // Reset form ID
+		productId = null;
+		initialFormData = null;
+		productName = '';
 		error = null;
-		loading = true; // Assume loading until fetch completes or fails
-
-		if (!idParam) {
-			console.log('Edit Effect: No idParam found.'); // Debug log
-			error = 'Product ID missing from URL.';
-			loading = false;
-			return; // Stop processing if no ID
-		}
-
-		const parsedId = parseInt(idParam, 10);
+		loading = true;
 
 		if (isNaN(parsedId)) {
-			console.log('Edit Effect: Invalid idParam format:', idParam); // Debug log
 			error = 'Invalid Product ID format in URL.';
 			loading = false;
 		} else {
-			console.log('Edit Effect: Valid productId parsed:', parsedId); // Debug log
+			productId = parsedId;
 			// Valid ID, trigger fetch
 			(async () => {
-				await fetchProduct(parsedId);
+				await fetchProduct(productId);
 			})();
 		}
 	});
 
-
 	async function fetchProduct(id: number) {
-		console.log('Edit fetchProduct called for', id); // Debug log
-		// error = null; // Resetting error in $effect now
 		try {
 			const response = await fetch(`/api/products/${id}`);
 			if (response.status === 404) throw new Error('Product not found.');
 			if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-			const productData: Product = await response.json();
-			// Populate formData state
-			formData.id = productData.id;
-			formData.name = productData.name;
-			formData.description = productData.description ?? '';
-			formData.imageUrl = productData.imageUrl ?? '';
-			formData.industry = productData.industry ?? '';
-			formData.overview = productData.overview ?? '';
-			formData.details = productData.details ?? '';
-			formData.featuresStrengths = productData.featuresStrengths ?? '';
+			const productData: ProductInputData & { id: number; name: string } = await response.json();
+			initialFormData = productData; // Set data for the form
+			productName = productData.name; // Store name for display
 
 		} catch (e: any) {
 			console.error(`Failed to fetch product ${id}:`, e);
 			error = e.message || 'Failed to load product details.';
-			formData.id = null; // Ensure ID is null on error
+			initialFormData = null; // Ensure form data is null on error
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function handleSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		if (!formData.id) return; // Should not happen if loaded correctly
+	// --- Form Submission (Update) ---
+	async function handleUpdateSubmit(payload: ProductPayload) {
+		if (!productId) return; // Should have ID if form is rendered
 
-		error = null;
-		submitting = true;
+		formErrors = {}; // Clear previous form errors
+		error = null; // Clear general page error
+		isSubmitting = true;
 
-		if (!formData.name.trim()) {
-			error = 'Product name is required.';
-			submitting = false;
+		// Basic client-side validation
+		if (!payload.name?.trim()) {
+			formErrors = { name: 'Product name is required.' };
+			isSubmitting = false;
 			return;
 		}
 
-		// Prepare data for PUT request (only send fields that are part of the form)
-		const updateData = {
-			name: formData.name,
-			description: formData.description,
-			imageUrl: formData.imageUrl,
-			industry: formData.industry,
-			overview: formData.overview,
-			details: formData.details,
-			featuresStrengths: formData.featuresStrengths
-		};
-
-
 		try {
-			const response = await fetch(`/api/products/${formData.id}`, {
+			const response = await fetch(`/api/products/${productId}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(updateData)
+				body: JSON.stringify(payload) // Send payload from form
 			});
 
+			const result = await response.json();
+
 			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({ message: 'Failed to update product.' }));
-				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+				if (response.status === 400 && result.errors) {
+					formErrors = result.errors; // API validation errors
+				} else {
+					formErrors = { server: result.message || 'Failed to update product.' };
+				}
+				throw new Error(formErrors.server || 'Validation failed');
 			}
 
-			goto(`/products/${formData.id}`); // Redirect to the product detail page
+			goto(`/products/${productId}`); // Redirect to the product detail page on success
 
 		} catch (e: any) {
 			console.error('Failed to update product:', e);
-			error = e.message || 'An unexpected error occurred during update.';
+			// Ensure server error is set if not already
+			if (!formErrors.server) {
+				formErrors = { ...formErrors, server: e.message || 'An unexpected error occurred during update.' };
+			}
 		} finally {
-			submitting = false;
+			isSubmitting = false;
 		}
 	}
 
-    async function handleDelete() {
-        if (!formData.id || deleting) return;
+	// --- Delete Logic ---
+	async function handleDelete() {
+		if (!productId || isDeleting || isSubmitting) return;
 
-        if (!confirm(`Are you sure you want to delete the product "${formData.name}"? This action cannot be undone.`)) {
-            return;
-        }
+		if (!confirm(`Are you sure you want to delete the product "${productName}"? This action cannot be undone.`)) {
+			return;
+		}
 
-        error = null;
-        deleting = true;
+		error = null; // Clear general page error
+		formErrors = {}; // Clear form errors
+		isDeleting = true;
 
-        try {
-            const response = await fetch(`/api/products/${formData.id}`, {
-                method: 'DELETE'
-            });
+		try {
+			const response = await fetch(`/api/products/${productId}`, {
+				method: 'DELETE'
+			});
 
-            if (response.status === 204) {
-                goto('/products'); // Redirect to product list on successful deletion
-            } else {
-                 const errorData = await response.json().catch(() => ({ message: 'Failed to delete product.' }));
+			if (response.status === 204 || response.ok) { // Handle 204 No Content or 200 OK
+				goto('/products'); // Redirect to product list on successful deletion
+			} else {
+				const errorData = await response.json().catch(() => ({ message: 'Failed to delete product.' }));
 				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-            }
+			}
 
-        } catch (e: any) {
-            console.error('Failed to delete product:', e);
-			error = e.message || 'An unexpected error occurred during deletion.';
-        } finally {
-            deleting = false;
-        }
-    }
+		} catch (e: any) {
+			console.error('Failed to delete product:', e);
+			error = e.message || 'An unexpected error occurred during deletion.'; // Show general error
+		} finally {
+			isDeleting = false;
+		}
+	}
 
-    function cancelEdit() {
-        if (formData.id) {
-            goto(`/products/${formData.id}`);
-        } else {
-            goto('/products');
-        }
-    }
+	// --- Cancel Handler ---
+	function handleCancel() {
+		if (productId) {
+			goto(`/products/${productId}`);
+		} else {
+			goto('/products');
+		}
+	}
 </script>
 
 <svelte:head>
-	<title>{loading ? 'Loading...' : `Edit Product: ${formData.name || '...'}`}</title>
+	<title>{loading ? 'Loading...' : `Edit Product: ${productName || '...'}`}</title>
 </svelte:head>
 
 <div class="container mx-auto p-4 md:p-8 max-w-2xl">
-	<h1 class="text-2xl font-bold mb-6">Edit Product</h1>
+	<!-- Back Button -->
+	<div class="mb-6">
+		<Button
+			href={productId ? `/products/${productId}` : '/products'}
+			variant="outline"
+			aria-disabled={!productId}
+			class={!productId ? 'pointer-events-none opacity-50' : ''}
+		>
+			<ArrowLeft class="mr-2 h-4 w-4" />
+			Back to {productId ? 'Product' : 'Products'}
+		</Button>
+	</div>
+
+	<h1 class="text-2xl font-bold mb-6">Edit Product {productName ? `"${productName}"` : ''}</h1>
 
 	{#if loading}
-		<p>Loading product data...</p>
-	{:else if error && !formData.id}
-        <!-- Show error only if we failed to load the product initially -->
-		<p class="text-red-500 mb-4">Error: {error}</p>
-        <Button onclick={() => goto('/products')} variant="outline">Back to Products List</Button>
-	{:else if formData.id}
-		<form onsubmit={handleSubmit} class="space-y-4">
-			<div>
-				<Label for="name">Product Name <span class="text-red-500">*</span></Label>
-				<Input id="name" type="text" bind:value={formData.name} required disabled={submitting || deleting} />
+		<p class="text-center">Loading product data...</p>
+	{:else if error && !initialFormData}
+		<!-- Show initial loading error -->
+		<div class="flex flex-col items-center justify-center rounded border border-dashed border-red-500 bg-red-50 p-12 text-center text-red-700">
+			<AlertCircle class="mb-2 h-8 w-8" />
+			<h3 class="text-xl font-semibold">Error Loading Product</h3>
+			<p class="mb-4 text-sm">{error}</p>
+			<Button href="/products" variant="outline">Back to Products List</Button>
+		</div>
+	{:else if initialFormData}
+		<!-- General Error Display (for delete/update errors) -->
+		{#if error}
+			<div class="mb-4 flex items-center rounded border border-red-500 bg-red-50 p-3 text-sm text-red-700">
+				<AlertCircle class="mr-2 h-4 w-4 flex-shrink-0" />
+				<span>{error}</span>
 			</div>
+		{/if}
 
-			<div>
-				<Label for="overview">Overview</Label>
-				<Textarea id="overview" bind:value={formData.overview} placeholder="A brief summary of the product." disabled={submitting || deleting} />
-			</div>
+		<!-- Render the shared ProductForm -->
+		<ProductForm
+			initialData={initialFormData}
+			onSubmit={handleUpdateSubmit}
+			onCancel={handleCancel}
+			isSubmitting={isSubmitting}
+			formErrors={formErrors}
+		/>
 
-			<div>
-				<Label for="industry">Industry</Label>
-				<Input id="industry" type="text" bind:value={formData.industry} placeholder="e.g., Business Video Media" disabled={submitting || deleting} />
-			</div>
+		<!-- Delete Button Section -->
+		<div class="mt-8 pt-6 border-t border-dashed border-red-300">
+			<h2 class="text-lg font-semibold text-red-700 mb-2">Danger Zone</h2>
+			<p class="text-sm text-gray-600 mb-4">Deleting this product cannot be undone.</p>
+			<Button
+				type="button"
+				variant="destructive"
+				onclick={handleDelete}
+				disabled={isDeleting || isSubmitting}
+			>
+				{#if isDeleting}
+					Deleting...
+				{:else}
+					<Trash2 class="mr-2 h-4 w-4" />
+					Delete Product
+				{/if}
+			</Button>
+		</div>
 
-			<div>
-				<Label for="details">Detailed Description</Label>
-				<Textarea id="details" bind:value={formData.details} rows={5} placeholder="More in-depth information about the product." disabled={submitting || deleting} />
-			</div>
-
-			<div>
-				<Label for="featuresStrengths">Features / Strengths</Label>
-				<Textarea id="featuresStrengths" bind:value={formData.featuresStrengths} rows={5} placeholder="List key features or strengths, one per line." disabled={submitting || deleting} />
-			</div>
-
-			<div>
-				<Label for="description">Internal Description (Optional)</Label>
-				<Textarea id="description" bind:value={formData.description} placeholder="Internal notes or description." disabled={submitting || deleting} />
-			</div>
-
-			<div>
-				<Label for="imageUrl">Image URL (Optional)</Label>
-				<Input id="imageUrl" type="url" bind:value={formData.imageUrl} placeholder="https://example.com/image.png" disabled={submitting || deleting} />
-			</div>
-
-			{#if error}
-                <!-- Show non-loading errors here -->
-				<p class="text-red-500">{error}</p>
-			{/if}
-
-			<div class="flex justify-between items-center pt-4">
-                <Button type="button" variant="destructive" onclick={handleDelete} disabled={deleting || submitting}>
-                    {deleting ? 'Deleting...' : 'Delete Product'}
-                </Button>
-				<div class="space-x-2">
-                    <Button type="button" variant="outline" onclick={cancelEdit} disabled={submitting || deleting}>Cancel</Button>
-                    <Button type="submit" disabled={submitting || deleting}>
-                        {submitting ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                </div>
-			</div>
-		</form>
-    {:else}
-        <!-- Fallback if loading finished but formData.id is still null (shouldn't happen ideally) -->
-         <p class="text-red-500 mb-4">Could not load product data.</p>
-         <Button onclick={() => goto('/products')} variant="outline">Back to Products List</Button>
+	{:else}
+		<!-- Fallback if loading finished but initialFormData is still null -->
+		<p class="text-center text-red-600">Could not load product data.</p>
 	{/if}
 </div>
