@@ -1,5 +1,6 @@
-<script lang="ts">
-	import { page } from '$app/stores';
+<script lang='ts'>
+import { page } from '$app/stores';
+import { Button } from '$lib/components/ui/button'; // Import Button
 
 	// Define navigation links
 	const navLinks = [
@@ -29,21 +30,19 @@
 			<!-- TODO: Add a logo/icon here if desired -->
 			<span class="font-bold">Marketing Manager</span>
 		</a>
-		<nav class="flex items-center space-x-6 text-sm font-medium">
+		<nav class="flex items-center space-x-1 text-sm font-medium"> <!-- Reduced space slightly for button padding -->
 			{#each navLinks as link}
-				<a
+				<Button
 					href={link.href}
-					class={`transition-colors hover:text-foreground/80 ${isActive(link.href) ? 'text-foreground' : 'text-foreground/60'}`}
+					variant="link"
+					class={`h-auto px-3 py-2 transition-colors hover:text-foreground/80 ${isActive(link.href) ? 'text-foreground underline' : 'text-foreground/60'}`}
 				>
+					<!-- Added underline for active state -->
 					{link.label}
-				</a>
+				</Button>
 			{/each}
 		</nav>
 		<!-- Optional: Add user profile/actions to the right -->
 		<!-- <div class="flex flex-1 items-center justify-end space-x-4"> ... </div> -->
 	</div>
 </header>
-
-<style>
-	/* Add any component-specific styles if needed, Tailwind is preferred */
-</style>

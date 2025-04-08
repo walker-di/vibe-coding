@@ -3,9 +3,13 @@ import {
 	creatives,
 	creativeText,
 	creativeImage,
-	creativeVideo, // Import other types later
-	creativeLp,    // Import other types later
-	creativeTypes
+	creativeVideo,
+	creativeLp,
+	creativeTypes,
+	// Add missing enum imports
+	videoPlatforms,
+	videoFormats,
+	videoEmotions
 } from '$lib/server/db/schema';
 import { json, error as kitError } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
@@ -36,7 +40,24 @@ const imageDataSchema = z.object({
 	height: z.number().int().positive().optional().nullable()
 }).partial();
 
-// TODO: Add videoDataSchema and lpDataSchema later
+// --- Add Start ---
+const videoDataSchema = z.object({
+	videoUrl: z.string().url('Invalid Video URL.').optional().nullable(),
+	platform: z.enum(videoPlatforms).optional().nullable(),
+	format: z.enum(videoFormats).optional().nullable(),
+	duration: z.number().int().positive('Duration must be a positive integer.').optional().nullable(),
+	appealFeature: z.string().max(255).optional().nullable(),
+	emotion: z.enum(videoEmotions).optional().nullable(),
+	templateId: z.number().int().positive().optional().nullable()
+}).partial(); // Allow partial updates
+
+const lpDataSchema = z.object({
+	pageUrl: z.string().url('Invalid Page URL.').optional(), // Optional for PUT
+	headline: z.string().max(200).optional().nullable(),
+	keySections: z.array(z.object({ title: z.string() })).optional().nullable()
+}).partial(); // Allow partial updates
+// --- Add End ---
+
 
 // We don't use discriminated union here as type isn't changing.
 // We'll validate based on the existing creative's type.
@@ -73,8 +94,8 @@ export const GET: RequestHandler = async ({ params }) => {
 				// Include relations for all possible types
 				textData: true,
 				imageData: true,
-				videoData: true, // Add later
-				lpData: true      // Add later
+				videoData: true, // <-- Uncommented
+				lpData: true      // <-- Uncommented
 			}
 		});
 
@@ -135,7 +156,18 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			typeValidationResult = imageDataSchema.safeParse(imageData);
 			if (typeValidationResult.success) validatedTypeData = typeValidationResult.data;
 		}
-		// TODO: Add validation for video/lp later
+		// --- Add Start ---
+		else if (creativeType === 'video' && videoData) {
+			typeValidationResult = videoDataSchema.safeParse(videoData);
+			if (typeValidationResult.success) validatedTypeData = typeValidationResult.data;
+		} else if (creativeType === 'lp' && lpData) {
+			// Special handling for keySections JSON parsing if needed (similar to POST?)
+			// For simplicity here, assume lpData is already structured correctly or handle parsing if needed.
+			typeValidationResult = lpDataSchema.safeParse(lpData);
+			if (typeValidationResult.success) validatedTypeData = typeValidationResult.data;
+		}
+		// --- Add End ---
+
 
 		if (typeValidationResult && !typeValidationResult.success) {
 			return json({ message: `Validation failed (${creativeType} data)`, errors: typeValidationResult.error.flatten().fieldErrors }, { status: 400 });
@@ -166,7 +198,17 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 						await tx.update(creativeImage).set(validatedTypeData).where(eq(creativeImage.creativeId, creativeId));
 						console.log(`API: Updated image data for creative ID: ${creativeId}`);
 						break;
-					// TODO: Add cases for video/lp later
+					// --- Add Start ---
+					case 'video':
+						await tx.update(creativeVideo).set(validatedTypeData).where(eq(creativeVideo.creativeId, creativeId));
+						console.log(`API: Updated video data for creative ID: ${creativeId}`);
+						break;
+					case 'lp':
+						// Ensure keySections is handled correctly if it's passed as JSON string vs object
+						await tx.update(creativeLp).set(validatedTypeData).where(eq(creativeLp.creativeId, creativeId));
+						console.log(`API: Updated LP data for creative ID: ${creativeId}`);
+						break;
+					// --- Add End ---
 				}
 				// Also update the base table's updatedAt timestamp if only type-specific data changed
 				if (Object.keys(validatedBaseData).length === 0) {
@@ -183,8 +225,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 					theme: { columns: { id: true, title: true } },
 					textData: true,
 					imageData: true,
-					videoData: true, // Add later
-					lpData: true      // Add later
+					videoData: true, // <-- Uncommented
+					lpData: true      // <-- Uncommented
 				}
 			});
 		});
