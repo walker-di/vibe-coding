@@ -9,9 +9,9 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 **(Same as before)**
 
 **Core User Journey (Refined based on Images 4, 7-11):**
-1.  **(Optional/Implicit) Define Product/Service:** (Context for everything, maybe part of Campaign setup initially).
-2.  **Define Target Audience (Personas):** Create detailed personas, potentially using AI assistance (Image 2, 5, 6).
-3.  **Select Creative Type:** Choose to create Ad Copy, LP info, or Video info (Image 7).
+1.  **Define Product/Service:** Establish the core offering the marketing efforts revolve around.
+2.  **Define Target Audience (Personas):** Create detailed personas, linked to a specific Product, potentially using AI assistance (Image 2, 5, 6).
+3.  **Select Creative Type:** Choose to create Ad Copy, LP info, or Video info (Image 7), linked to a Persona.
 4.  **Configure Creative Details:**
     *   *For Video:* Define appeal features, desired emotion, target platform, select a theme/angle, choose a format/template (Images 8, 9, 10, 11, 12).
     *   *For Copy/LP:* Define core message, potentially link to Theme.
@@ -23,7 +23,7 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 
 **(Same as before: SvelteKit, TypeScript, Drizzle ORM, SQLite, Tailwind CSS, Svelte 5 Runes, Storybook, ESLint/Prettier)**
 
-## Current Progress (As of April 7, 2025 - Updated - End of Day)
+## Current Progress (As of April 8, 2025 - Start of Day)
 
 *   **Phase 0: Foundation:**
     *   Project setup with SvelteKit, TypeScript, Tailwind CSS, Drizzle ORM, SQLite.
@@ -40,9 +40,9 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
         *   Mock AI Persona Generation implemented:
             *   `/api/personas/generate` mock endpoint created.
             *   "Generate" button added to `/personas/new` form, populating fields on mock success.
-    *   **Creatives (Phase 1 - Text & Image):**
-        *   Full CRUD API endpoints implemented for core creative and Text/Image types (`/api/creatives` for GET/POST, `/api/creatives/[id]` for GET/PUT/DELETE - Note: PUT/DELETE in `[id]` are not yet implemented).
-        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy for Text and Image types (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields. **Note:** Previous errors encountered while integrating Phase 3/4 features into `/routes/creatives/new/+page.svelte` are pending investigation; enhanced logging added to `POST /api/creatives` endpoint to assist debugging.
+    *   **Creatives (Phases 1, 3 & 4 - API Complete):**
+        *   Full CRUD API endpoints implemented for all creative types (`/api/creatives` for GET/POST, `/api/creatives/[id]` for GET/PUT/DELETE), including handling of `themeId` and detailed `videoData` (appeal feature, emotion, template ID, etc.). Enhanced logging remains in POST endpoint.
+        *   Frontend pages (List, New, Detail, Edit) implemented using SPA strategy (`/creatives`, `/creatives/new`, `/creatives/[id]`, `/creatives/[id]/edit`). Form includes type selection and conditional fields for all types, including Phase 3/4 video details. **Note:** Assumed functional after API fixes; thorough testing recommended.
     *   **Themes & Video Templates (Phase 3 & 4):**
         *   Full CRUD API endpoints implemented for Themes (`/api/themes`, `/api/themes/[id]`).
         *   Full CRUD API endpoints implemented for Video Templates (`/api/video-templates`, `/api/video-templates/[id]`).
@@ -51,7 +51,7 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
         *   Full CRUD frontend pages implemented for managing Video Templates (`/settings/video-templates`, `/settings/video-templates/new`, `/settings/video-templates/[id]/edit`).
 *   **Development Strategy:**
     *   Consistently using a Single-Page Application (SPA) strategy with client-side `fetch` calls to dedicated API endpoints and Svelte 5 Runes for state management.
-    *   `shadcn-svelte` initialized for UI components. **Note:** Header navigation update (`/lib/components/layout/Header.svelte`) failed due to persistent errors; component reverted to original state. Re-integration requires further investigation.
+    *   `shadcn-svelte` initialized for UI components. Header navigation (`/lib/components/layout/Header.svelte`) successfully updated to use `shadcn-svelte` Button component.
 
 ## 3. Phased Development Plan
 
@@ -60,23 +60,30 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
     *   **Database:** SQLite via Drizzle ORM. Remember manual `updatedAt` handling and `PRAGMA foreign_keys = ON;`.
     *   **Terminology:** Use labels/terms inspired by the images where practical (e.g., "Appeal Feature," "Stimulating Emotion").
 
-*   **Phase 1: Foundation, Core Creative Types (Text, Image, Basic Video/LP)**
+*   **Phase 1: Foundation, Core Entities (Product, Campaign, Persona, Creative Types)**
     *   **Developer Tasks:**
         *   Setup, Layout, Shared Components (as before).
-        *   **Database Schema (Initial):** `campaigns` (basic fields), `personas` (basic fields), `creatives`, `creativeText`, `creativeImage`, `creativeVideo` (URL, platform, format, duration only), `creativeLp` (URL, headline only). Use SQLite types (Schema below).
+        *   **Database Schema (Initial):** `products` (basic fields), `campaigns` (basic fields), `personas` (basic fields - *no product link yet*), `creatives`, `creativeText`, `creativeImage`, `creativeVideo` (URL, platform, format, duration only), `creativeLp` (URL, headline only). Use SQLite types (Schema below).
         *   Migrations (`drizzle-kit generate:sqlite`, apply).
+        *   **Product CRUD (`/products` or `/settings/products`):** Implement basic list, create, view, edit, delete for Products.
+        *   **Campaign CRUD (`/campaigns/...`):** Implement basic list, create, view, edit, delete for Campaigns.
+        *   **Persona CRUD (`/personas/...`):** Implement basic list, create, view, edit, delete for Personas (*Name only* initially).
         *   **Creative CRUD (`/creatives/...`):** Implement basic list, create, view, edit, delete for the four core types. `CreativeForm` uses conditional fields. `CreativeList/Card` shows basic info.
         *   **Basic Linking UI:** Add simple dropdowns in `CreativeForm` to select *existing* Campaign/Persona (by ID/Name). Save `campaignId`, `personaId`.
         *   **No File Uploads Yet:** Store image/video URLs provided by the user.
 
-*   **Phase 2: Detailed Persona Management & AI Assist**
+*   **Phase 2: Detailed Persona Management, Linking & AI Assist**
     *   **Developer Tasks:**
-        *   **Database Schema:** Enhance `personas` table with *all* detailed fields from Images 5 & 6 (personaTitle, ageRange specific format, jobTitle, incomeLevel, personalityTraits, values, spendingHabits, interestsHobbies, lifestyle, needsPainPoints, goalsExpectations, backstory, purchaseProcess).
+        *   **Database Schema:** Enhance `personas` table with *all* detailed fields from Images 5 & 6 (personaTitle, ageRange specific format, jobTitle, incomeLevel, personalityTraits, values, spendingHabits, interestsHobbies, lifestyle, needsPainPoints, goalsExpectations, backstory, purchaseProcess). **Add `productId` foreign key (nullable). Add `insights` (TEXT) field.**
         *   Migrations.
         *   **Persona UI (`/personas/...`):**
-            *   Update `PersonaForm` with all new fields, using appropriate input types (text, textarea). Match Image 2 inputs for Age (radios + text range) and Gender.
-            *   Implement `PersonaDetailView` showing all fields clearly sectioned.
+            *   Update `PersonaForm` with all new fields, including `insights`. Use appropriate input types (text, textarea). Match Image 2 inputs for Age (radios + text range) and Gender. **Add dropdown/select to link to an existing Product.**
+            *   Implement `PersonaDetailView` showing all fields clearly sectioned, including `insights` and linked Product name.
             *   `PersonaCard` can show name, title, image.
+            *   Update `PersonaForm` with all new fields, using appropriate input types (text, textarea). Match Image 2 inputs for Age (radios + text range) and Gender. **Add dropdown/select to link to an existing Product.**
+            *   Implement `PersonaDetailView` showing all fields clearly sectioned, **including linked Product name.**
+            *   `PersonaCard` can show name, title, image.
+        *   **API Updates:** Modify Persona API endpoints (`/api/personas`, `/api/personas/[id]`) to handle saving and retrieving the `productId`.
         *   **AI-Assisted Persona Generation (`PersonaForm`):**
             *   Add "顧客画像イメージを生成する" (Generate Persona Details) button.
             *   Inputs: Age range/selection, Gender (as per Image 2). Potentially add a field for "Industry" or "Core Need" to guide generation better.
@@ -84,14 +91,17 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
             *   Frontend: Call API on button click, populate the `$state` variables bound to the form fields with the response. User can edit before saving. Add `isGenerated` flag handling.
         *   **Linking:** Ensure Persona selection dropdown in `CreativeForm` searches/displays detailed personas.
 
-*   **Phase 3: Campaign Management & Introduction of Themes**
+*   **Phase 3: Campaign Management, Themes & Strategy Foundation**
     *   **Developer Tasks:**
         *   **Database Schema:**
             *   Enhance `campaigns` table (targetPlatforms, status).
             *   Add new `themes` table (id, title, description, associatedPainPoint - based on Image 9).
             *   Add optional `themeId` foreign key to `creatives` table.
+            *   **Add new `strategies` table (id, campaignId[FK], positioning_3c, positioning_pod_pop, who_insights, what_benefits, how_appeal_axis, how_expression_axis, how_media_plan, how_objectives, createdAt, updatedAt).**
+            *   **Add optional `strategyId` foreign key to `creatives` table.**
         *   Migrations.
-        *   **Campaign UI (`/campaigns/...`):** Implement full CRUD for Campaigns with the enhanced fields. `CampaignDetailView` should list associated creatives.
+        *   **Campaign UI (`/campaigns/...`):** Implement full CRUD for Campaigns with the enhanced fields. `CampaignDetailView` should list associated creatives **and potentially link to/display Strategy summary.**
+        *   **Strategy UI (Basic - Phase 3.5/S):** Add basic CRUD UI for managing Strategies, likely linked from Campaign view (`/campaigns/[id]/strategy`). Start with simple text areas for each field.
         *   **Theme Management (Simple):**
             *   Add basic CRUD UI for managing Themes (`/settings/themes` or similar).
             *   Allow creating themes with Title, Description, Pain Point.
@@ -119,8 +129,7 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
 *   **Phase 5 & Beyond (Aspirational / Long-Term R&D - Requires significant effort):**
     *   **Goals:** Implement features inspired by Images 3, 13-17.
     *   **Potential Features:**
-        *   **Product/Service Management:** Add entity to associate with campaigns.
-        *   **Advanced Strategy Module (Image 3):** UI to define Positioning (3C, PoD/PoP), WHO (Insights beyond Persona), WHAT (Benefits), HOW (Appeal Axis, Expression Axis, Media Plan). Link these strategy elements.
+        *   **Advanced Strategy Module (Integrated):** The `strategies` entity introduced in Phase 3 provides the foundation. Phase 5+ would involve enhancing the UI for better input/visualization and potentially adding AI assistance for filling these fields.
         *   **Structured Databases (Image 17):** Build management UI and schemas for `StructureDB` (copy frameworks, video scene structures) and `DesignDB` (visual styles).
         *   **AI Generation (Advanced):** Generate video scene lists, LP wireframes based on selected templates, themes, personas, and assets. Integrate with Structure/Design DBs.
         *   **Data Ingestion & Analysis (Image 15, 16):** Tools to input URLs, competitor info, meeting notes. AI analysis to generate Competitor Reports, Target Audience Analysis.
@@ -146,6 +155,15 @@ export const genders = ['Unspecified', 'Male', 'Female'] as const; // From Image
 
 // --- Core Tables ---
 
+export const products = sqliteTable('products', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  description: text('description'),
+  imageUrl: text('image_url'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }), // Handle updates in app logic
+});
+
 export const campaigns = sqliteTable('campaigns', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
@@ -163,6 +181,8 @@ export const personas = sqliteTable('personas', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   // Core Info (Image 5)
   name: text('name').notNull(),
+  productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }), // Added Phase 2
+  insights: text('insights'), // Added Phase 2 (from Strategy Image)
   personaTitle: text('persona_title'),
   imageUrl: text('image_url'),
   // Demographics (Image 2, 5)
@@ -198,6 +218,23 @@ export const themes = sqliteTable('themes', {
     associatedPainPoint: text('associated_pain_point'), // Pain Point from Image 9
     // Potential future fields: targetIndustry, associatedBenefit
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }), // Handle updates in app logic
+});
+
+// Added Phase 3.5/S
+export const strategies = sqliteTable('strategies', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    campaignId: integer('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }), // Link to Campaign
+    positioning_3c: text('positioning_3c'),
+    positioning_pod_pop: text('positioning_pod_pop'),
+    who_insights: text('who_insights'), // Can supplement persona insights
+    what_benefits: text('what_benefits'),
+    how_appeal_axis: text('how_appeal_axis'),
+    how_expression_axis: text('how_expression_axis'),
+    how_media_plan: text('how_media_plan'),
+    how_objectives: text('how_objectives'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }), // Handle updates in app logic
 });
 
 // Added in Phase 4
@@ -225,6 +262,11 @@ export const creatives = sqliteTable('creatives', {
   campaignId: integer('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
   personaId: integer('persona_id').references(() => personas.id, { onDelete: 'set null' }),
   themeId: integer('theme_id').references(() => themes.id, { onDelete: 'set null' }), // Added Phase 3
+  strategyId: integer('strategy_id').references(() => strategies.id, { onDelete: 'set null' }), // Added Phase 3.5/S (Optional direct link)
+  // Optional Detail Fields (Could Have - C)
+  design_notes: text('design_notes'),
+  expression_notes: text('expression_notes'),
+  audio_notes: text('audio_notes'),
   // Meta
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }), // Handle updates in app logic
@@ -272,15 +314,27 @@ export const creativeLp = sqliteTable('creative_lp', {
 
 // --- Relations ---
 // (Define relations using Drizzle `relations` helper for all tables, including new ones like themes and videoTemplates linking back to creatives where appropriate)
-export const campaignRelations = relations(campaigns, ({ many }) => ({ creatives: many(creatives) }));
-export const personaRelations = relations(personas, ({ many }) => ({ creatives: many(creatives) }));
+export const productRelations = relations(products, ({ many }) => ({ personas: many(personas) })); // Added Phase 2
+export const campaignRelations = relations(campaigns, ({ one, many }) => ({ // Updated Phase 3.5/S
+    strategy: one(strategies, { fields: [campaigns.id], references: [strategies.campaignId] }), // Campaign has one Strategy
+    creatives: many(creatives)
+}));
+export const personaRelations = relations(personas, ({ one, many }) => ({ // Updated Phase 2
+  product: one(products, { fields: [personas.productId], references: [products.id] }),
+  creatives: many(creatives)
+}));
 export const themeRelations = relations(themes, ({ many }) => ({ creatives: many(creatives) }));
+export const strategyRelations = relations(strategies, ({ one, many }) => ({ // Added Phase 3.5/S
+    campaign: one(campaigns, { fields: [strategies.campaignId], references: [campaigns.id] }),
+    creatives: many(creatives) // Strategy can guide many Creatives
+}));
 export const videoTemplateRelations = relations(videoTemplates, ({ many }) => ({ videoCreatives: many(creativeVideo) })); // A template can be used by many videos
 
 export const creativeRelations = relations(creatives, ({ one }) => ({
   campaign: one(campaigns, { fields: [creatives.campaignId], references: [campaigns.id] }),
   persona: one(personas, { fields: [creatives.personaId], references: [personas.id] }),
   theme: one(themes, { fields: [creatives.themeId], references: [themes.id] }),
+  strategy: one(strategies, { fields: [creatives.strategyId], references: [strategies.id] }), // Added Phase 3.5/S
   // One-to-one for specific types
   textData: one(creativeText, { fields: [creatives.id], references: [creativeText.creativeId] }),
   imageData: one(creativeImage, { fields: [creatives.id], references: [creativeImage.creativeId] }),
@@ -315,14 +369,16 @@ export const creativeLpRelations = relations(creativeLp, ({ one }) => ({ creativ
     *   `PersonaForm.svelte`: Add all new fields. Use radio buttons/text input for Age as in Image 2. Include the "Generate Persona Details" button and associated logic using `$state`.
     *   `PersonaDetailView.svelte`: Structure to display the rich profile clearly (like Images 5/6).
 *   **`/campaigns/`**: Update forms/views for new fields.
-*   **`/settings/`**: (New section for Phase 3/4)
-    *   `/settings/themes`: CRUD UI for managing Themes.
-    *   `/settings/video-templates`: CRUD UI for managing Video Templates.
+*   **`/products/` or `/settings/products`**: (New section for Phase 1) CRUD UI for managing Products.
+*   **`/settings/`**: (Existing section, expanded)
+    *   `/settings/themes`: CRUD UI for managing Themes (Phase 3).
+    *   `/settings/video-templates`: CRUD UI for managing Video Templates (Phase 4).
 
 ## 6. Sitemap / Routes (`src/routes/`)
 
 *   **(Mostly the same)**
-*   Add `/settings/themes` and `/settings/video-templates` routes.
+*   Add `/products` or `/settings/products` route (Phase 1).
+*   Add `/settings/themes` and `/settings/video-templates` routes (Phase 3/4).
 
 ## 7. API Endpoints & Data Flow
 
@@ -377,28 +433,33 @@ Okay, here is the final, consolidated, and detailed development plan for the "Ma
 | 0     |                       | Basic Layout & Navigation                         | **M**  | Main `+layout.svelte` with header/sidebar (links initially placeholders). Basic routing defined in `/src/routes`.         | -                                                                                                                                                 | Establishes consistent app structure and navigation patterns.                                                          |
 | 0     |                       | Shared UI Components (Basic)                      | **M**  | `/shared`: `Button`, `Input`, `Textarea`, `Select`, `Card`, `Modal`, `LoadingSpinner`, `PageHeader`. Develop via Storybook. | -                                                                                                                                                 | Reusable, styled primitives essential for consistent UI.                                                              |
 | 0     |                       | Drizzle ORM & SQLite Setup                       | **M**  | `drizzle.config.ts` for SQLite. `.env` for `DATABASE_URL="sqlite:./path/to/db.sqlite"`. Migration workflow established. | Initial `schema.ts` file.                                                                                                                         | Ensure SQLite driver installed. Confirm `PRAGMA foreign_keys = ON;` is active. Plan for manual `updatedAt` handling.      |
-| **1** | **Core Entities & CRUD** | **Campaigns (Basic CRUD)**                      | **M**  | `/campaigns` list (`Card`), `/campaigns/new`, `/[id]/edit` form (Name, Goal), `/[id]` detail view. Use Svelte 5 `$state` for forms. | `campaigns` table (id, name, goal, createdAt, updatedAt).                                                                                         | Foundational organizational unit. **(Completed)**                                                                       |
+| **1** | **Core Entities & CRUD** | **Product (Basic CRUD)**                        | **M**  | `/products` or `/settings/products`: List, New, Edit, Detail views.                                                       | `products` table (id, name, description, imageUrl, createdAt, updatedAt).                                                                         | Foundational entity.                                                                                                  |
+| 1     |                       | **Campaigns (Basic CRUD)**                      | **M**  | `/campaigns` list (`Card`), `/campaigns/new`, `/[id]/edit` form (Name, Goal), `/[id]` detail view. Use Svelte 5 `$state` for forms. | `campaigns` table (id, name, goal, createdAt, updatedAt).                                                                                         | Foundational organizational unit. **(Completed)**                                                                       |
 | 1     |                       | **Personas (Basic CRUD)**                         | **M**  | `/personas` list (`Card`), `/personas/new`, `/[id]/edit` form (*only Name* field initially), `/[id]` detail view.            | `personas` table (id, name, createdAt, updatedAt - detailed fields added Phase 2).                                                              | Establishes the Persona entity. **(Completed - List/Create via SPA)** Details are critical but added next.             |
 | 1     |                       | **Creatives (Core Concept & CRUD)**               | **M**  | `/creatives` list (`Card`), `/creatives/new` (Select Type -> Show Fields), `/[id]/edit`, `/[id]` detail view.                | `creatives` table (id, name, type[enum], description, campaignId[FK], personaId[FK], themeId[FK, nullable], createdAt, updatedAt). Basic relations. | Central hub for assets. FKs included for structure; linking UI is basic.                                             |
 | 1     |                       | **Creative Types (Text, Image - Basic)**          | **M**  | `CreativeForm`: Conditional display (`{#if type === 'text'}`) for Text (Headline, Body, CTA), Image (URL, Alt Text). View shows data. | `creativeText`, `creativeImage` tables (basic fields). 1-to-1 relations to `creatives`.                                                           | MVP requires storing basic text/image info. **No file uploads - user pastes URLs.**                                  |
 | 1     |                       | **Creative Types (Video, LP - Basic)**            | **M**  | `CreativeForm`: Conditional display for Video (URL, Platform[text], Format[text], Duration[int]), LP (URL, Headline). View. | `creativeVideo`, `creativeLp` tables (basic fields). 1-to-1 relations to `creatives`.                                                             | Captures essential metadata provided by the user for Video/LP.                                                       |
 | 1     |                       | **Basic Linking UI (Creatives <-> Campaign/Persona)** | **M**  | `CreativeForm`: Simple `<select>` dropdowns populated with existing Campaign/Persona names/IDs. Saves IDs to FK fields.   | Uses `campaignId`, `personaId` FKs in `creatives`.                                                                                               | Essential for organizing creatives within the MVP structure.                                                          |
-| **2** | **Detailed Personas** | **Detailed Persona Fields (Data Model)**            | **M**  | - (Schema definition)                                                                                                     | Enhance `personas` table with *all* fields derived from Image 5/6 (personaTitle, ageRangeSelection, ageRangeCustom, gender, location, jobTitle, incomeLevel, personalityTraits, valuesText, spendingHabits, interestsHobbies, lifestyle, needsPainPoints, goalsExpectations, backstory, purchaseProcess). Use SQLite types. | Critical data capture to match reference examples.                                                                    |
-| 2     |                       | **Detailed Persona UI (Form & View)**             | **M**  | `/personas/new`, `/[id]/edit`: Multi-section form matching data fields. `/personas/[id]`: Structured detail view. Use `$state`. | - (UI implementation using Phase 2 schema)                                                                                                        | Provides the interface to manage the rich persona data.                                                               |
+| **2** | **Detailed Personas & Linking** | **Detailed Persona Fields (Data Model)**            | **M**  | - (Schema definition)                                                                                                     | Enhance `personas` table with *all* fields derived from Image 5/6 + `insights` field. Add `productId` FK. Use SQLite types.                       | Critical data capture to match reference examples + strategy input.                                                   |
+| 2     |                       | **Detailed Persona UI (Form & View)**             | **M**  | `/personas/new`, `/[id]/edit`: Multi-section form matching data fields + `insights`. `/personas/[id]`: Structured detail view. Use `$state`. | - (UI implementation using Phase 2 schema)                                                                                                        | Provides the interface to manage the rich persona data.                                                               |
+| 2     |                       | **Link Personas to Products**                     | **M**  | `PersonaForm`: Add `<select>` dropdown to associate an existing Product. Display linked Product on detail view.             | Uses `productId` FK in `personas`. Define `relations`.                                                                                            | Implements the core Product -> Persona link.                                                                          |
 | 2     |                       | **Image 2 UI Replication (Age/Gender Input)**     | **S**  | `PersonaForm`: Implement Age range radios (`10s`, `20s`...) + 'Other' text input. Gender radios (`Male`, `Female`...).        | Uses `ageRangeSelection`, `ageRangeCustom`, `gender` fields in `personas`.                                                                          | High fidelity to reference UI, improves user experience. Could simplify to text input if time-constrained (`C`).     |
 | 2     |                       | **AI Persona Generation (Trigger & Mock UI)**     | **M**  | `PersonaForm`: "顧客画像イメージを生成する" button. On click: trigger API call, display loading state, populate form fields (`$state`) on mock response. | Add `isGenerated` (boolean/integer) field to `personas`.                                                                                         | Implements the visible AI workflow. Mock response essential for UI dev without immediate AI dependency.                 |
 | 2     |                       | **AI Persona Generation (Backend API - Mock)**    | **M**  | `/api/personas/generate`: Endpoint accepts basic inputs (e.g., age, gender), returns *hardcoded JSON* matching detailed fields. | -                                                                                                                                                 | Decouples frontend dev from actual AI service.                                                                      |
 | 2     |                       | **AI Persona Generation (Real AI Integration)**   | **S**  | `/api/personas/generate`: Replace mock logic with call to LLM API (e.g., OpenAI). Construct prompt using inputs. Handle API key securely. | -                                                                                                                                                 | Delivers the core AI value proposition for personas. Requires setup, cost, prompt tuning.                            |
-| **3** | **Campaigns & Themes**| **Enhanced Campaign Fields**                      | **S**  | `CampaignForm`/`View`: Add inputs/display for Status (select), Target Platforms (text/tags).                               | Add `status` (enum/text), `targetPlatforms` (text) fields to `campaigns`.                                                                           | Adds practical detail for campaign management.                                                                      |
+| **3** | **Campaigns, Themes, Strategy**| **Enhanced Campaign Fields**                      | **S**  | `CampaignForm`/`View`: Add inputs/display for Status (select), Target Platforms (text/tags).                               | Add `status` (enum/text), `targetPlatforms` (text) fields to `campaigns`.                                                                           | Adds practical detail for campaign management.                                                                      |
 | 3     |                       | **Themes (Concept & CRUD)**                       | **M**  | `/settings/themes`: Basic list, create, edit, delete UI for Themes (Title, Description, Pain Point - based on Image 9).   | `themes` table (id, title, description, associatedPainPoint, createdAt).                                                                          | Essential strategic input concept shown feeding into creative process (Image 9 -> Image 8). Required for Phase 4 video. |
 | 3     |                       | **Link Creatives to Themes**                      | **M**  | `CreativeForm`: Add `<select>` dropdown to associate an existing Theme with a Creative. Display linked Theme on detail view. | Uses `themeId` FK in `creatives`. Define `relations`.                                                                                             | Connects the strategic angle (Theme) directly to the creative asset.                                                  |
+| 3.5   |                       | **Strategy Module (Data Model & Basic Link)**     | **S**  | - (Schema definition & relations)                                                                                         | `strategies` table (all fields from image). Link `campaigns` to `strategies` (1:1 or 1:many). Optional `strategyId` FK in `creatives`.             | Foundational structure for the strategic layer.                                                                       |
+| 3.5   |                       | **Strategy Module (Basic UI)**                    | **C**  | `/campaigns/[id]/strategy`: Basic form with text areas for each strategy field. View displays data. Link from Campaign detail. | - (UI implementation)                                                                                                                             | Provides initial way to input/view strategy. Full rich UI is later.                                                   |
 | **4** | **Adv. Video & AI Copy**| **Video Templates (Concept & CRUD)**            | **S**  | `/settings/video-templates`: Basic CRUD UI. Manage fields from Image 12 (Code, Name, Duration, Aspect Ratio, Preview URL etc.). | `videoTemplates` table (id, templateCode[unique], name, durationSeconds, materialCount, aspectRatio, sceneCount, recommendedPlatforms[json], resolution, previewUrl, createdAt). | Foundational for the template-driven video workflow (Image 11/12). Significant UX improvement.                       |
 | 4     |                       | **Video Creative UI: Appeal/Emotion (Image 8)**   | **S**  | `CreativeFormFieldsVideo`: Use `CardSelector`/radios for Appeal Feature ("アピールしたい商材特徴"). Use `CardSelector` w/ icons for Emotion ("刺激したい感情"). | Add `appealFeature` (text), `emotion` (enum/text) fields to `creativeVideo`.                                                                    | Directly implements key UI/workflow step from Image 8. Guides creative direction.                                  |
 | 4     |                       | **Video Creative UI: Platform/Template (Image 10/11)** | **S**  | `CreativeFormFieldsVideo`: Dropdown for Platform (`配信先`). `CardSelector` w/ previews for Template selection (`動画フォーマットの選択`). Filter templates? | Add `templateId` FK to `creativeVideo`. Define `relations`. `platform` field in `creativeVideo` used.                                         | Implements platform/format selection shown in Images 10/11. Depends on Video Templates feature. Filter adds value (`C`). |
 | 4     |                       | **AI Copy Suggestion (Trigger & Mock/Real)**      | **S**  | `CreativeFormFieldsText` (etc.): "Generate Suggestions" button. Calls `/api/copy/generate`. Mock first, then real AI using context (Persona, Theme). | -                                                                                                                                                 | Extends AI assistance to copy. High value-add feature.                                                               |
 | 4     |                       | **Creative Filtering (Basic)**                    | **S**  | `/creatives`: UI controls (dropdowns) to filter list by Type, Campaign, Persona, Theme. Update `load` function logic.       | - (Uses existing fields for filtering)                                                                                                             | Essential usability improvement as data volume increases.                                                            |
-| **5+**| **Future / Advanced** | Strategy Module (Image 3)                         | **C**  | Dedicated UI section for 3C, PoD/PoP, WHO Insights, WHAT Benefits, HOW Axis. Link to Campaigns/Creatives.               | Requires new tables (`strategyPoints`, `insights`, `benefits` etc.) and complex relations.                                                         | Adds significant strategic depth but is a major feature expansion.                                                   |
+| **5+**| **Future / Advanced** | Advanced Strategy Module UI/AI                    | **C**  | Enhance Strategy UI with better visualization, potentially AI suggestions based on inputs.                                | -                                                                                                                                                 | Improves usability and value of the strategy module.                                                                  |
 | 5+**|                       | Structured DBs (Image 17)                         | **C**  | UI/Schema (`structureTemplates`, `designStyles`) to manage reusable frameworks (copy, video scenes, design elements).       | New tables and management interfaces.                                                                                                             | Foundational for advanced AI generation ("mass production"). Requires significant design and implementation.         |
+| 5+**|                       | Creative Detail Fields (Design, Expression, Audio)  | **C**  | `CreativeForm`/`View`: Add optional text areas for Design Notes, Expression Notes, Audio Notes.                           | Add optional `design_notes`, `expression_notes`, `audio_notes` fields to `creatives`.                                                             | Captures more nuanced "HOW" details directly on the creative.                                                         |
 | 5+**|                       | Advanced AI Generation (Video Scenes, LP Wireframes)| **C**  | AI uses inputs + Structured DBs to generate draft video scene lists or LP structure proposals.                              | Complex AI prompting/fine-tuning. Output might be JSON/text descriptions.                                                                         | Core of the "mass production" vision. High complexity and dependency.                                                |
 | 5+**|                       | Data Ingestion/Analysis (Image 15, 16)**            | **C**  | Features to input URLs, competitor notes. AI backend analyzes and generates Competitor/Target reports.                       | New tables (`ingestedData`, `analysisReports`). Complex backend processing.                                                                     | Powerful automation but requires significant backend/AI work.                                                       |
 | 5+**|                       | Workflow Orchestration (Image 14)**               | **C**  | Guided UI flow (Plan->Design->Check->Action) coordinating different modules/features, possibly with AI suggestions.           | Complex state management across application, potentially tracking workflow progress per campaign/creative.                                    | High-level feature integrating many parts. Needs mature base features first.                                        |
@@ -429,9 +490,9 @@ Okay, here is the final, consolidated, and detailed development plan for the "Ma
 **High-Level Roadmap Summary:**
 
 1.  **Foundation (Phase 0):** Set up the project, core tools, and database connection.
-2.  **MVP Core (Phase 1 - Must):** Build basic CRUD for Campaigns, Personas, and all Creative types (Text, Image, Video, LP) with simple linking.
-3.  **Persona Enhancement (Phase 2 - Must/Should):** Implement detailed persona profiles and introduce the first key AI feature (Persona Generation).
-4.  **Strategic Layer (Phase 3 - Must):** Add the "Theme" concept as a strategic input and link it to creatives.
+2.  **MVP Core (Phase 1 - Must):** Build basic CRUD for Products, Campaigns, Personas (basic), and all Creative types (Text, Image, Video, LP) with simple linking (Creative -> Campaign/Persona).
+3.  **Persona Enhancement & Linking (Phase 2 - Must/Should):** Implement detailed persona profiles (including Insights), link Personas to Products, and introduce the first key AI feature (Persona Generation).
+4.  **Strategic Layer Foundation (Phase 3 & 3.5 - Must/Should):** Add Themes, link to Creatives. Introduce the core Strategy entity linked to Campaigns.
 5.  **Video & Copy AI (Phase 4 - Should):** Enhance the video creation process significantly with templates, appeal/emotion inputs, and add AI assistance for copywriting. Implement basic filtering.
 6.  **Future Iterations (Phase 5+ - Could):** Selectively implement advanced features like strategic planning modules, structured content databases, more sophisticated AI generation, data analysis, and eventually direct file uploads based on evolving priorities. The full video editor remains out of scope.
 
