@@ -69,10 +69,10 @@
 		if (generatedData.name !== undefined) name = generatedData.name;
 		if (generatedData.personaTitle !== undefined) personaTitle = generatedData.personaTitle ?? '';
 		if (generatedData.imageUrl !== undefined) imageUrl = generatedData.imageUrl ?? '';
-		// Don't update age/gender from AI as they might be inputs to the generation
-		// if (generatedData.ageRangeSelection !== undefined) ageRangeSelection = generatedData.ageRangeSelection ?? '';
-		// if (generatedData.ageRangeCustom !== undefined) ageRangeCustom = generatedData.ageRangeCustom ?? '';
-		// if (generatedData.gender !== undefined) gender = generatedData.gender ?? '';
+		// Re-enable age/gender updates from AI
+		if (generatedData.ageRangeSelection !== undefined) ageRangeSelection = generatedData.ageRangeSelection ?? '';
+		if (generatedData.ageRangeCustom !== undefined) ageRangeCustom = generatedData.ageRangeCustom ?? ''; // Update custom age if provided
+		if (generatedData.gender !== undefined) gender = generatedData.gender ?? '';
 		if (generatedData.location !== undefined) location = generatedData.location ?? '';
 		if (generatedData.jobTitle !== undefined) jobTitle = generatedData.jobTitle ?? '';
 		if (generatedData.incomeLevel !== undefined) incomeLevel = generatedData.incomeLevel ?? '';

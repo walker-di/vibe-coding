@@ -22,10 +22,10 @@ const personaSchema = {
 	properties: {
 		name: { type: 'STRING', description: 'Persona name (required)', nullable: false },
 		personaTitle: { type: 'STRING', description: 'A descriptive title for the persona (e.g., "Tech-Savvy Early Adopter").' },
-		// imageUrl: { type: 'STRING', description: 'URL for a representative persona image (optional).' }, // Often better generated separately or manually added
-		// ageRangeSelection: { type: 'STRING', description: `Suggested age range from the list: ${ageRanges.join(', ')} or Custom.` }, // Let AI generate text description if needed, selection is UI concern
-		// ageRangeCustom: { type: 'STRING', description: 'Specific custom age range if ageRangeSelection is Custom.' },
-		// gender: { type: 'STRING', description: `Suggested gender from the list: ${genders.filter(g => g !== 'Unspecified').join(', ')}.` }, // Selection is UI concern
+		imageUrl: { type: 'STRING', description: 'URL for a representative persona image (optional). Should be a plausible image URL. from https://randomuser.me/ or https://avatar-placeholder.iran.liara.run/' }, // Re-enabled
+		ageRangeSelection: { type: 'STRING', description: `Suggested age range. Must be one of: ${ageRanges.join(', ')}.` }, // Re-enabled
+		ageRangeCustom: { type: 'STRING', description: 'Specific custom age range (e.g., "28-32") ONLY if ageRangeSelection is "Custom". Otherwise, this should be null or omitted.' }, // Re-enabled
+		gender: { type: 'STRING', description: `Suggested gender. Must be one of: ${genders.filter(g => g !== 'Unspecified').join(', ')}.` }, // Re-enabled
 		location: { type: 'STRING', description: 'Geographic location or region.' },
 		jobTitle: { type: 'STRING', description: 'Primary job title or role.' },
 		incomeLevel: { type: 'STRING', description: 'General income level or range.' },
@@ -38,7 +38,6 @@ const personaSchema = {
 		goalsExpectations: { type: 'STRING', description: 'Goals or expectations they have related to solutions like this product/service.' },
 		backstory: { type: 'STRING', description: 'A brief narrative or backstory for the persona.' },
 		purchaseProcess: { type: 'STRING', description: 'How they typically research and make purchase decisions in this category.' },
-		// isGenerated: { type: 'BOOLEAN', description: 'Indicates if the persona was AI-generated (set automatically).' } // Handled by frontend/backend logic, not AI
 	},
 	required: ['name', 'needsPainPoints', 'goalsExpectations'] // Define essential fields for a useful persona
 };
@@ -103,7 +102,7 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
 	try {
 		const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 		const model = genAI.getGenerativeModel({
-			model: 'gemini-1.5-flash', // Use a capable model
+			model: 'gemini-2.0-flash', // Use a capable model
 			generationConfig: {
 				temperature: 0.8, // Slightly creative but grounded
 				responseMimeType: 'application/json',
@@ -120,12 +119,12 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
 		const prompt = `Generate or update persona details in JSON format based on the schema provided below.
 This persona is being created for the following product:
 --- START PRODUCT CONTEXT ---
-${productContextString}
+${JSON.stringify(productDetails, null, 2)}
 --- END PRODUCT CONTEXT ---
 
 Use the product context to create a relevant and targeted persona.
 Respect the user's language. Focus on creating helpful output in JSON matching the schema.
-If the 'Current Persona Data' is empty or minimal, generate a comprehensive persona based on the 'User Instructions' and the 'Product Context'.
+If the 'Current Persona Data' is empty or minimal, generate a comprehensive persona based on the 'User Instructions' and the 'Product Context' filling all the fields.
 If 'Current Persona Data' exists, strictly apply only the changes requested in the 'User Instructions' to the existing data. Do not overwrite fields unless specifically asked.
 
 User Instructions:
