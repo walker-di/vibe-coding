@@ -22,36 +22,40 @@
 	let associatedPersonas = $state<PersonaListItem[]>([]);
 	let personasLoading = $state<boolean>(true);
 	let personasError = $state<string | null>(null);
-	let productId = $state<number | null>(null); // Store parsed product ID
+	let currentLoadedProductId = $state<number | null>(null); // Track loaded ID
 
 	// --- Data Fetching ---
 	$effect(() => {
 		const idParam = $page.params.productId;
 		const parsedId = idParam ? parseInt(idParam, 10) : NaN;
 
-		// Reset state
-		product = null;
-		associatedPersonas = [];
-		error = null;
-		personasError = null;
-		loading = true;
-		personasLoading = true;
-		productId = null; // Reset productId
-
+		// Reset state immediately based on parsedId validity
 		if (isNaN(parsedId)) {
+			product = null;
+			associatedPersonas = [];
 			error = 'Invalid Product ID format in URL.';
+			personasError = null;
 			loading = false;
 			personasLoading = false;
-		} else {
-			productId = parsedId; // Store valid ID
-			// Trigger fetches
+		} else if (parsedId !== currentLoadedProductId) { // Only fetch if ID changed
+			// Reset state for valid ID before fetching
+			product = null;
+			associatedPersonas = [];
+			error = null;
+			personasError = null;
+			loading = true;
+			personasLoading = true;
+			currentLoadedProductId = parsedId; // Update the tracking ID *before* fetching
+
+			// Trigger fetches directly with parsedId
 			(async () => {
 				await Promise.all([
-					fetchProduct(productId),
-					fetchPersonas(productId)
+					fetchProduct(parsedId),
+					fetchPersonas(parsedId) // Use parsedId directly
 				]);
 			})();
 		}
+		// If parsedId === currentLoadedProductId, do nothing, data is already loaded/loading
 	});
 
 	async function fetchProduct(id: number) {
@@ -78,14 +82,19 @@
 		personasError = null;
 		personasLoading = true;
 		try {
+			console.log(`API: Loading personas for product ID: ${prodId}...`); // Added logging
 			const response = await fetch(`/api/products/${prodId}/personas`);
 			if (!response.ok) {
 				if (response.status === 404) {
+					console.log(`API: Found 0 personas for product ${prodId}.`); // Added logging
 					associatedPersonas = []; return; // No personas found is okay
 				}
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
-			associatedPersonas = await response.json();
+			// Process the response only once
+			const fetchedPersonas = await response.json();
+			associatedPersonas = fetchedPersonas;
+			console.log(`API: Found ${associatedPersonas.length} personas for product ${prodId}.`); // Added logging
 		} catch (e: any) {
 			console.error(`Failed to fetch personas for product ${prodId}:`, e);
 			personasError = e.message || 'Failed to load associated personas.';
@@ -97,8 +106,11 @@
 
 	// --- Navigation ---
 	function editProduct() {
-		if (productId) {
-			goto(`/products/${productId}/edit`);
+		// Use parsedId from the store if needed, or re-parse from $page
+		const idParam = $page.params.productId;
+		const parsedId = idParam ? parseInt(idParam, 10) : NaN;
+		if (!isNaN(parsedId)) {
+			goto(`/products/${parsedId}/edit`);
 		}
 	}
 
@@ -107,8 +119,11 @@
 	}
 
 	function createPersona() {
-		if (productId) {
-			goto(`/products/${productId}/personas/new`);
+		// Use parsedId from the store if needed, or re-parse from $page
+		const idParam = $page.params.productId;
+		const parsedId = idParam ? parseInt(idParam, 10) : NaN;
+		if (!isNaN(parsedId)) {
+			goto(`/products/${parsedId}/personas/new`);
 		}
 	}
 
@@ -161,6 +176,7 @@
 			{:else}
 				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 					{#each associatedPersonas as persona (persona.id)}
+						{@const currentProductId = parseInt($page.params.productId, 10)}
 						<div class="border rounded-lg p-4 shadow hover:shadow-md transition-shadow flex flex-col justify-between">
 							<div class="flex items-center mb-3">
 								{#if persona.imageUrl}
@@ -178,13 +194,15 @@
 								</div>
 							</div>
 							<div class="flex justify-end mt-2">
-								<Button
-									href={`/products/${productId}/personas/${persona.id}`}
-									variant="outline"
-									class="text-sm px-3 py-1"
-								>
-									View Details
-								</Button>
+								{#if !isNaN(currentProductId)}
+									<Button
+										href={`/products/${currentProductId}/personas/${persona.id}`}
+										variant="outline"
+										class="text-sm px-3 py-1"
+									>
+										View Details
+									</Button>
+								{/if}
 							</div>
 						</div>
 					{/each}

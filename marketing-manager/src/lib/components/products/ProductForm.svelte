@@ -13,7 +13,15 @@
 	// --- Props ---
 	// Define types for props separately
 	type ProductFormProps = {
-		initialData?: ProductInputData | null;
+		// Replace initialData with individual field props
+		initialName?: string;
+		initialDescription?: string | null;
+		initialImageUrl?: string | null;
+		initialIndustry?: string | null;
+		initialOverview?: string | null;
+		initialDetails?: string | null;
+		initialFeaturesStrengths?: string | null;
+		// Keep other props
 		onSubmit?: (payload: ProductPayload) => Promise<void>;
 		onCancel: () => void;
 		isSubmitting?: boolean;
@@ -21,7 +29,15 @@
 	};
 	// Use $props() without arguments and apply types during destructuring
 	let {
-		initialData = null,
+		// Destructure new initial field props
+		initialName = '',
+		initialDescription = null,
+		initialImageUrl = null,
+		initialIndustry = null,
+		initialOverview = null,
+		initialDetails = null,
+		initialFeaturesStrengths = null,
+		// Destructure other props
 		onSubmit, // Keep optional, default handled by usage check
 		onCancel,
 		isSubmitting = false,
@@ -30,17 +46,36 @@
 
 
 	// --- State Management with Runes ---
-	// Initialize state from initialData if provided
-	let name = $state(initialData?.name ?? '');
-	let description = $state(initialData?.description ?? '');
-	let imageUrl = $state(initialData?.imageUrl ?? '');
-	let industry = $state(initialData?.industry ?? '');
-	let overview = $state(initialData?.overview ?? '');
-	let details = $state(initialData?.details ?? '');
-	let featuresStrengths = $state(initialData?.featuresStrengths ?? '');
+	// Initialize state with defaults
+	let name = $state('');
+	let description = $state('');
+	let imageUrl = $state('');
+	let industry = $state('');
+	let overview = $state('');
+	let details = $state('');
+	let featuresStrengths = $state('');
+	let initialized = $state(false); // Flag to track initialization
 
-	// Determine if we are in edit mode
-	const isEditMode = $derived(!!initialData?.name); // Or check initialData directly
+	// Use effect to synchronize state with initial props once
+	$effect.pre(() => {
+		if (!initialized) {
+			name = initialName;
+			description = initialDescription ?? '';
+			imageUrl = initialImageUrl ?? '';
+			industry = initialIndustry ?? '';
+			overview = initialOverview ?? '';
+			details = initialDetails ?? '';
+			featuresStrengths = initialFeaturesStrengths ?? '';
+			initialized = true; // Mark as initialized
+		}
+		// This effect depends on initial* props. If the component is keyed,
+		// it will re-run with new props when the key changes, resetting initialized.
+		// If not keyed, this might need adjustment if props can change mid-lifecycle.
+	});
+
+
+	// Determine if we are in edit mode (based on initialName prop presence)
+	const isEditMode = $derived(!!initialName); // Still derive from the prop
 
 	// --- Form Submission Logic (for client-side handling if onSubmit is provided) ---
 	async function handleSubmit(event: SubmitEvent) {
