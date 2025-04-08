@@ -45,6 +45,8 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
     *   Database schema updated and migrated. **(Completed)**
     *   Product API endpoints implemented. **(Completed)**
     *   Product Frontend routes (`/products/...`) implemented and refactored (View/Edit pages use simplified `$effect` logic). **(Completed)**
+    *   Persona API endpoints (`/api/products/[productId]/personas/...`) created. **(Completed)**
+    *   Persona Frontend route for creation (`/products/[productId]/personas/new`) created. **(Completed)**
 
 ## **NEW: Refactoring Plan: Product -> Persona -> Creative Hierarchy**
 
@@ -65,16 +67,16 @@ Okay, let's significantly enhance the plan by incorporating more specific detail
         *   `GET, PUT, DELETE /api/products/[productId]` **(Completed)**
     *   **Personas:** Refactor to nest under Products: *(Next Step)*
         *   `GET, POST /api/products/[productId]/personas`
-        *   `GET, PUT, DELETE /api/products/[productId]/personas/[personaId]` (Handlers must verify persona belongs to product).
+        *   `GET, PUT, DELETE /api/products/[productId]/personas/[personaId]` (Handlers must verify persona belongs to product). *(Next Step)*
     *   **Creatives:** Keep top-level but enforce logic:
-        *   `GET /api/creatives` (Support `?personaId=`, `?campaignId=`, `?themeId=` filters).
+        *   `GET /api/creatives` (Support `?personaId=`, `?campaignId=`, `?themeId=` filters). *(Next Step)*
         *   `POST /api/creatives` (Require `personaId` in request body).
         *   `GET /api/creatives/[creativeId]`
         *   `PUT /api/creatives/[creativeId]` (Disallow changing `personaId`).
         *   `DELETE /api/creatives/[creativeId]`
 3.  **Frontend Routes & UI (Fully Nested):**
     *   **Products:** Create new CRUD pages under `/products/...`. The detail page (`/products/[productId]`) and edit page (`/products/[productId]/edit`) display product info and allow editing. View/Edit pages refactored to use simplified `$effect` logic. **(Completed)**
-    *   **Personas:** Move existing routes to `/products/[productId]/personas/...`. Update data loading to use `productId`. Remove the Product selection dropdown from forms. The detail page (`.../[personaId]`) will list/link to associated Creatives. *(Next Step)*
+    *   **Personas:** Create new persona page (`/products/[productId]/personas/new`) implemented. Other routes (list, view, edit) need to be moved/created. *(Partially Completed)*
     *   **Creatives:** Move existing routes to `/products/[productId]/personas/[personaId]/creatives/...`. Update data loading to use `personaId`. Remove the Persona selection dropdown from forms. API calls will target `/api/creatives`. *(Following Personas)*
     *   **Navigation:** Update the main header navigation to feature `/products`. Implement breadcrumbs for nested routes. *(Partially done - Header updated, breadcrumbs pending)*
 4.  **Update `README.md`:** After implementation, update this `README.md` file again to reflect the completed refactoring.
