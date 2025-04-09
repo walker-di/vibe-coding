@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { Button } from '$lib/components/ui/button';
   import { Square, Circle, Type, Image as ImageIcon, Trash2 } from 'lucide-svelte';
 
@@ -15,29 +16,41 @@
   let canvasContainer: HTMLDivElement;
   let fabricLoaded = $state(false);
   let selectedObject = $state<any>(null);
+  let isTransitioning = $state(false); // State for managing fade transition
 
-  // --- Method to explicitly load canvas data ---
-  export function loadCanvasData(canvasJson: string | null) {
+  // --- Method to explicitly load canvas data with transition ---
+  export async function loadCanvasData(canvasJson: string | null) {
     console.log(`CanvasEditor: loadCanvasData called. FabricLoaded: ${fabricLoaded}`);
     if (canvas && fabricLoaded) {
+      isTransitioning = true;
+      console.log('Transition started (fade out)');
+      await tick(); // Allow fade-out to start
+      // Optional: Add a small delay if tick isn't enough for visual effect
+      // await new Promise(resolve => setTimeout(resolve, 50)); 
+
       try {
         if (canvasJson) {
-          console.log('Loading new canvas data via method...');
-          // Removed the check: if (canvasJson !== currentCanvasJson)
-          // Always attempt to load if canvasJson is provided
-          canvas.loadFromJSON(canvasJson, () => {
-            canvas.renderAll();
-            console.log('Canvas loaded via method.');
+          console.log('Loading new canvas data during transition...');
+          await new Promise<void>((resolve, reject) => {
+            canvas.loadFromJSON(canvasJson, () => {
+              canvas.renderAll();
+              console.log('Canvas loaded via method.');
+              resolve();
+            }, (err: any) => reject(err)); // Added error handling for loadFromJSON
           });
         } else {
           // Clear canvas if null is passed
-          console.log('Clearing canvas via method (null data).');
+          console.log('Clearing canvas during transition (null data).');
           canvas.clear();
           canvas.backgroundColor = '#f0f0f0';
           canvas.renderAll();
         }
       } catch (error) {
-        console.error('Error in loadCanvasData:', error);
+        console.error('Error in loadCanvasData during transition:', error);
+        // Still finish transition even if loading fails
+      } finally {
+        isTransitioning = false;
+        console.log('Transition ended (fade in)');
       }
     } else {
        console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
@@ -154,11 +167,21 @@
     </Button>
   </div>
 
-  <div class="border rounded-md overflow-hidden" bind:this={canvasContainer}>
-    <canvas id="canvas"></canvas>
+  <div class="border rounded-md overflow-hidden relative min-h-[400px]" bind:this={canvasContainer}>
+    {#if !isTransitioning}
+      <div transition:fade={{ duration: 150 }}>
+        <canvas id="canvas"></canvas>
+      </div>
+    {:else}
+      <!-- Optional: Placeholder or spinner during transition -->
+       <div class="absolute inset-0 flex items-center justify-center bg-gray-100/50">
+         <!-- Loading... -->
+       </div>
+    {/if}
   </div>
 
-  {#if !fabricLoaded}
+
+  {#if !fabricLoaded && !isTransitioning}
     <div class="text-center py-4">
       <p>Loading canvas editor...</p>
     </div>

@@ -27,6 +27,8 @@
 
   // State for the selected clip
   let selectedClip = $state<Clip | null>(null);
+  // State to track which clip's data is currently loaded in the canvas
+  let loadedClipIdInCanvas = $state<number | null>(null);
 
   // Reference to the CanvasEditor component instance
   let canvasEditorInstance: CanvasEditor;
@@ -38,55 +40,70 @@
        console.log('Same clip selected, skipping state update.');
         return;
      }
-     selectedClip = clip; // Just update the state
-     // The $effect below *should* handle calling loadCanvasData, but let's try a direct call too for debugging
-     if (canvasEditorInstance) {
-        console.log(`[handleSelectClip] Scheduling direct call to loadCanvasData for clip ${clip.id}`);
-        // Use a timeout to ensure this runs after the current execution context allows potential state updates
-        setTimeout(() => {
-           if (canvasEditorInstance) { // Check again inside timeout
-              console.log(`[handleSelectClip - setTimeout] Calling loadCanvasData for clip ${clip.id}`);
-              canvasEditorInstance.loadCanvasData(clip.canvas ?? null);
-           } else {
-              console.log('[handleSelectClip - setTimeout] canvasEditorInstance became unavailable.');
-           }
-        }, 0);
-     } else {
-        console.log('[handleSelectClip] canvasEditorInstance not ready for direct call.');
-     }
+     selectedClip = clip; // Update the state immediately
+     // The $effect below will handle loading the canvas if necessary
    }
- 
-    // Effect to call loadCanvasData when selectedClip changes OR when canvasEditorInstance becomes available
+
+    // Effect to call loadCanvasData when selectedClip changes OR when canvasEditorInstance becomes available,
+    // but only if the selected clip is different from the one already loaded.
    $effect(() => {
-     const clipId = selectedClip?.id;
+     const newClipId = selectedClip?.id ?? null; // Use null if no clip is selected
      const canvasData = selectedClip?.canvas ?? null;
      const isInstanceReady = !!canvasEditorInstance;
-     
-     console.log(`SceneEditor effect running. Clip ID: ${clipId}, Instance Ready: ${isInstanceReady}, Has Canvas Data: ${!!canvasData}`);
-     
-     if (isInstanceReady) {
-        console.log(`Calling canvasEditorInstance.loadCanvasData with canvas data for clip ${clipId}`);
+
+     console.log(`SceneEditor effect running. New Clip ID: ${newClipId}, Loaded Clip ID: ${loadedClipIdInCanvas}, Instance Ready: ${isInstanceReady}`);
+
+     if (isInstanceReady && newClipId !== loadedClipIdInCanvas) {
+        console.log(`Clip changed (${loadedClipIdInCanvas} -> ${newClipId}). Calling canvasEditorInstance.loadCanvasData.`);
         canvasEditorInstance.loadCanvasData(canvasData);
-     } else {
+        loadedClipIdInCanvas = newClipId; // Update the tracker *after* loading
+        console.log(`Updated loadedClipIdInCanvas to: ${loadedClipIdInCanvas}`);
+     } else if (!isInstanceReady) {
         console.log('SceneEditor effect: canvasEditorInstance not ready yet.');
+     } else if (newClipId === loadedClipIdInCanvas) {
+        console.log(`SceneEditor effect: Selected clip (${newClipId}) is already loaded. Skipping canvas load.`);
      }
    });
 
 
   // Handler for canvas changes (required by CanvasEditor)
-  function handleCanvasChange(canvasJson: string) {
-    // TODO: Implement saving logic if needed here or pass up further
+  async function handleCanvasChange(canvasJson: string) {
     console.log('Canvas changed in SceneEditor:', canvasJson ? canvasJson.substring(0, 50) + '...' : 'null');
-    if (selectedClip) {
-      // Update local state cautiously - create new object to ensure reactivity
-      // Avoid triggering the $effect again if only canvas content changed internally
-      if (selectedClip.canvas !== canvasJson) {
-         selectedClip = { ...selectedClip, canvas: canvasJson };
+    if (selectedClip && selectedClip.canvas !== canvasJson) {
+      // Update local state first for responsiveness
+      const updatedClip = { ...selectedClip, canvas: canvasJson };
+      selectedClip = updatedClip; // Update local state
+
+      // --- Save to backend ---
+      try {
+        const response = await fetch(`/api/clips/${selectedClip.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          // Send only the necessary data to update
+          body: JSON.stringify({ canvas: canvasJson }) 
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
+          console.error(`Failed to save clip ${selectedClip.id}:`, response.status, errorData.message || response.statusText);
+          // Optionally: Revert local state or show an error message to the user
+          // For now, just log the error
+        } else {
+          console.log(`Clip ${selectedClip.id} canvas saved successfully.`);
+          // Optionally: Update the clip in the parent `scenes` array if needed,
+          // though the local update might be sufficient if the parent re-fetches.
+        }
+      } catch (error) {
+        console.error(`Error saving clip ${selectedClip.id}:`, error);
+        // Optionally: Handle network errors, show message
       }
-     }
-   }
- 
-   // Removed unused derived prop
+      // --- End Save ---
+    } else if (selectedClip && selectedClip.canvas === canvasJson) {
+       console.log('Canvas data unchanged, skipping save.');
+    }
+  }
  
  </script>
 
