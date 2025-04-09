@@ -7,7 +7,7 @@
   // Props
   let {
     scenes,
-    creativeId,
+    creativeId, // Used in navigation URLs
     storyId,
     onAddScene,
     onEditScene,
@@ -29,6 +29,7 @@
 
   // State
   let isCreatingScene = $state(false);
+  let isCreatingClip = $state<{[sceneId: number]: boolean}>({});
 
   // Create a new scene directly
   async function createNewScene() {
@@ -76,13 +77,85 @@
       isCreatingScene = false;
     }
   }
+
+  // Create a new clip directly
+  async function createNewClip(sceneId: number) {
+    // Skip if already creating a clip for this scene
+    if (isCreatingClip[sceneId]) return;
+
+    // Set creating state for this specific scene
+    isCreatingClip = { ...isCreatingClip, [sceneId]: true };
+
+    try {
+      // Find the scene
+      const scene = scenes.find((s: SceneWithRelations) => s.id === sceneId);
+      if (!scene) {
+        throw new Error(`Scene with ID ${sceneId} not found`);
+      }
+
+      // Calculate the next order index for clips in this scene
+      const nextOrderIndex = scene.clips && scene.clips.length > 0
+        ? Math.max(...scene.clips.map((clip: Clip) => clip.orderIndex)) + 1
+        : 0;
+
+      // Create a minimal empty canvas data (valid JSON for fabric.js)
+      const emptyCanvas = JSON.stringify({
+        version: '5.3.0',
+        objects: [],
+        background: '#ffffff'
+      });
+
+      // Create a new clip with default values
+      const response = await fetch('/api/clips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sceneId: sceneId,
+          orderIndex: nextOrderIndex,
+          canvas: emptyCanvas,
+          narration: null,
+          imageUrl: null
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create clip. Status: ${response.status}`);
+      }
+
+      // Get the newly created clip from the response
+      const newClip = await response.json();
+
+      // Add the new clip to the scene's clips array
+      const updatedScenes = scenes.map((s: SceneWithRelations) => {
+        if (s.id === sceneId) {
+          return {
+            ...s,
+            clips: [...(s.clips || []), newClip]
+          };
+        }
+        return s;
+      });
+
+      scenes = updatedScenes;
+
+      // Navigate to the edit page for the new clip
+      window.location.href = `/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}/clips/${newClip.id}/edit`;
+    } catch (error) {
+      console.error('Error creating clip:', error);
+      alert('Failed to create new clip. Please try again.');
+      // Reset creating state for this scene
+      isCreatingClip = { ...isCreatingClip, [sceneId]: false };
+    }
+  }
 </script>
 
 <div class="space-y-4">
-  <div class="flex space-x-4 overflow-x-auto pb-4">
+  <div class="flex space-x-4 overflow-x-auto">
     {#if scenes.length > 0}
       {#each scenes as scene, index (scene.id)}
-        <div class="border rounded-md p-4 hover:shadow-md transition-shadow w-80 flex-shrink-0">
+        <div class="border rounded-md p-0 hover:shadow-md transition-shadow w-80 flex-shrink-0">
           <div class="flex justify-between items-start mb-2">
             <div class="flex-1 min-w-0">
               <button
@@ -117,8 +190,8 @@
           </div>
 
           <!-- Clip Preview Row -->
-          {#if scene.clips && scene.clips.length > 0}
-            <div class="mt-2 flex space-x-1 overflow-x-auto pb-1">
+          <div class="mt-2 flex space-x-1 overflow-x-auto pb-1">
+            {#if scene.clips && scene.clips.length > 0}
               {#each scene.clips as clip (clip.id)}
                 <button
                    type="button"
@@ -144,25 +217,17 @@
                   + {scene.clips.length - 7}
                 </div>
               {/if}
-            </div>
-          {:else}
-             <div class="mt-2 text-sm text-muted-foreground">No clips in this scene.</div>
-          {/if}
+            {/if}
 
-          <div class="mt-3 flex justify-between items-center">
-            <div class="text-sm text-muted-foreground">
-              Order: {scene.orderIndex || 0}
-            </div>
-            <div class="flex gap-2">
-              <a href="/creatives/{creativeId}/stories/{storyId}/scenes/{scene.id}/clips/new"
-                 class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 py-1 px-3">
-                 <Plus class="h-3 w-3 mr-1" />
-                Add Clip
-              </a>
-              <Button variant="outline" class="h-8 py-1 px-3 text-xs" onclick={() => onSelectScene(scene.id)}>
-                View Clips
-              </Button>
-            </div>
+            <!-- Add Clip Button (next to the last clip) -->
+            <button
+              type="button"
+              onclick={() => createNewClip(scene.id)}
+              disabled={isCreatingClip[scene.id]}
+              class="flex-shrink-0 w-[50px] h-[33px] border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
+              title="Add new clip">
+              <Plus class="h-4 w-4 text-gray-600" />
+            </button>
           </div>
         </div>
       {/each}
@@ -172,10 +237,10 @@
         type="button"
         onclick={createNewScene}
         disabled={isCreatingScene}
-        class="border rounded-md p-4 hover:shadow-md transition-shadow w-40 flex-shrink-0 flex flex-col items-center justify-center h-[100px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
+        class="border rounded-md p-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
         <div class="flex flex-col items-center justify-center h-full">
-          <div class="rounded-full bg-gray-200 p-3 mb-2">
-            <Plus class="h-6 w-6 text-gray-600" />
+          <div class="rounded-full bg-gray-200 p-1.5 mb-2">
+            <Plus class="h-5 w-5 text-gray-600" />
           </div>
           <span class="text-gray-600 font-medium">{isCreatingScene ? 'Creating...' : 'New Scene'}</span>
         </div>
