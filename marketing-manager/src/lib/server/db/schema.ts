@@ -1,6 +1,6 @@
 import { sqliteTable, integer, text, real, uniqueIndex, foreignKey } from 'drizzle-orm/sqlite-core';
 import { relations, sql } from 'drizzle-orm';
-import { creativeTypes, videoPlatforms, videoFormats, videoEmotions, campaignStatuses, ageRanges, genders } from '../../components/constants'; // Import the constants
+import { creativeTypes, videoPlatforms, videoFormats, videoEmotions, campaignStatuses, ageRanges, genders, canvasAspectRatios } from '../../constants'; // Use relative path for Drizzle Kit compatibility
 
 // --- Core Tables ---
 
@@ -195,6 +195,20 @@ export const clips = sqliteTable('clips', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 });
 
+// NEW: Canvas Templates Table
+export const canvasTemplates = sqliteTable('canvas_templates', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  description: text('description'),
+  aspectRatio: text('aspect_ratio', { enum: canvasAspectRatios }).default('16:9'), // Added
+  resolution: text('resolution'), // Added - Store as text (e.g., "1920x1080", "Custom")
+  canvasData: text('canvas_data').notNull(), // JSON string for fabric.js data
+  previewImageUrl: text('preview_image_url'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
+});
+
+
 // --- Relations ---
 
 // NEW: Product Relations
@@ -258,4 +272,9 @@ export const sceneRelations = relations(scenes, ({ one, many }) => ({
 
 export const clipRelations = relations(clips, ({ one }) => ({
   scene: one(scenes, { fields: [clips.sceneId], references: [scenes.id] })
+}));
+
+// NEW: Canvas Template Relations (currently none needed, but good practice to define)
+export const canvasTemplateRelations = relations(canvasTemplates, () => ({
+  // No direct relations needed for now
 }));

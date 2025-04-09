@@ -3,10 +3,13 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { ArrowLeft, Save, FileText, ImageUp } from 'lucide-svelte'; // Added ImageUp
+  import { ArrowLeft, Save, FileText, ImageUp, LayoutGrid, Loader2 } from 'lucide-svelte'; // Added ImageUp, LayoutGrid, Loader2
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
   import type { Clip } from '$lib/types/story.types';
-  // Removed: import { toast } from 'svelte-sonner'; 
+  import type { CanvasTemplateListItem, CanvasTemplate } from '$lib/types/canvasTemplate.types'; // Import template types
+  import { onMount } from 'svelte'; // Import onMount
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu'; // Import DropdownMenu
+  // Removed: import { toast } from 'svelte-sonner'; // Assuming toast is handled elsewhere or not needed here
 
   // Props
   let { 
@@ -35,6 +38,25 @@
   let isSubmitting = $state(false); // Removed duplicate declaration
   let errors = $state<Record<string, string>>({});
   let canvasEditorInstance: CanvasEditor | null = $state(null); // To bind component instance
+  let availableTemplates = $state<CanvasTemplateListItem[]>([]);
+  let isLoadingTemplates = $state(false);
+  let isLoadingSelectedTemplate = $state(false);
+
+  // Fetch available templates on mount
+  onMount(async () => {
+    isLoadingTemplates = true;
+    try {
+      const response = await fetch('/api/canvas-templates');
+      if (!response.ok) throw new Error('Failed to fetch templates');
+      availableTemplates = await response.json();
+    } catch (error) {
+      console.error("Error fetching canvas templates:", error);
+      // Optionally show an error message to the user
+    } finally {
+      isLoadingTemplates = false;
+    }
+  });
+
 
   // Handle canvas changes
   function handleCanvasChange(canvasJson: string) {
@@ -80,6 +102,34 @@
       console.error('Error uploading preview:', error);
       // Removed: toast.error(`Error uploading preview: ${error.message}`);
       return null;
+    }
+  }
+
+  // Function to load a selected template
+  async function loadTemplate(templateId: number) {
+    if (!canvasEditorInstance) {
+      console.error('Canvas editor instance not available.');
+      // Optionally show user error
+      return;
+    }
+    isLoadingSelectedTemplate = true;
+    try {
+      const response = await fetch(`/api/canvas-templates/${templateId}`);
+      if (!response.ok) throw new Error('Failed to fetch selected template data');
+      const template: CanvasTemplate = await response.json();
+
+      // Load the data into the editor
+      await canvasEditorInstance.loadCanvasData(template.canvasData);
+      // handleCanvasChange will be triggered by the editor's internal events after loading
+
+      // Optionally update other fields if needed (e.g., maybe description?)
+      // narration = template.description || narration; // Example
+
+    } catch (error) {
+      console.error(`Error loading template ${templateId}:`, error);
+      // Optionally show user error
+    } finally {
+      isLoadingSelectedTemplate = false;
     }
   }
 
@@ -194,9 +244,52 @@
     </div>
     
     <div class="border-t pt-4 mt-4">
-      <h3 class="text-lg font-semibold mb-3">Canvas Content</h3>
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-lg font-semibold">Canvas Content</h3>
+        
+        <!-- Load Template Dropdown -->
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild let:builder>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              builders={[builder]} 
+              disabled={isLoadingTemplates || isLoadingSelectedTemplate || availableTemplates.length === 0}
+            >
+              {#if isLoadingSelectedTemplate}
+                <Loader2 class="h-4 w-4 mr-2 animate-spin" /> Loading...
+              {:else if isLoadingTemplates}
+                 <Loader2 class="h-4 w-4 mr-2 animate-spin" /> Templates...
+              {:else}
+                <LayoutGrid class="h-4 w-4 mr-2" /> Load Template
+              {/if}
+            </Button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content>
+            {#if availableTemplates.length === 0 && !isLoadingTemplates}
+              <DropdownMenu.Label>No templates found</DropdownMenu.Label>
+            {:else if isLoadingTemplates}
+               <DropdownMenu.Label>Loading templates...</DropdownMenu.Label>
+            {:else}
+              <DropdownMenu.Label>Available Templates</DropdownMenu.Label>
+              <DropdownMenu.Separator />
+              {#each availableTemplates as template (template.id)}
+                <DropdownMenu.Item on:click={() => loadTemplate(template.id)} disabled={isLoadingSelectedTemplate}>
+                  {template.name}
+                </DropdownMenu.Item>
+              {/each}
+            {/if}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
+        <!-- End Load Template Dropdown -->
+      </div>
       
       <div class="border rounded-md p-4 relative {errors.canvas ? 'border-red-500' : ''}">
+        {#if isLoadingSelectedTemplate}
+           <div class="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
+             <Loader2 class="h-6 w-6 animate-spin text-primary" />
+           </div>
+        {/if}
         {#if imageUrl}
           <div class="absolute top-2 right-2 bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded border border-green-400 flex items-center">
             <ImageUp class="h-3 w-3 mr-1" /> Preview Saved

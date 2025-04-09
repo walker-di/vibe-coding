@@ -24,3 +24,11 @@ export type Gender = typeof genders[number];
 // Example options for UI elements that might not directly map to strict enums in DB
 export const appealFeatures = ['Product Feature Focus', 'Benefit Focus', 'Problem/Solution', 'Testimonial/Social Proof', 'Comparison', 'Storytelling', 'Humor', 'Educational'] as const;
 export type AppealFeature = typeof appealFeatures[number];
+
+// Canvas/Image Resolutions (Examples)
+export const commonResolutions = ['1920x1080 (16:9 HD)', '1080x1920 (9:16 HD)', '1080x1080 (1:1 Square)', '1200x628 (Landscape Ad)', '1080x1350 (4:5 Portrait)', 'Custom'] as const;
+export type CommonResolution = typeof commonResolutions[number];
+
+// Re-using videoFormats for Canvas Aspect Ratios for now
+export const canvasAspectRatios = videoFormats;
+export type CanvasAspectRatio = VideoFormat;

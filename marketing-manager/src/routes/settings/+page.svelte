@@ -22,6 +22,14 @@
 			<p class="text-sm text-muted-foreground">Manage video templates, formats, and properties.</p>
 		</a>
 
+		<a
+			href="/settings/canvas-templates"
+			class="block rounded border p-4 transition-colors hover:bg-muted hover:text-muted-foreground"
+		>
+			<h2 class="mb-1 text-lg font-semibold">Canvas Templates</h2>
+			<p class="text-sm text-muted-foreground">Manage reusable canvas layouts and designs.</p>
+		</a>
+
 		<!-- Add links to other settings sections here later -->
 	</div>
 </div>
