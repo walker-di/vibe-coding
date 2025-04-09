@@ -2,7 +2,8 @@
   import SceneList from '$lib/components/story/SceneList.svelte';
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
-  // Removed tick import as it's no longer needed here
+  import { Button } from '$lib/components/ui/button';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp } from 'lucide-svelte';
 
   // Props passed down from the page
   let {
@@ -33,7 +34,7 @@
   let canvasIsReady = $state(false);
 
   // Reference to the CanvasEditor component instance
-  let canvasEditorInstance: CanvasEditor;
+  let canvasEditorInstance = $state<CanvasEditor | null>(null);
 
   // Handler for when CanvasEditor signals it's ready
   function handleCanvasReady() {
@@ -63,7 +64,7 @@
      console.log(`SceneEditor effect running. New Clip ID: ${newClipId}, Loaded Clip ID: ${loadedClipIdInCanvas}, Instance Available: ${isInstanceAvailable}, Canvas Ready: ${canvasIsReady}`);
 
      // Only proceed if the canvas instance is bound AND the canvas component signaled it's ready
-     if (isInstanceAvailable && canvasIsReady && newClipId !== loadedClipIdInCanvas) {
+     if (isInstanceAvailable && canvasIsReady && newClipId !== loadedClipIdInCanvas && canvasEditorInstance) {
         console.log(`Clip changed (${loadedClipIdInCanvas} -> ${newClipId}) and canvas is ready. Calling canvasEditorInstance.loadCanvasData.`);
         canvasEditorInstance.loadCanvasData(canvasData);
         loadedClipIdInCanvas = newClipId; // Update the tracker *after* loading
@@ -94,7 +95,7 @@
             'Content-Type': 'application/json'
           },
           // Send only the necessary data to update
-          body: JSON.stringify({ canvas: canvasJson }) 
+          body: JSON.stringify({ canvas: canvasJson })
         });
 
         if (!response.ok) {
@@ -160,40 +161,75 @@
        console.log('Canvas data unchanged, skipping save.');
     }
   }
- 
+
  </script>
 
-<div class="flex flex-col h-[calc(100vh-10rem)]">
-
-  <div class="flex-grow border rounded-md p-4 mb-4 overflow-auto relative">
-      <h2 class="text-lg font-semibold mb-2">Canvas Editor</h2>
-       <div>
-         <CanvasEditor
-           bind:this={canvasEditorInstance}
-           onCanvasChange={handleCanvasChange}
-           onReady={handleCanvasReady}
-         />
-       </div>
-       {#if selectedClip === null && scenes.length > 0}
-         <div class="flex items-center justify-center h-full text-muted-foreground absolute inset-0 pointer-events-none bg-white/50 top-12">
-           Select a clip below to edit its canvas.
-         </div>
-       {/if}
-   </div>
-
-  <div class="flex-shrink-0 border-t pt-4">
-     <h2 class="text-lg font-semibold mb-2 px-4">Scenes & Clips</h2>
-    <SceneList
-      {scenes}
-      {creativeId}
-      {storyId}
-      {onAddScene}
-      {onEditScene}
-      {onDeleteScene}
-      {onSelectScene}
-      {onPlayScene}
-      onSelectClip={handleSelectClip}
-    />
+<div class="flex h-[calc(100vh-10rem)]">
+  <!-- Left Panel: Buttons/Tools -->
+  <div class="w-64 border-r p-4 flex flex-col overflow-y-auto">
+    <h2 class="text-lg font-semibold mb-4">Tools</h2>
+    <div class="space-y-2">
+      <Button variant="outline" onclick={() => canvasEditorInstance?.addRectangle()} title="Add Rectangle" disabled={!canvasIsReady}>
+        <Square class="h-4 w-4 mr-2" /> Rectangle
+      </Button>
+      <Button variant="outline" onclick={() => canvasEditorInstance?.addCircle()} title="Add Circle" disabled={!canvasIsReady}>
+        <Circle class="h-4 w-4 mr-2" /> Circle
+      </Button>
+      <Button variant="outline" onclick={() => canvasEditorInstance?.addText()} title="Add Text" disabled={!canvasIsReady}>
+        <Type class="h-4 w-4 mr-2" /> Text
+      </Button>
+      <Button variant="outline" onclick={() => canvasEditorInstance?.addImage()} title="Add Image" disabled={!canvasIsReady}>
+        <ImageIcon class="h-4 w-4 mr-2" /> Image
+      </Button>
+      <Button variant="outline" onclick={() => canvasEditorInstance?.setBackgroundColor()} title="Set Background Color" disabled={!canvasIsReady}>
+        <Palette class="h-4 w-4 mr-2" /> BG Color
+      </Button>
+      <Button variant="outline" onclick={() => canvasEditorInstance?.setBackgroundImageFromUrl()} title="Set Background Image" disabled={!canvasIsReady}>
+        <ImageUp class="h-4 w-4 mr-2" /> BG Image
+      </Button>
+      <Button variant="outline" onclick={() => canvasEditorInstance?.deleteSelected()} title="Delete Selected" disabled={!canvasIsReady || !canvasEditorInstance?.hasSelectedObject()}>
+        <Trash2 class="h-4 w-4 mr-2" /> Delete
+      </Button>
+      <Button variant="outline" onclick={() => canvasEditorInstance?.clearCanvas()} title="Clear Canvas" disabled={!canvasIsReady}>
+        Clear All
+      </Button>
+    </div>
   </div>
 
+  <!-- Main Content Area -->
+  <div class="flex flex-col flex-grow">
+    <!-- Canvas Area (Main View) -->
+    <div class="flex-grow border rounded-md p-4 m-4 overflow-auto relative">
+      <h2 class="text-lg font-semibold mb-2">Canvas</h2>
+      <div>
+        <CanvasEditor
+          bind:this={canvasEditorInstance}
+          onCanvasChange={handleCanvasChange}
+          onReady={handleCanvasReady}
+          hideControls={true}
+        />
+      </div>
+      {#if selectedClip === null && scenes.length > 0}
+        <div class="flex items-center justify-center h-full text-muted-foreground absolute inset-0 pointer-events-none bg-white/50 top-12">
+          Select a clip below to edit its canvas.
+        </div>
+      {/if}
+    </div>
+
+    <!-- Scenes & Clips (Bottom Panel) -->
+    <div class="flex-shrink-0 border-t p-4 h-48 overflow-y-auto">
+      <h2 class="text-lg font-semibold mb-2">Scenes & Clips</h2>
+      <SceneList
+        {scenes}
+        {creativeId}
+        {storyId}
+        {onAddScene}
+        {onEditScene}
+        {onDeleteScene}
+        {onSelectScene}
+        {onPlayScene}
+        onSelectClip={handleSelectClip}
+      />
+    </div>
+  </div>
 </div>

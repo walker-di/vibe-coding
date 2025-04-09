@@ -7,10 +7,12 @@
   // Props
   let {
     onCanvasChange, // Only need the change handler
-    onReady // Optional callback for when fabric is loaded and canvas initialized
+    onReady, // Optional callback for when fabric is loaded and canvas initialized
+    hideControls = false // Whether to hide the control buttons (when they're shown elsewhere)
   } = $props<{
     onCanvasChange: (canvasJson: string) => void;
     onReady?: () => void;
+    hideControls?: boolean;
   }>();
 
   // State
@@ -20,6 +22,11 @@
   let selectedObject = $state<any>(null);
   let isTransitioning = $state(false); // State for managing fade transition
 
+  // Getter for selectedObject to be used from outside
+  export function hasSelectedObject(): boolean {
+    return !!selectedObject;
+  }
+
   // --- Method to explicitly load canvas data with transition ---
   export async function loadCanvasData(canvasJson: string | null) {
     console.log(`CanvasEditor: loadCanvasData called. FabricLoaded: ${fabricLoaded}`);
@@ -28,7 +35,7 @@
       console.log('Transition started (fade out)');
       await tick(); // Allow fade-out to start
       // Optional: Add a small delay if tick isn't enough for visual effect
-      // await new Promise(resolve => setTimeout(resolve, 50)); 
+      // await new Promise(resolve => setTimeout(resolve, 50));
 
       try {
         if (canvasJson) {
@@ -135,15 +142,17 @@
   // Update selection / Clear selection / Add/Delete/Clear functions remain the same...
   function updateSelection(e: any) { selectedObject = e.selected[0]; }
   function clearSelection() { selectedObject = null; }
-  function addRectangle() { if (!canvas) return; const wf = window as any; const r = new wf.fabric.Rect({left: 100, top: 100, fill: '#3498db', width: 100, height: 100, strokeWidth: 2, stroke: '#2980b9'}); canvas.add(r); canvas.setActiveObject(r); }
-  function addCircle() { if (!canvas) return; const wf = window as any; const c = new wf.fabric.Circle({left: 100, top: 100, fill: '#e74c3c', radius: 50, strokeWidth: 2, stroke: '#c0392b'}); canvas.add(c); canvas.setActiveObject(c); }
-  function addText() { if (!canvas) return; const wf = window as any; const t = new wf.fabric.Textbox('Text', {left: 100, top: 100, fill: '#2c3e50', fontSize: 24, width: 200}); canvas.add(t); canvas.setActiveObject(t); }
-  function addImage() { if (!canvas) return; const url = prompt('Enter image URL:'); if (!url) return; const wf = window as any; wf.fabric.Image.fromURL(url, (img: any) => { const maxW = canvas.width * 0.8; const maxH = canvas.height * 0.8; if (img.width > maxW || img.height > maxH) { const scale = Math.min(maxW / img.width, maxH / img.height); img.scale(scale); } canvas.add(img); canvas.setActiveObject(img); saveCanvas(); }, { crossOrigin: 'anonymous' }); }
-  function deleteSelected() { if (!canvas || !selectedObject) return; canvas.remove(selectedObject); selectedObject = null; }
-  function clearCanvas() { if (!canvas) return; if (confirm('Are you sure?')) { canvas.clear(); canvas.backgroundColor = '#f0f0f0'; canvas.renderAll(); saveCanvas(); } }
+
+  // Export these methods so they can be called from SceneEditor
+  export function addRectangle() { if (!canvas) return; const wf = window as any; const r = new wf.fabric.Rect({left: 100, top: 100, fill: '#3498db', width: 100, height: 100, strokeWidth: 2, stroke: '#2980b9'}); canvas.add(r); canvas.setActiveObject(r); }
+  export function addCircle() { if (!canvas) return; const wf = window as any; const c = new wf.fabric.Circle({left: 100, top: 100, fill: '#e74c3c', radius: 50, strokeWidth: 2, stroke: '#c0392b'}); canvas.add(c); canvas.setActiveObject(c); }
+  export function addText() { if (!canvas) return; const wf = window as any; const t = new wf.fabric.Textbox('Text', {left: 100, top: 100, fill: '#2c3e50', fontSize: 24, width: 200}); canvas.add(t); canvas.setActiveObject(t); }
+  export function addImage() { if (!canvas) return; const url = prompt('Enter image URL:'); if (!url) return; const wf = window as any; wf.fabric.Image.fromURL(url, (img: any) => { const maxW = canvas.width * 0.8; const maxH = canvas.height * 0.8; if (img.width > maxW || img.height > maxH) { const scale = Math.min(maxW / img.width, maxH / img.height); img.scale(scale); } canvas.add(img); canvas.setActiveObject(img); saveCanvas(); }, { crossOrigin: 'anonymous' }); }
+  export function deleteSelected() { if (!canvas || !selectedObject) return; canvas.remove(selectedObject); selectedObject = null; }
+  export function clearCanvas() { if (!canvas) return; if (confirm('Are you sure?')) { canvas.clear(); canvas.backgroundColor = '#f0f0f0'; canvas.renderAll(); saveCanvas(); } }
 
   // --- Background Functions ---
-  function setBackgroundColor() {
+  export function setBackgroundColor() {
     if (!canvas) return;
     const color = prompt('Enter background color (e.g., #ff0000, red, rgb(0,0,255)):', canvas.backgroundColor || '#f0f0f0');
     if (color) {
@@ -153,7 +162,7 @@
     }
   }
 
-  function setBackgroundImageFromUrl() {
+  export function setBackgroundImageFromUrl() {
     if (!canvas) return;
     const url = prompt('Enter background image URL:');
     if (!url) return;
@@ -223,6 +232,7 @@
 </script>
 
 <div class="space-y-4">
+  {#if !hideControls}
   <div class="flex flex-wrap gap-2 mb-4">
     <Button variant="outline" onclick={addRectangle} title="Add Rectangle" disabled={!fabricLoaded}>
       <Square class="h-4 w-4 mr-2" /> Rectangle
@@ -249,6 +259,7 @@
       Clear All
     </Button>
   </div>
+  {/if}
 
   <div class="border rounded-md overflow-hidden relative min-h-[400px]" bind:this={canvasContainer}>
     {#if !isTransitioning}
