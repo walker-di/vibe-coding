@@ -98,7 +98,7 @@
             <div class="flex gap-2">
               <a href="/creatives/{creativeId}/stories/{storyId}/scenes/{scene.id}/clips/new"
                  class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 py-1 px-3">
-                {/* Removed Plus icon to test syntax */}
+                 <Plus class="h-3 w-3 mr-1" />
                 Add Clip
               </a>
               <Button variant="outline" class="h-8 py-1 px-3 text-xs" onclick={() => onSelectScene(scene.id)}>

@@ -175,8 +175,9 @@
         
         {#if story.scenes && story.scenes.length > 0}
           <SceneList 
-            scenes={story.scenes} 
+            scenes={story.scenes}
             storyId={story.id}
+            creativeId={creativeId}
             onAddScene={handleAddScene}
             onEditScene={handleEditScene}
             onDeleteScene={handleDeleteScene}
