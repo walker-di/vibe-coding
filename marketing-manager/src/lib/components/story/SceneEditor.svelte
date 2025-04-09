@@ -29,9 +29,18 @@
   let selectedClip = $state<Clip | null>(null);
   // State to track which clip's data is currently loaded in the canvas
   let loadedClipIdInCanvas = $state<number | null>(null);
+  // State to track if the CanvasEditor child component is fully initialized
+  let canvasIsReady = $state(false);
 
   // Reference to the CanvasEditor component instance
   let canvasEditorInstance: CanvasEditor;
+
+  // Handler for when CanvasEditor signals it's ready
+  function handleCanvasReady() {
+    console.log('SceneEditor: Received ready signal from CanvasEditor.');
+    canvasIsReady = true;
+    // No need to trigger load here, the effect will handle it
+  }
 
   // Handler for when a clip is selected in SceneList
   function handleSelectClip(clip: Clip) { // No longer async
@@ -44,22 +53,25 @@
      // The $effect below will handle loading the canvas if necessary
    }
 
-    // Effect to call loadCanvasData when selectedClip changes OR when canvasEditorInstance becomes available,
+    // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready,
     // but only if the selected clip is different from the one already loaded.
    $effect(() => {
      const newClipId = selectedClip?.id ?? null; // Use null if no clip is selected
      const canvasData = selectedClip?.canvas ?? null;
-     const isInstanceReady = !!canvasEditorInstance;
+     const isInstanceAvailable = !!canvasEditorInstance; // Check if the instance binding exists
 
-     console.log(`SceneEditor effect running. New Clip ID: ${newClipId}, Loaded Clip ID: ${loadedClipIdInCanvas}, Instance Ready: ${isInstanceReady}`);
+     console.log(`SceneEditor effect running. New Clip ID: ${newClipId}, Loaded Clip ID: ${loadedClipIdInCanvas}, Instance Available: ${isInstanceAvailable}, Canvas Ready: ${canvasIsReady}`);
 
-     if (isInstanceReady && newClipId !== loadedClipIdInCanvas) {
-        console.log(`Clip changed (${loadedClipIdInCanvas} -> ${newClipId}). Calling canvasEditorInstance.loadCanvasData.`);
+     // Only proceed if the canvas instance is bound AND the canvas component signaled it's ready
+     if (isInstanceAvailable && canvasIsReady && newClipId !== loadedClipIdInCanvas) {
+        console.log(`Clip changed (${loadedClipIdInCanvas} -> ${newClipId}) and canvas is ready. Calling canvasEditorInstance.loadCanvasData.`);
         canvasEditorInstance.loadCanvasData(canvasData);
         loadedClipIdInCanvas = newClipId; // Update the tracker *after* loading
         console.log(`Updated loadedClipIdInCanvas to: ${loadedClipIdInCanvas}`);
-     } else if (!isInstanceReady) {
-        console.log('SceneEditor effect: canvasEditorInstance not ready yet.');
+     } else if (!isInstanceAvailable) {
+        console.log('SceneEditor effect: canvasEditorInstance not available yet.');
+     } else if (!canvasIsReady) {
+        console.log('SceneEditor effect: canvasEditorInstance is available, but canvas is not ready yet.');
      } else if (newClipId === loadedClipIdInCanvas) {
         console.log(`SceneEditor effect: Selected clip (${newClipId}) is already loaded. Skipping canvas load.`);
      }
@@ -157,8 +169,9 @@
       <h2 class="text-lg font-semibold mb-2">Canvas Editor</h2>
        <div>
          <CanvasEditor
-           bind:this={canvasEditorInstance} 
-           onCanvasChange={handleCanvasChange} 
+           bind:this={canvasEditorInstance}
+           onCanvasChange={handleCanvasChange}
+           onReady={handleCanvasReady}
          />
        </div>
        {#if selectedClip === null && scenes.length > 0}

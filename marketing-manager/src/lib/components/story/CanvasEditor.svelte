@@ -6,9 +6,11 @@
 
   // Props
   let {
-    onCanvasChange // Only need the change handler
+    onCanvasChange, // Only need the change handler
+    onReady // Optional callback for when fabric is loaded and canvas initialized
   } = $props<{
     onCanvasChange: (canvasJson: string) => void;
+    onReady?: () => void;
   }>();
 
   // State
@@ -70,6 +72,8 @@
        script.onload = () => {
          initializeCanvas();
          fabricLoaded = true;
+         console.log('CanvasEditor: Fabric loaded and canvas initialized. Signaling ready.');
+         onReady?.(); // Signal readiness to the parent
          // Initial load is now fully handled by the parent calling loadCanvasData
        };
 
