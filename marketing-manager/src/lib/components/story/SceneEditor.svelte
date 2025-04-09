@@ -3,7 +3,7 @@
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Copy } from 'lucide-svelte';
 
   // Props passed down from the page
   let {
@@ -40,21 +40,283 @@
 
   // Handler for when CanvasEditor signals it's ready
   function handleCanvasReady() {
-    console.log('SceneEditor: Received ready signal from CanvasEditor.');
     canvasIsReady = true;
     // No need to trigger load here, the effect will handle it
   }
 
   // Handler for when a clip is selected in SceneList
-  function handleSelectClip(clip: Clip) { // No longer async
-    console.log('Clip selected in SceneEditor:', clip.id, clip.orderIndex);
+  async function handleSelectClip(clip: Clip) {
     if (selectedClip?.id === clip.id) {
-       console.log('Same clip selected, skipping state update.');
+      console.log('Same clip selected, skipping state update.');
+      return;
+    }
+
+    try {
+      // Fetch the latest clip data from the API to ensure we have the most up-to-date version
+      const response = await fetch(`/api/clips/${clip.id}`);
+      if (!response.ok) {
+        console.error(`Failed to fetch latest clip data. Status: ${response.status}`);
+        // Fall back to using the provided clip data if the fetch fails
+        selectedClip = clip;
+      } else {
+        // Use the fresh data from the database
+        const freshClipData = await response.json();
+        selectedClip = freshClipData;
+
+        // Also update the clip in the scenes array to keep everything in sync
+        scenes = scenes.map((scene: SceneWithRelations) => {
+          if (scene.clips) {
+            scene.clips = scene.clips.map((c: Clip) => {
+              if (c.id === freshClipData.id) {
+                return freshClipData;
+              }
+              return c;
+            });
+          }
+          return scene;
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching latest clip data:', error);
+      // Fall back to using the provided clip data if an error occurs
+      selectedClip = clip;
+    }
+
+    // The $effect below will handle loading the canvas once selectedClip is updated
+  }
+
+  // Handler for duplicating a clip
+  async function handleDuplicateClip(clip: Clip) {
+    try {
+      // Find the scene that contains this clip
+      const scene = scenes.find((s: SceneWithRelations) =>
+        s.clips && s.clips.some((c: Clip) => c.id === clip.id)
+      );
+
+      if (!scene) {
+        console.error(`Scene containing clip ${clip.id} not found`);
         return;
-     }
-     selectedClip = clip; // Update the state immediately
-     // The $effect below will handle loading the canvas if necessary
-   }
+      }
+
+      // Calculate the next order index (position right after the current clip)
+      const currentIndex = scene.clips?.findIndex((c: Clip) => c.id === clip.id) ?? -1;
+      const nextOrderIndex = currentIndex >= 0 && currentIndex < (scene.clips?.length ?? 0) - 1
+        ? (scene.clips?.[currentIndex + 1].orderIndex + clip.orderIndex) / 2 // Place between current and next clip
+        : clip.orderIndex + 1; // Place after current clip if it's the last one
+
+      // Create a new clip with the same canvas data
+      const response = await fetch('/api/clips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sceneId: scene.id,
+          orderIndex: nextOrderIndex,
+          canvas: clip.canvas,
+          narration: clip.narration,
+          imageUrl: null // We'll update this after getting the ID
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to duplicate clip. Status: ${response.status}`);
+      }
+
+      // Get the newly created clip from the response
+      const newClip = await response.json();
+
+      // Set the image URL based on the clip ID
+      const imageUrl = `/clip-previews/clip-${newClip.id}.png`;
+
+      // Update the clip with the image URL
+      const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          imageUrl: imageUrl
+        })
+      });
+
+      if (!updateResponse.ok) {
+        console.warn(`Failed to update duplicated clip with image URL. Status: ${updateResponse.status}`);
+      }
+
+      // Get the updated clip with the image URL
+      let updatedClip;
+      try {
+        updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+      } catch (err) {
+        console.warn('Error parsing update response:', err);
+        updatedClip = { ...newClip, imageUrl };
+      }
+
+      // Duplicate the preview image
+      if (clip.imageUrl) {
+        try {
+          // First, try to fetch the original image
+          const originalImageResponse = await fetch(clip.imageUrl);
+          if (!originalImageResponse.ok) {
+            throw new Error(`Failed to fetch original image. Status: ${originalImageResponse.status}`);
+          }
+
+          // Convert the image to a blob
+          const imageBlob = await originalImageResponse.blob();
+
+          // Convert blob to base64 data URL
+          const reader = new FileReader();
+          const imageDataUrlPromise = new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+          });
+          reader.readAsDataURL(imageBlob);
+
+          // Wait for the data URL
+          const imageDataUrl = await imageDataUrlPromise;
+
+          // Upload the preview
+          const uploadResponse = await fetch('/api/upload/clip-preview', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              clipId: newClip.id,
+              imageData: imageDataUrl
+            })
+          });
+
+          if (!uploadResponse.ok) {
+            console.error(`Failed to upload preview for duplicated clip ${newClip.id}. Status: ${uploadResponse.status}`);
+          } else {
+            console.log(`Successfully duplicated preview image for clip ${newClip.id}`);
+          }
+        } catch (previewErr) {
+          console.error('Error duplicating preview image:', previewErr);
+
+          // Fallback method if direct duplication fails
+          try {
+            // Create a temporary canvas to generate the preview
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 300; // Standard width for preview
+            tempCanvas.height = 200; // Standard height for preview
+            const ctx = tempCanvas.getContext('2d');
+
+            if (ctx) {
+              // Create an image from the original clip's preview
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+
+              // Create a promise to handle the image loading
+              const imageLoadPromise = new Promise<string>((resolve, reject) => {
+                img.onload = () => {
+                  // Draw the image to the canvas
+                  ctx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                  // Get the data URL
+                  const dataUrl = tempCanvas.toDataURL('image/png');
+                  resolve(dataUrl);
+                };
+                img.onerror = () => {
+                  reject(new Error('Failed to load image'));
+                };
+
+                // Set the source of the image to the original clip's preview
+                // Add a cache-busting parameter to ensure we get the latest version
+                img.src = `${clip.imageUrl}?t=${Date.now()}`;
+              });
+
+              // Wait for the image to load and get the data URL
+              const imageDataUrl = await imageLoadPromise;
+
+              // Upload the preview
+              const uploadResponse = await fetch('/api/upload/clip-preview', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  clipId: newClip.id,
+                  imageData: imageDataUrl
+                })
+              });
+
+              if (!uploadResponse.ok) {
+                console.error(`Failed to upload preview for duplicated clip ${newClip.id} using fallback method. Status: ${uploadResponse.status}`);
+              } else {
+                console.log(`Successfully duplicated preview image for clip ${newClip.id} using fallback method`);
+              }
+            }
+          } catch (fallbackErr) {
+            console.error('Error in fallback preview duplication:', fallbackErr);
+          }
+        }
+      } else if (clip.canvas) {
+        // If no image URL but we have canvas data, create a blank preview
+        try {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = 300;
+          tempCanvas.height = 200;
+          const ctx = tempCanvas.getContext('2d');
+
+          if (ctx) {
+            // Create a blank white canvas
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // Get the data URL
+            const imageDataUrl = tempCanvas.toDataURL('image/png');
+
+            // Upload the preview
+            const uploadResponse = await fetch('/api/upload/clip-preview', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                clipId: newClip.id,
+                imageData: imageDataUrl
+              })
+            });
+
+            if (!uploadResponse.ok) {
+              console.error(`Failed to upload blank preview for duplicated clip ${newClip.id}. Status: ${uploadResponse.status}`);
+            }
+          }
+        } catch (blankPreviewErr) {
+          console.error('Error creating blank preview for duplicated clip:', blankPreviewErr);
+        }
+      }
+
+      // Add the new clip to the scene's clips array
+      const updatedScenes = scenes.map((s: SceneWithRelations) => {
+        if (s.id === scene.id) {
+          // Add the new clip to the scene's clips array
+          const updatedClips = [...(s.clips || []), updatedClip];
+          // Sort clips by orderIndex to ensure they appear in the correct order
+          updatedClips.sort((a, b) => a.orderIndex - b.orderIndex);
+          return {
+            ...s,
+            clips: updatedClips
+          };
+        }
+        return s;
+      });
+
+      scenes = updatedScenes;
+
+      // Force a refresh of the scene list to show the updated preview
+      setTimeout(() => {
+        forceSceneRefresh++;
+      }, 500); // 500ms delay
+
+    } catch (error) {
+      console.error('Error duplicating clip:', error);
+      alert('Failed to duplicate clip. Please try again.');
+    }
+  }
 
     // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready,
     // but only if the selected clip is different from the one already loaded.
@@ -97,7 +359,6 @@
           // Optionally: Revert local state or show an error message to the user
           // For now, just log the error
         } else {
-          console.log(`Clip ${selectedClip.id} canvas saved successfully.`);
 
           // --- Generate and Upload Image Preview ---
           if (canvasEditorInstance) {
@@ -121,10 +382,12 @@
                 } else {
                   const uploadData = await uploadResponse.json();
                   if (uploadData.imageUrl) {
-                    // Update local state with the new image URL
-                    selectedClip = { ...selectedClip, imageUrl: uploadData.imageUrl };
+                    // Add a timestamp to the image URL to prevent caching
+                    const timestamp = Date.now();
+                    const imageUrlWithTimestamp = `${uploadData.imageUrl}?t=${timestamp}`;
 
-                    // Update the clip record in the database with the new image URL
+                    // Store the base URL (without timestamp) in the database
+                    // This ensures consistent URLs across page reloads
                     try {
                       const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
                         method: 'PUT',
@@ -139,17 +402,21 @@
                         const errorText = await updateResponse.text().catch(() => 'Could not read error response');
                         console.error(`Error response: ${errorText}`);
                       } else {
-                        const updatedClipData = await updateResponse.json().catch(() => null);
+                        // Get the updated clip data from the response
+                        const updatedClip = await updateResponse.json().catch(() => null);
 
-                        // Update the clip in the scenes array directly
-                        if (selectedClip) { // Check if selectedClip is not null
-                          const clipId = selectedClip.id; // Store ID in a local variable
+                        if (updatedClip) {
+                          // Update the selectedClip with the data from the database, but use the timestamped URL for display
+                          selectedClip = { ...updatedClip, imageUrl: imageUrlWithTimestamp };
+
+                          // Update the clip in the scenes array to keep everything in sync
+                          const clipId = updatedClip.id; // Use updatedClip.id which is guaranteed to exist
                           scenes = scenes.map((scene: SceneWithRelations) => {
                             if (scene.clips) {
                               scene.clips = scene.clips.map((clip: Clip) => {
                                 if (clip.id === clipId) {
-                                  // Update the clip with the new image URL
-                                  return { ...clip, imageUrl: uploadData.imageUrl };
+                                  // Use the same timestamped URL for consistency
+                                  return { ...updatedClip, imageUrl: imageUrlWithTimestamp };
                                 }
                                 return clip;
                               });
@@ -158,26 +425,28 @@
                           });
                         }
 
-
                         // Force a refresh of the scene list to show the updated preview
                         // Use setTimeout to ensure the image is fully saved before refreshing
                         setTimeout(() => {
                           forceSceneRefresh++;
-                          console.log(`Triggered scene refresh #${forceSceneRefresh} to update preview images`);
                         }, 500); // 500ms delay
                       }
                     } catch (updateError) {
-                      console.error(`Error updating clip ${selectedClip.id} with new imageUrl:`, updateError);
+                      // Use optional chaining to safely access selectedClip.id
+                      console.error(`Error updating clip ${selectedClip?.id} with new imageUrl:`, updateError);
                     }
                   } else {
-                    console.warn(`Upload endpoint for clip ${selectedClip.id} did not return an imageUrl.`);
+                    // Use optional chaining to safely access selectedClip.id
+                    console.warn(`Upload endpoint for clip ${selectedClip?.id} did not return an imageUrl.`);
                   }
                 }
               } catch (uploadError) {
-                console.error(`Error uploading preview for clip ${selectedClip.id}:`, uploadError);
+                // Use optional chaining to safely access selectedClip.id
+                console.error(`Error uploading preview for clip ${selectedClip?.id}:`, uploadError);
               }
             } else {
-              console.error(`Failed to generate image data URL from canvas for clip ${selectedClip.id}.`);
+              // Use optional chaining to safely access selectedClip.id
+              console.error(`Failed to generate image data URL from canvas for clip ${selectedClip?.id}.`);
             }
           } else {
              console.warn('CanvasEditor instance not available to generate image data.');
@@ -259,6 +528,7 @@
         {onSelectScene}
         {onPlayScene}
         onSelectClip={handleSelectClip}
+        onDuplicateClip={handleDuplicateClip}
         refreshTrigger={forceSceneRefresh}
       />
     </div>

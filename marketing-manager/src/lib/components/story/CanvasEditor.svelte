@@ -31,7 +31,6 @@
 
   // --- Method to explicitly load canvas data with transition ---
   export async function loadCanvasData(canvasJson: string | null) {
-    console.log(`CanvasEditor: loadCanvasData called. FabricLoaded: ${fabricLoaded}`);
     if (canvas && fabricLoaded) {
       isTransitioning = true;
       console.log('Transition started (fade out)');
@@ -41,17 +40,14 @@
 
       try {
         if (canvasJson) {
-          console.log('Loading new canvas data during transition...');
           await new Promise<void>((resolve, reject) => {
             canvas.loadFromJSON(canvasJson, () => {
               canvas.renderAll();
-              console.log('Canvas loaded via method.');
               resolve();
             }, (err: any) => reject(err)); // Added error handling for loadFromJSON
           });
         } else {
           // Clear canvas if null is passed
-          console.log('Clearing canvas during transition (null data).');
           canvas.clear();
           canvas.backgroundColor = '#f0f0f0';
           canvas.renderAll();
@@ -81,7 +77,6 @@
        script.onload = () => {
          initializeCanvas();
          fabricLoaded = true;
-         console.log('CanvasEditor: Fabric loaded and canvas initialized. Signaling ready.');
          onReady?.(); // Signal readiness to the parent
          // Initial load is now fully handled by the parent calling loadCanvasData
        };
@@ -136,7 +131,6 @@
   function saveCanvas() {
     if (canvas) {
       const json = JSON.stringify(canvas.toJSON());
-      console.log('Canvas saved:', json.substring(0, 50) + '...');
       onCanvasChange(json);
     }
   }
@@ -202,7 +196,6 @@
   // --- Method to update canvas dimensions ---
   export function updateDimensions(newWidth: number, newHeight: number) {
     if (canvas && fabricLoaded) {
-      console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
       // Use setDimensions which is more efficient than separate setWidth/setHeight calls
       canvas.setDimensions({ width: newWidth, height: newHeight });
       // Adjust background image scaling if necessary? Might need more complex logic if background image exists.

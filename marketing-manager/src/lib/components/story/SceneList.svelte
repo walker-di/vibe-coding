@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
-  import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon } from 'lucide-svelte';
+  import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon, Copy } from 'lucide-svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte';
   import { onMount } from 'svelte';
@@ -31,6 +31,7 @@
     onSelectScene,
     onPlayScene,
     onSelectClip,
+    onDuplicateClip,
     refreshTrigger = 0 // Added to force refresh
   } = $props<{
     scenes: SceneWithRelations[];
@@ -42,6 +43,7 @@
     onSelectScene: (sceneId: number) => void;
     onPlayScene?: (sceneId: number) => void;
     onSelectClip: (clip: Clip) => void;
+    onDuplicateClip?: (clip: Clip) => void;
     refreshTrigger?: number; // Optional prop to force refresh
   }>();
 
@@ -52,7 +54,6 @@
   $effect(() => {
     // Only update if the refreshTrigger has actually changed to a new value
     if (refreshTrigger > 0 && refreshTrigger !== lastSeenRefreshTrigger) {
-      console.log(`SceneList: Detected refreshTrigger change from ${lastSeenRefreshTrigger} to ${refreshTrigger}, updating timestamp`);
       lastSeenRefreshTrigger = refreshTrigger;
       refreshTimestamp();
     }
@@ -251,24 +252,35 @@
           <div class="mt-2 flex space-x-1 overflow-x-auto pb-1">
             {#if scene.clips && scene.clips.length > 0}
               {#each scene.clips as clip (clip.id)}
-                <button
-                   type="button"
-                   onclick={() => onSelectClip(clip)}
-                   class="flex-shrink-0 w-[50px] h-[33px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
-                   title="Select Clip {clip.orderIndex}">
-                  {#if clip.imageUrl}
-                    <img
-                      src={`${clip.imageUrl}?t=${timestamp}`}
-                      alt="Clip preview"
-                      class="object-cover w-full h-full"
-                      loading="lazy"
-                    />
-                  {:else if clip.canvas}
-                    <CanvasPreview canvasData={clip.canvas} width={50} height={33} />
-                  {:else}
-                    <ImageIcon class="h-4 w-4 text-gray-400" />
+                <div class="relative flex-shrink-0 group">
+                  <button
+                    type="button"
+                    onclick={() => onSelectClip(clip)}
+                    class="flex-shrink-0 w-auto h-[49px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
+                    title="Select Clip {clip.orderIndex}">
+                    {#if clip.imageUrl}
+                      <img
+                        src={`${clip.imageUrl}?t=${timestamp}`}
+                        alt="Clip preview"
+                        class="object-cover w-full h-full"
+                        loading="lazy"
+                      />
+                    {:else if clip.canvas}
+                      <CanvasPreview canvasData={clip.canvas} width={50} height={33} />
+                    {:else}
+                      <ImageIcon class="h-4 w-4 text-gray-400" />
+                    {/if}
+                  </button>
+                  {#if onDuplicateClip}
+                    <button
+                      type="button"
+                      onclick={(e) => { e.stopPropagation(); onDuplicateClip(clip); }}
+                      class="absolute -top-2 -right-2 bg-white rounded-full p-0.5 shadow-sm border opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100"
+                      title="Duplicate Clip">
+                      <Copy class="h-3 w-3 text-gray-600" />
+                    </button>
                   {/if}
-                </button>
+                </div>
               {/each}
               {#if scene.clips.length > 7}
                 <div class="flex-shrink-0 w-[50px] h-[33px] border rounded bg-gray-100 flex items-center justify-center text-xs text-muted-foreground" title="{scene.clips.length - 7} more clips">
