@@ -28,13 +28,14 @@
 
 <div class="space-y-4">
   {#if scenes.length > 0}
-    <div class="space-y-4">
+    <div class="flex space-x-4 overflow-x-auto pb-4"> 
       {#each scenes as scene, index (scene.id)}
-        <div class="border rounded-md p-4 hover:shadow-md transition-shadow">
+        <div class="border rounded-md p-4 hover:shadow-md transition-shadow w-80 flex-shrink-0"> 
           <div class="flex justify-between items-start mb-2">
-            <div class="flex-1">
-              <h3 class="text-lg font-semibold hover:text-blue-600 cursor-pointer" 
-                  onclick={() => onSelectScene(scene.id)}>
+            <div class="flex-1 min-w-0"> 
+              <h3 class="text-lg font-semibold hover:text-blue-600 cursor-pointer truncate" 
+                  title="Scene {index + 1}" 
+                  onclick={() => onSelectScene(scene.id)}> 
                 Scene {index + 1}
               </h3>
               <div class="flex items-center text-sm text-muted-foreground">
