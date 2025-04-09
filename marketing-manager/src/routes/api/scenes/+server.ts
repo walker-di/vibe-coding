@@ -21,8 +21,8 @@ export async function POST({ request }) {
       bgmUrl: sceneData.bgmUrl || null,
       bgmName: sceneData.bgmName || null,
       orderIndex: sceneData.orderIndex,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: new Date(), // Use new Date() object
+      updatedAt: new Date()  // Use new Date() object
     } as any).returning();
 
     return json(newScene, { status: 201 });

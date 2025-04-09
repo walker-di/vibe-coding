@@ -50,7 +50,7 @@ export async function PUT({ params, request }) {
         bgmUrl: sceneData.bgmUrl || null,
         bgmName: sceneData.bgmName || null,
         orderIndex: sceneData.orderIndex,
-        updatedAt: Date.now()
+        updatedAt: new Date() // Use new Date() object
       } as any)
       .where(eq(scenes.id, sceneId))
       .returning();

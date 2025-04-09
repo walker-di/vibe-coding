@@ -24,8 +24,8 @@ export async function POST({ request }) {
       canvas: clipData.canvas,
       narration: clipData.narration || null,
       orderIndex: clipData.orderIndex,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: new Date(), // Use new Date() object
+      updatedAt: new Date()  // Use new Date() object
     } as any).returning();
 
     return json(newClip, { status: 201 });

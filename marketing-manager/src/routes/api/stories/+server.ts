@@ -40,8 +40,8 @@ export async function POST({ request }) {
       creativeId: storyData.creativeId as any,
       title: storyData.title,
       description: storyData.description || null,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: new Date(), // Use new Date() object
+      updatedAt: new Date()  // Use new Date() object
     } as any).returning();
 
     return json(newStory, { status: 201 });

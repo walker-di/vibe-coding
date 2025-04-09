@@ -52,7 +52,7 @@ export async function PUT({ params, request }) {
       .set({
         title: storyData.title,
         description: storyData.description || null,
-        updatedAt: Date.now()
+        updatedAt: new Date() // Use new Date() object
       } as any)
       .where(eq(stories.id, storyId))
       .returning();

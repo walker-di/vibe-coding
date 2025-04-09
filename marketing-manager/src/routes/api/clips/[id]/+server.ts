@@ -48,7 +48,7 @@ export async function PUT({ params, request }) {
         canvas: clipData.canvas,
         narration: clipData.narration || null,
         orderIndex: clipData.orderIndex,
-        updatedAt: Date.now()
+        updatedAt: new Date() // Use new Date() object
       } as any)
       .where(eq(clips.id, clipId))
       .returning();
