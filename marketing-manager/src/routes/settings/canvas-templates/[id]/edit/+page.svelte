@@ -8,10 +8,8 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types'; // Import PageData type
-	import type { CanvasTemplate } from '$lib/types/canvasTemplate.types';
 	import { canvasAspectRatios, commonResolutions } from '$lib/constants'; // Import constants
 	import type { CanvasAspectRatio, CommonResolution } from '$lib/constants'; // Import types
-	import { onMount } from 'svelte'; // Import onMount
 
 	let { data }: { data: PageData } = $props(); // Get data from load function
 
@@ -27,7 +25,8 @@
 	let description = $state(data.template.description ?? '');
 	let aspectRatio = $state<CanvasAspectRatio>(data.template.aspectRatio ?? '16:9'); // Added
 	let resolutionSelection = $state<CommonResolution | ''>(getInitialResolutionSelection(data.template.resolution)); // Added
-	let customResolution = $state(resolutionSelection === 'Custom' ? (data.template.resolution ?? '') : ''); // Added
+	// Initialize custom resolution value
+let customResolution = $state(data.template.resolution && getInitialResolutionSelection(data.template.resolution) === 'Custom' ? data.template.resolution : '');
 	let canvasDataJson = $state<string | null>(data.template.canvasData); // Initial canvas data
 	let isSaving = $state(false);
 	let canvasEditorRef: CanvasEditor | null = $state(null);
@@ -52,10 +51,15 @@ function getCompatibleResolutions(selectedAspectRatio: CanvasAspectRatio): Commo
 // Filtered resolutions based on current aspect ratio
 let compatibleResolutions = $derived(getCompatibleResolutions(aspectRatio));
 
-// Reset resolution selection if it's not compatible with the new aspect ratio
+// Automatically update resolution when aspect ratio changes
 $effect(() => {
-	if (resolutionSelection && resolutionSelection !== 'Custom' && !compatibleResolutions.includes(resolutionSelection)) {
-		resolutionSelection = '';
+	// Get the first compatible resolution for this aspect ratio (excluding Custom)
+	const defaultResolution = compatibleResolutions.find(res => res !== 'Custom');
+
+	// If the current selection is not compatible or empty, set it to the default
+	if (!resolutionSelection ||
+		(resolutionSelection !== 'Custom' && !compatibleResolutions.includes(resolutionSelection))) {
+		resolutionSelection = defaultResolution || 'Custom';
 	}
 });
 
@@ -280,11 +284,7 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 					</Select.Trigger>
 					<Select.Content>
 						{#each compatibleResolutions as res (res)}
-							<Select.Item value={res} label={res}>
-								{#snippet children({ selected })}
-									{res}
-								{/snippet}
-							</Select.Item>
+							<Select.Item value={res} label={res}>{res}</Select.Item>
 						{/each}
 					</Select.Content>
 				</Select.Root>

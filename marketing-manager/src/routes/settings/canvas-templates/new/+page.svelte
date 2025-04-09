@@ -37,10 +37,15 @@ function getCompatibleResolutions(selectedAspectRatio: CanvasAspectRatio): Commo
 // Filtered resolutions based on current aspect ratio
 let compatibleResolutions = $derived(getCompatibleResolutions(aspectRatio));
 
-// Reset resolution selection if it's not compatible with the new aspect ratio
+// Automatically update resolution when aspect ratio changes
 $effect(() => {
-	if (resolutionSelection && resolutionSelection !== 'Custom' && !compatibleResolutions.includes(resolutionSelection)) {
-		resolutionSelection = '';
+	// Get the first compatible resolution for this aspect ratio (excluding Custom)
+	const defaultResolution = compatibleResolutions.find(res => res !== 'Custom');
+
+	// If the current selection is not compatible or empty, set it to the default
+	if (!resolutionSelection ||
+		(resolutionSelection !== 'Custom' && !compatibleResolutions.includes(resolutionSelection))) {
+		resolutionSelection = defaultResolution || 'Custom';
 	}
 });
 
@@ -258,7 +263,7 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 						{resolutionSelection || 'Select resolution...'}
 					</Select.Trigger>
 					<Select.Content>
-						{#each commonResolutions as res (res)}
+						{#each compatibleResolutions as res (res)}
 							<Select.Item value={res} label={res}>{res}</Select.Item>
 						{/each}
 					</Select.Content>
