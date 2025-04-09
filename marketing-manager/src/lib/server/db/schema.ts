@@ -188,6 +188,7 @@ export const clips = sqliteTable('clips', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   sceneId: integer('scene_id').notNull().references(() => scenes.id, { onDelete: 'cascade' }),
   canvas: text('canvas').notNull(), // JSON string for fabric.js data
+  imageUrl: text('image_url'), // Added for preview image
   narration: text('narration'),
   orderIndex: integer('order_index').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),

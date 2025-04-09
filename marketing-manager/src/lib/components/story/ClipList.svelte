@@ -28,8 +28,15 @@
       {#each clips as clip, index (clip.id)}
         <div class="border rounded-md p-4 hover:shadow-md transition-shadow flex gap-4 items-start">
           <!-- Thumbnail Column -->
-          <div class="flex-shrink-0 w-[100px] h-[67px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center">
-            {#if clip.canvas}
+          <div class="flex-shrink-0 w-[100px] h-[67px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative">
+            {#if clip.imageUrl}
+              <img 
+                src={clip.imageUrl} 
+                alt="Clip {index + 1} preview" 
+                class="object-cover w-full h-full"
+                loading="lazy"
+              />
+            {:else if clip.canvas}
               <CanvasPreview canvasData={clip.canvas} width={100} height={67} />
             {:else}
               <ImageIcon class="h-6 w-6 text-gray-400" />

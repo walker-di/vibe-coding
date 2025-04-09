@@ -200,6 +200,11 @@
       saveCanvas();
     }
   }
+
+  // Expose the canvas instance for parent components
+  export function getCanvasInstance() {
+    return canvas;
+  }
 </script>
 
 <div class="space-y-4">

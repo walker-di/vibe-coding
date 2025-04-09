@@ -31,8 +31,8 @@
     isLoading = false;
   });
 
-  // Handle form submission
-  async function handleSubmit(clipData: Partial<Clip>) {
+  // Handle form submission (Step 1: Create Clip)
+  async function handleSubmit(clipData: Partial<Clip>): Promise<Clip | null> { // Return the created clip or null
     try {
       const response = await fetch('/api/clips', {
         method: 'POST',
@@ -46,11 +46,37 @@
         throw new Error(`Failed to create clip. Status: ${response.status}`);
       }
 
-      const newClip = await response.json();
-      goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}/clips/${newClip.id}`);
+      const newClip: Clip = await response.json();
+      // Don't navigate yet, return the new clip data
+      return newClip; 
     } catch (e: any) {
       console.error('Error creating clip:', e);
       alert(`Failed to create clip: ${e.message}`);
+      return null; // Return null on error
+    }
+  }
+
+  // Handle Image URL Update (Step 2: Update with Image URL)
+  async function handleImageUrlUpdate(clipId: number, imageUrl: string) {
+    try {
+      const response = await fetch(`/api/clips/${clipId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: imageUrl }) // Only send imageUrl
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update clip with image URL. Status: ${response.status}`);
+      }
+      
+      // Now navigate after successful update
+      goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}/clips/${clipId}`);
+
+    } catch (e: any) {
+      console.error('Error updating clip with image URL:', e);
+      alert(`Failed to update clip image: ${e.message}`);
+      // Optional: Navigate even if image update fails? Or stay on page?
+      // For now, stay on page on error.
     }
   }
 
@@ -78,6 +104,7 @@
         sceneId={sceneId || 0}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
+        onImageUrlUpdate={handleImageUrlUpdate}
       />
     </div>
   {/if}

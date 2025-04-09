@@ -1,13 +1,16 @@
-import { json } from '@sveltejs/kit';
+import { json, error, type RequestEvent } from '@sveltejs/kit'; // Import error and RequestEvent
 import { db } from '$lib/server/db';
 import { clips } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
-export async function GET({ params }) {
+export async function GET({ params }: RequestEvent) { // Add type
   try {
+    if (!params.id) {
+      throw error(400, 'Clip ID parameter is missing');
+    }
     const clipId = parseInt(params.id);
     if (isNaN(clipId)) {
-      return json({ error: 'Invalid clip ID' }, { status: 400 });
+      throw error(400, 'Invalid clip ID format'); // Use error helper
     }
 
     const clip = await db.query.clips.findFirst({
@@ -19,56 +22,89 @@ export async function GET({ params }) {
     }
 
     return json(clip);
-  } catch (error) {
-    console.error('Error fetching clip:', error);
-    return json({ error: 'Failed to fetch clip' }, { status: 500 });
+  // Removed redundant catch block here
+  } catch (err: any) { // This is the correct catch block location
+    console.error('Error fetching clip:', err);
+    // Check if it's an error thrown by SvelteKit's error() helper
+    if (err.status && err.body) {
+      throw err; // Re-throw SvelteKit errors
+    }
+    throw error(500, `Failed to fetch clip: ${err.message || 'Unknown error'}`); // Use error helper
   }
 }
 
-export async function PUT({ params, request }) {
+export async function PUT({ params, request }: RequestEvent) { // Add type
   try {
+    if (!params.id) {
+      throw error(400, 'Clip ID parameter is missing');
+    }
     const clipId = parseInt(params.id);
     if (isNaN(clipId)) {
-      return json({ error: 'Invalid clip ID' }, { status: 400 });
+      throw error(400, 'Invalid clip ID format'); // Use error helper
     }
 
     const clipData = await request.json();
+    
+    // Build the update object dynamically based on provided fields
+    const updateData: Partial<typeof clips.$inferInsert> = {
+        updatedAt: new Date() 
+    };
 
-    // Validate required fields
-    if (!clipData.canvas) {
-      return json({ error: 'Canvas data is required' }, { status: 400 });
+    if (clipData.canvas !== undefined) {
+        updateData.canvas = clipData.canvas;
     }
-    if (clipData.orderIndex === undefined || clipData.orderIndex === null) {
-      return json({ error: 'Order index is required' }, { status: 400 });
+    if (clipData.narration !== undefined) {
+        // Allow setting narration to null or empty string
+        updateData.narration = clipData.narration; 
+    }
+    if (clipData.orderIndex !== undefined && clipData.orderIndex !== null) {
+         if (typeof clipData.orderIndex !== 'number' || clipData.orderIndex < 0) {
+            throw error(400, 'Invalid order index format');
+         }
+        updateData.orderIndex = clipData.orderIndex;
+    }
+     if (clipData.imageUrl !== undefined) {
+        // Allow setting imageUrl to null or a string
+        if (clipData.imageUrl !== null && typeof clipData.imageUrl !== 'string') {
+             throw error(400, 'Invalid imageUrl format');
+        }
+        updateData.imageUrl = clipData.imageUrl;
     }
 
-    // Update clip using type assertions to bypass TypeScript's type checking
+    // Ensure at least one field is being updated besides updatedAt
+    if (Object.keys(updateData).length <= 1) {
+         throw error(400, 'No valid fields provided for update.');
+    }
+
+    // Perform the update with dynamically built data
     const [updatedClip] = await db.update(clips)
-      .set({
-        canvas: clipData.canvas,
-        narration: clipData.narration || null,
-        orderIndex: clipData.orderIndex,
-        updatedAt: new Date() // Use new Date() object
-      } as any)
+      .set(updateData)
       .where(eq(clips.id, clipId))
       .returning();
 
     if (!updatedClip) {
-      return json({ error: 'Clip not found' }, { status: 404 });
+      throw error(404, 'Clip not found'); // Use error helper
     }
 
     return json(updatedClip);
-  } catch (error) {
-    console.error('Error updating clip:', error);
-    return json({ error: 'Failed to update clip' }, { status: 500 });
+  } catch (err: any) { // Add type
+    console.error('Error updating clip:', err);
+    // Check if it's an error thrown by SvelteKit's error() helper
+    if (err.status && err.body) {
+      throw err; // Re-throw SvelteKit errors
+    }
+    throw error(500, `Failed to update clip: ${err.message || 'Unknown error'}`); // Use error helper
   }
 }
 
-export async function DELETE({ params }) {
+export async function DELETE({ params }: RequestEvent) { // Add type
   try {
+    if (!params.id) {
+      throw error(400, 'Clip ID parameter is missing');
+    }
     const clipId = parseInt(params.id);
     if (isNaN(clipId)) {
-      return json({ error: 'Invalid clip ID' }, { status: 400 });
+      throw error(400, 'Invalid clip ID format'); // Use error helper
     }
 
     // Delete clip
@@ -77,12 +113,16 @@ export async function DELETE({ params }) {
       .returning();
 
     if (!deletedClip) {
-      return json({ error: 'Clip not found' }, { status: 404 });
+      throw error(404, 'Clip not found'); // Use error helper
     }
 
     return json({ success: true });
-  } catch (error) {
-    console.error('Error deleting clip:', error);
-    return json({ error: 'Failed to delete clip' }, { status: 500 });
+  } catch (err: any) { // Add type
+    console.error('Error deleting clip:', err);
+    // Check if it's an error thrown by SvelteKit's error() helper
+    if (err.status && err.body) {
+      throw err; // Re-throw SvelteKit errors
+    }
+    throw error(500, `Failed to delete clip: ${err.message || 'Unknown error'}`); // Use error helper
   }
 }
