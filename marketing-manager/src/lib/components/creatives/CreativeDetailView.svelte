@@ -91,8 +91,8 @@
 	}
 
 	function handleSelectStory(storyId: number) {
-		// Navigate to the specific story view page
-		goto(`/stories/${storyId}`); 
+		// Navigate to the specific story view page within the creative context
+		goto(`/creatives/${creative.id}/stories/${storyId}`); 
 	}
 
 	// --- Helper ---
@@ -219,6 +219,7 @@
 		{#if isLoadingStories}
 			<p class="text-muted-foreground text-center py-4">Loading stories...</p>
 		{:else}
+			
 			<StoryList 
 				creativeId={creative.id} 
 				stories={stories}
@@ -228,14 +229,6 @@
 				onSelectStory={handleSelectStory}
 			/>
 		{/if}
-		<div class="flex gap-2 mt-4"> 
-			<Button href={`/creatives/${creative.id}/stories`} variant="outline" class="h-8 px-3 py-1">
-				View All Stories
-			</Button>
-			<Button href={`/creatives/${creative.id}/stories/new`} variant="default" class="h-8 px-3 py-1">
-				Create New Story
-			</Button>
-		</div>
 	</div>
 </section>
 
