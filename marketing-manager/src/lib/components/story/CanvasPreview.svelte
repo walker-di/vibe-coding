@@ -9,13 +9,14 @@
   }>();
   
   let canvasElement: HTMLCanvasElement;
-  let fabricCanvas: fabric.Canvas;
+  let fabricCanvas: fabric.StaticCanvas; // Use StaticCanvas for non-interactive preview
 
   onMount(() => {
-    fabricCanvas = new fabric.Canvas(canvasElement, {
+    // Use StaticCanvas for a non-editable preview
+    fabricCanvas = new fabric.StaticCanvas(canvasElement, { 
       width,
       height,
-      selection: false, // Disable selection in preview mode
+      // selection: false, // Not needed for StaticCanvas, it's non-interactive by default
       renderOnAddRemove: true,
       preserveObjectStacking: true
     });
@@ -24,7 +25,10 @@
       // Load the canvas data from JSON
       if (canvasData) {
         fabricCanvas.loadFromJSON(canvasData, () => {
-          fabricCanvas.renderAll();
+          // Explicitly set dimensions after loading, might help with smaller canvases
+          fabricCanvas.setDimensions({ width: width, height: height });
+          // Ensure rendering happens after data is fully loaded and canvas is ready
+          requestAnimationFrame(() => fabricCanvas.renderAll());
         });
       }
     } catch (error) {
@@ -44,7 +48,10 @@
     if (fabricCanvas && canvasData) {
       try {
         fabricCanvas.loadFromJSON(canvasData, () => {
-          fabricCanvas.renderAll();
+          // Explicitly set dimensions after loading, might help with smaller canvases
+          fabricCanvas.setDimensions({ width: width, height: height });
+          // Ensure rendering happens after data is fully loaded and canvas is ready
+          requestAnimationFrame(() => fabricCanvas.renderAll());
         });
       } catch (error) {
         console.error('Error updating canvas data:', error);

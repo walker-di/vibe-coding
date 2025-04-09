@@ -4,6 +4,7 @@
   import { Button } from '$lib/components/ui/button';
   import { ArrowLeft, Edit, Trash2, FileText } from 'lucide-svelte';
   import type { Clip } from '$lib/types/story.types';
+  import CanvasPreview from '$lib/components/story/CanvasPreview.svelte'; // Import the preview component
 
   // State
   let creativeId = $state<number | null>(null);
@@ -14,7 +15,8 @@
   let isLoading = $state(true);
   let error = $state<string | null>(null);
   let isDeleting = $state(false);
-  let canvasObject = $state<any>(null);
+  // Remove canvasObject state, it's handled by CanvasPreview now
+  // let canvasObject = $state<any>(null);
 
   // Fetch clip data
   $effect(() => {
@@ -48,14 +50,14 @@
       }
       clip = await response.json();
       
-      // Parse canvas data
-      if (clip && clip.canvas) {
-        try {
-          canvasObject = JSON.parse(clip.canvas);
-        } catch (e) {
-          console.error('Error parsing canvas data:', e);
-        }
-      }
+      // No need to parse canvas data here anymore
+      // if (clip && clip.canvas) {
+      //   try {
+      //     canvasObject = JSON.parse(clip.canvas);
+      //   } catch (e) {
+      //     console.error('Error parsing canvas data:', e);
+      //   }
+      // }
     } catch (e: any) {
       console.error('Error fetching clip:', e);
       error = e.message || 'Failed to load clip';
@@ -137,42 +139,13 @@
       
       <div class="rounded border p-6 shadow">
         <h2 class="text-xl font-semibold mb-4">Canvas Content</h2>
-        <div class="border rounded-md overflow-hidden bg-gray-100 p-4">
-          <canvas id="viewCanvas" width="600" height="400" class="mx-auto border bg-white"></canvas>
-        </div>
-        
-        <script>
-          // Load fabric.js and render canvas
-          document.addEventListener('DOMContentLoaded', () => {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js';
-            script.async = true;
-            
-            script.onload = () => {
-              const canvas = new fabric.StaticCanvas('viewCanvas');
-              
-              // Get canvas data from the clip
-              const clipElement = document.getElementById('clipData');
-              if (clipElement) {
-                const canvasData = clipElement.textContent;
-                if (canvasData) {
-                  try {
-                    canvas.loadFromJSON(canvasData, () => {
-                      canvas.renderAll();
-                    });
-                  } catch (error) {
-                    console.error('Error loading canvas data:', error);
-                  }
-                }
-              }
-            };
-            
-            document.body.appendChild(script);
-          });
-        </script>
-        
-        <!-- Hidden element to store canvas data -->
-        <div id="clipData" style="display: none;">{clip.canvas}</div>
+        {#if clip.canvas}
+          <CanvasPreview canvasData={clip.canvas} width={600} height={400} />
+        {:else}
+          <div class="border rounded-md overflow-hidden bg-gray-100 p-4 text-center text-muted-foreground">
+            No canvas data available for this clip.
+          </div>
+        {/if}
       </div>
       
       {#if clip.narration}
