@@ -14,6 +14,10 @@
 		videoTemplates as videoTemplatesTable // Import template type for video
 	} from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
+	import { onMount } from 'svelte'; // Use onMount for initial data fetching
+	import { goto } from '$app/navigation'; // For navigation
+	import StoryList from '$lib/components/story/StoryList.svelte'; // Import StoryList
+	import type { StoryWithRelations } from '$lib/types/story.types'; // Import Story type
 
 	// --- Type for Prop ---
 	// Define a comprehensive type for the creative detail view prop
@@ -32,6 +36,64 @@
 
 	// Correctly type the destructured prop
 	let { creative }: { creative: CreativeDetail } = $props();
+
+	// --- State for Stories ---
+	let stories = $state<StoryWithRelations[]>([]); // Initialize stories state
+	let isLoadingStories = $state(true); // Add loading state
+
+	// --- Lifecycle ---
+	onMount(async () => {
+		isLoadingStories = true;
+		try {
+			// Fetch stories for the current creative
+			const response = await fetch(`/api/stories?creativeId=${creative.id}`);
+			if (!response.ok) {
+				throw new Error('Failed to fetch stories');
+			}
+			const data = await response.json();
+			// API returns the array directly, assign it to the state
+			stories = Array.isArray(data) ? data : []; 
+		} catch (error) {
+			console.error('Error fetching stories:', error);
+			stories = []; // Set to empty array on error
+		} finally {
+			isLoadingStories = false;
+		}
+	});
+
+	// --- Story Handlers ---
+	function handleAddStory() {
+		goto(`/creatives/${creative.id}/stories/new`);
+	}
+
+	function handleEditStory(storyId: number) {
+		// Assuming an edit page exists at /stories/[storyId]/edit or similar
+		// Adjust the path as needed
+		goto(`/stories/${storyId}/edit`); 
+	}
+
+	async function handleDeleteStory(storyId: number) {
+		if (!confirm('Are you sure you want to delete this story?')) {
+			return;
+		}
+		try {
+			const response = await fetch(`/api/stories/${storyId}`, { method: 'DELETE' });
+			if (!response.ok) {
+				throw new Error('Failed to delete story');
+			}
+			// Remove story from local state
+			stories = stories.filter(s => s.id !== storyId);
+			// Optionally show a success message
+		} catch (error) {
+			console.error('Error deleting story:', error);
+			// Optionally show an error message
+		}
+	}
+
+	function handleSelectStory(storyId: number) {
+		// Navigate to the specific story view page
+		goto(`/stories/${storyId}`); 
+	}
 
 	// --- Helper ---
 	// Add explicit return type
@@ -153,7 +215,20 @@
 		<p class="text-sm text-muted-foreground mb-3">
 			Create interactive stories with multiple scenes and clips for this creative.
 		</p>
-		<div class="flex gap-2">
+		<!-- Add StoryList component here, with loading state and props -->
+		{#if isLoadingStories}
+			<p class="text-muted-foreground text-center py-4">Loading stories...</p>
+		{:else}
+			<StoryList 
+				creativeId={creative.id} 
+				stories={stories}
+				onAddStory={handleAddStory}
+				onEditStory={handleEditStory}
+				onDeleteStory={handleDeleteStory}
+				onSelectStory={handleSelectStory}
+			/>
+		{/if}
+		<div class="flex gap-2 mt-4"> 
 			<Button href={`/creatives/${creative.id}/stories`} variant="outline" class="h-8 px-3 py-1">
 				View All Stories
 			</Button>
