@@ -27,6 +27,8 @@
     return !!selectedObject;
   }
 
+  // Getter for selectedObject to be used from outside
+
   // --- Method to explicitly load canvas data with transition ---
   export async function loadCanvasData(canvasJson: string | null) {
     console.log(`CanvasEditor: loadCanvasData called. FabricLoaded: ${fabricLoaded}`);
@@ -113,8 +115,8 @@
     }
 
     canvas = new windowWithFabric.fabric.Canvas('canvas', {
-      width: 600,
-      height: 400,
+      width: 800,
+      height: 600,
       backgroundColor: '#f0f0f0'
     });
      console.log('Canvas initialized.');
@@ -201,8 +203,8 @@
   export function updateDimensions(newWidth: number, newHeight: number) {
     if (canvas && fabricLoaded) {
       console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
-      canvas.setWidth(newWidth);
-      canvas.setHeight(newHeight);
+      // Use setDimensions which is more efficient than separate setWidth/setHeight calls
+      canvas.setDimensions({ width: newWidth, height: newHeight });
       // Adjust background image scaling if necessary? Might need more complex logic if background image exists.
       canvas.renderAll();
       saveCanvas(); // Save state after resize
@@ -261,7 +263,7 @@
   </div>
   {/if}
 
-  <div class="border rounded-md overflow-hidden relative min-h-[400px]" bind:this={canvasContainer}>
+  <div class="border rounded-md overflow-hidden relative min-h-[500px]" bind:this={canvasContainer}>
     {#if !isTransitioning}
       <div transition:fade={{ duration: 150 }}>
         <canvas id="canvas"></canvas>

@@ -129,25 +129,7 @@
 
 </script>
 
-<div class="container mx-auto max-w-4xl py-8">
-  <div class="mb-6 flex justify-between items-center">
-    <Button href={`/creatives/${creativeId}/stories`} variant="outline" disabled={!creativeId}>
-      <ArrowLeft class="mr-2 h-4 w-4" />
-      Back to Stories
-    </Button>
-
-    <div class="flex gap-2">
-      <Button variant="outline" onclick={handleEditStory} disabled={!creativeId || !storyId}>
-        <Edit class="mr-2 h-4 w-4" />
-        Edit Story
-      </Button>
-      <Button variant="destructive" onclick={handleDeleteStory} disabled={isDeleting || !storyId}>
-        <Trash2 class="mr-2 h-4 w-4" />
-        {isDeleting ? 'Deleting...' : 'Delete Story'}
-      </Button>
-    </div>
-  </div>
-
+<div class="container mx-auto py-8">
   {#if isLoading}
     <div class="flex justify-center p-12">
       <p>Loading story...</p>
@@ -161,21 +143,28 @@
   {:else if story}
     <!-- Render story details first -->
     <div class="space-y-6">
-      <div class="rounded border p-6 shadow">
-        <h1 class="text-3xl font-bold mb-2">{story.title}</h1>
-        {#if story.description}
-          <p class="text-muted-foreground">{story.description}</p>
-        {/if}
-      </div>
-
       <!-- Render SceneEditor section separately -->
-      <div class="rounded border p-6 shadow">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-xl font-semibold">Scenes</h2>
-          <Button onclick={handleAddScene} variant="default" disabled={!creativeId || !storyId}>
-            <Plus class="mr-2 h-4 w-4" />
-            Add Scene
-          </Button>
+      <div class="rounded border shadow">
+        <div class="flex justify-between items-center p-4 border-b">
+          <div class="flex ">
+            <Button href={`/creatives/${creativeId}/stories`} variant="outline" disabled={!creativeId}>
+              <ArrowLeft class="h-4 w-4" />
+            </Button>
+            <h1 class="text-xl font-semibold p-1.5 ml-2">{story.title}</h1>
+            <Button variant="ghost" onclick={handleEditStory} disabled={!creativeId || !storyId}>
+              <Edit class="h-4 w-4" />
+            </Button>
+          </div>
+          <div>
+            <Button variant="destructive" onclick={handleDeleteStory} disabled={isDeleting || !storyId}>
+              <Trash2 class="mr-2 h-4 w-4" />
+              {isDeleting ? 'Deleting...' : 'Delete Story'}
+            </Button>
+            <Button onclick={handleAddScene} variant="default" disabled={!creativeId || !storyId}>
+              <Plus class="mr-2 h-4 w-4" />
+              Add Scene
+            </Button>
+          </div>
         </div>
 
         {#if creativeId !== null && storyId !== null}
