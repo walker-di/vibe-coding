@@ -44,10 +44,10 @@ export async function PUT({ params, request }: RequestEvent) { // Add type
     }
 
     const clipData = await request.json();
-    
+
     // Build the update object dynamically based on provided fields
     const updateData: Partial<typeof clips.$inferInsert> = {
-        updatedAt: new Date() 
+        updatedAt: new Date()
     };
 
     if (clipData.canvas !== undefined) {
@@ -55,7 +55,7 @@ export async function PUT({ params, request }: RequestEvent) { // Add type
     }
     if (clipData.narration !== undefined) {
         // Allow setting narration to null or empty string
-        updateData.narration = clipData.narration; 
+        updateData.narration = clipData.narration;
     }
     if (clipData.orderIndex !== undefined && clipData.orderIndex !== null) {
          if (typeof clipData.orderIndex !== 'number' || clipData.orderIndex < 0) {
@@ -83,6 +83,7 @@ export async function PUT({ params, request }: RequestEvent) { // Add type
       .returning();
 
     if (!updatedClip) {
+      console.error(`clips API: Clip ${clipId} not found for update`);
       throw error(404, 'Clip not found'); // Use error helper
     }
 

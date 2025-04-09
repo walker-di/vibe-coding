@@ -5,8 +5,8 @@
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte'; // Import CanvasPreview
 
   // Props
-  let { 
-    clips, 
+  let {
+    clips,
     sceneId,
     onAddClip,
     onEditClip,
@@ -30,9 +30,9 @@
           <!-- Thumbnail Column -->
           <div class="flex-shrink-0 w-[100px] h-[67px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative">
             {#if clip.imageUrl}
-              <img 
-                src={clip.imageUrl} 
-                alt="Clip {index + 1} preview" 
+              <img
+                src={`${clip.imageUrl}?t=${Date.now()}`}
+                alt="Clip {index + 1} preview"
                 class="object-cover w-full h-full"
                 loading="lazy"
               />
@@ -46,7 +46,7 @@
           <!-- Details Column -->
           <div class="flex-1">
             <div class="flex justify-between items-start mb-1">
-              <h3 class="text-lg font-semibold hover:text-blue-600 cursor-pointer" 
+              <h3 class="text-lg font-semibold hover:text-blue-600 cursor-pointer"
                   onclick={() => onViewClip(clip.id)}>
                 Clip {index + 1}
               </h3>
@@ -75,7 +75,7 @@
               </Button>
             </div>
           </div>
-          
+
           <div class="mt-2 text-sm text-muted-foreground">
             Order: {clip.orderIndex || 0}
           </div>
@@ -88,7 +88,7 @@
       {/each}
     </div>
   {/if}
-  
+
   <div class="mt-4">
     <Button variant="outline" onclick={onAddClip} class="w-full">
       <Plus class="h-4 w-4 mr-2" />

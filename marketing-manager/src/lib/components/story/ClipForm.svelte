@@ -12,7 +12,7 @@
   // Removed: import { toast } from 'svelte-sonner'; // Assuming toast is handled elsewhere or not needed here
 
   // Props
-  let { 
+  let {
     clip,
     sceneId,
     isEditing = false,
@@ -24,10 +24,10 @@
     sceneId: number;
     isEditing?: boolean;
     // onSubmit should return the created/updated clip, especially the ID for new ones
-    onSubmit: (clipData: Partial<Clip>) => Promise<Clip | null | undefined>; 
+    onSubmit: (clipData: Partial<Clip>) => Promise<Clip | null | undefined>;
     onCancel: () => void;
     // Function to call PUT /api/clips/[id] with just the imageUrl
-    onImageUrlUpdate?: (clipId: number, imageUrl: string) => Promise<void>; 
+    onImageUrlUpdate?: (clipId: number, imageUrl: string) => Promise<void>;
   }>();
 
   // Form state
@@ -41,6 +41,7 @@
   let availableTemplates = $state<CanvasTemplateListItem[]>([]);
   let isLoadingTemplates = $state(false);
   let isLoadingSelectedTemplate = $state(false);
+  let canvasHasChanged = $state(false); // Track if canvas has changed since initial load
 
   // Fetch available templates on mount
   onMount(async () => {
@@ -62,21 +63,24 @@
   function handleCanvasChange(canvasJson: string) {
     canvas = canvasJson;
     // Clear previous image URL if canvas changes, as preview is outdated
-    imageUrl = ''; 
+    imageUrl = '';
+    // Mark that canvas has changed and needs a new preview
+    canvasHasChanged = true;
+    console.log('Canvas changed, will generate new preview on save');
   }
 
   // Validate form
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
-    
+
     if (!canvas || canvas === '{}') {
       newErrors.canvas = 'Canvas content is required';
     }
-    
+
     if (orderIndex < 0) {
       newErrors.orderIndex = 'Order index must be a non-negative number';
     }
-    
+
     errors = newErrors;
     return Object.keys(newErrors).length === 0;
   }
@@ -146,8 +150,9 @@
 
       // --- Handle Editing Existing Clip ---
       if (!isNewClip) {
-        // Generate and upload preview only if it doesn't exist or canvas changed
-        if (!finalImageUrl && canvasEditorInstance && clip?.id) {
+        // Generate and upload preview if canvas has changed or if there's no existing preview
+        if ((canvasHasChanged || !finalImageUrl) && canvasEditorInstance && clip?.id) {
+          console.log('Generating new preview image for edited clip');
           const fabricCanvas = canvasEditorInstance.getCanvasInstance();
           if (fabricCanvas) {
             const dataUrl = fabricCanvas.toDataURL({ format: 'png', quality: 0.8 });
@@ -157,6 +162,7 @@
               return; // Stop if upload fails
             }
             imageUrl = finalImageUrl; // Update local state
+            console.log('New preview image generated and uploaded:', finalImageUrl);
           } else {
             console.warn('Could not get Fabric canvas instance for preview.');
           }
@@ -227,14 +233,14 @@
       Cancel
     </Button>
   </div>
-  
+
   <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-4">
     <div class="space-y-2">
       <Label for="orderIndex">Order Index</Label>
-      <Input 
-        id="orderIndex" 
+      <Input
+        id="orderIndex"
         type="number"
-        bind:value={orderIndex} 
+        bind:value={orderIndex}
         min="0"
         class={errors.orderIndex ? 'border-red-500' : ''}
       />
@@ -242,17 +248,17 @@
         <p class="text-xs text-red-500">{errors.orderIndex}</p>
       {/if}
     </div>
-    
+
     <div class="border-t pt-4 mt-4">
       <div class="flex justify-between items-center mb-3">
         <h3 class="text-lg font-semibold">Canvas Content</h3>
-        
+
         <!-- Load Template Dropdown -->
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               disabled={isLoadingTemplates || isLoadingSelectedTemplate || availableTemplates.length === 0}
             >
               {#if isLoadingSelectedTemplate}
@@ -282,7 +288,7 @@
         </DropdownMenu.Root>
         <!-- End Load Template Dropdown -->
       </div>
-      
+
       <div class="border rounded-md p-4 relative {errors.canvas ? 'border-red-500' : ''}">
         {#if isLoadingSelectedTemplate}
            <div class="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
@@ -294,38 +300,41 @@
             <ImageUp class="h-3 w-3 mr-1" /> Preview Saved
           </div>
         {/if}
-        <CanvasEditor 
-          bind:this={canvasEditorInstance} 
+        <CanvasEditor
+          bind:this={canvasEditorInstance}
           onCanvasChange={handleCanvasChange}
           onReady={() => {
             // Load initial data once the editor signals it's ready
             console.log('ClipForm: CanvasEditor ready. Attempting to load initial data.');
-            canvasEditorInstance?.loadCanvasData(canvas); 
+            canvasEditorInstance?.loadCanvasData(canvas);
+            // Reset the canvasHasChanged flag after initial load
+            canvasHasChanged = false;
+            console.log('Canvas loaded from initial data, resetting canvasHasChanged flag');
           }}
         />
-        
+
         {#if errors.canvas}
           <p class="text-xs text-red-500 mt-2">{errors.canvas}</p>
         {/if}
       </div>
     </div>
-    
+
     <div class="border-t pt-4 mt-4">
       <h3 class="text-lg font-semibold mb-3 flex items-center">
         <FileText class="h-5 w-5 mr-2" />
         Narration (Optional)
       </h3>
-      
+
       <div class="space-y-2">
-        <Textarea 
-          id="narration" 
-          bind:value={narration} 
+        <Textarea
+          id="narration"
+          bind:value={narration}
           placeholder="Enter narration text for this clip"
           rows={4}
         />
       </div>
     </div>
-    
+
     <div class="flex justify-end pt-4">
       <Button type="submit" disabled={isSubmitting}>
         <Save class="h-4 w-4 mr-2" />

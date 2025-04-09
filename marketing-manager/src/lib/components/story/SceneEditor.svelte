@@ -32,6 +32,8 @@
   let loadedClipIdInCanvas = $state<number | null>(null);
   // State to track if the CanvasEditor child component is fully initialized
   let canvasIsReady = $state(false);
+  // State to track if we need to force a scene refresh
+  let forceSceneRefresh = $state(0);
 
   // Reference to the CanvasEditor component instance
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
@@ -61,27 +63,18 @@
      const canvasData = selectedClip?.canvas ?? null;
      const isInstanceAvailable = !!canvasEditorInstance; // Check if the instance binding exists
 
-     console.log(`SceneEditor effect running. New Clip ID: ${newClipId}, Loaded Clip ID: ${loadedClipIdInCanvas}, Instance Available: ${isInstanceAvailable}, Canvas Ready: ${canvasIsReady}`);
 
      // Only proceed if the canvas instance is bound AND the canvas component signaled it's ready
      if (isInstanceAvailable && canvasIsReady && newClipId !== loadedClipIdInCanvas && canvasEditorInstance) {
-        console.log(`Clip changed (${loadedClipIdInCanvas} -> ${newClipId}) and canvas is ready. Calling canvasEditorInstance.loadCanvasData.`);
         canvasEditorInstance.loadCanvasData(canvasData);
         loadedClipIdInCanvas = newClipId; // Update the tracker *after* loading
-        console.log(`Updated loadedClipIdInCanvas to: ${loadedClipIdInCanvas}`);
-     } else if (!isInstanceAvailable) {
-        console.log('SceneEditor effect: canvasEditorInstance not available yet.');
-     } else if (!canvasIsReady) {
-        console.log('SceneEditor effect: canvasEditorInstance is available, but canvas is not ready yet.');
-     } else if (newClipId === loadedClipIdInCanvas) {
-        console.log(`SceneEditor effect: Selected clip (${newClipId}) is already loaded. Skipping canvas load.`);
      }
    });
 
 
   // Handler for canvas changes (required by CanvasEditor)
   async function handleCanvasChange(canvasJson: string) {
-    console.log('Canvas changed in SceneEditor:', canvasJson ? canvasJson.substring(0, 50) + '...' : 'null');
+
     if (selectedClip && selectedClip.canvas !== canvasJson) {
       // Update local state first for responsiveness
       const updatedClip = { ...selectedClip, canvas: canvasJson };
@@ -110,7 +103,6 @@
           if (canvasEditorInstance) {
             const imageDataUrl = canvasEditorInstance.getCanvasImageDataUrl();
             if (imageDataUrl) {
-              console.log(`Generated image data URL for clip ${selectedClip.id}. Uploading...`);
               try {
                 const uploadResponse = await fetch('/api/upload/clip-preview', {
                   method: 'POST',
@@ -129,13 +121,54 @@
                 } else {
                   const uploadData = await uploadResponse.json();
                   if (uploadData.imageUrl) {
-                    console.log(`Preview uploaded successfully for clip ${selectedClip.id}. New URL: ${uploadData.imageUrl}`);
                     // Update local state with the new image URL
                     selectedClip = { ...selectedClip, imageUrl: uploadData.imageUrl };
-                    // Note: The backend /api/upload/clip-preview saves the file,
-                    // but doesn't update the clip record in the DB with the URL.
-                    // If that's needed, a separate PUT /api/clips/[id] call
-                    // with { imageUrl: uploadData.imageUrl } might be required here or in the backend.
+
+                    // Update the clip record in the database with the new image URL
+                    try {
+                      const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ imageUrl: uploadData.imageUrl })
+                      });
+
+                      if (!updateResponse.ok) {
+                        console.error(`Failed to update clip ${selectedClip.id} with new imageUrl in database. Status: ${updateResponse.status}`);
+                        const errorText = await updateResponse.text().catch(() => 'Could not read error response');
+                        console.error(`Error response: ${errorText}`);
+                      } else {
+                        const updatedClipData = await updateResponse.json().catch(() => null);
+
+                        // Update the clip in the scenes array directly
+                        if (selectedClip) { // Check if selectedClip is not null
+                          const clipId = selectedClip.id; // Store ID in a local variable
+                          scenes = scenes.map((scene: SceneWithRelations) => {
+                            if (scene.clips) {
+                              scene.clips = scene.clips.map((clip: Clip) => {
+                                if (clip.id === clipId) {
+                                  // Update the clip with the new image URL
+                                  return { ...clip, imageUrl: uploadData.imageUrl };
+                                }
+                                return clip;
+                              });
+                            }
+                            return scene;
+                          });
+                        }
+
+
+                        // Force a refresh of the scene list to show the updated preview
+                        // Use setTimeout to ensure the image is fully saved before refreshing
+                        setTimeout(() => {
+                          forceSceneRefresh++;
+                          console.log(`Triggered scene refresh #${forceSceneRefresh} to update preview images`);
+                        }, 500); // 500ms delay
+                      }
+                    } catch (updateError) {
+                      console.error(`Error updating clip ${selectedClip.id} with new imageUrl:`, updateError);
+                    }
                   } else {
                     console.warn(`Upload endpoint for clip ${selectedClip.id} did not return an imageUrl.`);
                   }
@@ -164,7 +197,7 @@
 
  </script>
 
-<div class="flex flex-col h-[calc(100vh-25vh)] w-full">
+<div class="flex flex-col h-[calc(100vh-18vh)] w-full">
   <div class="flex flex-grow overflow-hidden">
     <!-- Left Panel: Buttons/Tools -->
     <div class="w-48 border-r flex flex-col overflow-y-auto">
@@ -226,6 +259,7 @@
         {onSelectScene}
         {onPlayScene}
         onSelectClip={handleSelectClip}
+        refreshTrigger={forceSceneRefresh}
       />
     </div>
   </div>

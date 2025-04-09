@@ -14,9 +14,11 @@ export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent t
     const clipId = body.clipId; // Expect clipId
 
     if (!clipId || typeof clipId !== 'number') {
+      console.error('clip-preview API: Missing or invalid clipId');
       throw error(400, 'Missing or invalid clipId.');
     }
     if (!imageDataUrl || typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image/png;base64,')) {
+      console.error('clip-preview API: Invalid image data format');
       throw error(400, 'Invalid image data format. Expected PNG base64 data URL.');
     }
 
@@ -24,17 +26,20 @@ export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent t
     const base64Data = imageDataUrl.replace(/^data:image\/png;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
-    // Generate filename based on clipId
-    const filename = `clip-${clipId}.png`; // Use clipId for consistent filename
+    // Generate filename based on clipId with a unique timestamp
+    const timestamp = Date.now();
+    const filename = `clip-${clipId}-${timestamp}.png`; // Add timestamp for uniqueness
     const filePath = path.join(UPLOAD_DIR, filename);
 
-    // Save the file
     await fs.writeFile(filePath, imageBuffer);
 
     // Construct the public URL
     const imageUrl = `/clip-previews/${filename}`; // Relative URL for client-side use
 
-    return json({ imageUrl });
+    // Add a timestamp query parameter to force browser cache refresh
+    const timestampedUrl = `${imageUrl}?t=${Date.now()}`;
+
+    return json({ imageUrl: timestampedUrl });
 
   } catch (err: any) {
     console.error('Error processing image upload:', err);

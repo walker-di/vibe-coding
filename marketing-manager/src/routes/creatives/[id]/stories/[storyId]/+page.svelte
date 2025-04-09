@@ -129,7 +129,7 @@
 
 </script>
 
-<div class="container mx-auto py-8">
+<div class="container mx-auto py-1">
   {#if isLoading}
     <div class="flex justify-center p-12">
       <p>Loading story...</p>

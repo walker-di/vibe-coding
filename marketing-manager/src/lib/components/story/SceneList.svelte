@@ -3,6 +3,22 @@
   import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon } from 'lucide-svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte';
+  import { onMount } from 'svelte';
+
+  // Create a timestamp that will be used to force image refreshes
+  let timestamp = $state(Date.now());
+
+  // Function to refresh the timestamp
+  function refreshTimestamp() {
+    timestamp = Date.now();
+  }
+
+  // Refresh timestamp only when the component is mounted
+  onMount(() => {
+    // Initial refresh
+    refreshTimestamp();
+    // No need for interval - we'll refresh on demand with refreshTrigger
+  });
 
   // Props
   let {
@@ -14,7 +30,8 @@
     onDeleteScene,
     onSelectScene,
     onPlayScene,
-    onSelectClip
+    onSelectClip,
+    refreshTrigger = 0 // Added to force refresh
   } = $props<{
     scenes: SceneWithRelations[];
     creativeId: number;
@@ -25,7 +42,21 @@
     onSelectScene: (sceneId: number) => void;
     onPlayScene?: (sceneId: number) => void;
     onSelectClip: (clip: Clip) => void;
+    refreshTrigger?: number; // Optional prop to force refresh
   }>();
+
+  // Track the last seen refreshTrigger value to prevent infinite loops
+  let lastSeenRefreshTrigger = $state(0);
+
+  // Effect to update timestamp when refreshTrigger changes
+  $effect(() => {
+    // Only update if the refreshTrigger has actually changed to a new value
+    if (refreshTrigger > 0 && refreshTrigger !== lastSeenRefreshTrigger) {
+      console.log(`SceneList: Detected refreshTrigger change from ${lastSeenRefreshTrigger} to ${refreshTrigger}, updating timestamp`);
+      lastSeenRefreshTrigger = refreshTrigger;
+      refreshTimestamp();
+    }
+  });
 
   // State
   let isCreatingScene = $state(false);
@@ -128,6 +159,7 @@
       const newClip = await response.json();
 
       // Set the image URL based on the clip ID
+      // Format: /clip-previews/clip-<CLIP_ID>.png
       const imageUrl = `/clip-previews/clip-${newClip.id}.png`;
 
       // Update the clip with the image URL
@@ -146,7 +178,14 @@
       }
 
       // Get the updated clip with the image URL
-      const updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+      let updatedClip;
+      try {
+        updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+      } catch (err) {
+        // If there's an error parsing the response, use the original clip with the image URL
+        console.warn('Error parsing update response:', err);
+        updatedClip = { ...newClip, imageUrl };
+      }
 
       // Add the new clip to the scene's clips array
       const updatedScenes = scenes.map((s: SceneWithRelations) => {
@@ -161,7 +200,6 @@
 
       scenes = updatedScenes;
 
-      // Navigate to the edit page for the new clip
     } catch (error) {
       console.error('Error creating clip:', error);
       alert('Failed to create new clip. Please try again.');
@@ -220,7 +258,7 @@
                    title="Select Clip {clip.orderIndex}">
                   {#if clip.imageUrl}
                     <img
-                      src={clip.imageUrl}
+                      src={`${clip.imageUrl}?t=${timestamp}`}
                       alt="Clip preview"
                       class="object-cover w-full h-full"
                       loading="lazy"
