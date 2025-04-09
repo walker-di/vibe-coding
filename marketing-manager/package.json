@@ -60,6 +60,7 @@
     "drizzle-orm": "^0.40.0",
     "fabric": "^6.6.2",
     "postcss": "^8.5.3",
+    "svelte-local-storage-store": "^0.6.4",
     "svelte-sonner": "^0.3.28",
     "zod": "^3.24.2"
   }

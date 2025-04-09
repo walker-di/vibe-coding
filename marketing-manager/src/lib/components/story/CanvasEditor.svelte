@@ -188,6 +188,22 @@
     return canvas;
   }
 
+  // --- Method to update canvas dimensions ---
+  export function updateDimensions(newWidth: number, newHeight: number) {
+    if (canvas && fabricLoaded) {
+      console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
+      canvas.setWidth(newWidth);
+      canvas.setHeight(newHeight);
+      // Adjust background image scaling if necessary? Might need more complex logic if background image exists.
+      canvas.renderAll();
+      saveCanvas(); // Save state after resize
+    } else {
+      console.warn(`updateDimensions called but canvas not ready. W: ${newWidth}, H: ${newHeight}`);
+    }
+  }
+  // --- End Method ---
+
+
   // --- Function to get canvas image data ---
   export function getCanvasImageDataUrl(): string | null {
     if (canvas && fabricLoaded) {

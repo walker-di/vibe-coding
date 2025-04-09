@@ -149,6 +149,36 @@
 		}
 	}
 
+	// Helper function to parse aspect ratio string and calculate dimensions
+	function calculateDimensions(ratioString: CanvasAspectRatio, fixedWidth: number): { width: number; height: number } {
+		if (!ratioString || typeof ratioString !== 'string' || !ratioString.includes(':')) {
+			console.warn(`Invalid aspect ratio string: ${ratioString}. Defaulting to 600x400.`);
+			return { width: fixedWidth, height: 400 }; // Default or fallback
+		}
+		const parts = ratioString.split(':');
+		const ratioW = parseFloat(parts[0]);
+		const ratioH = parseFloat(parts[1]);
+
+		if (isNaN(ratioW) || isNaN(ratioH) || ratioW <= 0 || ratioH <= 0) {
+			console.warn(`Invalid aspect ratio numbers: ${ratioString}. Defaulting to 600x400.`);
+			return { width: fixedWidth, height: 400 }; // Default or fallback
+		}
+
+		const newHeight = Math.round((fixedWidth / ratioW) * ratioH);
+		return { width: fixedWidth, height: newHeight };
+	}
+
+	// Effect to update canvas dimensions when aspect ratio changes
+	$effect(() => {
+		if (isCanvasReady && canvasEditorRef && aspectRatio) {
+			console.log(`Effect: Aspect ratio changed to ${aspectRatio}. Updating canvas dimensions.`);
+			const { width, height } = calculateDimensions(aspectRatio, 600); // Keep width fixed at 600 for now
+			canvasEditorRef.updateDimensions(width, height);
+		} else {
+			console.log(`Effect: Canvas dimension update skipped. Ready: ${isCanvasReady}, Ref: ${!!canvasEditorRef}, Ratio: ${aspectRatio}`);
+		}
+	});
+
 
 	// Effect to load data when canvas is ready (alternative to onReady prop)
 	// $effect.pre(() => {
@@ -203,25 +233,22 @@
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<div>
 				<Label for="aspect-ratio">Aspect Ratio</Label>
-				<Select.Root
-					value={aspectRatio}
-					onValueChange={(v: any) => { if (v) aspectRatio = v.value; }}
+				<!-- Use native select for Aspect Ratio -->
+				<select
+					id="aspect-ratio"
+					bind:value={aspectRatio}
+					class="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 				>
-					<Select.Trigger class="w-full" id="aspect-ratio">
-						{aspectRatio || 'Select aspect ratio...'}
-					</Select.Trigger>
-					<Select.Content>
-						{#each canvasAspectRatios as ratio (ratio)}
-							<Select.Item value={ratio} label={ratio}>{ratio}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
+					{#each canvasAspectRatios as ratio (ratio)}
+						<option value={ratio}>{ratio}</option>
+					{/each}
+				</select>
 			</div>
 			<div>
 				<Label for="resolution">Resolution</Label>
 				<Select.Root
 					value={resolutionSelection}
-					onValueChange={(v: any) => { if (v) resolutionSelection = v.value; }}
+					onValueChange={(newValue: CommonResolution | '' | undefined) => { if (newValue !== undefined) resolutionSelection = newValue; }}
 				>
 					<Select.Trigger class="w-full" id="resolution">
 						{resolutionSelection || 'Select resolution...'}
