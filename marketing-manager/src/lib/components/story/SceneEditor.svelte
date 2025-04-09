@@ -64,10 +64,10 @@
       }
      }
    }
-
-   // Removed derived props
-
-</script>
+ 
+   // Removed unused derived prop
+ 
+ </script>
 
 <div class="flex flex-col h-[calc(100vh-10rem)]">
 
@@ -76,7 +76,7 @@
        <div>
          <CanvasEditor
            bind:this={canvasEditorInstance} 
-           onCanvasChange={handleCanvasChange}
+           onCanvasChange={handleCanvasChange} 
          />
        </div>
        {#if selectedClip === null && scenes.length > 0}

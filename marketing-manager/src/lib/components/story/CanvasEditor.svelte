@@ -5,12 +5,9 @@
 
   // Props
   let {
-    initialCanvas, // Keep initialCanvas for the very first load
-    onCanvasChange
+    onCanvasChange // Only need the change handler
   } = $props<{
-    initialCanvas: string;
     onCanvasChange: (canvasJson: string) => void;
-    // currentClipCanvas is removed as we'll use an explicit method
   }>();
 
   // State
@@ -26,16 +23,12 @@
       try {
         if (canvasJson) {
           console.log('Loading new canvas data via method...');
-          // Check if data is different before loading to avoid unnecessary re-renders if possible
-          const currentCanvasJson = JSON.stringify(canvas.toJSON());
-          if (canvasJson !== currentCanvasJson) {
-             canvas.loadFromJSON(canvasJson, () => {
-               canvas.renderAll();
-               console.log('Canvas loaded via method.');
-             });
-          } else {
-             console.log('Canvas data is the same, skipping load.');
-          }
+          // Removed the check: if (canvasJson !== currentCanvasJson)
+          // Always attempt to load if canvasJson is provided
+          canvas.loadFromJSON(canvasJson, () => {
+            canvas.renderAll();
+            console.log('Canvas loaded via method.');
+          });
         } else {
           // Clear canvas if null is passed
           console.log('Clearing canvas via method (null data).');
@@ -61,14 +54,13 @@
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js';
       script.async = true;
 
-      script.onload = () => {
-        initializeCanvas();
-        fabricLoaded = true;
-        // After fabric loads, try loading initial data if it exists
-        loadCanvasData(initialCanvas && initialCanvas !== '{}' ? initialCanvas : null);
-      };
+       script.onload = () => {
+         initializeCanvas();
+         fabricLoaded = true;
+         // Initial load is now fully handled by the parent calling loadCanvasData
+       };
 
-      document.body.appendChild(script);
+       document.body.appendChild(script);
 
       return () => {
         // Clean up
@@ -101,11 +93,11 @@
       height: 400,
       backgroundColor: '#f0f0f0'
     });
-    console.log('Canvas initialized.');
+     console.log('Canvas initialized.');
 
-    // Initial load is now handled in onMount after fabric loads
+     // Initial load is now fully handled by the parent calling loadCanvasData
 
-    // Set up event listeners
+     // Set up event listeners
     canvas.on('object:modified', saveCanvas);
     canvas.on('object:added', saveCanvas);
     canvas.on('object:removed', saveCanvas);
