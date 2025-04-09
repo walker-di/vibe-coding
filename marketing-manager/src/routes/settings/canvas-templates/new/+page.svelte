@@ -19,8 +19,33 @@
 	let isSaving = $state(false);
 	let canvasEditorRef: CanvasEditor | null = $state(null); // To call methods on the editor
 
-	// Derived state for the final resolution value to be saved
-	let finalResolution = $derived(resolutionSelection === 'Custom' ? customResolution.trim() : resolutionSelection);
+	// Filter resolutions based on selected aspect ratio
+function getCompatibleResolutions(selectedAspectRatio: CanvasAspectRatio): CommonResolution[] {
+	const aspectRatioMap: Record<CanvasAspectRatio, string[]> = {
+		'16:9': ['1920x1080 (16:9 HD)'],
+		'9:16': ['1080x1920 (9:16 HD)'],
+		'1:1': ['1080x1080 (1:1 Square)'],
+		'4:5': ['1080x1350 (4:5 Portrait)'],
+		'1.91:1': ['1200x628 (Landscape Ad)'],
+		'Other': [...commonResolutions.filter(r => r !== 'Custom')]
+	};
+
+	// Always include Custom option
+	return [...(aspectRatioMap[selectedAspectRatio] || []), 'Custom'] as CommonResolution[];
+}
+
+// Filtered resolutions based on current aspect ratio
+let compatibleResolutions = $derived(getCompatibleResolutions(aspectRatio));
+
+// Reset resolution selection if it's not compatible with the new aspect ratio
+$effect(() => {
+	if (resolutionSelection && resolutionSelection !== 'Custom' && !compatibleResolutions.includes(resolutionSelection)) {
+		resolutionSelection = '';
+	}
+});
+
+// Derived state for the final resolution value to be saved
+let finalResolution = $derived(resolutionSelection === 'Custom' ? customResolution.trim() : resolutionSelection);
 
 	function handleCanvasChange(json: string) {
 		canvasDataJson = json;
@@ -211,7 +236,7 @@
 				<Label for="aspect-ratio">Aspect Ratio</Label>
 				<Select.Root
 					bind:value={aspectRatio}
-					onValueChange={(v: any) => { if (v) aspectRatio = v.value; }}
+					type="single"
 				>
 					<Select.Trigger class="w-full" id="aspect-ratio">
 						{aspectRatio || 'Select aspect ratio...'}
@@ -227,7 +252,7 @@
 				<Label for="resolution">Resolution</Label>
 				<Select.Root
 					bind:value={resolutionSelection}
-					onValueChange={(v: any) => { if (v) resolutionSelection = v.value; }}
+					type="single"
 				>
 					<Select.Trigger class="w-full" id="resolution">
 						{resolutionSelection || 'Select resolution...'}

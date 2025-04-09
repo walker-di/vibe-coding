@@ -34,8 +34,33 @@
 	let isCanvasReady = $state(false); // Track if canvas editor is initialized
 	let canvasHasChanged = $state(false); // Track if user modified the canvas
 
-	// Derived state for the final resolution value to be saved
-	let finalResolution = $derived(resolutionSelection === 'Custom' ? customResolution.trim() : resolutionSelection);
+	// Filter resolutions based on selected aspect ratio
+function getCompatibleResolutions(selectedAspectRatio: CanvasAspectRatio): CommonResolution[] {
+	const aspectRatioMap: Record<CanvasAspectRatio, string[]> = {
+		'16:9': ['1920x1080 (16:9 HD)'],
+		'9:16': ['1080x1920 (9:16 HD)'],
+		'1:1': ['1080x1080 (1:1 Square)'],
+		'4:5': ['1080x1350 (4:5 Portrait)'],
+		'1.91:1': ['1200x628 (Landscape Ad)'],
+		'Other': [...commonResolutions.filter(r => r !== 'Custom')]
+	};
+
+	// Always include Custom option
+	return [...(aspectRatioMap[selectedAspectRatio] || []), 'Custom'] as CommonResolution[];
+}
+
+// Filtered resolutions based on current aspect ratio
+let compatibleResolutions = $derived(getCompatibleResolutions(aspectRatio));
+
+// Reset resolution selection if it's not compatible with the new aspect ratio
+$effect(() => {
+	if (resolutionSelection && resolutionSelection !== 'Custom' && !compatibleResolutions.includes(resolutionSelection)) {
+		resolutionSelection = '';
+	}
+});
+
+// Derived state for the final resolution value to be saved
+let finalResolution = $derived(resolutionSelection === 'Custom' ? customResolution.trim() : resolutionSelection);
 
 	function handleCanvasChange(json: string) {
 		if (isCanvasReady) { // Only track changes after initial load
@@ -247,15 +272,19 @@
 			<div>
 				<Label for="resolution">Resolution</Label>
 				<Select.Root
-					value={resolutionSelection}
-					onValueChange={(newValue: CommonResolution | '' | undefined) => { if (newValue !== undefined) resolutionSelection = newValue; }}
+					bind:value={resolutionSelection}
+					type="single"
 				>
 					<Select.Trigger class="w-full" id="resolution">
 						{resolutionSelection || 'Select resolution...'}
 					</Select.Trigger>
 					<Select.Content>
-						{#each commonResolutions as res (res)}
-							<Select.Item value={res} label={res}>{res}</Select.Item>
+						{#each compatibleResolutions as res (res)}
+							<Select.Item value={res} label={res}>
+								{#snippet children({ selected })}
+									{res}
+								{/snippet}
+							</Select.Item>
 						{/each}
 					</Select.Content>
 				</Select.Root>
