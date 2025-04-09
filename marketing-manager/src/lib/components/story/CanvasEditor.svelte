@@ -143,6 +143,23 @@
   export function getCanvasInstance() {
     return canvas;
   }
+
+  // --- Function to get canvas image data ---
+  export function getCanvasImageDataUrl(): string | null {
+    if (canvas && fabricLoaded) {
+      try {
+        // Export as PNG data URL
+        return canvas.toDataURL({ format: 'png', quality: 0.8 }); // Adjust quality as needed
+      } catch (error) {
+        console.error('Error generating canvas data URL:', error);
+        return null;
+      }
+    }
+    console.warn('getCanvasImageDataUrl called but canvas is not ready.');
+    return null;
+  }
+  // --- End function ---
+
 </script>
 
 <div class="space-y-4">

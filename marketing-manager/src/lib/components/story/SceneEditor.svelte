@@ -92,11 +92,55 @@
           // For now, just log the error
         } else {
           console.log(`Clip ${selectedClip.id} canvas saved successfully.`);
-          // Optionally: Update the clip in the parent `scenes` array if needed,
-          // though the local update might be sufficient if the parent re-fetches.
+
+          // --- Generate and Upload Image Preview ---
+          if (canvasEditorInstance) {
+            const imageDataUrl = canvasEditorInstance.getCanvasImageDataUrl();
+            if (imageDataUrl) {
+              console.log(`Generated image data URL for clip ${selectedClip.id}. Uploading...`);
+              try {
+                const uploadResponse = await fetch('/api/upload/clip-preview', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    clipId: selectedClip.id,
+                    imageData: imageDataUrl
+                  })
+                });
+
+                if (!uploadResponse.ok) {
+                  const errorData = await uploadResponse.json().catch(() => ({ message: 'Failed to parse upload error response' }));
+                  console.error(`Failed to upload preview for clip ${selectedClip.id}:`, uploadResponse.status, errorData.message || uploadResponse.statusText);
+                } else {
+                  const uploadData = await uploadResponse.json();
+                  if (uploadData.imageUrl) {
+                    console.log(`Preview uploaded successfully for clip ${selectedClip.id}. New URL: ${uploadData.imageUrl}`);
+                    // Update local state with the new image URL
+                    selectedClip = { ...selectedClip, imageUrl: uploadData.imageUrl };
+                    // Note: The backend /api/upload/clip-preview saves the file,
+                    // but doesn't update the clip record in the DB with the URL.
+                    // If that's needed, a separate PUT /api/clips/[id] call
+                    // with { imageUrl: uploadData.imageUrl } might be required here or in the backend.
+                  } else {
+                    console.warn(`Upload endpoint for clip ${selectedClip.id} did not return an imageUrl.`);
+                  }
+                }
+              } catch (uploadError) {
+                console.error(`Error uploading preview for clip ${selectedClip.id}:`, uploadError);
+              }
+            } else {
+              console.error(`Failed to generate image data URL from canvas for clip ${selectedClip.id}.`);
+            }
+          } else {
+             console.warn('CanvasEditor instance not available to generate image data.');
+          }
+          // --- End Generate and Upload Image Preview ---
         }
       } catch (error) {
-        console.error(`Error saving clip ${selectedClip.id}:`, error);
+        const clipId = selectedClip ? selectedClip.id : 'unknown';
+        console.error(`Error in canvas save/preview process for clip ${clipId}:`, error);
         // Optionally: Handle network errors, show message
       }
       // --- End Save ---

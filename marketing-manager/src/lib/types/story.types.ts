@@ -22,6 +22,7 @@ export interface Clip {
   id: number;
   sceneId: number;
   canvas: string; // JSON string of fabric.js canvas data
+  imageUrl?: string; // Optional URL for the generated preview image
   narration: string | null;
   orderIndex: number;
   createdAt: number;
