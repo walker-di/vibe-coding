@@ -52,7 +52,7 @@
 			}
 			const data = await response.json();
 			// API returns the array directly, assign it to the state
-			stories = Array.isArray(data) ? data : []; 
+			stories = Array.isArray(data) ? data : [];
 		} catch (error) {
 			console.error('Error fetching stories:', error);
 			stories = []; // Set to empty array on error
@@ -69,7 +69,7 @@
 	function handleEditStory(storyId: number) {
 		// Assuming an edit page exists at /stories/[storyId]/edit or similar
 		// Adjust the path as needed
-		goto(`/stories/${storyId}/edit`); 
+		goto(`/stories/${storyId}/edit`);
 	}
 
 	async function handleDeleteStory(storyId: number) {
@@ -91,8 +91,14 @@
 	}
 
 	function handleSelectStory(storyId: number) {
-		// Navigate to the specific story view page within the creative context
-		goto(`/creatives/${creative.id}/stories/${storyId}`); 
+		// Check if we're in a nested product/persona context by checking if persona has productId
+		if (creative.persona?.productId) {
+			// If in nested context, maintain the product/persona/creative route structure
+			goto(`/products/${creative.persona.productId}/personas/${creative.persona.id}/creatives/${creative.id}/stories/${storyId}`);
+		} else {
+			// Otherwise, use the standalone creative route
+			goto(`/creatives/${creative.id}/stories/${storyId}`);
+		}
 	}
 
 	// --- Helper ---
@@ -205,12 +211,19 @@
 <section class="mt-6 border-t pt-4">
 	<div class="flex items-center justify-between mb-3">
 		<h2 class="text-lg font-semibold">Stories</h2>
-		<Button href={`/creatives/${creative.id}/stories`} variant="outline" class="h-8 px-3 py-1">
+		<Button
+			href={creative.persona?.productId
+				? `/products/${creative.persona.productId}/personas/${creative.persona.id}/creatives/${creative.id}/stories`
+				: `/creatives/${creative.id}/stories`
+			}
+			variant="outline"
+			class="h-8 px-3 py-1"
+		>
 			<BookOpen class="h-4 w-4 mr-2" />
 			Manage Stories
 		</Button>
 	</div>
-	
+
 	<div class="rounded border p-4">
 		<p class="text-sm text-muted-foreground mb-3">
 			Create interactive stories with multiple scenes and clips for this creative.
@@ -219,9 +232,9 @@
 		{#if isLoadingStories}
 			<p class="text-muted-foreground text-center py-4">Loading stories...</p>
 		{:else}
-			
-			<StoryList 
-				creativeId={creative.id} 
+
+			<StoryList
+				creativeId={creative.id}
 				stories={stories}
 				onAddStory={handleAddStory}
 				onEditStory={handleEditStory}

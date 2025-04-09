@@ -1,11 +1,24 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { stories } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
-export async function GET() {
+export async function GET({ url }) {
   try {
+    // Check if creativeId query parameter exists
+    const creativeIdParam = url.searchParams.get('creativeId');
+    let whereCondition = undefined;
+
+    // If creativeId is provided, filter stories by that creative
+    if (creativeIdParam) {
+      const creativeId = parseInt(creativeIdParam);
+      if (!isNaN(creativeId)) {
+        whereCondition = eq(stories.creativeId, creativeId);
+      }
+    }
+
     const allStories = await db.query.stories.findMany({
+      where: whereCondition,
       with: {
         scenes: {
           with: {
