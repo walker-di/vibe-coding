@@ -14,23 +14,73 @@
     onDeleteScene,
     onSelectScene,
     onPlayScene,
-    onSelectClip 
+    onSelectClip
   } = $props<{
     scenes: SceneWithRelations[];
     creativeId: number;
     storyId: number;
-    onAddScene: () => void;
+    onAddScene?: () => void;
     onEditScene: (sceneId: number) => void;
     onDeleteScene: (sceneId: number) => void;
     onSelectScene: (sceneId: number) => void;
     onPlayScene?: (sceneId: number) => void;
-    onSelectClip: (clip: Clip) => void; 
+    onSelectClip: (clip: Clip) => void;
   }>();
+
+  // State
+  let isCreatingScene = $state(false);
+
+  // Create a new scene directly
+  async function createNewScene() {
+    if (isCreatingScene) return;
+    isCreatingScene = true;
+
+    try {
+      // Calculate the next order index
+      const nextOrderIndex = scenes.length > 0
+        ? Math.max(...scenes.map((scene: SceneWithRelations) => scene.orderIndex)) + 1
+        : 0;
+
+      // Create a new scene with default values
+      const response = await fetch('/api/scenes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          storyId: storyId,
+          orderIndex: nextOrderIndex,
+          bgmUrl: null,
+          bgmName: null
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create scene. Status: ${response.status}`);
+      }
+
+      // Get the newly created scene from the response
+      const newScene = await response.json();
+
+      // Add the new scene to the scenes array
+      scenes = [...scenes, { ...newScene, clips: [] }];
+
+      // Also call the parent's onAddScene if it exists
+      if (onAddScene) {
+        onAddScene();
+      }
+    } catch (error) {
+      console.error('Error creating scene:', error);
+      alert('Failed to create new scene. Please try again.');
+    } finally {
+      isCreatingScene = false;
+    }
+  }
 </script>
 
 <div class="space-y-4">
-  {#if scenes.length > 0}
-    <div class="flex space-x-4 overflow-x-auto pb-4">
+  <div class="flex space-x-4 overflow-x-auto pb-4">
+    {#if scenes.length > 0}
       {#each scenes as scene, index (scene.id)}
         <div class="border rounded-md p-4 hover:shadow-md transition-shadow w-80 flex-shrink-0">
           <div class="flex justify-between items-start mb-2">
@@ -120,15 +170,16 @@
       <!-- Add New Scene Button -->
       <button
         type="button"
-        onclick={onAddScene}
+        onclick={createNewScene}
+        disabled={isCreatingScene}
         class="border rounded-md p-4 hover:shadow-md transition-shadow w-40 flex-shrink-0 flex flex-col items-center justify-center h-[100px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
         <div class="flex flex-col items-center justify-center h-full">
           <div class="rounded-full bg-gray-200 p-3 mb-2">
             <Plus class="h-6 w-6 text-gray-600" />
           </div>
-          <span class="text-gray-600 font-medium">New Scene</span>
+          <span class="text-gray-600 font-medium">{isCreatingScene ? 'Creating...' : 'New Scene'}</span>
         </div>
       </button>
-    </div>
-  {/if}
+    {/if}
+  </div>
 </div>
