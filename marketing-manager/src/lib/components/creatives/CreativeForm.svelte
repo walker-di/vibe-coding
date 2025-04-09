@@ -216,12 +216,9 @@
 				finalPayload.textData = typeSpecificPayload;
 				break;
 			case 'image':
-				if (!imageUrl) {
-					if (!localFormErrors.imageData) localFormErrors.imageData = {};
-					localFormErrors.imageData.imageUrl = 'Image URL is required.';
-				}
+				// Image URL is now optional, so no validation needed
 				typeSpecificPayload = {
-					imageUrl: imageUrl,
+					imageUrl: imageUrl || null, // Convert empty string to null
 					altText: imageAltText || null,
 					appealFeature: imageAppealFeature || null, // Added
 					emotion: imageEmotion || null, // Added
@@ -443,8 +440,8 @@
 		<section class="space-y-4 rounded border p-4">
 			<h3 class="flex items-center text-lg font-semibold"><ImageIcon class="mr-2 h-5 w-5"/> Image Creative Details</h3>
 			<div>
-				<Label for="imageUrl" class={formErrors.imageData?.imageUrl ? 'text-red-600' : ''}>Image URL *</Label>
-				<Input id="imageUrl" name="imageUrl" type="url" required bind:value={imageUrl} disabled={isSubmitting} class={formErrors.imageData?.imageUrl ? 'border-red-500' : ''} placeholder="https://..." />
+				<Label for="imageUrl" class={formErrors.imageData?.imageUrl ? 'text-red-600' : ''}>Image URL (Optional)</Label>
+				<Input id="imageUrl" name="imageUrl" type="url" bind:value={imageUrl} disabled={isSubmitting} class={formErrors.imageData?.imageUrl ? 'border-red-500' : ''} placeholder="https://..." />
 				{#if formErrors.imageData?.imageUrl}<p class="mt-1 text-sm text-red-600">{formErrors.imageData.imageUrl}</p>{/if}
 				{#if imageUrl}
 					<img src={imageUrl} alt="Preview" class="mt-2 max-h-40 rounded border" />

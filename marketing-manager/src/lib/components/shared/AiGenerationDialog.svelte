@@ -21,7 +21,7 @@
 	};
 
 	let {
-		open = $bindable(), // Make prop bindable
+		open = $bindable(false), // Make prop bindable with explicit default
 		apiUrl,
 		triggerButtonText = 'AI',
 		triggerButtonVariant = 'secondary',
@@ -90,9 +90,11 @@
 
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root open={open} onOpenChange={(isOpen) => open = isOpen}>
 	{#if children}
-		{@render children()}
+		<Dialog.Trigger asChild>
+			{@render children()}
+		</Dialog.Trigger>
 	{/if}
 	<Dialog.Content class="sm:max-w-[525px]">
 		<Dialog.Header>
@@ -116,7 +118,7 @@
 			{/if}
 		</div>
 		<Dialog.Footer>
-			<Dialog.Close asChild let:builder>
+			<Dialog.Close>
 			<Button variant="outline" type="button" disabled={isGenerating}>Cancel</Button>
 			</Dialog.Close>
 			<Button onclick={(e: MouseEvent) => { e.stopPropagation(); generate(); }} disabled={isGenerating || !instructions.trim()} type="button">

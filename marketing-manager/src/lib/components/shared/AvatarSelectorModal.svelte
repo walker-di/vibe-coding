@@ -52,7 +52,7 @@
 
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root open={open} onOpenChange={(isOpen) => open = isOpen}>
 	<Dialog.Content class="sm:max-w-[600px]">
 		<Dialog.Header>
 			<Dialog.Title>Select Placeholder Avatar</Dialog.Title>

@@ -31,7 +31,11 @@ const textDataSchema = z.object({
 
 // Schema for Image Creative specific fields
 const imageDataSchema = z.object({
-	imageUrl: z.string().url('Invalid Image URL.').min(1, 'Image URL is required.'),
+	imageUrl: z.union([
+		z.string().url('Invalid Image URL.'),
+		z.string().max(0), // Allow empty string
+		z.null() // Allow null
+	]).optional(), // Made optional
 	altText: z.string().max(200).optional().nullable(),
 	// width/height are optional, might be set later or derived
 	width: z.number().int().positive().optional().nullable(),

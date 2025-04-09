@@ -131,7 +131,7 @@ export const creativeText = sqliteTable('creative_text', {
 export const creativeImage = sqliteTable('creative_image', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   creativeId: integer('creative_id').notNull().unique().references(() => creatives.id, { onDelete: 'cascade' }),
-  imageUrl: text('imageUrl').notNull(), // Corrected field name based on previous file content
+  imageUrl: text('imageUrl'), // Made optional by removing notNull()
   altText: text('alt_text'),
   width: integer('width'),
   height: integer('height'),

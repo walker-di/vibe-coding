@@ -34,7 +34,11 @@ const textDataSchema = z.object({
 }).partial(); // Allow partial updates
 
 const imageDataSchema = z.object({
-	imageUrl: z.string().url().min(1).optional(),
+	imageUrl: z.union([
+		z.string().url('Invalid Image URL.'),
+		z.string().max(0), // Allow empty string
+		z.null() // Allow null
+	]).optional(), // Made optional
 	altText: z.string().max(200).optional().nullable(),
 	width: z.number().int().positive().optional().nullable(),
 	height: z.number().int().positive().optional().nullable(),
