@@ -36,20 +36,41 @@
     console.log('Clip selected in SceneEditor:', clip.id, clip.orderIndex);
     if (selectedClip?.id === clip.id) {
        console.log('Same clip selected, skipping state update.');
-       return;
-    }
-    selectedClip = clip; // Just update the state
-    // The $effect below will handle calling loadCanvasData
-  }
-
-  // Effect to call loadCanvasData when selectedClip changes OR when canvasEditorInstance becomes available
-  $effect(() => {
-    console.log(`SceneEditor effect running. Clip ID: ${selectedClip?.id}, Editor Instance: ${canvasEditorInstance ? 'Ready' : 'Not Ready'}`);
-    if (canvasEditorInstance) {
-       // Call method imperatively when selectedClip changes or instance is ready
-       canvasEditorInstance.loadCanvasData(selectedClip?.canvas ?? null);
-    }
-  });
+        return;
+     }
+     selectedClip = clip; // Just update the state
+     // The $effect below *should* handle calling loadCanvasData, but let's try a direct call too for debugging
+     if (canvasEditorInstance) {
+        console.log(`[handleSelectClip] Scheduling direct call to loadCanvasData for clip ${clip.id}`);
+        // Use a timeout to ensure this runs after the current execution context allows potential state updates
+        setTimeout(() => {
+           if (canvasEditorInstance) { // Check again inside timeout
+              console.log(`[handleSelectClip - setTimeout] Calling loadCanvasData for clip ${clip.id}`);
+              canvasEditorInstance.loadCanvasData(clip.canvas ?? null);
+           } else {
+              console.log('[handleSelectClip - setTimeout] canvasEditorInstance became unavailable.');
+           }
+        }, 0);
+     } else {
+        console.log('[handleSelectClip] canvasEditorInstance not ready for direct call.');
+     }
+   }
+ 
+    // Effect to call loadCanvasData when selectedClip changes OR when canvasEditorInstance becomes available
+   $effect(() => {
+     const clipId = selectedClip?.id;
+     const canvasData = selectedClip?.canvas ?? null;
+     const isInstanceReady = !!canvasEditorInstance;
+     
+     console.log(`SceneEditor effect running. Clip ID: ${clipId}, Instance Ready: ${isInstanceReady}, Has Canvas Data: ${!!canvasData}`);
+     
+     if (isInstanceReady) {
+        console.log(`Calling canvasEditorInstance.loadCanvasData with canvas data for clip ${clipId}`);
+        canvasEditorInstance.loadCanvasData(canvasData);
+     } else {
+        console.log('SceneEditor effect: canvasEditorInstance not ready yet.');
+     }
+   });
 
 
   // Handler for canvas changes (required by CanvasEditor)
