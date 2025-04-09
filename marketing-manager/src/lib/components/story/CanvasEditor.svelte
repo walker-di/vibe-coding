@@ -4,12 +4,13 @@
   import { Square, Circle, Type, Image as ImageIcon, Trash2 } from 'lucide-svelte';
 
   // Props
-  let { 
-    initialCanvas,
+  let {
+    initialCanvas, // Keep initialCanvas for the very first load
     onCanvasChange
   } = $props<{
     initialCanvas: string;
     onCanvasChange: (canvasJson: string) => void;
+    // currentClipCanvas is removed as we'll use an explicit method
   }>();
 
   // State
@@ -18,6 +19,40 @@
   let fabricLoaded = $state(false);
   let selectedObject = $state<any>(null);
 
+  // --- Method to explicitly load canvas data ---
+  export function loadCanvasData(canvasJson: string | null) {
+    console.log(`CanvasEditor: loadCanvasData called. FabricLoaded: ${fabricLoaded}`);
+    if (canvas && fabricLoaded) {
+      try {
+        if (canvasJson) {
+          console.log('Loading new canvas data via method...');
+          // Check if data is different before loading to avoid unnecessary re-renders if possible
+          const currentCanvasJson = JSON.stringify(canvas.toJSON());
+          if (canvasJson !== currentCanvasJson) {
+             canvas.loadFromJSON(canvasJson, () => {
+               canvas.renderAll();
+               console.log('Canvas loaded via method.');
+             });
+          } else {
+             console.log('Canvas data is the same, skipping load.');
+          }
+        } else {
+          // Clear canvas if null is passed
+          console.log('Clearing canvas via method (null data).');
+          canvas.clear();
+          canvas.backgroundColor = '#f0f0f0';
+          canvas.renderAll();
+        }
+      } catch (error) {
+        console.error('Error in loadCanvasData:', error);
+      }
+    } else {
+       console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
+    }
+  }
+  // --- End of explicit method ---
+
+
   // Load fabric.js and initialize canvas
   onMount(async (): Promise<any> => {
     try {
@@ -25,53 +60,51 @@
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js';
       script.async = true;
-      
+
       script.onload = () => {
         initializeCanvas();
         fabricLoaded = true;
+        // After fabric loads, try loading initial data if it exists
+        loadCanvasData(initialCanvas && initialCanvas !== '{}' ? initialCanvas : null);
       };
-      
+
       document.body.appendChild(script);
-      
+
       return () => {
         // Clean up
         if (canvas) {
           canvas.dispose();
         }
-        document.body.removeChild(script);
+        const existingScript = document.querySelector(`script[src="${script.src}"]`);
+        if (existingScript && document.body.contains(existingScript)) {
+           document.body.removeChild(existingScript);
+        }
       };
     } catch (error) {
       console.error('Error loading fabric.js:', error);
     }
   });
 
+  // $effect removed - loading is now imperative via loadCanvasData
+
+
   // Initialize canvas
   function initializeCanvas() {
-    // Use type assertion to avoid TypeScript errors
     const windowWithFabric = window as any;
     if (!windowWithFabric.fabric) {
       console.error('Fabric.js not loaded');
       return;
     }
-    
-    // Create canvas
+
     canvas = new windowWithFabric.fabric.Canvas('canvas', {
       width: 600,
       height: 400,
       backgroundColor: '#f0f0f0'
     });
-    
-    // Load initial canvas data if available
-    if (initialCanvas && initialCanvas !== '{}') {
-      try {
-        canvas.loadFromJSON(initialCanvas, () => {
-          canvas.renderAll();
-        });
-      } catch (error) {
-        console.error('Error loading canvas data:', error);
-      }
-    }
-    
+    console.log('Canvas initialized.');
+
+    // Initial load is now handled in onMount after fabric loads
+
     // Set up event listeners
     canvas.on('object:modified', saveCanvas);
     canvas.on('object:added', saveCanvas);
@@ -85,121 +118,21 @@
   function saveCanvas() {
     if (canvas) {
       const json = JSON.stringify(canvas.toJSON());
+      console.log('Canvas saved:', json.substring(0, 50) + '...');
       onCanvasChange(json);
     }
   }
 
-  // Update selection
-  function updateSelection(e: any) {
-    selectedObject = e.selected[0];
-  }
+  // Update selection / Clear selection / Add/Delete/Clear functions remain the same...
+  function updateSelection(e: any) { selectedObject = e.selected[0]; }
+  function clearSelection() { selectedObject = null; }
+  function addRectangle() { if (!canvas) return; const wf = window as any; const r = new wf.fabric.Rect({left: 100, top: 100, fill: '#3498db', width: 100, height: 100, strokeWidth: 2, stroke: '#2980b9'}); canvas.add(r); canvas.setActiveObject(r); }
+  function addCircle() { if (!canvas) return; const wf = window as any; const c = new wf.fabric.Circle({left: 100, top: 100, fill: '#e74c3c', radius: 50, strokeWidth: 2, stroke: '#c0392b'}); canvas.add(c); canvas.setActiveObject(c); }
+  function addText() { if (!canvas) return; const wf = window as any; const t = new wf.fabric.Textbox('Text', {left: 100, top: 100, fill: '#2c3e50', fontSize: 24, width: 200}); canvas.add(t); canvas.setActiveObject(t); }
+  function addImage() { if (!canvas) return; const url = prompt('Enter image URL:'); if (!url) return; const wf = window as any; wf.fabric.Image.fromURL(url, (img: any) => { const maxW = canvas.width * 0.8; const maxH = canvas.height * 0.8; if (img.width > maxW || img.height > maxH) { const scale = Math.min(maxW / img.width, maxH / img.height); img.scale(scale); } canvas.add(img); canvas.setActiveObject(img); saveCanvas(); }, { crossOrigin: 'anonymous' }); }
+  function deleteSelected() { if (!canvas || !selectedObject) return; canvas.remove(selectedObject); selectedObject = null; }
+  function clearCanvas() { if (!canvas) return; if (confirm('Are you sure?')) { canvas.clear(); canvas.backgroundColor = '#f0f0f0'; canvas.renderAll(); saveCanvas(); } }
 
-  // Clear selection
-  function clearSelection() {
-    selectedObject = null;
-  }
-
-  // Add rectangle
-  function addRectangle() {
-    if (!canvas) return;
-    
-    // Use type assertion to avoid TypeScript errors
-    const windowWithFabric = window as any;
-    const rect = new windowWithFabric.fabric.Rect({
-      left: 100,
-      top: 100,
-      fill: '#3498db',
-      width: 100,
-      height: 100,
-      strokeWidth: 2,
-      stroke: '#2980b9'
-    });
-    
-    canvas.add(rect);
-    canvas.setActiveObject(rect);
-  }
-
-  // Add circle
-  function addCircle() {
-    if (!canvas) return;
-    
-    // Use type assertion to avoid TypeScript errors
-    const windowWithFabric = window as any;
-    const circle = new windowWithFabric.fabric.Circle({
-      left: 100,
-      top: 100,
-      fill: '#e74c3c',
-      radius: 50,
-      strokeWidth: 2,
-      stroke: '#c0392b'
-    });
-    
-    canvas.add(circle);
-    canvas.setActiveObject(circle);
-  }
-
-  // Add text
-  function addText() {
-    if (!canvas) return;
-    
-    // Use type assertion to avoid TypeScript errors
-    const windowWithFabric = window as any;
-    const text = new windowWithFabric.fabric.Textbox('Text', {
-      left: 100,
-      top: 100,
-      fill: '#2c3e50',
-      fontSize: 24,
-      width: 200
-    });
-    
-    canvas.add(text);
-    canvas.setActiveObject(text);
-  }
-
-  // Add image
-  function addImage() {
-    if (!canvas) return;
-    
-    const imageUrl = prompt('Enter image URL:');
-    if (!imageUrl) return;
-    
-    // Use type assertion to avoid TypeScript errors
-    const windowWithFabric = window as any;
-    windowWithFabric.fabric.Image.fromURL(imageUrl, (img: any) => {
-      // Scale image to fit canvas
-      const maxWidth = canvas.width * 0.8;
-      const maxHeight = canvas.height * 0.8;
-      
-      if (img.width > maxWidth || img.height > maxHeight) {
-        const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
-        img.scale(scale);
-      }
-      
-      canvas.add(img);
-      canvas.setActiveObject(img);
-      saveCanvas();
-    }, { crossOrigin: 'anonymous' });
-  }
-
-  // Delete selected object
-  function deleteSelected() {
-    if (!canvas || !selectedObject) return;
-    
-    canvas.remove(selectedObject);
-    selectedObject = null;
-  }
-
-  // Clear canvas
-  function clearCanvas() {
-    if (!canvas) return;
-    
-    if (confirm('Are you sure you want to clear the canvas?')) {
-      canvas.clear();
-      canvas.backgroundColor = '#f0f0f0';
-      canvas.renderAll();
-      saveCanvas();
-    }
-  }
 
   // Expose the canvas instance for parent components
   export function getCanvasInstance() {
@@ -210,34 +143,29 @@
 <div class="space-y-4">
   <div class="flex flex-wrap gap-2 mb-4">
     <Button variant="outline" onclick={addRectangle} title="Add Rectangle" disabled={!fabricLoaded}>
-      <Square class="h-4 w-4 mr-2" />
-      Rectangle
+      <Square class="h-4 w-4 mr-2" /> Rectangle
     </Button>
     <Button variant="outline" onclick={addCircle} title="Add Circle" disabled={!fabricLoaded}>
-      <Circle class="h-4 w-4 mr-2" />
-      Circle
+      <Circle class="h-4 w-4 mr-2" /> Circle
     </Button>
     <Button variant="outline" onclick={addText} title="Add Text" disabled={!fabricLoaded}>
-      <Type class="h-4 w-4 mr-2" />
-      Text
+      <Type class="h-4 w-4 mr-2" /> Text
     </Button>
     <Button variant="outline" onclick={addImage} title="Add Image" disabled={!fabricLoaded}>
-      <ImageIcon class="h-4 w-4 mr-2" />
-      Image
+      <ImageIcon class="h-4 w-4 mr-2" /> Image
     </Button>
     <Button variant="outline" onclick={deleteSelected} title="Delete Selected" disabled={!fabricLoaded || !selectedObject} class="ml-auto">
-      <Trash2 class="h-4 w-4 mr-2" />
-      Delete
+      <Trash2 class="h-4 w-4 mr-2" /> Delete
     </Button>
     <Button variant="outline" onclick={clearCanvas} title="Clear Canvas" disabled={!fabricLoaded}>
       Clear All
     </Button>
   </div>
-  
+
   <div class="border rounded-md overflow-hidden" bind:this={canvasContainer}>
     <canvas id="canvas"></canvas>
   </div>
-  
+
   {#if !fabricLoaded}
     <div class="text-center py-4">
       <p>Loading canvas editor...</p>

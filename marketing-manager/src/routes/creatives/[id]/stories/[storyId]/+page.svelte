@@ -3,10 +3,10 @@
   import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui/button';
   import { ArrowLeft, Edit, Trash2, Plus, BookOpen } from 'lucide-svelte';
-  import SceneList from '$lib/components/story/SceneList.svelte';
+  import SceneEditor from '$lib/components/story/SceneEditor.svelte'; // Import SceneEditor
   import type { StoryWithRelations } from '$lib/types/story.types';
 
-  // State
+   // State
   let creativeId = $state<number | null>(null);
   let storyId = $state<number | null>(null);
   let story = $state<StoryWithRelations | null>(null);
@@ -18,7 +18,7 @@
   $effect(() => {
     const cId = $page.params.id;
     const sId = $page.params.storyId;
-    
+
     if (!cId || isNaN(parseInt(cId)) || !sId || isNaN(parseInt(sId))) {
       error = 'Invalid ID parameters';
       isLoading = false;
@@ -57,7 +57,7 @@
 
   async function handleDeleteStory() {
     if (!storyId || isDeleting) return;
-    
+
     if (!confirm('Are you sure you want to delete this story? This action cannot be undone.')) {
       return;
     }
@@ -120,25 +120,28 @@
   }
 
   function handleSelectScene(sceneId: number) {
+    // This function is passed down but might not be directly used by SceneEditor itself,
+    // rather by the SceneList within it.
     if (creativeId && storyId) {
       goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}`);
-    }
-  }
+     }
+   }
+
 </script>
 
 <div class="container mx-auto max-w-4xl py-8">
   <div class="mb-6 flex justify-between items-center">
-    <Button href={`/creatives/${creativeId}/stories`} variant="outline">
+    <Button href={`/creatives/${creativeId}/stories`} variant="outline" disabled={!creativeId}>
       <ArrowLeft class="mr-2 h-4 w-4" />
       Back to Stories
     </Button>
-    
+
     <div class="flex gap-2">
-      <Button variant="outline" onclick={handleEditStory}>
+      <Button variant="outline" onclick={handleEditStory} disabled={!creativeId || !storyId}>
         <Edit class="mr-2 h-4 w-4" />
         Edit Story
       </Button>
-      <Button variant="destructive" onclick={handleDeleteStory} disabled={isDeleting}>
+      <Button variant="destructive" onclick={handleDeleteStory} disabled={isDeleting || !storyId}>
         <Trash2 class="mr-2 h-4 w-4" />
         {isDeleting ? 'Deleting...' : 'Delete Story'}
       </Button>
@@ -153,9 +156,10 @@
     <div class="flex flex-col items-center justify-center rounded border border-dashed border-red-500 bg-red-50 p-12 text-center text-red-700">
       <h3 class="text-xl font-semibold">Error Loading Story</h3>
       <p class="mb-4 text-sm">{error}</p>
-      <Button href={`/creatives/${creativeId}/stories`} variant="outline">Go Back</Button>
+      <Button href={`/creatives/${creativeId}/stories`} variant="outline" disabled={!creativeId}>Go Back</Button>
     </div>
   {:else if story}
+    <!-- Render story details first -->
     <div class="space-y-6">
       <div class="rounded border p-6 shadow">
         <h1 class="text-3xl font-bold mb-2">{story.title}</h1>
@@ -163,19 +167,20 @@
           <p class="text-muted-foreground">{story.description}</p>
         {/if}
       </div>
-      
+
+      <!-- Render SceneEditor section separately -->
       <div class="rounded border p-6 shadow">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold">Scenes</h2>
-          <Button onclick={handleAddScene} variant="default">
+          <Button onclick={handleAddScene} variant="default" disabled={!creativeId || !storyId}>
             <Plus class="mr-2 h-4 w-4" />
             Add Scene
           </Button>
         </div>
-        
-        {#if story.scenes && story.scenes.length > 0}
-          <SceneList 
-            scenes={story.scenes}
+
+        {#if creativeId !== null && storyId !== null}
+          <SceneEditor
+            scenes={story.scenes || []}
             storyId={story.id}
             creativeId={creativeId}
             onAddScene={handleAddScene}
@@ -184,16 +189,18 @@
             onSelectScene={handleSelectScene}
           />
         {:else}
-          <div class="text-center py-8 border border-dashed rounded-md">
-            <BookOpen class="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p class="text-muted-foreground mb-4">No scenes found for this story.</p>
-            <Button onclick={handleAddScene} variant="default">
-              <Plus class="mr-2 h-4 w-4" />
-              Create Your First Scene
-            </Button>
-          </div>
+           <!-- Placeholder if IDs are missing, even if story loaded -->
+           <div class="text-center py-8 border border-dashed rounded-md">
+             <BookOpen class="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+             <p class="text-muted-foreground mb-4">Required creative or story ID is missing.</p>
+           </div>
         {/if}
       </div>
     </div>
+  {:else}
+     <!-- Fallback if story is null after loading (shouldn't happen if no error) -->
+     <div class="flex justify-center p-12">
+       <p>Story data not available.</p>
+     </div>
   {/if}
 </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon } from 'lucide-svelte'; // Added ImageIcon
-  import type { SceneWithRelations } from '$lib/types/story.types';
+  import type { SceneWithRelations, Clip } from '$lib/types/story.types'; // Import Clip type
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte'; // Import CanvasPreview
 
   // Props
@@ -13,7 +13,8 @@
     onEditScene,
     onDeleteScene,
     onSelectScene,
-    onPlayScene
+    onPlayScene,
+    onSelectClip // Added onSelectClip prop
   } = $props<{
     scenes: SceneWithRelations[];
     creativeId: number; // Added creativeId prop type
@@ -23,6 +24,7 @@
     onDeleteScene: (sceneId: number) => void;
     onSelectScene: (sceneId: number) => void;
     onPlayScene?: (sceneId: number) => void;
+    onSelectClip: (clip: Clip) => void; // Added onSelectClip prop type
   }>();
 </script>
 
@@ -64,12 +66,14 @@
           <!-- Clip Preview Row -->
           {#if scene.clips && scene.clips.length > 0}
             <div class="mt-2 flex space-x-1 overflow-x-auto pb-1">
-              {#each scene.clips.slice(0, 7) as clip (clip.id)}
-                <a href="/creatives/{creativeId}/stories/{storyId}/scenes/{scene.id}/clips/{clip.id}/edit"  
-                   class="flex-shrink-0 w-[50px] h-[33px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow" 
-                   title="Edit Clip {clip.orderIndex}">
+              {#each scene.clips as clip (clip.id)}
+                <button 
+                   type="button"
+                   onclick={() => onSelectClip(clip)}
+                   class="flex-shrink-0 w-[50px] h-[33px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0" 
+                   title="Select Clip {clip.orderIndex}">
                   {#if clip.imageUrl}
-                    <img 
+                    <img
                       src={clip.imageUrl} 
                       alt="Clip preview" 
                       class="object-cover w-full h-full"
@@ -80,7 +84,7 @@
                   {:else}
                     <ImageIcon class="h-4 w-4 text-gray-400" />
                   {/if}
-                </a>
+                </button>
               {/each}
               {#if scene.clips.length > 7}
                 <div class="flex-shrink-0 w-[50px] h-[33px] border rounded bg-gray-100 flex items-center justify-center text-xs text-muted-foreground" title="{scene.clips.length - 7} more clips">
