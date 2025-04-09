@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2 } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp } from 'lucide-svelte'; // Added Palette, ImageUp
 
   // Props
   let {
@@ -142,6 +142,46 @@
   function deleteSelected() { if (!canvas || !selectedObject) return; canvas.remove(selectedObject); selectedObject = null; }
   function clearCanvas() { if (!canvas) return; if (confirm('Are you sure?')) { canvas.clear(); canvas.backgroundColor = '#f0f0f0'; canvas.renderAll(); saveCanvas(); } }
 
+  // --- Background Functions ---
+  function setBackgroundColor() {
+    if (!canvas) return;
+    const color = prompt('Enter background color (e.g., #ff0000, red, rgb(0,0,255)):', canvas.backgroundColor || '#f0f0f0');
+    if (color) {
+      canvas.backgroundColor = color;
+      canvas.renderAll();
+      saveCanvas();
+    }
+  }
+
+  function setBackgroundImageFromUrl() {
+    if (!canvas) return;
+    const url = prompt('Enter background image URL:');
+    if (!url) return;
+    const wf = window as any;
+    wf.fabric.Image.fromURL(url, (img: any) => {
+      // Scale the image to fit the canvas dimensions
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const scaleX = canvasWidth / img.width;
+      const scaleY = canvasHeight / img.height;
+      const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
+
+      img.set({
+        scaleX: scale,
+        scaleY: scale,
+        originX: 'left',
+        originY: 'top'
+      });
+
+      canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+        // Optional: Set background image options like repeat, etc.
+        // For scaling to fit, we set scaleX/scaleY on the image itself before setting it as background
+      });
+      saveCanvas();
+    }, { crossOrigin: 'anonymous' });
+  }
+  // --- End Background Functions ---
+
 
   // Expose the canvas instance for parent components
   export function getCanvasInstance() {
@@ -179,6 +219,12 @@
     </Button>
     <Button variant="outline" onclick={addImage} title="Add Image" disabled={!fabricLoaded}>
       <ImageIcon class="h-4 w-4 mr-2" /> Image
+    </Button>
+    <Button variant="outline" onclick={setBackgroundColor} title="Set Background Color" disabled={!fabricLoaded}>
+      <Palette class="h-4 w-4 mr-2" /> BG Color
+    </Button>
+    <Button variant="outline" onclick={setBackgroundImageFromUrl} title="Set Background Image" disabled={!fabricLoaded}>
+      <ImageUp class="h-4 w-4 mr-2" /> BG Image
     </Button>
     <Button variant="outline" onclick={deleteSelected} title="Delete Selected" disabled={!fabricLoaded || !selectedObject} class="ml-auto">
       <Trash2 class="h-4 w-4 mr-2" /> Delete
