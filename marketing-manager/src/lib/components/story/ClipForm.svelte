@@ -204,8 +204,12 @@
         {/if}
         <CanvasEditor 
           bind:this={canvasEditorInstance} 
-          initialCanvas={canvas} 
           onCanvasChange={handleCanvasChange}
+          onReady={() => {
+            // Load initial data once the editor signals it's ready
+            console.log('ClipForm: CanvasEditor ready. Attempting to load initial data.');
+            canvasEditorInstance?.loadCanvasData(canvas); 
+          }}
         />
         
         {#if errors.canvas}

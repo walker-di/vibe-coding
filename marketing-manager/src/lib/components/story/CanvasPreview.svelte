@@ -40,27 +40,16 @@
       if (fabricCanvas) {
         fabricCanvas.dispose();
       }
-    };
-  });
-
-  // Update canvas when canvasData changes
-  $effect(() => {
-    if (fabricCanvas && canvasData) {
-      try {
-        fabricCanvas.loadFromJSON(canvasData, () => {
-          // Explicitly set dimensions after loading, might help with smaller canvases
-          fabricCanvas.setDimensions({ width: width, height: height });
-          // Ensure rendering happens after data is fully loaded and canvas is ready
-          requestAnimationFrame(() => fabricCanvas.renderAll());
-        });
-      } catch (error) {
-        console.error('Error updating canvas data:', error);
-      }
-    }
-  });
-</script>
-
-<div class="canvas-preview">
+     };
+   });
+ 
+   // $effect hook removed for simplification - rely on onMount for initial load.
+   // If canvasData needs to be reactive later, this effect would need careful implementation
+   // (e.g., clearing canvas before loading new data).
+ 
+ </script>
+ 
+ <div class="canvas-preview">
   <canvas bind:this={canvasElement}></canvas>
 </div>
 

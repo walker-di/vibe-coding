@@ -80,26 +80,21 @@
 </script>
 
 <div class="container mx-auto max-w-4xl py-8">
-  {#if isLoading}
-    <div class="flex justify-center p-12">
-      <p>Loading...</p>
-    </div>
-  {:else if error}
-    <div class="flex flex-col items-center justify-center rounded border border-dashed border-red-500 bg-red-50 p-12 text-center text-red-700">
-      <AlertCircle class="mb-2 h-8 w-8" />
-      <h3 class="text-xl font-semibold">Error</h3>
-      <p class="mb-4 text-sm">{error}</p>
-      <Button href={`/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}/clips/${clipId}`} variant="outline">Go Back</Button>
-    </div>
-  {:else if clip}
+  {#if clip} <!-- Render only if clip data is available from load -->
     <div class="rounded border p-6 shadow">
       <ClipForm 
         {clip}
-        sceneId={sceneId || 0}
+        sceneId={sceneId || 0} 
         isEditing={true}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
       />
+    </div>
+  {:else}
+    <!-- Optional: Add a message or fallback UI if clip is unexpectedly null/undefined 
+         after a successful load, though this shouldn't typically happen if load guards correctly. -->
+    <div class="flex justify-center p-12">
+      <p>Clip data not available.</p> 
     </div>
   {/if}
 </div>
