@@ -52,10 +52,50 @@ $effect(() => {
 // Derived state for the final resolution value to be saved
 let finalResolution = $derived(resolutionSelection === 'Custom' ? customResolution.trim() : resolutionSelection);
 
-	function handleCanvasChange(json: string) {
-		canvasDataJson = json;
-		// console.log('New canvas data received in parent:', json.substring(0, 50) + '...');
+// Helper function to parse aspect ratio string and calculate dimensions
+function calculateDimensions(ratioString: CanvasAspectRatio, fixedWidth: number): { width: number; height: number } {
+	// Handle special cases
+	if (ratioString === 'Other') {
+		return { width: fixedWidth, height: Math.round(fixedWidth * (9/16)) };
 	}
+
+	// Handle 1.91:1 aspect ratio specifically
+	if (ratioString === '1.91:1') {
+		return { width: fixedWidth, height: Math.round(fixedWidth / 1.91) };
+	}
+
+	if (!ratioString || typeof ratioString !== 'string' || !ratioString.includes(':')) {
+		console.warn(`Invalid aspect ratio string: ${ratioString}. Defaulting to 600x400.`);
+		return { width: fixedWidth, height: 400 }; // Default or fallback
+	}
+	const parts = ratioString.split(':');
+	const ratioW = parseFloat(parts[0]);
+	const ratioH = parseFloat(parts[1]);
+
+	if (isNaN(ratioW) || isNaN(ratioH) || ratioW <= 0 || ratioH <= 0) {
+		console.warn(`Invalid aspect ratio numbers: ${ratioString}. Defaulting to 600x400.`);
+		return { width: fixedWidth, height: 400 }; // Default or fallback
+	}
+
+	const newHeight = Math.round((fixedWidth / ratioW) * ratioH);
+	return { width: fixedWidth, height: newHeight };
+}
+
+// Effect to update canvas dimensions when aspect ratio changes
+$effect(() => {
+	if (canvasEditorRef && aspectRatio) {
+		console.log(`Effect: Aspect ratio changed to ${aspectRatio}. Updating canvas dimensions.`);
+		const { width, height } = calculateDimensions(aspectRatio, 600); // Keep width fixed at 600 for now
+		canvasEditorRef.updateDimensions(width, height);
+	} else {
+		console.log(`Effect: Canvas dimension update skipped. Ref: ${!!canvasEditorRef}, Ratio: ${aspectRatio}`);
+	}
+});
+
+function handleCanvasChange(json: string) {
+	canvasDataJson = json;
+	// console.log('New canvas data received in parent:', json.substring(0, 50) + '...');
+}
 
 	async function saveTemplate() {
 		if (!name.trim()) {

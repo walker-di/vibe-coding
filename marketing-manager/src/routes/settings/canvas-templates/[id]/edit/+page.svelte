@@ -180,6 +180,16 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 
 	// Helper function to parse aspect ratio string and calculate dimensions
 	function calculateDimensions(ratioString: CanvasAspectRatio, fixedWidth: number): { width: number; height: number } {
+		// Handle special cases
+		if (ratioString === 'Other') {
+			return { width: fixedWidth, height: Math.round(fixedWidth * (9/16)) };
+		}
+
+		// Handle 1.91:1 aspect ratio specifically
+		if (ratioString === '1.91:1') {
+			return { width: fixedWidth, height: Math.round(fixedWidth / 1.91) };
+		}
+
 		if (!ratioString || typeof ratioString !== 'string' || !ratioString.includes(':')) {
 			console.warn(`Invalid aspect ratio string: ${ratioString}. Defaulting to 600x400.`);
 			return { width: fixedWidth, height: 400 }; // Default or fallback
