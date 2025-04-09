@@ -168,7 +168,6 @@
   <div class="flex flex-grow overflow-hidden">
     <!-- Left Panel: Buttons/Tools -->
     <div class="w-48 border-r flex flex-col overflow-y-auto">
-      <h2 class="text-lg font-semibold p-3 border-b">Tools</h2>
       <div class="p-3 space-y-2">
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.addRectangle()} title="Add Rectangle" disabled={!canvasIsReady}>
           <Square class="h-4 w-4 mr-2" /> Rectangle
@@ -199,9 +198,6 @@
 
     <!-- Canvas Area (Main View) -->
     <div class="flex-grow overflow-hidden flex flex-col">
-      <div class="p-3 border-b">
-        <h2 class="text-lg font-semibold">Canvas</h2>
-      </div>
       <div class="flex-grow p-4 overflow-auto relative">
         <CanvasEditor
           bind:this={canvasEditorInstance}
@@ -220,9 +216,6 @@
 
   <!-- Scenes & Clips (Bottom Panel) -->
   <div class="border-t h-40 overflow-y-auto">
-    <div class="p-3 border-b">
-      <h2 class="text-lg font-semibold">Scenes & Clips</h2>
-    </div>
     <div class="p-3">
       <SceneList
         {scenes}
