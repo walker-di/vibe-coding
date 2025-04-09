@@ -138,7 +138,7 @@
     <div class="flex flex-col items-center justify-center rounded border border-dashed border-red-500 bg-red-50 p-12 text-center text-red-700">
       <h3 class="text-xl font-semibold">Error Loading Story</h3>
       <p class="mb-4 text-sm">{error}</p>
-      <Button href={`/creatives/${creativeId}/stories`} variant="outline" disabled={!creativeId}>Go Back</Button>
+      <Button variant="outline" onclick={() => history.back()}>Go Back</Button>
     </div>
   {:else if story}
     <!-- Render story details first -->
@@ -147,7 +147,7 @@
       <div class="rounded border shadow">
         <div class="flex justify-between items-center p-4 border-b">
           <div class="flex ">
-            <Button href={`/creatives/${creativeId}/stories`} variant="outline" disabled={!creativeId}>
+            <Button variant="outline" onclick={() => history.back()}>
               <ArrowLeft class="h-4 w-4" />
             </Button>
             <h1 class="text-xl font-semibold p-1.5 ml-2">{story.title}</h1>

@@ -211,7 +211,7 @@
 </script>
 
 <div class="space-y-4">
-  <div class="flex space-x-4 overflow-x-auto">
+  <div class="flex space-x-1 overflow-x-auto">
     {#if scenes.length > 0}
       {#each scenes as scene, index (scene.id)}
         <div class="border rounded-md p-0 hover:shadow-md transition-shadow p-2 flex-shrink-0">
@@ -252,11 +252,11 @@
           <div class="mt-2 flex space-x-1 overflow-x-auto pb-1">
             {#if scene.clips && scene.clips.length > 0}
               {#each scene.clips as clip (clip.id)}
-                <div class="relative flex-shrink-0 group">
+                <div class="relative flex-shrink-0 group m-1 mr-0">
                   <button
                     type="button"
                     onclick={() => onSelectClip(clip)}
-                    class="flex-shrink-0 w-auto h-[49px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
+                    class="flex-shrink-0 w-auto h-[40px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
                     title="Select Clip {clip.orderIndex}">
                     {#if clip.imageUrl}
                       <img
@@ -275,7 +275,7 @@
                     <button
                       type="button"
                       onclick={(e) => { e.stopPropagation(); onDuplicateClip(clip); }}
-                      class="absolute -top-2 -right-2 bg-white rounded-full p-0.5 shadow-sm border opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100"
+                      class="absolute top-0.5 -right-0 bg-white rounded-full p-0.5 shadow-sm border opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100"
                       title="Duplicate Clip">
                       <Copy class="h-3 w-3 text-gray-600" />
                     </button>
@@ -294,7 +294,7 @@
               type="button"
               onclick={() => createNewClip(scene.id)}
               disabled={isCreatingClip[scene.id]}
-              class="flex-shrink-0 w-[50px] h-[33px] border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
+              class="flex-shrink-0 w-[50px] h-[33px] mt-2 !mr-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
               title="Add new clip">
               <Plus class="h-4 w-4 text-gray-600" />
             </button>
@@ -307,7 +307,7 @@
         type="button"
         onclick={createNewScene}
         disabled={isCreatingScene}
-        class="border rounded-md p-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
+        class="border rounded-md p-4 mt-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
         <div class="flex flex-col items-center justify-center h-full">
           <div class="rounded-full bg-gray-200 p-1.5 mb-2">
             <Plus class="h-5 w-5 text-gray-600" />
