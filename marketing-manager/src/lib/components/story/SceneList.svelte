@@ -116,7 +116,7 @@
           orderIndex: nextOrderIndex,
           canvas: emptyCanvas,
           narration: null,
-          imageUrl: null
+          imageUrl: null // We'll update this after getting the ID
         })
       });
 
@@ -127,12 +127,33 @@
       // Get the newly created clip from the response
       const newClip = await response.json();
 
+      // Set the image URL based on the clip ID
+      const imageUrl = `/clip-previews/clip-${newClip.id}.png`;
+
+      // Update the clip with the image URL
+      const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          imageUrl: imageUrl
+        })
+      });
+
+      if (!updateResponse.ok) {
+        console.warn(`Failed to update clip with image URL. Status: ${updateResponse.status}`);
+      }
+
+      // Get the updated clip with the image URL
+      const updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+
       // Add the new clip to the scene's clips array
       const updatedScenes = scenes.map((s: SceneWithRelations) => {
         if (s.id === sceneId) {
           return {
             ...s,
-            clips: [...(s.clips || []), newClip]
+            clips: [...(s.clips || []), updatedClip]
           };
         }
         return s;
@@ -141,7 +162,6 @@
       scenes = updatedScenes;
 
       // Navigate to the edit page for the new clip
-      window.location.href = `/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}/clips/${newClip.id}/edit`;
     } catch (error) {
       console.error('Error creating clip:', error);
       alert('Failed to create new clip. Please try again.');
@@ -155,7 +175,7 @@
   <div class="flex space-x-4 overflow-x-auto">
     {#if scenes.length > 0}
       {#each scenes as scene, index (scene.id)}
-        <div class="border rounded-md p-0 hover:shadow-md transition-shadow w-80 flex-shrink-0">
+        <div class="border rounded-md p-0 hover:shadow-md transition-shadow p-2 flex-shrink-0">
           <div class="flex justify-between items-start mb-2">
             <div class="flex-1 min-w-0">
               <button

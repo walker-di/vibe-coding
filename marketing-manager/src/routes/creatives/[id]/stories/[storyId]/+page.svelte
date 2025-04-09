@@ -155,16 +155,6 @@
               <Edit class="h-4 w-4" />
             </Button>
           </div>
-          <div>
-            <Button variant="destructive" onclick={handleDeleteStory} disabled={isDeleting || !storyId}>
-              <Trash2 class="mr-2 h-4 w-4" />
-              {isDeleting ? 'Deleting...' : 'Delete Story'}
-            </Button>
-            <Button onclick={handleAddScene} variant="default" disabled={!creativeId || !storyId}>
-              <Plus class="mr-2 h-4 w-4" />
-              Add Scene
-            </Button>
-          </div>
         </div>
 
         {#if creativeId !== null && storyId !== null}
