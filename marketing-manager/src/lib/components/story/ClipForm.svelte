@@ -249,11 +249,10 @@
         
         <!-- Load Template Dropdown -->
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild let:builder>
+          <DropdownMenu.Trigger asChild>
             <Button 
               variant="outline" 
               size="sm" 
-              builders={[builder]} 
               disabled={isLoadingTemplates || isLoadingSelectedTemplate || availableTemplates.length === 0}
             >
               {#if isLoadingSelectedTemplate}
