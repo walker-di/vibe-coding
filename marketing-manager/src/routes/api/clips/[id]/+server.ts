@@ -57,6 +57,10 @@ export async function PUT({ params, request }: RequestEvent) { // Add type
         // Allow setting narration to null or empty string
         updateData.narration = clipData.narration;
     }
+    if (clipData.description !== undefined) {
+        // Allow setting description to null or empty string
+        updateData.description = clipData.description;
+    }
     if (clipData.orderIndex !== undefined && clipData.orderIndex !== null) {
          if (typeof clipData.orderIndex !== 'number' || clipData.orderIndex < 0) {
             throw error(400, 'Invalid order index format');

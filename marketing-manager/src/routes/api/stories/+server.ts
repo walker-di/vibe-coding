@@ -53,6 +53,8 @@ export async function POST({ request }) {
       creativeId: storyData.creativeId as any,
       title: storyData.title,
       description: storyData.description || null,
+      aspectRatio: storyData.aspectRatio || '16:9', // Default to 16:9 if not provided
+      resolution: storyData.resolution || null,
       createdAt: new Date(), // Use new Date() object
       updatedAt: new Date()  // Use new Date() object
     } as any).returning();

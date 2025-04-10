@@ -10,6 +10,8 @@
     scenes,
     creativeId,
     storyId,
+    aspectRatio = '16:9', // Default to 16:9 if not provided
+    resolution = null,
     onAddScene,
     onEditScene,
     onDeleteScene,
@@ -19,12 +21,44 @@
     scenes: SceneWithRelations[];
     creativeId: number;
     storyId: number;
+    aspectRatio?: string; // Optional aspect ratio from story
+    resolution?: string | null; // Optional resolution from story
     onAddScene: () => void;
     onEditScene: (sceneId: number) => void;
     onDeleteScene: (sceneId: number) => void;
     onSelectScene: (sceneId: number) => void; // Keep for scene-level actions
     onPlayScene?: (sceneId: number) => void; // Optional
   }>();
+
+  // Calculate canvas dimensions based on aspect ratio
+  function calculateDimensions(ratioString: string, fixedWidth: number = 800): { width: number; height: number } {
+    // Handle special cases
+    if (ratioString === 'Other') {
+      return { width: fixedWidth, height: Math.round(fixedWidth * (9/16)) };
+    }
+
+    // Handle 1.91:1 aspect ratio specifically
+    if (ratioString === '1.91:1') {
+      return { width: fixedWidth, height: Math.round(fixedWidth / 1.91) };
+    }
+
+    if (!ratioString || typeof ratioString !== 'string' || !ratioString.includes(':')) {
+      console.warn(`Invalid aspect ratio string: ${ratioString}. Defaulting to 800x600.`);
+      return { width: fixedWidth, height: 600 }; // Default or fallback
+    }
+
+    const parts = ratioString.split(':');
+    const ratioW = parseFloat(parts[0]);
+    const ratioH = parseFloat(parts[1]);
+
+    if (isNaN(ratioW) || isNaN(ratioH) || ratioW <= 0 || ratioH <= 0) {
+      console.warn(`Invalid aspect ratio numbers: ${ratioString}. Defaulting to 800x600.`);
+      return { width: fixedWidth, height: 600 }; // Default or fallback
+    }
+
+    const newHeight = Math.round((fixedWidth / ratioW) * ratioH);
+    return { width: fixedWidth, height: newHeight };
+  }
 
   // State for the selected clip
   let selectedClip = $state<Clip | null>(null);
@@ -41,7 +75,13 @@
   // Handler for when CanvasEditor signals it's ready
   function handleCanvasReady() {
     canvasIsReady = true;
-    // No need to trigger load here, the effect will handle it
+
+    // Set canvas dimensions based on story's aspect ratio
+    if (canvasEditorInstance && aspectRatio) {
+      const { width, height } = calculateDimensions(aspectRatio);
+      canvasEditorInstance.updateDimensions(width, height);
+    }
+    // The effect will handle loading clip data
   }
 
   // Handler for when a clip is selected in SceneList

@@ -170,6 +170,8 @@ export const stories = sqliteTable('stories', {
   creativeId: integer('creative_id').notNull().references(() => creatives.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description'),
+  aspectRatio: text('aspect_ratio', { enum: canvasAspectRatios }).default('16:9'), // Added
+  resolution: text('resolution'), // Added - Store as text (e.g., "1920x1080", "Custom")
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 });
@@ -179,6 +181,7 @@ export const scenes = sqliteTable('scenes', {
   storyId: integer('story_id').notNull().references(() => stories.id, { onDelete: 'cascade' }),
   bgmUrl: text('bgm_url'),
   bgmName: text('bgm_name'),
+  description: text('description'),
   orderIndex: integer('order_index').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
@@ -190,6 +193,7 @@ export const clips = sqliteTable('clips', {
   canvas: text('canvas').notNull(), // JSON string for fabric.js data
   imageUrl: text('image_url'), // Added for preview image
   narration: text('narration'),
+  description: text('description'),
   orderIndex: integer('order_index').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),

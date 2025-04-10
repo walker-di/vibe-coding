@@ -33,6 +33,7 @@
   // Form state
   let canvas = $state(clip?.canvas || '{}');
   let narration = $state(clip?.narration || '');
+  let description = $state(clip?.description || '');
   let orderIndex = $state(clip?.orderIndex !== undefined ? clip.orderIndex : 0);
   let imageUrl = $state(clip?.imageUrl || ''); // Added imageUrl state
   let isSubmitting = $state(false); // Removed duplicate declaration
@@ -174,6 +175,7 @@
           canvas,
           imageUrl: finalImageUrl || null,
           narration: narration || null,
+          description: description || null,
           orderIndex
         });
 
@@ -186,6 +188,7 @@
           canvas,
           imageUrl: null, // Send null initially
           narration: narration || null,
+          description: description || null,
           orderIndex
         });
 
@@ -316,6 +319,22 @@
         {#if errors.canvas}
           <p class="text-xs text-red-500 mt-2">{errors.canvas}</p>
         {/if}
+      </div>
+    </div>
+
+    <div class="border-t pt-4 mt-4">
+      <h3 class="text-lg font-semibold mb-3 flex items-center">
+        <FileText class="h-5 w-5 mr-2" />
+        Description (Optional)
+      </h3>
+
+      <div class="space-y-2">
+        <Textarea
+          id="description"
+          bind:value={description}
+          placeholder="Enter a description for this clip"
+          rows={3}
+        />
       </div>
     </div>
 

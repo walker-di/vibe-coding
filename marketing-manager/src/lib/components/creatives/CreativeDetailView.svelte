@@ -67,9 +67,8 @@
 	}
 
 	function handleEditStory(storyId: number) {
-		// Assuming an edit page exists at /stories/[storyId]/edit or similar
-		// Adjust the path as needed
-		goto(`/stories/${storyId}/edit`);
+		// Navigate to the story edit page within the creative context
+		goto(`/creatives/${creative.id}/stories/${storyId}/edit`);
 	}
 
 	async function handleDeleteStory(storyId: number) {
@@ -148,7 +147,10 @@
 <div class="mb-6 flex flex-col items-start justify-between gap-4 border-b pb-4 md:flex-row md:items-center">
 	<div class="flex-grow">
 		<div class="mb-1 flex items-center gap-2">
-			<svelte:component this={getIcon(creative.type)} class="h-6 w-6 text-muted-foreground" />
+			{#if true}
+				{@const Icon = getIcon(creative.type)}
+				<Icon class="h-6 w-6 text-muted-foreground" />
+			{/if}
 			<h1 class="text-3xl font-bold">{creative.name}</h1>
 		</div>
 		<p class="text-sm text-muted-foreground">Type: {creative.type.toUpperCase()}</p>

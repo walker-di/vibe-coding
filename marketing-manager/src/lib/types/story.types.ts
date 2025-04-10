@@ -1,9 +1,13 @@
+import type { CanvasAspectRatio } from '$lib/constants';
+
 // Story Types
 export interface Story {
   id: number;
   creativeId: number;
   title: string;
   description: string | null;
+  aspectRatio: CanvasAspectRatio; // Added
+  resolution: string | null; // Added
   createdAt: number;
   updatedAt: number | null;
 }
@@ -13,6 +17,7 @@ export interface Scene {
   storyId: number;
   bgmUrl: string | null;
   bgmName: string | null;
+  description: string | null;
   orderIndex: number;
   createdAt: number;
   updatedAt: number | null;
@@ -24,6 +29,7 @@ export interface Clip {
   canvas: string; // JSON string of fabric.js canvas data
   imageUrl: string | null; // URL for the generated preview image (can be null)
   narration: string | null;
+  description: string | null;
   orderIndex: number;
   createdAt: Date; // Expect Date object
   updatedAt: Date | null; // Expect Date object or null

@@ -162,6 +162,8 @@
             scenes={story.scenes || []}
             storyId={story.id}
             creativeId={creativeId}
+            aspectRatio={story.aspectRatio}
+            resolution={story.resolution}
             onAddScene={handleAddScene}
             onEditScene={handleEditScene}
             onDeleteScene={handleDeleteScene}

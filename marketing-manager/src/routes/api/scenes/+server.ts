@@ -20,6 +20,7 @@ export async function POST({ request }) {
       storyId: sceneData.storyId as any,
       bgmUrl: sceneData.bgmUrl || null,
       bgmName: sceneData.bgmName || null,
+      description: sceneData.description || null,
       orderIndex: sceneData.orderIndex,
       createdAt: new Date(), // Use new Date() object
       updatedAt: new Date()  // Use new Date() object

@@ -52,6 +52,8 @@ export async function PUT({ params, request }) {
       .set({
         title: storyData.title,
         description: storyData.description || null,
+        aspectRatio: storyData.aspectRatio || undefined, // Only update if provided
+        resolution: storyData.resolution !== undefined ? storyData.resolution : undefined, // Only update if provided
         updatedAt: new Date() // Use new Date() object
       } as any)
       .where(eq(stories.id, storyId))

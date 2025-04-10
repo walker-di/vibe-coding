@@ -49,6 +49,7 @@ export async function PUT({ params, request }) {
       .set({
         bgmUrl: sceneData.bgmUrl || null,
         bgmName: sceneData.bgmName || null,
+        description: sceneData.description || null,
         orderIndex: sceneData.orderIndex,
         updatedAt: new Date() // Use new Date() object
       } as any)

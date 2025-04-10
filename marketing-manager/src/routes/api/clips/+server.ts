@@ -23,6 +23,7 @@ export async function POST({ request }) {
       sceneId: clipData.sceneId as any,
       canvas: clipData.canvas,
       narration: clipData.narration || null,
+      description: clipData.description || null,
       orderIndex: clipData.orderIndex,
       createdAt: new Date(), // Use new Date() object
       updatedAt: new Date()  // Use new Date() object

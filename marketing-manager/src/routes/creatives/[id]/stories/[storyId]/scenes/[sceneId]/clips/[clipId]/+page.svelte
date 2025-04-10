@@ -24,8 +24,8 @@
     const sId = $page.params.storyId;
     const scId = $page.params.sceneId;
     const clId = $page.params.clipId;
-    
-    if (!cId || isNaN(parseInt(cId)) || !sId || isNaN(parseInt(sId)) || 
+
+    if (!cId || isNaN(parseInt(cId)) || !sId || isNaN(parseInt(sId)) ||
         !scId || isNaN(parseInt(scId)) || !clId || isNaN(parseInt(clId))) {
       error = 'Invalid ID parameters';
       isLoading = false;
@@ -49,7 +49,7 @@
         throw new Error(`Failed to fetch clip. Status: ${response.status}`);
       }
       clip = await response.json();
-      
+
       // No need to parse canvas data here anymore
       // if (clip && clip.canvas) {
       //   try {
@@ -75,7 +75,7 @@
 
   async function handleDeleteClip() {
     if (!clipId || isDeleting) return;
-    
+
     if (!confirm('Are you sure you want to delete this clip? This action cannot be undone.')) {
       return;
     }
@@ -107,7 +107,7 @@
       <ArrowLeft class="mr-2 h-4 w-4" />
       Back to Scene
     </Button>
-    
+
     <div class="flex gap-2">
       <Button variant="outline" onclick={handleEditClip}>
         <Edit class="mr-2 h-4 w-4" />
@@ -134,9 +134,15 @@
     <div class="space-y-6">
       <div class="rounded border p-6 shadow">
         <h1 class="text-3xl font-bold mb-2">Clip {clip.orderIndex}</h1>
+        {#if clip.description}
+          <div class="flex items-center text-muted-foreground mb-2">
+            <FileText class="h-4 w-4 mr-2" />
+            <span>{clip.description}</span>
+          </div>
+        {/if}
         <p class="text-muted-foreground">Order: {clip.orderIndex}</p>
       </div>
-      
+
       <div class="rounded border p-6 shadow">
         <h2 class="text-xl font-semibold mb-4">Canvas Content</h2>
         {#if clip.canvas}
@@ -147,7 +153,7 @@
           </div>
         {/if}
       </div>
-      
+
       {#if clip.narration}
         <div class="rounded border p-6 shadow">
           <h2 class="text-xl font-semibold mb-4 flex items-center">

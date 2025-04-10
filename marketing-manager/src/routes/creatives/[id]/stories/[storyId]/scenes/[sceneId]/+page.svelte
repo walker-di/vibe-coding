@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui/button';
-  import { ArrowLeft, Edit, Trash2, Plus, Music, Play } from 'lucide-svelte';
+  import { ArrowLeft, Edit, Trash2, Plus, Music, Play, FileText } from 'lucide-svelte';
   import ClipList from '$lib/components/story/ClipList.svelte';
   import type { SceneWithRelations } from '$lib/types/story.types';
 
@@ -20,7 +20,7 @@
     const cId = $page.params.id;
     const sId = $page.params.storyId;
     const scId = $page.params.sceneId;
-    
+
     if (!cId || isNaN(parseInt(cId)) || !sId || isNaN(parseInt(sId)) || !scId || isNaN(parseInt(scId))) {
       error = 'Invalid ID parameters';
       isLoading = false;
@@ -60,7 +60,7 @@
 
   async function handleDeleteScene() {
     if (!sceneId || isDeleting) return;
-    
+
     if (!confirm('Are you sure you want to delete this scene? This action cannot be undone.')) {
       return;
     }
@@ -141,7 +141,7 @@
       <ArrowLeft class="mr-2 h-4 w-4" />
       Back to Story
     </Button>
-    
+
     <div class="flex gap-2">
       <Button variant="outline" onclick={handleEditScene}>
         <Edit class="mr-2 h-4 w-4" />
@@ -170,6 +170,12 @@
         <div class="flex justify-between items-start">
           <div>
             <h1 class="text-3xl font-bold mb-2">Scene {scene.orderIndex}</h1>
+            {#if scene.description}
+              <div class="flex items-center text-muted-foreground mb-2">
+                <FileText class="h-4 w-4 mr-2" />
+                <span>{scene.description}</span>
+              </div>
+            {/if}
             {#if scene.bgmName}
               <div class="flex items-center text-muted-foreground">
                 <Music class="h-4 w-4 mr-2" />
@@ -177,14 +183,14 @@
               </div>
             {/if}
           </div>
-          
+
           <Button variant="default" onclick={handlePlayScene} class="flex items-center">
             <Play class="mr-2 h-4 w-4" />
             Play Scene
           </Button>
         </div>
       </div>
-      
+
       <div class="rounded border p-6 shadow">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold">Clips</h2>
@@ -193,10 +199,10 @@
             Add Clip
           </Button>
         </div>
-        
+
         {#if scene.clips && scene.clips.length > 0}
-          <ClipList 
-            clips={scene.clips} 
+          <ClipList
+            clips={scene.clips}
             sceneId={scene.id}
             onAddClip={handleAddClip}
             onEditClip={handleEditClip}

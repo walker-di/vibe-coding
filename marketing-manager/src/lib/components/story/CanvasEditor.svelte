@@ -109,6 +109,7 @@
       return;
     }
 
+    // Initialize with default dimensions, will be updated by parent if needed
     canvas = new windowWithFabric.fabric.Canvas('canvas', {
       width: 800,
       height: 600,
@@ -196,6 +197,7 @@
   // --- Method to update canvas dimensions ---
   export function updateDimensions(newWidth: number, newHeight: number) {
     if (canvas && fabricLoaded) {
+      console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
       // Use setDimensions which is more efficient than separate setWidth/setHeight calls
       canvas.setDimensions({ width: newWidth, height: newHeight });
       // Adjust background image scaling if necessary? Might need more complex logic if background image exists.
