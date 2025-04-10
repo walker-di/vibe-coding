@@ -1,7 +1,6 @@
 <script lang="ts">
   import SceneList from '$lib/components/story/SceneList.svelte';
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
-  import AutoCreateModal from '$lib/components/story/AutoCreateModalLegacy.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -13,6 +12,7 @@
   let {
     scenes,
     storyId,
+    creativeId, // We need this for creating new stories
     aspectRatio = '16:9', // Default to 16:9 if not provided
     // resolution is not used but kept in the type for future use
     onEditScene,
@@ -24,7 +24,7 @@
     onDuplicateClip // Optional - for duplicating clips
   } = $props<{
     scenes: SceneWithRelations[];
-    creativeId?: number; // Made optional since it's not used in this component
+    creativeId: number; // Required for creating new stories
     storyId: number;
     aspectRatio?: string; // Optional aspect ratio from story
     resolution?: string | null; // Optional resolution from story
@@ -137,6 +137,7 @@
   // State for the auto-create modal
   let showAutoCreateModal = $state(false);
   let isAutoCreating = $state(false);
+  let storyPrompt = $state('');
 
   // Handler for opening the auto-create modal
   function openAutoCreateModal() {
@@ -144,20 +145,14 @@
   }
 
   // Handler for auto-creating a story using AI
-  async function handleAutoCreateStory(event: CustomEvent<{storyPrompt: string}>) {
-    const { storyPrompt } = event.detail;
+  async function handleAutoCreateStory() {
     if (!storyPrompt) return;
 
     isAutoCreating = true;
 
     try {
-      // Get the current scene
-      const currentScene = scenes.find((scene: SceneWithRelations) => scene.id);
-      if (!currentScene) {
-        alert('No scene available. Please create a scene first.');
-        isAutoCreating = false;
-        return;
-      }
+      // Get the current story ID from props
+      // storyId is already available from props
 
       // Call the unified auto-create API endpoint
       const response = await fetch('/api/storyboard/auto-create', {
@@ -165,7 +160,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storyPrompt,
-          sceneId: currentScene.id
+          storyId, // Pass the current storyId if available
+          creativeId // Pass the creativeId for creating a new story if needed
         })
       });
 
@@ -188,7 +184,13 @@
 
     } catch (error: any) {
       console.error('Error auto-creating story:', error);
-      alert(`Failed to auto-create story: ${error.message || 'Unknown error'}`);
+
+      // Provide more specific error messages based on common issues
+      if (error.message.includes('Failed to connect to AI storyboard creator')) {
+        alert('Failed to connect to the AI storyboard creator. Please make sure the 003-ai-storyboard-creator project is running on port 5173.');
+      } else {
+        alert(`Failed to auto-create story: ${error.message || 'Unknown error'}`);
+      }
     } finally {
       isAutoCreating = false;
     }
@@ -935,10 +937,68 @@
 
 <!-- Auto-Create Story Modal -->
 {#if showAutoCreateModal}
-  <AutoCreateModal
-    show={showAutoCreateModal}
-    isLoading={isAutoCreating}
-    on:close={() => { showAutoCreateModal = false; }}
-    on:create={handleAutoCreateStory}
-  />
+  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-[500px] max-w-[90vw]">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold flex items-center">
+          <Sparkles class="h-5 w-5 mr-2 text-purple-500" />
+          Auto-Create Story
+        </h2>
+        <button
+          class="text-gray-500 hover:text-gray-700"
+          onclick={() => { if (!isAutoCreating) { showAutoCreateModal = false; } }}
+          disabled={isAutoCreating}
+          type="button"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div class="mb-4">
+        <label for="storyPrompt" class="mb-2 block">Story Prompt</label>
+        <Textarea
+          id="storyPrompt"
+          bind:value={storyPrompt}
+          placeholder="Describe the story you want to create..."
+          rows={5}
+          disabled={isAutoCreating}
+          class="w-full"
+        />
+        <p class="text-xs text-gray-500 mt-1">
+          Provide a detailed description of the story you want to create. The AI will generate multiple clips based on your prompt.
+        </p>
+      </div>
+
+      <div class="flex justify-end space-x-2">
+        <button
+          class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          onclick={() => { if (!isAutoCreating) { showAutoCreateModal = false; } }}
+          disabled={isAutoCreating}
+          type="button"
+        >
+          Cancel
+        </button>
+        <button
+          class="px-4 py-2 rounded-md bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 flex items-center justify-center"
+          onclick={() => {
+            if (storyPrompt.trim()) {
+              handleAutoCreateStory();
+            } else {
+              alert('Please enter a story prompt');
+            }
+          }}
+          disabled={isAutoCreating}
+          type="button"
+        >
+          {#if isAutoCreating}
+            <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+            Generating...
+          {:else}
+            <Sparkles class="h-4 w-4 mr-2" />
+            Create Story
+          {/if}
+        </button>
+      </div>
+    </div>
+  </div>
 {/if}

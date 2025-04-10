@@ -2,28 +2,18 @@
   import { Label } from '$lib/components/ui/label';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Sparkles } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
 
   // Props using Svelte 5 runes
-  const { show = false, isLoading = false } = $props<{
-    show: boolean;
-    isLoading: boolean;
-  }>();
-
+  const { show = false, isLoading = false } = $props();
+  
   // State
   let storyPrompt = $state('');
-  let modalElement: HTMLDivElement;
-
-  // Create event dispatcher
-  const dispatch = createEventDispatcher<{
-    close: void;
-    create: { storyPrompt: string };
-  }>();
+  let modalElement = $state<HTMLDivElement | null>(null);
 
   function handleClose() {
     if (!isLoading) {
-      show.set(false);
-      dispatch('close');
+      const event = new CustomEvent('close');
+      dispatchEvent(event);
     }
   }
 
@@ -33,7 +23,10 @@
       return;
     }
 
-    dispatch('create', { storyPrompt });
+    const event = new CustomEvent('create', { 
+      detail: { storyPrompt } 
+    });
+    dispatchEvent(event);
   }
 
   // Handle clicking outside the modal to close it
@@ -54,16 +47,17 @@
     if (show) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeydown);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeydown);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleKeydown);
+      };
     }
   });
 </script>
 
 {#if show}
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div
+    <div 
       class="bg-white p-6 rounded-lg shadow-lg w-[500px] max-w-[90vw]"
       bind:this={modalElement}
     >
@@ -72,9 +66,9 @@
           <Sparkles class="h-5 w-5 mr-2 text-purple-500" />
           Auto-Create Story
         </h2>
-        <button
-          class="text-gray-500 hover:text-gray-700"
-          on:click={handleClose}
+        <button 
+          class="text-gray-500 hover:text-gray-700" 
+          onclick={handleClose}
           disabled={isLoading}
           type="button"
         >
@@ -98,17 +92,17 @@
       </div>
 
       <div class="flex justify-end space-x-2">
-        <button
+        <button 
           class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          on:click={handleClose}
+          onclick={handleClose}
           disabled={isLoading}
           type="button"
         >
           Cancel
         </button>
-        <button
+        <button 
           class="px-4 py-2 rounded-md bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 flex items-center justify-center"
-          on:click={handleSubmit}
+          onclick={handleSubmit}
           disabled={isLoading}
           type="button"
         >
