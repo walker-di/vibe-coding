@@ -352,8 +352,8 @@
    $effect(() => {
      // When selectedClip changes, load its canvas data
      if (selectedClip && canvasEditorInstance && canvasIsReady && !isLoadingCanvas) {
-       // Only load if the canvas data has changed
-       if (selectedClip.canvas !== lastLoadedCanvas) {
+       // Only load if the canvas data has changed and is not null/undefined
+       if (selectedClip.canvas !== lastLoadedCanvas && selectedClip.canvas) {
          console.log('Loading new canvas data for clip', selectedClip.id);
 
          // Set the loading flag to prevent infinite loops
@@ -370,8 +370,10 @@
            }, 100);
          }
        } else {
-         console.log('Skipping canvas load - same data as before');
+         console.log('Skipping canvas load - same data as before or canvas data is empty');
        }
+     } else if (!selectedClip) {
+       console.log('No clip selected, skipping canvas load');
      }
    });
 
@@ -541,7 +543,14 @@
                           console.log('Received updated clip data from server');
                           // Update the selectedClip with the data from the database, but use the timestamped URL for display
                           // Also increment forceSceneRefresh to trigger a UI update
-                          selectedClip = { ...updatedClip, imageUrl: imageUrlWithTimestamp };
+                          // Preserve the canvas data to prevent unnecessary reloading
+                          const currentCanvas = selectedClip.canvas;
+                          selectedClip = {
+                            ...updatedClip,
+                            imageUrl: imageUrlWithTimestamp,
+                            // Keep the current canvas data to prevent the canvas from disappearing
+                            canvas: currentCanvas || updatedClip.canvas
+                          };
 
                           // Update the clip in the scenes array to keep everything in sync
                           const clipId = updatedClip.id; // Use updatedClip.id which is guaranteed to exist
@@ -552,8 +561,13 @@
                             if (scene.clips) {
                               scene.clips = scene.clips.map((clip: Clip) => {
                                 if (clip.id === clipId) {
-                                  // Use the same timestamped URL for consistency
-                                  return { ...updatedClip, imageUrl: imageUrlWithTimestamp };
+                                  // Use the same timestamped URL for consistency and preserve canvas data
+                                  return {
+                                    ...updatedClip,
+                                    imageUrl: imageUrlWithTimestamp,
+                                    // Keep the current canvas data to prevent the canvas from disappearing
+                                    canvas: clip.canvas || updatedClip.canvas
+                                  };
                                 }
                                 return clip;
                               });
@@ -571,15 +585,49 @@
                           // Also refresh the scenes array to ensure it has the latest data
                           if (storyId) {
                             console.log('Fetching updated story data');
+                            // Store the current selectedClip ID before updating scenes
+                            const currentSelectedClipId = selectedClip?.id;
+
                             fetch(`/api/stories/${storyId}`)
                               .then(response => response.json())
                               .then(storyData => {
+                                let newScenes = [];
                                 if (storyData.success && storyData.data) {
-                                  scenes = storyData.data.scenes || [];
+                                  newScenes = storyData.data.scenes || [];
                                   console.log('Updated scenes from API');
                                 } else if (storyData.scenes) {
-                                  scenes = storyData.scenes;
+                                  newScenes = storyData.scenes;
                                   console.log('Updated scenes from API (legacy format)');
+                                }
+
+                                // Update scenes
+                                scenes = newScenes;
+
+                                // Restore the selected clip after scenes update
+                                if (currentSelectedClipId) {
+                                  // Find the clip in the updated scenes
+                                  let foundClip: Clip | null = null;
+                                  for (const scene of newScenes) {
+                                    if (scene.clips) {
+                                      const clip = scene.clips.find((c: Clip) => c.id === currentSelectedClipId);
+                                      if (clip) {
+                                        foundClip = clip;
+                                        break;
+                                      }
+                                    }
+                                  }
+
+                                  // If we found the clip, update selectedClip
+                                  if (foundClip) {
+                                    console.log('Restoring selected clip after scenes update:', foundClip.id);
+                                    // Preserve the canvas data from the previous selectedClip
+                                    const canvasData = selectedClip?.canvas;
+                                    selectedClip = {
+                                      ...foundClip,
+                                      // Keep the canvas data from before to prevent unnecessary reloading
+                                      canvas: canvasData || foundClip.canvas
+                                    };
+                                  }
                                 }
                               })
                               .catch(err => console.error('Error fetching updated story data:', err));

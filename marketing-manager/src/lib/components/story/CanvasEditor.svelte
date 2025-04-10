@@ -46,6 +46,21 @@
       return;
     }
 
+    // Handle undefined or null canvas data
+    if (!canvasJson) {
+      console.log('Canvas data is null or undefined, loading empty canvas');
+      // Still update lastLoadedCanvasData to prevent reloading
+      lastLoadedCanvasData = canvasJson;
+
+      // If canvas is ready, clear it and set default background
+      if (canvas && fabricLoaded) {
+        canvas.clear();
+        canvas.backgroundColor = '#f0f0f0';
+        canvas.renderAll();
+      }
+      return;
+    }
+
     // Update the last loaded canvas data
     lastLoadedCanvasData = canvasJson;
 
