@@ -305,8 +305,14 @@
           obj.id = `layer-${index}-${Date.now()}`;
         }
 
+        // Use the existing name if available, otherwise generate a default name
         const layerName = obj.name || `Layer ${index + 1}`;
         const layerType = obj.type || 'unknown';
+
+        // Store the name on the object for persistence
+        if (!obj.name) {
+          obj.name = layerName;
+        }
 
         console.log(`Layer ${index}: ${layerName} (${layerType})`);
 
@@ -346,6 +352,12 @@
         const layer = newLayers[i];
         if (layer.object) {
           try {
+            // Update the object name if it has changed
+            if (layer.name && layer.object.name !== layer.name) {
+              console.log(`Updating layer name from '${layer.object.name}' to '${layer.name}'`);
+              layer.object.name = layer.name;
+            }
+
             // First, bring the object to the front
             // This ensures it's at the top of the stack
             layer.object.bringToFront();
@@ -353,6 +365,11 @@
           } catch (err) {
             // If bringToFront is not available on the object, try using the canvas method
             try {
+              // Still update the name
+              if (layer.name) {
+                layer.object.name = layer.name;
+              }
+
               canvas.bringToFront(layer.object);
               console.log(`Used canvas.bringToFront for: ${layer.name} (${layer.type})`);
             } catch (err2) {
@@ -385,6 +402,12 @@
           for (let i = 0; i < newLayers.length; i++) {
             const layer = newLayers[i];
             if (layer.object) {
+              // Update the object name if it has changed
+              if (layer.name && layer.object.name !== layer.name) {
+                console.log(`Updating layer name in fallback from '${layer.object.name}' to '${layer.name}'`);
+                layer.object.name = layer.name;
+              }
+
               canvas.add(layer.object);
               console.log(`Re-added layer: ${layer.name} (${layer.type})`);
             }

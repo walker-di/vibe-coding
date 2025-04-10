@@ -1,6 +1,16 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import { Layers, GripVertical } from "lucide-svelte";
+  import { Layers, GripVertical, Pencil, Check, X } from "lucide-svelte";
+
+  // Action to focus an element when it's mounted
+  function focusOnMount(node: HTMLElement) {
+    // Focus the element after it's mounted
+    setTimeout(() => {
+      node.focus();
+    }, 0);
+
+    return {};
+  }
 
   // Props using Svelte 5 runes
   const { open = $bindable(false), layers = [], onSave, onClose } = $props<{
@@ -12,6 +22,8 @@
 
   // State
   let orderedLayers = $state(layers);
+  let editingLayerId = $state<string | null>(null);
+  let editingName = $state('');
 
   // Reset ordered layers when the modal opens or layers change
   $effect(() => {
@@ -19,6 +31,8 @@
       console.log('Modal opened, initializing layers:', layers);
       // Create a deep copy to ensure we don't lose object references
       orderedLayers = layers.map((layer: {id: string, name: string, type: string, object: any}) => ({ ...layer }));
+      // Reset editing state
+      editingLayerId = null;
     }
   });
 
@@ -57,6 +71,54 @@
   function getLayerDisplayName(layer: any) {
     if (layer.name) return layer.name;
     return `${layer.type.charAt(0).toUpperCase() + layer.type.slice(1)} ${layer.id.substring(0, 4)}`;
+  }
+
+  // Start editing a layer name
+  function startEditingName(layer: any) {
+    editingLayerId = layer.id;
+    editingName = layer.name || getLayerDisplayName(layer);
+  }
+
+  // Save the edited layer name
+  function saveLayerName() {
+    if (!editingLayerId) return;
+
+    // Find the layer being edited
+    const layerIndex = orderedLayers.findIndex((layer: {id: string}) => layer.id === editingLayerId);
+    if (layerIndex === -1) return;
+
+    // Update the layer name
+    const updatedLayer = { ...orderedLayers[layerIndex] };
+    updatedLayer.name = editingName.trim() || getLayerDisplayName(updatedLayer);
+
+    // Also update the name in the fabric object if possible
+    if (updatedLayer.object) {
+      updatedLayer.object.name = updatedLayer.name;
+    }
+
+    // Update the layer in the array
+    const newLayers = [...orderedLayers];
+    newLayers[layerIndex] = updatedLayer;
+    orderedLayers = newLayers;
+
+    // Exit editing mode
+    editingLayerId = null;
+  }
+
+  // Cancel editing
+  function cancelEditing() {
+    editingLayerId = null;
+  }
+
+  // Handle keydown events in the name input
+  function handleNameInputKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveLayerName();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelEditing();
+    }
   }
 </script>
 
@@ -128,7 +190,45 @@
                 <GripVertical class="h-5 w-5" />
               </div>
               <div class="flex-1">
-                <div class="font-medium">{getLayerDisplayName(layer)}</div>
+                {#if editingLayerId === layer.id}
+                  <div class="flex items-center space-x-1">
+                    <input
+                      type="text"
+                      class="flex-1 px-2 py-1 border rounded text-sm"
+                      bind:value={editingName}
+                      onkeydown={handleNameInputKeydown}
+                      use:focusOnMount
+                    />
+                    <button
+                      type="button"
+                      class="p-1 text-green-600 hover:text-green-800"
+                      onclick={saveLayerName}
+                      title="Save name"
+                    >
+                      <Check class="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="p-1 text-red-600 hover:text-red-800"
+                      onclick={cancelEditing}
+                      title="Cancel"
+                    >
+                      <X class="h-4 w-4" />
+                    </button>
+                  </div>
+                {:else}
+                  <div class="flex items-center justify-between">
+                    <div class="font-medium">{getLayerDisplayName(layer)}</div>
+                    <button
+                      type="button"
+                      class="p-1 text-gray-400 hover:text-gray-600"
+                      onclick={() => startEditingName(layer)}
+                      title="Edit name"
+                    >
+                      <Pencil class="h-4 w-4" />
+                    </button>
+                  </div>
+                {/if}
                 <div class="text-xs text-muted-foreground">{layer.type}</div>
               </div>
             </div>
