@@ -364,6 +364,32 @@
   }
   // --- End function ---
 
+  // --- Function to get current canvas JSON ---
+  export function getCurrentCanvasJson(): string {
+    if (canvas && fabricLoaded) {
+      try {
+        // Get the canvas JSON
+        const canvasJson = canvas.toJSON();
+        // Ensure the objects array exists
+        if (!canvasJson.objects) {
+          canvasJson.objects = [];
+        }
+        // Filter out any problematic objects (optional, but good practice)
+        canvasJson.objects = canvasJson.objects.filter((obj: any) => {
+          const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
+          return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
+        });
+        return JSON.stringify(canvasJson);
+      } catch (error) {
+        console.error('Error getting current canvas JSON:', error);
+        return '{}'; // Return empty JSON on error
+      }
+    }
+    console.warn('getCurrentCanvasJson called but canvas is not ready.');
+    return '{}'; // Return empty JSON if not ready
+  }
+  // --- End function ---
+
 </script>
 
 <div class="space-y-4">

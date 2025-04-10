@@ -73,11 +73,26 @@
   let canvasIsReady = $state(false);
   // State to track if we need to force a scene refresh
   let forceSceneRefresh = $state(0);
-  // Flag to prevent infinite loops when loading canvas data
-  let isLoadingCanvas = $state(false);
+  // Removed isLoadingCanvas state
 
   // Reference to the CanvasEditor component instance
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
+
+  // --- Debounce Utility ---
+  function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    return function executedFunction(...args: Parameters<T>) {
+      const later = () => {
+        timeout = null;
+        func(...args);
+      };
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(later, wait);
+    };
+  }
+  // --- End Debounce ---
 
   // Handler for when CanvasEditor signals it's ready
   function handleCanvasReady() {
@@ -351,35 +366,39 @@
     }
   }
 
-    // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready,
-    // but only if the selected clip is different from the one already loaded.
-   let lastLoadedCanvas = $state<string | null>(null);
-
+    // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready.
    $effect(() => {
-     // When selectedClip changes, load its canvas data
-     if (selectedClip && canvasEditorInstance && canvasIsReady && !isLoadingCanvas) {
-       // Only load if the canvas data has changed and is not null/undefined
-       if (selectedClip.canvas !== lastLoadedCanvas && selectedClip.canvas) {
-         console.log('Loading new canvas data for clip', selectedClip.id);
+     // When selectedClip changes, load its canvas data if it differs from the current editor state
+     // Removed isLoadingCanvas check here, effect should run based on clip/ready state
+     if (selectedClip && canvasEditorInstance && canvasIsReady) {
+       const canvasToLoad = selectedClip.canvas || '{}'; // Default to empty JSON string if null/undefined
+       const currentEditorJson = canvasEditorInstance.getCurrentCanvasJson();
 
-         // Set the loading flag to prevent infinite loops
-         isLoadingCanvas = true;
-         lastLoadedCanvas = selectedClip.canvas;
+       // Only load if the selected clip's canvas data is different from the current editor state
+       if (canvasToLoad !== currentEditorJson) {
+         console.log('Canvas data differs, loading canvas for clip:', selectedClip.id);
+         // No need to set isLoadingCanvas here anymore
 
          // Load canvas data
          try {
-           canvasEditorInstance.loadCanvasData(selectedClip.canvas);
-         } finally {
-           // Reset the loading flag after a short delay
-           setTimeout(() => {
-             isLoadingCanvas = false;
-           }, 100);
+           canvasEditorInstance.loadCanvasData(canvasToLoad); // Pass the string directly
+         } catch (error) {
+            console.error('Error loading canvas data:', error);
          }
+         // No finally block needed here for isLoadingCanvas
        } else {
-         console.log('Skipping canvas load - same data as before or canvas data is empty');
+         console.log('Skipping canvas load - selected clip data matches current editor state.');
        }
      } else if (!selectedClip) {
-       console.log('No clip selected, skipping canvas load');
+       console.log('No clip selected, canvas load skipped.');
+       // Optionally clear canvas if no clip is selected
+       // if (canvasEditorInstance && canvasIsReady && !isLoadingCanvas) {
+       //   const currentEditorJson = canvasEditorInstance.getCurrentCanvasJson();
+       //   if (currentEditorJson !== '{}') {
+       //      console.log('Clearing canvas as no clip is selected.');
+       //      canvasEditorInstance.clearCanvas(); // Be careful with this, might trigger save
+       //   }
+       // }
      }
    });
 
@@ -501,215 +520,192 @@
     }
   }
 
-  // Handler for canvas changes (required by CanvasEditor)
-  async function handleCanvasChange(canvasJson: string) {
-    // Skip if we're currently loading canvas data to prevent infinite loops
-    if (isLoadingCanvas) {
-      console.log('Skipping canvas change while loading');
+  // --- Debounced Canvas Change Processing ---
+  const processCanvasChange = debounce(async (canvasJson: string) => {
+    console.log('Debounced: Processing canvas change');
+
+    // Check again if clip is selected, as it might have changed during the debounce period
+    if (!selectedClip) {
+      console.log('Debounced: No clip selected, skipping save.');
       return;
     }
 
-    // Skip if the canvas data is the same as what's already in the clip
-    if (selectedClip && selectedClip.canvas === canvasJson) {
-      console.log('Skipping canvas change - no changes detected');
-      return;
+    // Check if data actually changed compared to the current selected clip state
+    // This prevents saving if the user rapidly undid changes during the debounce period
+    if (selectedClip.canvas === canvasJson) {
+        console.log('Debounced: Canvas data matches current clip state, skipping save.');
+        return;
     }
 
-    console.log('Canvas changed, updating clip data');
+    console.log('Debounced: Canvas changed, updating clip data');
 
-    if (selectedClip) {
-      // Update local state first for responsiveness
-      const updatedClip = { ...selectedClip, canvas: canvasJson };
-      selectedClip = updatedClip; // Update local state
+    // --- Proceed with saving ---
+    // Use a temporary variable for the selected clip ID in case it changes
+    const clipToUpdate = selectedClip;
 
-      // Update the lastLoadedCanvas to prevent reloading
-      lastLoadedCanvas = canvasJson;
+    // Update local state first for responsiveness
+    const updatedLocalClip = { ...clipToUpdate, canvas: canvasJson };
+    // Update the main selectedClip state
+    // Note: This might cause a brief flicker if the user selects another clip *during* the save
+    // but is necessary for the UI to reflect the change being saved.
+    selectedClip = updatedLocalClip;
 
-      // --- Save to backend ---
-      try {
-        const response = await fetch(`/api/clips/${selectedClip.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          // Send only the necessary data to update
-          body: JSON.stringify({ canvas: canvasJson })
+    // Update the clip in the main scenes array as well
+    scenes = scenes.map((scene: SceneWithRelations) => {
+      if (scene.clips) {
+        scene.clips = scene.clips.map((c: Clip) => {
+          if (c.id === clipToUpdate.id) {
+            return updatedLocalClip; // Use the locally updated version
+          }
+          return c;
         });
+      }
+      return scene;
+    });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
-          console.error(`Failed to save clip ${selectedClip.id}:`, response.status, errorData.message || response.statusText);
-          // Optionally: Revert local state or show an error message to the user
-          // For now, just log the error
-        } else {
 
-          // --- Generate and Upload Image Preview ---
-          if (canvasEditorInstance) {
-            console.log('Generating preview image for clip', selectedClip.id);
-            const imageDataUrl = canvasEditorInstance.getCanvasImageDataUrl();
-            if (imageDataUrl) {
-              console.log('Preview image generated, uploading...');
-              try {
-                const uploadResponse = await fetch('/api/upload/clip-preview', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    clipId: selectedClip.id,
-                    imageData: imageDataUrl
-                  })
-                });
+    // --- Save to backend ---
+    try {
+      const response = await fetch(`/api/clips/${clipToUpdate.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        // Send only the necessary data to update
+        body: JSON.stringify({ canvas: canvasJson })
+      });
 
-                if (!uploadResponse.ok) {
-                  const errorData = await uploadResponse.json().catch(() => ({ message: 'Failed to parse upload error response' }));
-                  console.error(`Failed to upload preview for clip ${selectedClip.id}:`, uploadResponse.status, errorData.message || uploadResponse.statusText);
-                } else {
-                  const uploadData = await uploadResponse.json();
-                  console.log('Upload response data:', uploadData);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
+        console.error(`Debounced: Failed to save clip ${clipToUpdate.id}:`, response.status, errorData.message || response.statusText);
+        // Optionally: Revert local state or show an error message to the user
+        // For now, just log the error
+      } else {
+        console.log(`Debounced: Clip ${clipToUpdate.id} canvas saved successfully.`);
 
-                  // Extract the imageUrl from the response data
-                  // The API returns { data: { imageUrl: string }, message: string }
-                  const imageUrl = uploadData.data?.imageUrl || uploadData.imageUrl;
+        // --- Generate and Upload Image Preview ---
+        if (canvasEditorInstance) {
+          console.log('Debounced: Generating preview image for clip', clipToUpdate.id);
+          const imageDataUrl = canvasEditorInstance.getCanvasImageDataUrl();
+          if (imageDataUrl) {
+            console.log('Debounced: Preview image generated, uploading...');
+            try {
+              const uploadResponse = await fetch('/api/upload/clip-preview', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  clipId: clipToUpdate.id,
+                  imageData: imageDataUrl
+                })
+              });
 
-                  if (imageUrl) {
-                    console.log('Got image URL from response:', imageUrl);
-                    // Add a timestamp to the image URL to prevent caching
-                    const timestamp = Date.now();
-                    const imageUrlWithTimestamp = `${imageUrl}?t=${timestamp}`;
+              if (!uploadResponse.ok) {
+                const errorData = await uploadResponse.json().catch(() => ({ message: 'Failed to parse upload error response' }));
+                console.error(`Debounced: Failed to upload preview for clip ${clipToUpdate.id}:`, uploadResponse.status, errorData.message || uploadResponse.statusText);
+              } else {
+                const uploadData = await uploadResponse.json();
+                console.log('Debounced: Upload response data:', uploadData);
 
-                    // Store the base URL (without timestamp) in the database
-                    // This ensures consistent URLs across page reloads
-                    try {
-                      // Remove any timestamp query parameters from the URL
-                      const cleanImageUrl = imageUrl.split('?')[0];
-                      console.log('Updating clip with new image URL:', cleanImageUrl);
+                // Extract the imageUrl from the response data
+                const imageUrl = uploadData.data?.imageUrl || uploadData.imageUrl;
 
-                      const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
-                        method: 'PUT',
-                        headers: {
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ imageUrl: cleanImageUrl })
-                      });
+                if (imageUrl) {
+                  console.log('Debounced: Got image URL from response:', imageUrl);
+                  // Add a timestamp to the image URL to prevent caching
+                  const timestamp = Date.now();
+                  const imageUrlWithTimestamp = `${imageUrl}?t=${timestamp}`;
 
-                      if (!updateResponse.ok) {
-                        console.error(`Failed to update clip ${selectedClip.id} with new imageUrl in database. Status: ${updateResponse.status}`);
-                        const errorText = await updateResponse.text().catch(() => 'Could not read error response');
-                        console.error(`Error response: ${errorText}`);
-                      } else {
-                        console.log('Successfully updated clip with new image URL');
-                        // Get the updated clip data from the response
-                        const updatedClip = await updateResponse.json().catch(() => null);
+                  // Store the base URL (without timestamp) in the database
+                  try {
+                    const cleanImageUrl = imageUrl.split('?')[0];
+                    console.log('Debounced: Updating clip with new image URL:', cleanImageUrl);
 
-                        if (updatedClip) {
-                          console.log('Received updated clip data from server');
-                          console.log('Before update - selectedClip:', JSON.stringify({
-                            id: selectedClip.id,
-                            narration: selectedClip.narration,
-                            description: selectedClip.description,
-                            duration: selectedClip.duration,
-                            orderIndex: selectedClip.orderIndex,
-                            hasCanvas: !!selectedClip.canvas,
-                            hasImageUrl: !!selectedClip.imageUrl
-                          }));
-                          console.log('Server response - updatedClip:', JSON.stringify({
-                            id: updatedClip.id,
-                            narration: updatedClip.narration,
-                            description: updatedClip.description,
-                            duration: updatedClip.duration,
-                            orderIndex: updatedClip.orderIndex,
-                            hasCanvas: !!updatedClip.canvas,
-                            hasImageUrl: !!updatedClip.imageUrl
-                          }));
+                    const updateResponse = await fetch(`/api/clips/${clipToUpdate.id}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ imageUrl: cleanImageUrl })
+                    });
 
-                          // Create a complete clip object with all required properties
-                          // Keep all properties from the current selectedClip
-                          const completeClip = {
-                            // Start with all properties from the current selectedClip
-                            ...selectedClip,
-                            // Override with properties from the updatedClip
-                            ...updatedClip,
-                            // Ensure these specific properties are preserved
-                            narration: updatedClip.narration ?? selectedClip.narration ?? '',
-                            description: updatedClip.description ?? selectedClip.description ?? '',
-                            duration: updatedClip.duration ?? selectedClip.duration ?? 3000,
-                            orderIndex: updatedClip.orderIndex ?? selectedClip.orderIndex ?? 0,
-                            // Use the timestamped URL for display
-                            imageUrl: imageUrlWithTimestamp,
-                            // Keep the current canvas data to prevent the canvas from disappearing
-                            canvas: selectedClip.canvas || updatedClip.canvas || ''
-                          };
+                    if (!updateResponse.ok) {
+                      console.error(`Debounced: Failed to update clip ${clipToUpdate.id} with new imageUrl in database. Status: ${updateResponse.status}`);
+                      const errorText = await updateResponse.text().catch(() => 'Could not read error response');
+                      console.error(`Debounced: Error response: ${errorText}`);
+                    } else {
+                      console.log('Debounced: Successfully updated clip with new image URL');
+                      // Get the updated clip data from the response
+                      const updatedClipFromServer = await updateResponse.json().catch(() => null);
 
-                          // Update the selectedClip with the complete object
-                          selectedClip = completeClip;
+                      if (updatedClipFromServer) {
+                        console.log('Debounced: Received updated clip data from server after image URL update');
 
-                          // selectedClip is guaranteed to be non-null here since we just assigned it
-                          console.log('After update - selectedClip:', JSON.stringify({
-                            id: completeClip.id,
-                            narration: completeClip.narration,
-                            description: completeClip.description,
-                            duration: completeClip.duration,
-                            orderIndex: completeClip.orderIndex,
-                            hasCanvas: !!completeClip.canvas,
-                            hasImageUrl: !!completeClip.imageUrl
-                          }));
+                        // Merge server data with the *current* selectedClip state,
+                        // preserving the latest canvasJson that was just saved.
+                        const finalClipState = {
+                          ...(selectedClip?.id === clipToUpdate.id ? selectedClip : updatedLocalClip), // Use current selectedClip if it's still the same one
+                          ...updatedClipFromServer,
+                          canvas: canvasJson, // Ensure we keep the canvas that triggered this save
+                          imageUrl: imageUrlWithTimestamp // Use the timestamped URL for display
+                        };
 
-                          // Update the clip in the scenes array to keep everything in sync
-                          const clipId = updatedClip.id; // Use updatedClip.id which is guaranteed to exist
-
-                          // Force a refresh of the SceneList to show the updated preview
-                          forceSceneRefresh++;
-                          // Use the same complete clip object for the scenes array
-                          scenes = scenes.map((scene: SceneWithRelations) => {
-                            if (scene.clips) {
-                              scene.clips = scene.clips.map((clip: Clip) => {
-                                if (clip.id === clipId) {
-                                  // Use the same complete clip object we created above
-                                  return completeClip;
-                                }
-                                return clip;
-                              });
-                            }
-                            return scene;
-                          });
+                        // Update selectedClip only if it's still the one we were working on
+                        if (selectedClip?.id === clipToUpdate.id) {
+                           selectedClip = finalClipState;
+                           console.log('Debounced: Updated selectedClip state after image URL save.');
+                        } else {
+                           console.log('Debounced: selectedClip changed during image URL save, not updating main state.');
                         }
 
-                        // Removed forceSceneRefresh and full story refetch.
-                        // Direct updates to `scenes` and `selectedClip` should trigger UI updates.
-                        console.log('Clip canvas and preview updated successfully.');
+
+                        // Update the clip in the scenes array
+                        scenes = scenes.map((scene: SceneWithRelations) => {
+                          if (scene.clips) {
+                            scene.clips = scene.clips.map((clip: Clip) => {
+                              if (clip.id === clipToUpdate.id) {
+                                return finalClipState; // Use the final merged state
+                              }
+                              return clip;
+                            });
+                          }
+                          return scene;
+                        });
+
+                        // Force a refresh of the SceneList to show the updated preview
+                        forceSceneRefresh++;
+                        console.log('Debounced: Clip canvas and preview updated successfully.');
                       }
-                    } catch (updateError) {
-                      // Use optional chaining to safely access selectedClip.id
-                      console.error(`Error updating clip ${selectedClip?.id} with new imageUrl:`, updateError);
                     }
-                  } else {
-                    // Use optional chaining to safely access selectedClip.id
-                    console.warn(`Upload endpoint for clip ${selectedClip?.id} did not return an imageUrl.`);
+                  } catch (updateError) {
+                    console.error(`Debounced: Error updating clip ${clipToUpdate.id} with new imageUrl:`, updateError);
                   }
+                } else {
+                  console.warn(`Debounced: Upload endpoint for clip ${clipToUpdate.id} did not return an imageUrl.`);
                 }
-              } catch (uploadError) {
-                // Use optional chaining to safely access selectedClip.id
-                console.error(`Error uploading preview for clip ${selectedClip?.id}:`, uploadError);
               }
-            } else {
-              // Use optional chaining to safely access selectedClip.id
-              console.error(`Failed to generate image data URL from canvas for clip ${selectedClip?.id}.`);
+            } catch (uploadError) {
+              console.error(`Debounced: Error uploading preview for clip ${clipToUpdate.id}:`, uploadError);
             }
           } else {
-             console.warn('CanvasEditor instance not available to generate image data.');
+            console.error(`Debounced: Failed to generate image data URL from canvas for clip ${clipToUpdate.id}.`);
           }
-          // --- End Generate and Upload Image Preview ---
+        } else {
+           console.warn('Debounced: CanvasEditor instance not available to generate image data.');
         }
-      } catch (error) {
-        const clipId = selectedClip ? selectedClip.id : 'unknown';
-        console.error(`Error in canvas save/preview process for clip ${clipId}:`, error);
-        // Optionally: Handle network errors, show message
+        // --- End Generate and Upload Image Preview ---
       }
-      // --- End Save ---
-    } else {
-       console.log('No clip selected or canvas data unchanged, skipping save.');
+    } catch (error) {
+      console.error(`Debounced: Error in canvas save/preview process for clip ${clipToUpdate.id}:`, error);
+      // Optionally: Handle network errors, show message
     }
+  }, 500); // 500ms debounce delay
+
+  // Original handler now just calls the debounced version
+  function handleCanvasChange(canvasJson: string) {
+    console.log('Canvas change detected, invoking debounced handler...');
+    processCanvasChange(canvasJson);
   }
 
  </script>
@@ -777,7 +773,7 @@
             <Input
               id="orderIndex"
               type="number"
-              bind:value={selectedClip.orderIndex}
+              bind:value={selectedClip!.orderIndex}
               min="0"
             />
           </div>
@@ -791,12 +787,12 @@
               <Input
                 id="duration"
                 type="number"
-                bind:value={selectedClip.duration}
+                bind:value={selectedClip!.duration}
                 min="500"
                 max="10000"
                 step="100"
               />
-              <span class="text-sm text-gray-500">{((selectedClip.duration || 3000) / 1000).toFixed(1)}s</span>
+              <span class="text-sm text-gray-500">{((selectedClip!.duration || 3000) / 1000).toFixed(1)}s</span>
             </div>
             <p class="text-xs text-muted-foreground">Duration in milliseconds (0.5s to 10s)</p>
           </div>
@@ -808,7 +804,7 @@
             </Label>
             <Textarea
               id="description"
-              bind:value={selectedClip.description}
+              bind:value={selectedClip!.description}
               placeholder="Brief description of this clip"
               rows={3}
             />
@@ -821,7 +817,7 @@
             </Label>
             <Textarea
               id="narration"
-              bind:value={selectedClip.narration}
+              bind:value={selectedClip!.narration}
               placeholder="Enter narration text for this clip"
               rows={5}
             />
