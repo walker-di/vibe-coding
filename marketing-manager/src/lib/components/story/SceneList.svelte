@@ -13,6 +13,7 @@
   } from "lucide-svelte";
   import ClipNarrationModal from "./ClipNarrationModal.svelte";
   import TransitionModal from "./TransitionModal.svelte";
+  import AddClipBetweenButton from "./AddClipBetweenButton.svelte";
   import type {
     SceneWithRelations,
     Clip,
@@ -579,11 +580,21 @@
       }
 
       // Add the new clip (which now has an ID and imageUrl) to the scene's clips array
+      // and make sure clips are sorted by orderIndex
       const updatedScenes = scenes.map((s: SceneWithRelations) => {
         if (s.id === sceneId) {
+          // Add the new clip and sort by orderIndex
+          const updatedClips = [...(s.clips || []), updatedClip].sort(
+            (a, b) => {
+              // Handle possible undefined values
+              const orderA = a?.orderIndex ?? 0;
+              const orderB = b?.orderIndex ?? 0;
+              return orderA - orderB;
+            }
+          );
           return {
             ...s,
-            clips: [...(s.clips || []), updatedClip],
+            clips: updatedClips,
           };
         }
         return s;
@@ -712,9 +723,17 @@
           </div>
 
           <!-- Clip Preview Row -->
-          <div class="mt-2 flex space-x-1 overflow-x-auto pb-1">
+          <div class="mt-2 flex overflow-x-auto pb-1">
             {#if scene.clips && scene.clips.length > 0}
-              {#each scene.clips as clip (clip.id)}
+              {#each scene.clips as clip, clipIndex (clip.id)}
+                {#if clipIndex > 0}
+                  <AddClipBetweenButton
+                    scene={scene}
+                    beforeClipIndex={clipIndex - 1}
+                    afterClipIndex={clipIndex}
+                    onClipAdded={() => refreshTimestamp()}
+                  />
+                {/if}
                 <div class="relative flex-shrink-0 group m-1 mr-0">
                   <button
                     type="button"
