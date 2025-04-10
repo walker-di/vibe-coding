@@ -1,5 +1,14 @@
 # Todo List for REST API Transformation and Refactoring
 
+How to work with this todo list:
+Execute one task at a time.
+Update this file.
+If you finished the implemnentio,
+Run the project and test it using the browser
+Update this file with the bugs you found.
+Start the loop from the beginning.
+
+
 ## 1. REST API Standardization
 
 ### 1.1 Standardize API Response Format
