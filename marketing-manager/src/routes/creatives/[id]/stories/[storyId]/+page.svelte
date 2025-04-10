@@ -113,12 +113,26 @@
         throw new Error(`Failed to update clip. Status: ${response.status}`);
       }
 
-      // Refresh the story data to update the UI
-      if (storyId) {
-        fetchStory(storyId);
-      }
+      // Removed fetchStory(storyId) - SceneEditor updates its state internally
+      // and reactivity should handle UI updates based on the 'scenes' prop.
+      const updatedClipData = await response.json();
 
-      return await response.json();
+      // Optionally, update the local 'story' state if absolutely necessary,
+      // but prefer letting SceneEditor manage its view based on props.
+      // Example (if needed):
+      /*
+      if (story?.scenes) {
+        story.scenes = story.scenes.map(scene => {
+          if (scene.clips) {
+            scene.clips = scene.clips.map(c => c.id === clipId ? { ...c, ...updatedClipData } : c);
+          }
+          return scene;
+        });
+        story = { ...story }; // Trigger reactivity if needed
+      }
+      */
+
+      return updatedClipData;
     } catch (e: any) {
       console.error('Error updating clip:', e);
       throw new Error(`Failed to update clip: ${e.message}`);
@@ -152,9 +166,10 @@
         throw new Error(`Failed to delete scene. Status: ${response.status}`);
       }
 
-      // Refresh story data to update the scenes list
-      if (storyId) {
-        fetchStory(storyId);
+      // Removed fetchStory(storyId) - Update local state directly
+      if (story?.scenes) {
+        story.scenes = story.scenes.filter(scene => scene.id !== sceneId);
+        story = { ...story }; // Trigger reactivity
       }
     } catch (e: any) {
       console.error('Error deleting scene:', e);
@@ -202,10 +217,11 @@
         throw new Error(`Failed to duplicate clip. Status: ${response.status}`);
       }
 
-      // Refresh the story data to update the UI
-      if (storyId) {
-        fetchStory(storyId);
-      }
+      // Removed fetchStory(storyId) - SceneEditor updates its state internally
+      // after its own duplication logic completes.
+      // The page component doesn't need to refetch here.
+      // Note: SceneEditor's handleDuplicateClip might need adjustment
+      // if it relies on this page refetching.
     } catch (e: any) {
       console.error('Error duplicating clip:', e);
       alert(`Failed to duplicate clip: ${e.message}`);
