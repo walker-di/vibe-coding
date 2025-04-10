@@ -2,7 +2,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { sceneTransitions, scenes } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, inArray } from 'drizzle-orm';
 import {
   successResponse,
   HttpStatus,
@@ -38,11 +38,31 @@ export const GET = withErrorHandling(async ({ url }: RequestEvent) => {
     query = query.where(eq(sceneTransitions.toSceneId, parseInt(toSceneId)));
   } else if (storyId) {
     // Get all transitions for a specific story
-    // We need to join with scenes to filter by storyId
+    // We need to find transitions where either fromSceneId or toSceneId belongs to the story
+    const parsedStoryId = parseInt(storyId);
+
+    // First, get all scenes for this story
+    const storyScenes = await db.select({ id: scenes.id })
+      .from(scenes)
+      .where(eq(scenes.storyId, parsedStoryId));
+
+    // Extract scene IDs
+    const sceneIds = storyScenes.map(scene => scene.id);
+
+    if (sceneIds.length === 0) {
+      // No scenes in this story, return empty array
+      return json(successResponse([]), { status: HttpStatus.OK });
+    }
+
+    // Find all transitions where either fromSceneId or toSceneId is in the list of scene IDs
     query = db.select()
       .from(sceneTransitions)
-      .innerJoin(scenes, eq(sceneTransitions.fromSceneId, scenes.id))
-      .where(eq(scenes.storyId, parseInt(storyId)));
+      .where(
+        or(
+          inArray(sceneTransitions.fromSceneId, sceneIds),
+          inArray(sceneTransitions.toSceneId, sceneIds)
+        )
+      );
   }
 
   const transitions = await query;
