@@ -4,7 +4,7 @@
   import { Button } from '$lib/components/ui/button';
   import { ArrowLeft, Edit, Trash2, Plus, BookOpen } from 'lucide-svelte';
   import SceneEditor from '$lib/components/story/SceneEditor.svelte'; // Import SceneEditor
-  import type { StoryWithRelations } from '$lib/types/story.types';
+  import type { StoryWithRelations, Clip } from '$lib/types/story.types';
 
    // State
   let creativeId = $state<number | null>(null);
@@ -79,6 +79,33 @@
       alert(`Failed to delete story: ${e.message}`);
     } finally {
       isDeleting = false;
+    }
+  }
+
+  // Function to update a clip
+  async function handleUpdateClip(clipId: number, data: Partial<Clip>) {
+    try {
+      const response = await fetch(`/api/clips/${clipId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update clip. Status: ${response.status}`);
+      }
+
+      // Refresh the story data to update the UI
+      if (storyId) {
+        fetchStory(storyId);
+      }
+
+      return await response.json();
+    } catch (e: any) {
+      console.error('Error updating clip:', e);
+      throw new Error(`Failed to update clip: ${e.message}`);
     }
   }
 
@@ -168,6 +195,7 @@
             onEditScene={handleEditScene}
             onDeleteScene={handleDeleteScene}
             onSelectScene={handleSelectScene}
+            onUpdateClip={handleUpdateClip}
           />
         {:else}
            <!-- Placeholder if IDs are missing, even if story loaded -->

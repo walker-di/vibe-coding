@@ -14,7 +14,8 @@
     onEditScene,
     onDeleteScene,
     onSelectScene,
-    onPlayScene // Optional
+    onPlayScene, // Optional
+    onUpdateClip // Optional
   } = $props<{
     scenes: SceneWithRelations[];
     creativeId?: number; // Made optional since it's not used in this component
@@ -26,6 +27,7 @@
     onDeleteScene: (sceneId: number) => void;
     onSelectScene: (sceneId: number) => void; // Keep for scene-level actions
     onPlayScene?: (sceneId: number) => void; // Optional
+    onUpdateClip?: (clipId: number, data: Partial<Clip>) => Promise<void>; // Optional
   }>();
 
   // Calculate canvas dimensions based on aspect ratio
@@ -689,6 +691,7 @@
         {onPlayScene}
         onSelectClip={handleSelectClip}
         onDuplicateClip={handleDuplicateClip}
+        {onUpdateClip}
         refreshTrigger={forceSceneRefresh}
       />
     </div>

@@ -1,12 +1,17 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
-  import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon, Copy } from 'lucide-svelte';
+  import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon, Copy, MessageSquare } from 'lucide-svelte';
+  import ClipNarrationModal from './ClipNarrationModal.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte';
   import { onMount } from 'svelte';
 
   // Create a timestamp that will be used to force image refreshes
   let timestamp = $state(Date.now());
+
+  // State for narration modal
+  let isNarrationModalOpen = $state(false);
+  let currentEditingClip = $state<Clip | null>(null);
 
   // Function to refresh the timestamp
   function refreshTimestamp() {
@@ -31,6 +36,7 @@
     onPlayScene,
     onSelectClip,
     onDuplicateClip,
+    onUpdateClip,
     refreshTrigger = 0 // Added to force refresh
   } = $props<{
     scenes: SceneWithRelations[];
@@ -43,6 +49,7 @@
     onPlayScene?: (sceneId: number) => void;
     onSelectClip: (clip: Clip) => void;
     onDuplicateClip?: (clip: Clip) => void;
+    onUpdateClip?: (clipId: number, data: Partial<Clip>) => Promise<void>;
     refreshTrigger?: number; // Optional prop to force refresh
   }>();
 
@@ -110,6 +117,37 @@
   }
 
   // Create a new clip directly
+  // Handle opening the narration modal
+  function handleEditNarration(clip: Clip, event: Event) {
+    event.stopPropagation(); // Prevent triggering the clip selection
+    currentEditingClip = clip;
+    isNarrationModalOpen = true;
+  }
+
+  // Handle saving narration and description
+  async function handleSaveNarration(data: { narration: string | null; description: string | null }) {
+    if (!currentEditingClip || !onUpdateClip) return;
+
+    try {
+      await onUpdateClip(currentEditingClip.id, {
+        narration: data.narration,
+        description: data.description
+      });
+
+      // Update the local clip data
+      if (currentEditingClip) {
+        currentEditingClip.narration = data.narration;
+        currentEditingClip.description = data.description;
+      }
+
+      // Refresh the scene list
+      refreshTimestamp();
+    } catch (error) {
+      console.error('Error updating clip:', error);
+      alert('Failed to update clip. Please try again.');
+    }
+  }
+
   async function createNewClip(sceneId: number) {
     // Skip if already creating a clip for this scene
     if (isCreatingClip[sceneId]) return;
@@ -377,15 +415,26 @@
                       <ImageIcon class="h-4 w-4 text-gray-400" />
                     {/if}
                   </button>
-                  {#if onDuplicateClip}
-                    <button
-                      type="button"
-                      onclick={(e) => { e.stopPropagation(); onDuplicateClip(clip); }}
-                      class="absolute top-0.5 -right-0 bg-white rounded-full p-0.5 shadow-sm border opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100"
-                      title="Duplicate Clip">
-                      <Copy class="h-3 w-3 text-gray-600" />
-                    </button>
-                  {/if}
+                  <div class="absolute top-0.5 -right-0 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {#if onUpdateClip}
+                      <button
+                        type="button"
+                        onclick={(e) => handleEditNarration(clip, e)}
+                        class="bg-white rounded-full p-0.5 shadow-sm border hover:bg-gray-100"
+                        title="Edit Narration & Description">
+                        <MessageSquare class="h-3 w-3 text-gray-600" />
+                      </button>
+                    {/if}
+                    {#if onDuplicateClip}
+                      <button
+                        type="button"
+                        onclick={(e) => { e.stopPropagation(); onDuplicateClip(clip); }}
+                        class="bg-white rounded-full p-0.5 shadow-sm border hover:bg-gray-100"
+                        title="Duplicate Clip">
+                        <Copy class="h-3 w-3 text-gray-600" />
+                      </button>
+                    {/if}
+                  </div>
                 </div>
               {/each}
               {#if scene.clips.length > 7}
@@ -423,4 +472,13 @@
       </button>
     {/if}
   </div>
+
+  {#if currentEditingClip}
+    <ClipNarrationModal
+      bind:open={isNarrationModalOpen}
+      narration={currentEditingClip.narration || ''}
+      description={currentEditingClip.description || ''}
+      onSave={handleSaveNarration}
+    />
+  {/if}
 </div>

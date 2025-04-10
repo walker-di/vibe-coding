@@ -306,6 +306,12 @@
         <CanvasEditor
           bind:this={canvasEditorInstance}
           onCanvasChange={handleCanvasChange}
+          narration={narration}
+          description={description}
+          onNarrationChange={async (data) => {
+            narration = data.narration || '';
+            description = data.description || '';
+          }}
           onReady={() => {
             // Load initial data once the editor signals it's ready
             console.log('ClipForm: CanvasEditor ready. Attempting to load initial data.');

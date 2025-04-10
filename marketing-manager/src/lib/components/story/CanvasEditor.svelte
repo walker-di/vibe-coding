@@ -2,17 +2,24 @@
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp } from 'lucide-svelte'; // Added Palette, ImageUp
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, FileText, MessageSquare } from 'lucide-svelte'; // Added MessageSquare, FileText
+  import ClipNarrationModal from './ClipNarrationModal.svelte';
 
   // Props
   let {
     onCanvasChange, // Only need the change handler
     onReady, // Optional callback for when fabric is loaded and canvas initialized
-    hideControls = false // Whether to hide the control buttons (when they're shown elsewhere)
+    hideControls = false, // Whether to hide the control buttons (when they're shown elsewhere)
+    narration = '', // Narration text for the clip
+    description = '', // Description for the clip
+    onNarrationChange // Callback for when narration/description is changed
   } = $props<{
     onCanvasChange: (canvasJson: string) => void;
     onReady?: () => void;
     hideControls?: boolean;
+    narration?: string;
+    description?: string;
+    onNarrationChange?: (data: { narration: string | null; description: string | null }) => Promise<void>;
   }>();
 
   // State
@@ -21,6 +28,7 @@
   let fabricLoaded = $state(false);
   let selectedObject = $state<any>(null);
   let isTransitioning = $state(false); // State for managing fade transition
+  let isNarrationModalOpen = $state(false); // State for narration modal
 
   // Getter for selectedObject to be used from outside
   export function hasSelectedObject(): boolean {
@@ -255,6 +263,11 @@
     <Button variant="outline" onclick={clearCanvas} title="Clear Canvas" disabled={!fabricLoaded}>
       Clear All
     </Button>
+    {#if onNarrationChange}
+      <Button variant="outline" onclick={() => isNarrationModalOpen = true} title="Edit Narration & Description" disabled={!fabricLoaded}>
+        <MessageSquare class="h-4 w-4 mr-2" /> Edit Content
+      </Button>
+    {/if}
   </div>
   {/if}
 
@@ -276,5 +289,14 @@
     <div class="text-center py-4">
       <p>Loading canvas editor...</p>
     </div>
+  {/if}
+
+  {#if onNarrationChange}
+    <ClipNarrationModal
+      bind:open={isNarrationModalOpen}
+      narration={narration}
+      description={description}
+      onSave={onNarrationChange}
+    />
   {/if}
 </div>

@@ -2,9 +2,10 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui/button';
-  import { ArrowLeft, Edit, Trash2, FileText } from 'lucide-svelte';
+  import { ArrowLeft, Edit, Trash2, FileText, MessageSquare } from 'lucide-svelte';
   import type { Clip } from '$lib/types/story.types';
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte'; // Import the preview component
+  import ClipNarrationModal from '$lib/components/story/ClipNarrationModal.svelte';
 
   // State
   let creativeId = $state<number | null>(null);
@@ -15,6 +16,7 @@
   let isLoading = $state(true);
   let error = $state<string | null>(null);
   let isDeleting = $state(false);
+  let isNarrationModalOpen = $state(false);
   // Remove canvasObject state, it's handled by CanvasPreview now
   // let canvasObject = $state<any>(null);
 
@@ -73,6 +75,30 @@
     }
   }
 
+  function handleEditNarration() {
+    isNarrationModalOpen = true;
+  }
+
+  async function handleSaveNarration(data: { narration: string | null; description: string | null }) {
+    if (!clipId) return;
+
+    const response = await fetch(`/api/clips/${clipId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update clip. Status: ${response.status}`);
+    }
+
+    // Update local state with the updated clip data
+    const updatedClip = await response.json();
+    clip = updatedClip;
+  }
+
   async function handleDeleteClip() {
     if (!clipId || isDeleting) return;
 
@@ -109,9 +135,13 @@
     </Button>
 
     <div class="flex gap-2">
+      <Button variant="outline" onclick={handleEditNarration}>
+        <MessageSquare class="mr-2 h-4 w-4" />
+        Edit Content
+      </Button>
       <Button variant="outline" onclick={handleEditClip}>
         <Edit class="mr-2 h-4 w-4" />
-        Edit Clip
+        Edit Canvas
       </Button>
       <Button variant="destructive" onclick={handleDeleteClip} disabled={isDeleting}>
         <Trash2 class="mr-2 h-4 w-4" />
@@ -166,5 +196,13 @@
         </div>
       {/if}
     </div>
+  {/if}
+
+  {#if clip}
+    <ClipNarrationModal
+      bind:open={isNarrationModalOpen}
+      clip={clip}
+      onSave={handleSaveNarration}
+    />
   {/if}
 </div>
