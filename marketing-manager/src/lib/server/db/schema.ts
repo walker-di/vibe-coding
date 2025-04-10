@@ -255,6 +255,23 @@ export const clipRelations = relations(clips, ({ one }) => ({
   scene: one(scenes, { fields: [clips.sceneId], references: [scenes.id] })
 }));
 
+// Scene transitions table
+export const sceneTransitions = sqliteTable('scene_transitions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  fromSceneId: integer('from_scene_id').notNull().references(() => scenes.id, { onDelete: 'cascade' }),
+  toSceneId: integer('to_scene_id').notNull().references(() => scenes.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(), // 'Fade', 'Slide', 'Zoom', 'Wipe', 'None'
+  duration: integer('duration').notNull(), // Duration in milliseconds
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
+});
+
+// Scene transitions relations
+export const sceneTransitionsRelations = relations(sceneTransitions, ({ one }) => ({
+  fromScene: one(scenes, { fields: [sceneTransitions.fromSceneId], references: [scenes.id] }),
+  toScene: one(scenes, { fields: [sceneTransitions.toSceneId], references: [scenes.id] })
+}));
+
 // NEW: Canvas Template Relations (currently none needed, but good practice to define)
 export const canvasTemplateRelations = relations(canvasTemplates, () => ({
   // No direct relations needed for now

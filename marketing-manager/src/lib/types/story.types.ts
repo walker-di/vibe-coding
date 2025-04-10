@@ -41,6 +41,18 @@ export interface StoryWithRelations extends Story {
   scenes?: SceneWithRelations[];
 }
 
+export interface SceneTransition {
+  id: number;
+  fromSceneId: number;
+  toSceneId: number;
+  type: string; // 'Fade', 'Slide', 'Zoom', 'Wipe', 'None'
+  duration: number; // Duration in milliseconds
+  createdAt: number;
+  updatedAt: number | null;
+}
+
 export interface SceneWithRelations extends Scene {
   clips?: Clip[];
+  transitionsFrom?: SceneTransition[];
+  transitionsTo?: SceneTransition[];
 }

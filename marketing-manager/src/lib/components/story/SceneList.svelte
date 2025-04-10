@@ -2,20 +2,41 @@
   import { Button } from '$lib/components/ui/button';
   import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon, Copy, MessageSquare, ChevronsLeftRightEllipsis } from 'lucide-svelte';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
-  import type { SceneWithRelations, Clip } from '$lib/types/story.types';
+  import TransitionModal from './TransitionModal.svelte';
+  import type { SceneWithRelations, Clip, SceneTransition } from '$lib/types/story.types';
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte';
   import { onMount } from 'svelte';
 
   // Create a timestamp that will be used to force image refreshes
   let timestamp = $state(Date.now());
 
-  // State for narration modal
+  // State for modals and transitions
   let isNarrationModalOpen = $state(false);
+  let isTransitionModalOpen = $state(false);
   let currentEditingClip = $state<Clip | null>(null);
+  let currentTransition = $state<{fromSceneId: number; toSceneId: number; fromSceneName: string; toSceneName: string; existingTransition?: SceneTransition;} | null>(null);
+  let sceneTransitions = $state<SceneTransition[]>([]);
 
   // Function to refresh the timestamp
   function refreshTimestamp() {
     timestamp = Date.now();
+  }
+
+  // Function to fetch transitions
+  async function fetchTransitions() {
+    try {
+      const response = await fetch(`/api/transitions?storyId=${storyId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch transitions. Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data)) {
+        sceneTransitions = data.data;
+      }
+    } catch (error) {
+      console.error('Error fetching transitions:', error);
+    }
   }
 
   // Refresh timestamp only when the component is mounted
@@ -62,6 +83,14 @@
     if (refreshTrigger > 0 && refreshTrigger !== lastSeenRefreshTrigger) {
       lastSeenRefreshTrigger = refreshTrigger;
       refreshTimestamp();
+      fetchTransitions(); // Also fetch transitions when refreshing
+    }
+  });
+
+  // Fetch transitions when component mounts or scenes change
+  $effect(() => {
+    if (scenes && scenes.length > 0) {
+      fetchTransitions();
     }
   });
 
@@ -180,9 +209,84 @@
     }
   }
 
-  async function openTransitionModal() {
-    alert('Transition modal is not implemented yet.');
+  async function openTransitionModal(fromIndex: number, toIndex: number) {
+    const fromScene = scenes[fromIndex];
+    const toScene = scenes[toIndex];
+
+    if (!fromScene || !toScene) {
+      console.error('Invalid scene indexes');
+      return;
+    }
+
+    // Check if a transition already exists between these scenes
+    const existingTransition = sceneTransitions.find(
+      t => t.fromSceneId === fromScene.id && t.toSceneId === toScene.id
+    );
+
+    currentTransition = {
+      fromSceneId: fromScene.id,
+      toSceneId: toScene.id,
+      fromSceneName: `Scene ${fromIndex + 1}`,
+      toSceneName: `Scene ${toIndex + 1}`,
+      existingTransition: existingTransition
+    };
+
+    isTransitionModalOpen = true;
   }
+
+  async function handleSaveTransition(data: { fromSceneId: number; toSceneId: number; type: string; duration: number }) {
+    try {
+      const response = await fetch('/api/transitions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save transition. Status: ${response.status}`);
+      }
+
+      const responseData = await response.json();
+
+      if (responseData.success && responseData.data) {
+        // Update local state with the new/updated transition
+        const newTransition = responseData.data;
+
+        // Remove existing transition if it exists
+        sceneTransitions = sceneTransitions.filter(
+          t => !(t.fromSceneId === data.fromSceneId && t.toSceneId === data.toSceneId)
+        );
+
+        // Add the new transition
+        sceneTransitions = [...sceneTransitions, newTransition];
+
+        console.log('Transition saved successfully');
+      }
+    } catch (error) {
+      console.error('Error saving transition:', error);
+      throw error; // Re-throw to be handled by the modal
+    }
+  }
+  // Helper functions for transitions
+  function hasTransition(fromSceneId: number | undefined, toSceneId: number | undefined): boolean {
+    if (!fromSceneId || !toSceneId) return false;
+    return sceneTransitions.some(t => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId);
+  }
+
+  function getTransitionType(fromSceneId: number | undefined, toSceneId: number | undefined): string {
+    if (!fromSceneId || !toSceneId) return '';
+    const transition = sceneTransitions.find(t => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId);
+    return transition ? transition.type : '';
+  }
+
+  function getTransitionDuration(fromSceneId: number | undefined, toSceneId: number | undefined): number {
+    if (!fromSceneId || !toSceneId) return 0;
+    const transition = sceneTransitions.find(t => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId);
+    return transition ? transition.duration : 0;
+  }
+
   // Create a new clip directly
   // Handle opening the narration modal
   function handleEditNarration(clip: Clip, event: Event) {
@@ -449,11 +553,14 @@
           <div>
             <button
             type="button"
-            onclick={() => openTransitionModal()}
+            onclick={() => openTransitionModal(index-1, index)}
             disabled={isCreatingSceneBetween[`${index-1}-${index}`]}
-            class="flex-shrink-0 mx-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer">
+            class="flex-shrink-0 mx-1 border rounded {hasTransition(scenes[index-1]?.id, scenes[index]?.id) ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'} hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer">
             <div class="flex flex-col items-center justify-center">
-              <ChevronsLeftRightEllipsis class="h-4 w-4 text-gray-600" />
+              <ChevronsLeftRightEllipsis class="h-4 w-4 {hasTransition(scenes[index-1]?.id, scenes[index]?.id) ? 'text-blue-600' : 'text-gray-600'}" />
+              {#if hasTransition(scenes[index-1]?.id, scenes[index]?.id)}
+                <span class="text-xs text-blue-600">{getTransitionType(scenes[index-1]?.id, scenes[index]?.id)}</span>
+              {/if}
             </div>
           </button>
           <button
@@ -605,6 +712,18 @@
       bind:open={isNarrationModalOpen}
       clip={currentEditingClip}
       onSave={handleSaveNarration}
+    />
+  {/if}
+
+  {#if currentTransition}
+    <TransitionModal
+      bind:open={isTransitionModalOpen}
+      fromSceneId={currentTransition.fromSceneId}
+      toSceneId={currentTransition.toSceneId}
+      fromSceneName={currentTransition.fromSceneName}
+      toSceneName={currentTransition.toSceneName}
+      existingTransition={currentTransition.existingTransition}
+      onSave={handleSaveTransition}
     />
   {/if}
 </div>
