@@ -2,7 +2,6 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import { Button } from '$lib/components/ui/button';
   import { Textarea } from '$lib/components/ui/textarea';
-  import { Input } from '$lib/components/ui/input';
   import { FileText, MessageSquare, Save } from 'lucide-svelte';
 
   // Props
@@ -63,7 +62,7 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="sm:max-w-[500px]">
+  <Dialog.Content class="sm:max-w-[600px]">
     <Dialog.Header>
       <Dialog.Title>Edit Clip Content</Dialog.Title>
       <Dialog.Description>
@@ -77,10 +76,12 @@
           <MessageSquare class="h-4 w-4 mr-2" />
           Description
         </label>
-        <Input
+        <Textarea
           id="description"
           bind:value={localDescription}
           placeholder="Brief description of this clip"
+          rows={5}
+          class="min-h-[100px]"
         />
         <p class="text-xs text-muted-foreground">
           A short description to help identify this clip.
@@ -96,7 +97,8 @@
           id="narration"
           bind:value={localNarration}
           placeholder="Enter narration text for this clip"
-          rows={6}
+          rows={8}
+          class="min-h-[150px]"
         />
         <p class="text-xs text-muted-foreground">
           The narration text that will be read or displayed with this clip.
