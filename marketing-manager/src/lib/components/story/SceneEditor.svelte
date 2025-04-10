@@ -1,12 +1,13 @@
 <script lang="ts">
   import SceneList from '$lib/components/story/SceneList.svelte';
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
+  import AutoCreateModal from '$lib/components/story/AutoCreateModalLegacy.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles } from 'lucide-svelte';
 
   // Props passed down from the page
   let {
@@ -132,6 +133,66 @@
   }
 
 
+
+  // State for the auto-create modal
+  let showAutoCreateModal = $state(false);
+  let isAutoCreating = $state(false);
+
+  // Handler for opening the auto-create modal
+  function openAutoCreateModal() {
+    showAutoCreateModal = true;
+  }
+
+  // Handler for auto-creating a story using AI
+  async function handleAutoCreateStory(event: CustomEvent<{storyPrompt: string}>) {
+    const { storyPrompt } = event.detail;
+    if (!storyPrompt) return;
+
+    isAutoCreating = true;
+
+    try {
+      // Get the current scene
+      const currentScene = scenes.find((scene: SceneWithRelations) => scene.id);
+      if (!currentScene) {
+        alert('No scene available. Please create a scene first.');
+        isAutoCreating = false;
+        return;
+      }
+
+      // Call the unified auto-create API endpoint
+      const response = await fetch('/api/storyboard/auto-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storyPrompt,
+          sceneId: currentScene.id
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to auto-create story. Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Auto-create result:', result);
+
+      // Close the modal
+      showAutoCreateModal = false;
+
+      // Refresh the scene list
+      forceSceneRefresh++;
+
+      // Show success message
+      alert(`Successfully created ${result.clipCount} clips from the AI storyboard!`);
+
+    } catch (error: any) {
+      console.error('Error auto-creating story:', error);
+      alert(`Failed to auto-create story: ${error.message || 'Unknown error'}`);
+    } finally {
+      isAutoCreating = false;
+    }
+  }
 
   // Handler for duplicating a clip
   async function handleDuplicateClip(clip: Clip) {
@@ -730,6 +791,10 @@
     <!-- Left Panel: Buttons/Tools -->
     <div class="w-48 border-r flex flex-col overflow-y-auto">
       <div class="p-3 space-y-2">
+        <Button variant="outline" class="w-full justify-start bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600" onclick={openAutoCreateModal} title="Auto-create story with AI">
+          <Sparkles class="h-4 w-4 mr-2" /> Auto Create
+        </Button>
+        <div class="border-t my-2"></div>
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.addRectangle()} title="Add Rectangle" disabled={!canvasIsReady}>
           <Square class="h-4 w-4 mr-2" /> Rectangle
         </Button>
@@ -867,3 +932,13 @@
     </div>
   </div>
 </div>
+
+<!-- Auto-Create Story Modal -->
+{#if showAutoCreateModal}
+  <AutoCreateModal
+    show={showAutoCreateModal}
+    isLoading={isAutoCreating}
+    on:close={() => { showAutoCreateModal = false; }}
+    on:create={handleAutoCreateStory}
+  />
+{/if}
