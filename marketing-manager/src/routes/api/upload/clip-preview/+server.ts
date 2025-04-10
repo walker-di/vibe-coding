@@ -1,7 +1,7 @@
-import { json, error, type RequestEvent } from '@sveltejs/kit'; // Import RequestEvent
+import { json, error, type RequestEvent } from '@sveltejs/kit';
 import fs from 'fs/promises';
 import path from 'path';
-import { randomUUID } from 'crypto';
+import { purgeUnusedClipPreviews } from '$lib/server/utils/purgeClipPreviews';
 
 // Ensure the upload directory exists
 const UPLOAD_DIR = path.join('static', 'clip-previews');
@@ -26,9 +26,9 @@ export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent t
     const base64Data = imageDataUrl.replace(/^data:image\/png;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
-    // Generate filename based on clipId with a unique timestamp
-    const timestamp = Date.now();
-    const filename = `clip-${clipId}-${timestamp}.png`; // Add timestamp for uniqueness
+    // Generate filename based on clipId
+    // We use a consistent filename format to ensure we can find and update existing previews
+    const filename = `clip-${clipId}.png`;
     const filePath = path.join(UPLOAD_DIR, filename);
 
     await fs.writeFile(filePath, imageBuffer);
@@ -38,6 +38,18 @@ export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent t
 
     // Add a timestamp query parameter to force browser cache refresh
     const timestampedUrl = `${imageUrl}?t=${Date.now()}`;
+
+    // Run the purge process in the background
+    // We don't await this to avoid delaying the response
+    purgeUnusedClipPreviews({ verbose: false, dryRun: false })
+      .then(result => {
+        if (result.success && 'deletedCount' in result && result.deletedCount > 0) {
+          console.log(`[Purge] Successfully purged ${result.deletedCount} unused clip preview files.`);
+        }
+      })
+      .catch(err => {
+        console.error('[Purge] Error during automatic purge:', err);
+      });
 
     return json({ imageUrl: timestampedUrl });
 

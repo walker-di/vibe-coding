@@ -23,7 +23,6 @@
   // Props
   let {
     scenes,
-    creativeId, // Used in navigation URLs
     storyId,
     onAddScene,
     onEditScene,
@@ -35,7 +34,7 @@
     refreshTrigger = 0 // Added to force refresh
   } = $props<{
     scenes: SceneWithRelations[];
-    creativeId: number;
+    creativeId?: number; // Made optional since it's not used in this component
     storyId: number;
     onAddScene?: () => void;
     onEditScene: (sceneId: number) => void;
@@ -159,33 +158,109 @@
       // Get the newly created clip from the response
       const newClip = await response.json();
 
-      // Set the image URL based on the clip ID
-      // Format: /clip-previews/clip-<CLIP_ID>.png
-      const imageUrl = `/clip-previews/clip-${newClip.id}.png`;
+      // Create a blank canvas for the preview
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = 300;
+      tempCanvas.height = 200;
+      const ctx = tempCanvas.getContext('2d');
 
-      // Update the clip with the image URL
-      const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          imageUrl: imageUrl
-        })
-      });
+      // Variable to store the updated clip data
+      let updatedClip: Clip | undefined;
 
-      if (!updateResponse.ok) {
-        console.warn(`Failed to update clip with image URL. Status: ${updateResponse.status}`);
-      }
+      if (ctx) {
+        // Create a blank white canvas with a light gray border
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(2, 2, tempCanvas.width - 4, tempCanvas.height - 4);
 
-      // Get the updated clip with the image URL
-      let updatedClip;
-      try {
-        updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
-      } catch (err) {
-        // If there's an error parsing the response, use the original clip with the image URL
-        console.warn('Error parsing update response:', err);
-        updatedClip = { ...newClip, imageUrl };
+        // Add some text to indicate it's a new clip
+        ctx.fillStyle = '#999999';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('New Clip', tempCanvas.width / 2, tempCanvas.height / 2);
+
+        // Get the data URL
+        const imageDataUrl = tempCanvas.toDataURL('image/png');
+
+        // Upload the preview
+        const uploadResponse = await fetch('/api/upload/clip-preview', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            clipId: newClip.id,
+            imageData: imageDataUrl
+          })
+        });
+
+        if (!uploadResponse.ok) {
+          console.warn(`Failed to upload preview for new clip ${newClip.id}. Status: ${uploadResponse.status}`);
+        }
+
+        // Get the image URL from the response or construct it
+        let imageUrl;
+        try {
+          if (uploadResponse.ok) {
+            const uploadData = await uploadResponse.json();
+            imageUrl = uploadData.imageUrl;
+          } else {
+            // Fallback to the expected URL format
+            imageUrl = `/clip-previews/clip-${newClip.id}.png`;
+          }
+        } catch (err) {
+          console.warn('Error parsing upload response:', err);
+          // Fallback to the expected URL format
+          imageUrl = `/clip-previews/clip-${newClip.id}.png`;
+        }
+
+        // Update the clip with the image URL
+        const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            imageUrl: imageUrl.split('?')[0] // Remove any query parameters
+          })
+        });
+
+        if (!updateResponse.ok) {
+          console.warn(`Failed to update clip with image URL. Status: ${updateResponse.status}`);
+        }
+
+        // Get the updated clip with the image URL
+        try {
+          updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+        } catch (err) {
+          // If there's an error parsing the response, use the original clip with the image URL
+          console.warn('Error parsing update response:', err);
+          updatedClip = { ...newClip, imageUrl };
+        }
+      } else {
+        // Fallback if canvas context is not available
+        console.warn('Could not get canvas context for preview generation');
+        const imageUrl = `/clip-previews/clip-${newClip.id}.png`;
+
+        // Update the clip with the image URL even without a preview
+        const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            imageUrl: imageUrl
+          })
+        });
+
+        try {
+          updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+        } catch (err) {
+          console.warn('Error parsing update response:', err);
+          updatedClip = { ...newClip, imageUrl };
+        }
       }
 
       // Add the new clip to the scene's clips array
@@ -200,6 +275,26 @@
       });
 
       scenes = updatedScenes;
+
+      // Force a refresh of the timestamp to ensure images are refreshed
+      refreshTimestamp();
+
+      // Make sure the updatedClip has a timestamped imageUrl for display
+      if (updatedClip && updatedClip.imageUrl) {
+        // Add timestamp to force browser to reload the image
+        updatedClip = {
+          ...updatedClip,
+          imageUrl: `${updatedClip.imageUrl}?t=${timestamp}`
+        };
+      }
+
+      // Automatically select the newly created clip
+      if (onSelectClip && updatedClip) {
+        // Small delay to ensure the UI has updated
+        setTimeout(() => {
+          onSelectClip(updatedClip);
+        }, 100);
+      }
 
     } catch (error) {
       console.error('Error creating clip:', error);
@@ -264,6 +359,17 @@
                         alt="Clip preview"
                         class="object-cover w-full h-full"
                         loading="lazy"
+                        onerror={(e: Event) => {
+                          // If image fails to load, show canvas preview instead
+                          if (clip.canvas && e.target instanceof HTMLImageElement) {
+                            const imgElement = e.target as HTMLImageElement;
+                            imgElement.style.display = 'none';
+                            // We can't directly switch to CanvasPreview here, so we'll show a fallback icon
+                            if (imgElement.parentElement) {
+                              imgElement.parentElement.innerHTML = '<div class="flex items-center justify-center w-full h-full"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>';
+                            }
+                          }
+                        }}
                       />
                     {:else if clip.canvas}
                       <CanvasPreview canvasData={clip.canvas} width={50} height={33} />

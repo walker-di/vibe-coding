@@ -3,27 +3,25 @@
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Copy } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp } from 'lucide-svelte';
 
   // Props passed down from the page
   let {
     scenes,
-    creativeId,
     storyId,
     aspectRatio = '16:9', // Default to 16:9 if not provided
-    resolution = null,
-    onAddScene,
+    // resolution is not used but kept in the type for future use
     onEditScene,
     onDeleteScene,
     onSelectScene,
     onPlayScene // Optional
   } = $props<{
     scenes: SceneWithRelations[];
-    creativeId: number;
+    creativeId?: number; // Made optional since it's not used in this component
     storyId: number;
     aspectRatio?: string; // Optional aspect ratio from story
     resolution?: string | null; // Optional resolution from story
-    onAddScene: () => void;
+    onAddScene?: () => void; // Made optional since it's not used here
     onEditScene: (sceneId: number) => void;
     onDeleteScene: (sceneId: number) => void;
     onSelectScene: (sceneId: number) => void; // Keep for scene-level actions
@@ -91,38 +89,161 @@
       return;
     }
 
+    // First, update the local state immediately to ensure UI responsiveness
+    // This prevents the clip from disappearing from the UI
+    selectedClip = clip;
+    console.log('Clip selected in SceneEditor:', clip.id, clip.orderIndex);
+
     try {
       // Fetch the latest clip data from the API to ensure we have the most up-to-date version
-      const response = await fetch(`/api/clips/${clip.id}`);
+      // Add retry parameter for newly created clips
+      const response = await fetch(`/api/clips/${clip.id}?retry=2`);
       if (!response.ok) {
         console.error(`Failed to fetch latest clip data. Status: ${response.status}`);
-        // Fall back to using the provided clip data if the fetch fails
-        selectedClip = clip;
+        // We already set selectedClip = clip above, so no need to do it again
+        // Just log the error and continue with the local data
+
+        // If this is a newly created clip, we might need to generate a preview
+        if (!clip.imageUrl || clip.imageUrl.includes('undefined')) {
+          console.log('Newly created clip without valid imageUrl detected. Generating preview...');
+          await generateAndUploadPreview(clip);
+        }
       } else {
         // Use the fresh data from the database
         const freshClipData = await response.json();
-        selectedClip = freshClipData;
 
-        // Also update the clip in the scenes array to keep everything in sync
+        // Only update if we got valid data back
+        if (freshClipData && freshClipData.id) {
+          // Preserve the imageUrl from the local clip if it exists but is missing in the fresh data
+          // This helps with newly created clips where the imageUrl might not be saved yet
+          if (!freshClipData.imageUrl && clip.imageUrl) {
+            freshClipData.imageUrl = clip.imageUrl;
+          }
+
+          selectedClip = freshClipData;
+
+          // Also update the clip in the scenes array to keep everything in sync
+          scenes = scenes.map((scene: SceneWithRelations) => {
+            if (scene.clips) {
+              scene.clips = scene.clips.map((c: Clip) => {
+                if (c.id === freshClipData.id) {
+                  return freshClipData;
+                }
+                return c;
+              });
+            }
+            return scene;
+          });
+
+          // If this is a newly created clip, we might need to generate a preview
+          if (!freshClipData.imageUrl || freshClipData.imageUrl.includes('undefined')) {
+            console.log('Newly created clip without valid imageUrl detected. Generating preview...');
+            await generateAndUploadPreview(freshClipData);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching latest clip data:', error);
+      // We already set selectedClip = clip above, so no need to do it again
+    }
+
+    // The $effect below will handle loading the canvas once selectedClip is updated
+  }
+
+  // Helper function to generate and upload a preview for a clip
+  async function generateAndUploadPreview(clip: Clip) {
+    if (!clip || !clip.id) {
+      console.error('Cannot generate preview: Invalid clip data');
+      return;
+    }
+
+    // Create a blank canvas for the preview
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 300;
+    tempCanvas.height = 200;
+    const ctx = tempCanvas.getContext('2d');
+
+    if (ctx) {
+      // Create a blank white canvas with a light gray border
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(2, 2, tempCanvas.width - 4, tempCanvas.height - 4);
+
+      // Add some text to indicate it's a new clip
+      ctx.fillStyle = '#999999';
+      ctx.font = '16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('New Clip', tempCanvas.width / 2, tempCanvas.height / 2);
+
+      // Get the data URL
+      const imageDataUrl = tempCanvas.toDataURL('image/png');
+
+      try {
+        // Upload the preview
+        const uploadResponse = await fetch('/api/upload/clip-preview', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            clipId: clip.id,
+            imageData: imageDataUrl
+          })
+        });
+
+        if (!uploadResponse.ok) {
+          console.warn(`Failed to upload preview for clip ${clip.id}. Status: ${uploadResponse.status}`);
+          return;
+        }
+
+        // Get the image URL from the response
+        const uploadData = await uploadResponse.json();
+        if (!uploadData.imageUrl) {
+          console.warn(`Upload endpoint for clip ${clip.id} did not return an imageUrl.`);
+          return;
+        }
+
+        // Update the clip with the image URL
+        const imageUrl = uploadData.imageUrl.split('?')[0]; // Remove any query parameters
+        const updateResponse = await fetch(`/api/clips/${clip.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ imageUrl })
+        });
+
+        if (!updateResponse.ok) {
+          console.warn(`Failed to update clip ${clip.id} with image URL. Status: ${updateResponse.status}`);
+          return;
+        }
+
+        // Update the local state with the new image URL
+        const updatedClip = await updateResponse.json();
+        selectedClip = updatedClip;
+
+        // Also update the clip in the scenes array
         scenes = scenes.map((scene: SceneWithRelations) => {
           if (scene.clips) {
             scene.clips = scene.clips.map((c: Clip) => {
-              if (c.id === freshClipData.id) {
-                return freshClipData;
+              if (c.id === clip.id) {
+                return updatedClip;
               }
               return c;
             });
           }
           return scene;
         });
-      }
-    } catch (error) {
-      console.error('Error fetching latest clip data:', error);
-      // Fall back to using the provided clip data if an error occurs
-      selectedClip = clip;
-    }
 
-    // The $effect below will handle loading the canvas once selectedClip is updated
+        // Force a refresh of the scene list
+        forceSceneRefresh++;
+
+      } catch (error) {
+        console.error(`Error generating/uploading preview for clip ${clip.id}:`, error);
+      }
+    }
   }
 
   // Handler for duplicating a clip
@@ -561,7 +682,6 @@
     <div class="p-3">
       <SceneList
         {scenes}
-        {creativeId}
         {storyId}
         {onEditScene}
         {onDeleteScene}
