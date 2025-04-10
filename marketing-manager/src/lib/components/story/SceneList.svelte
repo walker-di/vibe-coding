@@ -75,12 +75,7 @@
     isCreatingScene = true;
 
     try {
-      // Calculate the next order index
-      const nextOrderIndex = scenes.length > 0
-        ? Math.max(...scenes.map((scene: SceneWithRelations) => scene.orderIndex)) + 1
-        : 0;
-
-      // Create a new scene with default values
+      // Create a new scene - orderIndex is now calculated server-side
       const response = await fetch('/api/scenes', {
         method: 'POST',
         headers: {
@@ -88,7 +83,7 @@
         },
         body: JSON.stringify({
           storyId: storyId,
-          orderIndex: nextOrderIndex,
+          // orderIndex: nextOrderIndex, // Removed - server handles this
           bgmUrl: null,
           bgmName: null
         })
@@ -98,10 +93,17 @@
         throw new Error(`Failed to create scene. Status: ${response.status}`);
       }
 
-      // Get the newly created scene from the response
-      const newScene = await response.json();
+      // Get the response which includes the { success, data, message } structure
+      const responseData = await response.json();
 
-      // Add the new scene to the scenes array
+      if (!responseData.success || !responseData.data) {
+        throw new Error(responseData.message || 'Failed to get valid scene data from API response.');
+      }
+
+      // Extract the actual scene object from the 'data' property
+      const newScene = responseData.data;
+
+      // Add the new scene (which now has an ID) to the scenes array
       scenes = [...scenes, { ...newScene, clips: [] }];
 
       // Also call the parent's onAddScene if it exists
