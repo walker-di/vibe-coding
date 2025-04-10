@@ -9,7 +9,7 @@
 	import { appealFeatures } from '$lib/constants';
 	import type { CreativeType, VideoPlatform, VideoFormat, VideoEmotion, AppealFeature } from '$lib/constants';
 	import { creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/components/constants';
-	import type { campaigns, themes, videoTemplates } from '$lib/server/db/schema';
+	import type { campaigns } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
 
 	// --- Types for Props ---
@@ -24,8 +24,6 @@
 		personaId = null,
 		productId = null,
 		campaignsList = [],
-		themesList = [],
-		videoTemplatesList = [],
 		isLoadingDropdowns = false,
 		dropdownError = null,
 		onSubmit, // Required callback
@@ -37,8 +35,6 @@
 		personaId?: number | null;
 		productId?: number | null;
 		campaignsList?: Campaign[]; // Restore original type
-		themesList?: Theme[]; // Restore original type
-		videoTemplatesList?: VideoTemplate[]; // Restore original type
 		isLoadingDropdowns?: boolean;
 		dropdownError?: string | null;
 		onSubmit: (formData: Record<string, any>) => Promise<void>;
@@ -56,7 +52,7 @@
 	let description = $state(initialData?.description || '');
 	let selectedType = $state<CreativeType | ''>(initialData?.type || '');
 	let selectedCampaignId = $state<number | ''>(initialData?.campaignId || '');
-	let selectedThemeId = $state<number | ''>(initialData?.themeId || '');
+	
 
 	// Text Fields
 	let textHeadline = $state(initialData?.textData?.headline || '');
@@ -80,7 +76,7 @@
 	let videoDuration = $state<number | ''>(initialData?.videoData?.duration || '');
 	let videoAppealFeature = $state<AppealFeature | ''>(initialData?.videoData?.appealFeature || '');
 	let videoEmotion = $state<VideoEmotion | ''>(initialData?.videoData?.emotion || '');
-	let videoTemplateId = $state<number | ''>(initialData?.videoData?.templateId || '');
+	
 
 	// LP Fields
 	let lpPageUrl = $state(initialData?.lpData?.pageUrl || '');
@@ -151,7 +147,7 @@
 			description = initialData.description || '';
 			selectedType = initialData.type || '';
 			selectedCampaignId = initialData.campaignId || '';
-			selectedThemeId = initialData.themeId || '';
+			
 			textHeadline = initialData.textData?.headline || '';
 			textBody = initialData.textData?.body || '';
 			textCta = initialData.textData?.callToAction || '';
@@ -169,7 +165,7 @@
 			videoDuration = initialData.videoData?.duration || '';
 			videoAppealFeature = initialData.videoData?.appealFeature || '';
 			videoEmotion = initialData.videoData?.emotion || '';
-			videoTemplateId = initialData.videoData?.templateId || '';
+			
 			lpPageUrl = initialData.lpData?.pageUrl || '';
 			lpHeadline = initialData.lpData?.headline || '';
 			lpKeySections = initialData.lpData?.keySections ? JSON.stringify(initialData.lpData.keySections, null, 2) : '';

@@ -20,7 +20,7 @@ const baseCreativeSchema = z.object({
 	description: z.string().max(500).optional().nullable(),
 	campaignId: z.number().int().positive().optional().nullable(),
 	personaId: z.number().int().positive().optional(), // Keep optional for PUT, but ensure non-null if provided
-	themeId: z.number().int().positive().optional().nullable(),
+	// themeId field removed from schema
 	// Type cannot be changed via PUT
 });
 
@@ -100,7 +100,6 @@ export const GET: RequestHandler = async ({ params }) => {
 			with: {
 				campaign: { columns: { id: true, name: true } },
 				persona: { columns: { id: true, name: true } },
-				theme: { columns: { id: true, title: true } },
 				// Include relations for all possible types
 				textData: true,
 				imageData: true,
@@ -238,7 +237,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				with: {
 					campaign: { columns: { id: true, name: true } },
 					persona: { columns: { id: true, name: true } },
-					theme: { columns: { id: true, title: true } },
 					textData: true,
 					imageData: true,
 					videoData: true, // <-- Uncommented

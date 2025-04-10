@@ -15,7 +15,7 @@ const baseCreativeSchema = z.object({
 	description: z.string().max(500).optional().nullable(),
 	campaignId: z.number().int().positive().optional().nullable(),
 	personaId: z.number().int().positive(), // Made required (removed optional/nullable)
-	themeId: z.number().int().positive().optional().nullable(),
+	// themeId field removed from schema
 	// Type will be validated specifically based on payload
 });
 
@@ -104,8 +104,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			// Include basic related data for list display
 			with: {
 				campaign: { columns: { id: true, name: true } },
-				persona: { columns: { id: true, name: true } },
-				theme: { columns: { id: true, title: true } }
+				persona: { columns: { id: true, name: true } }
 				// Specific type data could be fetched on detail view
 			}
 		});
@@ -155,7 +154,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					type: validatedData.type,
 					campaignId: validatedData.campaignId,
 					personaId: validatedData.personaId,
-					themeId: validatedData.themeId,
+					// themeId field removed from schema
 					// createdAt/updatedAt handled by defaults/triggers or manual setting
 				})
 				.returning({ id: creatives.id });
