@@ -1,11 +1,25 @@
 <script lang="ts">
-  import { Button } from '$lib/components/ui/button';
-  import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon, Copy, MessageSquare, ChevronsLeftRightEllipsis } from 'lucide-svelte';
-  import ClipNarrationModal from './ClipNarrationModal.svelte';
-  import TransitionModal from './TransitionModal.svelte';
-  import type { SceneWithRelations, Clip, SceneTransition } from '$lib/types/story.types';
-  import CanvasPreview from '$lib/components/story/CanvasPreview.svelte';
-  import { onMount } from 'svelte';
+  import { Button } from "$lib/components/ui/button";
+  import {
+    Edit,
+    Trash2,
+    Play,
+    Plus,
+    Music,
+    Image as ImageIcon,
+    Copy,
+    MessageSquare,
+    ChevronsLeftRightEllipsis,
+  } from "lucide-svelte";
+  import ClipNarrationModal from "./ClipNarrationModal.svelte";
+  import TransitionModal from "./TransitionModal.svelte";
+  import type {
+    SceneWithRelations,
+    Clip,
+    SceneTransition,
+  } from "$lib/types/story.types";
+  import CanvasPreview from "$lib/components/story/CanvasPreview.svelte";
+  import { onMount } from "svelte";
 
   // Create a timestamp that will be used to force image refreshes
   let timestamp = $state(Date.now());
@@ -14,7 +28,13 @@
   let isNarrationModalOpen = $state(false);
   let isTransitionModalOpen = $state(false);
   let currentEditingClip = $state<Clip | null>(null);
-  let currentTransition = $state<{fromSceneId: number; toSceneId: number; fromSceneName: string; toSceneName: string; existingTransition?: SceneTransition;} | null>(null);
+  let currentTransition = $state<{
+    fromSceneId: number;
+    toSceneId: number;
+    fromSceneName: string;
+    toSceneName: string;
+    existingTransition?: SceneTransition;
+  } | null>(null);
   let sceneTransitions = $state<SceneTransition[]>([]);
 
   // Function to refresh the timestamp
@@ -27,7 +47,9 @@
     try {
       const response = await fetch(`/api/transitions?storyId=${storyId}`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch transitions. Status: ${response.status}`);
+        throw new Error(
+          `Failed to fetch transitions. Status: ${response.status}`,
+        );
       }
 
       const data = await response.json();
@@ -35,7 +57,7 @@
         sceneTransitions = data.data;
       }
     } catch (error) {
-      console.error('Error fetching transitions:', error);
+      console.error("Error fetching transitions:", error);
     }
   }
 
@@ -58,7 +80,7 @@
     onSelectClip,
     onDuplicateClip,
     onUpdateClip,
-    refreshTrigger = 0 // Added to force refresh
+    refreshTrigger = 0, // Added to force refresh
   } = $props<{
     scenes: SceneWithRelations[];
     creativeId?: number; // Made optional since it's not used in this component
@@ -96,8 +118,8 @@
 
   // State
   let isCreatingScene = $state(false);
-  let isCreatingSceneBetween = $state<{[key: string]: boolean}>({});
-  let isCreatingClip = $state<{[sceneId: number]: boolean}>({});
+  let isCreatingSceneBetween = $state<{ [key: string]: boolean }>({});
+  let isCreatingClip = $state<{ [sceneId: number]: boolean }>({});
 
   // Create a new scene directly at the end
   async function createNewScene() {
@@ -106,17 +128,17 @@
 
     try {
       // Create a new scene - orderIndex is now calculated server-side
-      const response = await fetch('/api/scenes', {
-        method: 'POST',
+      const response = await fetch("/api/scenes", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           storyId: storyId,
           // orderIndex: nextOrderIndex, // Removed - server handles this
           bgmUrl: null,
-          bgmName: null
-        })
+          bgmName: null,
+        }),
       });
 
       if (!response.ok) {
@@ -127,7 +149,10 @@
       const responseData = await response.json();
 
       if (!responseData.success || !responseData.data) {
-        throw new Error(responseData.message || 'Failed to get valid scene data from API response.');
+        throw new Error(
+          responseData.message ||
+            "Failed to get valid scene data from API response.",
+        );
       }
 
       // Extract the actual scene object from the 'data' property
@@ -141,8 +166,8 @@
         onAddScene();
       }
     } catch (error) {
-      console.error('Error creating scene:', error);
-      alert('Failed to create new scene. Please try again.');
+      console.error("Error creating scene:", error);
+      alert("Failed to create new scene. Please try again.");
     } finally {
       isCreatingScene = false;
     }
@@ -160,24 +185,25 @@
       const afterScene = scenes[afterIndex];
 
       if (!beforeScene || !afterScene) {
-        throw new Error('Invalid scene indexes');
+        throw new Error("Invalid scene indexes");
       }
 
       // Calculate the order index between the two scenes
-      const newOrderIndex = (beforeScene.orderIndex + afterScene.orderIndex) / 2;
+      const newOrderIndex =
+        (beforeScene.orderIndex + afterScene.orderIndex) / 2;
 
       // Create a new scene with the calculated order index
-      const response = await fetch('/api/scenes', {
-        method: 'POST',
+      const response = await fetch("/api/scenes", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           storyId: storyId,
           orderIndex: newOrderIndex, // Place between the two scenes
           bgmUrl: null,
-          bgmName: null
-        })
+          bgmName: null,
+        }),
       });
 
       if (!response.ok) {
@@ -188,22 +214,27 @@
       const responseData = await response.json();
 
       if (!responseData.success || !responseData.data) {
-        throw new Error(responseData.message || 'Failed to get valid scene data from API response.');
+        throw new Error(
+          responseData.message ||
+            "Failed to get valid scene data from API response.",
+        );
       }
 
       // Extract the actual scene object from the 'data' property
       const newScene = responseData.data;
 
       // Add the new scene to the scenes array and sort by orderIndex
-      scenes = [...scenes, { ...newScene, clips: [] }].sort((a, b) => a.orderIndex - b.orderIndex);
+      scenes = [...scenes, { ...newScene, clips: [] }].sort(
+        (a, b) => a.orderIndex - b.orderIndex,
+      );
 
       // Also call the parent's onAddScene if it exists
       if (onAddScene) {
         onAddScene();
       }
     } catch (error) {
-      console.error('Error creating scene between:', error);
-      alert('Failed to create new scene. Please try again.');
+      console.error("Error creating scene between:", error);
+      alert("Failed to create new scene. Please try again.");
     } finally {
       isCreatingSceneBetween = { ...isCreatingSceneBetween, [key]: false };
     }
@@ -214,13 +245,13 @@
     const toScene = scenes[toIndex];
 
     if (!fromScene || !toScene) {
-      console.error('Invalid scene indexes');
+      console.error("Invalid scene indexes");
       return;
     }
 
     // Check if a transition already exists between these scenes
     const existingTransition = sceneTransitions.find(
-      t => t.fromSceneId === fromScene.id && t.toSceneId === toScene.id
+      (t) => t.fromSceneId === fromScene.id && t.toSceneId === toScene.id,
     );
 
     currentTransition = {
@@ -228,24 +259,31 @@
       toSceneId: toScene.id,
       fromSceneName: `Scene ${fromIndex + 1}`,
       toSceneName: `Scene ${toIndex + 1}`,
-      existingTransition: existingTransition
+      existingTransition: existingTransition,
     };
 
     isTransitionModalOpen = true;
   }
 
-  async function handleSaveTransition(data: { fromSceneId: number; toSceneId: number; type: string; duration: number }) {
+  async function handleSaveTransition(data: {
+    fromSceneId: number;
+    toSceneId: number;
+    type: string;
+    duration: number;
+  }) {
     try {
-      const response = await fetch('/api/transitions', {
-        method: 'POST',
+      const response = await fetch("/api/transitions", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to save transition. Status: ${response.status}`);
+        throw new Error(
+          `Failed to save transition. Status: ${response.status}`,
+        );
       }
 
       const responseData = await response.json();
@@ -256,34 +294,53 @@
 
         // Remove existing transition if it exists
         sceneTransitions = sceneTransitions.filter(
-          t => !(t.fromSceneId === data.fromSceneId && t.toSceneId === data.toSceneId)
+          (t) =>
+            !(
+              t.fromSceneId === data.fromSceneId &&
+              t.toSceneId === data.toSceneId
+            ),
         );
 
         // Add the new transition
         sceneTransitions = [...sceneTransitions, newTransition];
 
-        console.log('Transition saved successfully');
+        console.log("Transition saved successfully");
       }
     } catch (error) {
-      console.error('Error saving transition:', error);
+      console.error("Error saving transition:", error);
       throw error; // Re-throw to be handled by the modal
     }
   }
   // Helper functions for transitions
-  function hasTransition(fromSceneId: number | undefined, toSceneId: number | undefined): boolean {
+  function hasTransition(
+    fromSceneId: number | undefined,
+    toSceneId: number | undefined,
+  ): boolean {
     if (!fromSceneId || !toSceneId) return false;
-    return sceneTransitions.some(t => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId);
+    return sceneTransitions.some(
+      (t) => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId,
+    );
   }
 
-  function getTransitionType(fromSceneId: number | undefined, toSceneId: number | undefined): string {
-    if (!fromSceneId || !toSceneId) return '';
-    const transition = sceneTransitions.find(t => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId);
-    return transition ? transition.type : '';
+  function getTransitionType(
+    fromSceneId: number | undefined,
+    toSceneId: number | undefined,
+  ): string {
+    if (!fromSceneId || !toSceneId) return "";
+    const transition = sceneTransitions.find(
+      (t) => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId,
+    );
+    return transition ? transition.type : "";
   }
 
-  function getTransitionDuration(fromSceneId: number | undefined, toSceneId: number | undefined): number {
+  function getTransitionDuration(
+    fromSceneId: number | undefined,
+    toSceneId: number | undefined,
+  ): number {
     if (!fromSceneId || !toSceneId) return 0;
-    const transition = sceneTransitions.find(t => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId);
+    const transition = sceneTransitions.find(
+      (t) => t.fromSceneId === fromSceneId && t.toSceneId === toSceneId,
+    );
     return transition ? transition.duration : 0;
   }
 
@@ -296,14 +353,18 @@
   }
 
   // Handle saving narration, description, and duration from the modal
-  async function handleSaveNarration(data: { narration: string | null; description: string | null; duration: number | null }) {
+  async function handleSaveNarration(data: {
+    narration: string | null;
+    description: string | null;
+    duration: number | null;
+  }) {
     if (!currentEditingClip || !onUpdateClip) return;
 
     try {
       // Prepare data to update, including duration if provided
       const updateData: Partial<Clip> = {
         narration: data.narration,
-        description: data.description
+        description: data.description,
       };
       if (data.duration !== null) {
         updateData.duration = data.duration;
@@ -320,8 +381,8 @@
       // Refresh the scene list
       refreshTimestamp();
     } catch (error) {
-      console.error('Error updating clip:', error);
-      alert('Failed to update clip. Please try again.');
+      console.error("Error updating clip:", error);
+      alert("Failed to update clip. Please try again.");
     }
   }
 
@@ -340,30 +401,31 @@
       }
 
       // Calculate the next order index for clips in this scene
-      const nextOrderIndex = scene.clips && scene.clips.length > 0
-        ? Math.max(...scene.clips.map((clip: Clip) => clip.orderIndex)) + 1
-        : 0;
+      const nextOrderIndex =
+        scene.clips && scene.clips.length > 0
+          ? Math.max(...scene.clips.map((clip: Clip) => clip.orderIndex)) + 1
+          : 0;
 
       // Create a minimal empty canvas data (valid JSON for fabric.js)
       const emptyCanvas = JSON.stringify({
-        version: '5.3.0',
+        version: "5.3.0",
         objects: [],
-        background: '#ffffff'
+        background: "#ffffff",
       });
 
       // Create a new clip with default values
-      const response = await fetch('/api/clips', {
-        method: 'POST',
+      const response = await fetch("/api/clips", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           sceneId: sceneId,
           orderIndex: nextOrderIndex,
           canvas: emptyCanvas,
           narration: null,
-          imageUrl: null // We'll update this after getting the ID
-        })
+          imageUrl: null, // We'll update this after getting the ID
+        }),
       });
 
       if (!response.ok) {
@@ -373,50 +435,55 @@
       // Get the response data { success, data, message }
       const responseData = await response.json();
       if (!responseData.success || !responseData.data) {
-        throw new Error(responseData.message || 'Failed to get valid clip data from create API response.');
+        throw new Error(
+          responseData.message ||
+            "Failed to get valid clip data from create API response.",
+        );
       }
       const newClip = responseData.data; // Extract the actual clip object
 
       // Create a blank canvas for the preview
-      const tempCanvas = document.createElement('canvas');
+      const tempCanvas = document.createElement("canvas");
       tempCanvas.width = 300;
       tempCanvas.height = 200;
-      const ctx = tempCanvas.getContext('2d');
+      const ctx = tempCanvas.getContext("2d");
 
       // Variable to store the updated clip data
       let updatedClip: Clip | undefined;
 
       if (ctx) {
         // Create a blank white canvas with a light gray border
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-        ctx.strokeStyle = '#e0e0e0';
+        ctx.strokeStyle = "#e0e0e0";
         ctx.lineWidth = 2;
         ctx.strokeRect(2, 2, tempCanvas.width - 4, tempCanvas.height - 4);
 
         // Add some text to indicate it's a new clip
-        ctx.fillStyle = '#999999';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('New Clip', tempCanvas.width / 2, tempCanvas.height / 2);
+        ctx.fillStyle = "#999999";
+        ctx.font = "16px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("New Clip", tempCanvas.width / 2, tempCanvas.height / 2);
 
         // Get the data URL
-        const imageDataUrl = tempCanvas.toDataURL('image/png');
+        const imageDataUrl = tempCanvas.toDataURL("image/png");
 
         // Upload the preview
-        const uploadResponse = await fetch('/api/upload/clip-preview', {
-          method: 'POST',
+        const uploadResponse = await fetch("/api/upload/clip-preview", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json'
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             clipId: newClip.id,
-            imageData: imageDataUrl
-          })
+            imageData: imageDataUrl,
+          }),
         });
 
         if (!uploadResponse.ok) {
-          console.warn(`Failed to upload preview for new clip ${newClip.id}. Status: ${uploadResponse.status}`);
+          console.warn(
+            `Failed to upload preview for new clip ${newClip.id}. Status: ${uploadResponse.status}`,
+          );
         }
 
         // Get the image URL from the response or construct it
@@ -430,24 +497,26 @@
             imageUrl = `/clip-previews/clip-${newClip.id}.png`;
           }
         } catch (err) {
-          console.warn('Error parsing upload response:', err);
+          console.warn("Error parsing upload response:", err);
           // Fallback to the expected URL format
           imageUrl = `/clip-previews/clip-${newClip.id}.png`;
         }
 
         // Update the clip with the image URL
         const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json'
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            imageUrl: imageUrl ? imageUrl.split('?')[0] : imageUrl // Remove any query parameters if imageUrl exists
-          })
+            imageUrl: imageUrl ? imageUrl.split("?")[0] : imageUrl, // Remove any query parameters if imageUrl exists
+          }),
         });
 
         if (!updateResponse.ok) {
-          console.warn(`Failed to update clip with image URL. Status: ${updateResponse.status}`);
+          console.warn(
+            `Failed to update clip with image URL. Status: ${updateResponse.status}`,
+          );
         }
 
         // Get the updated clip with the image URL
@@ -455,50 +524,56 @@
           if (updateResponse.ok) {
             const updateResponseData = await updateResponse.json();
             if (!updateResponseData.success || !updateResponseData.data) {
-               console.warn('Update response was ok but data structure is invalid:', updateResponseData);
-               updatedClip = { ...newClip, imageUrl }; // Fallback
+              console.warn(
+                "Update response was ok but data structure is invalid:",
+                updateResponseData,
+              );
+              updatedClip = { ...newClip, imageUrl }; // Fallback
             } else {
-               updatedClip = updateResponseData.data; // Extract from data property
+              updatedClip = updateResponseData.data; // Extract from data property
             }
           } else {
-             // If update failed, use the initially created clip but add the expected imageUrl
-             updatedClip = { ...newClip, imageUrl };
+            // If update failed, use the initially created clip but add the expected imageUrl
+            updatedClip = { ...newClip, imageUrl };
           }
         } catch (err) {
-          console.warn('Error parsing update response JSON:', err);
+          console.warn("Error parsing update response JSON:", err);
           updatedClip = { ...newClip, imageUrl }; // Fallback
         }
       } else {
         // Fallback if canvas context is not available
-        console.warn('Could not get canvas context for preview generation');
+        console.warn("Could not get canvas context for preview generation");
         const imageUrl = `/clip-previews/clip-${newClip.id}.png`;
 
         // Update the clip with the image URL even without a preview
         const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json'
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            imageUrl: imageUrl
-          })
+            imageUrl: imageUrl,
+          }),
         });
 
         try {
-           if (updateResponse.ok) {
-             const updateResponseData = await updateResponse.json();
-             if (!updateResponseData.success || !updateResponseData.data) {
-                console.warn('Update response was ok but data structure is invalid:', updateResponseData);
-                updatedClip = { ...newClip, imageUrl }; // Fallback
-             } else {
-                updatedClip = updateResponseData.data; // Extract from data property
-             }
-           } else {
-              // If update failed, use the initially created clip but add the expected imageUrl
-              updatedClip = { ...newClip, imageUrl };
-           }
+          if (updateResponse.ok) {
+            const updateResponseData = await updateResponse.json();
+            if (!updateResponseData.success || !updateResponseData.data) {
+              console.warn(
+                "Update response was ok but data structure is invalid:",
+                updateResponseData,
+              );
+              updatedClip = { ...newClip, imageUrl }; // Fallback
+            } else {
+              updatedClip = updateResponseData.data; // Extract from data property
+            }
+          } else {
+            // If update failed, use the initially created clip but add the expected imageUrl
+            updatedClip = { ...newClip, imageUrl };
+          }
         } catch (err) {
-          console.warn('Error parsing update response JSON:', err);
+          console.warn("Error parsing update response JSON:", err);
           updatedClip = { ...newClip, imageUrl }; // Fallback
         }
       }
@@ -508,7 +583,7 @@
         if (s.id === sceneId) {
           return {
             ...s,
-            clips: [...(s.clips || []), updatedClip]
+            clips: [...(s.clips || []), updatedClip],
           };
         }
         return s;
@@ -524,7 +599,7 @@
         // Add timestamp to force browser to reload the image
         updatedClip = {
           ...updatedClip,
-          imageUrl: `${updatedClip.imageUrl}?t=${timestamp}`
+          imageUrl: `${updatedClip.imageUrl}?t=${timestamp}`,
         };
       }
 
@@ -535,10 +610,9 @@
           onSelectClip(updatedClip);
         }, 100);
       }
-
     } catch (error) {
-      console.error('Error creating clip:', error);
-      alert('Failed to create new clip. Please try again.');
+      console.error("Error creating clip:", error);
+      alert("Failed to create new clip. Please try again.");
       // Reset creating state for this scene
       isCreatingClip = { ...isCreatingClip, [sceneId]: false };
     }
@@ -550,31 +624,44 @@
     {#if scenes.length > 0}
       {#each scenes as scene, index (scene.id)}
         {#if index > 0}
-          <div>
+          <div class="mt-7">
             <button
-            type="button"
-            onclick={() => openTransitionModal(index-1, index)}
-            disabled={isCreatingSceneBetween[`${index-1}-${index}`]}
-            class="flex-shrink-0 mx-1 border rounded {hasTransition(scenes[index-1]?.id, scenes[index]?.id) ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'} hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer">
-            <div class="flex flex-col items-center justify-center">
-              <ChevronsLeftRightEllipsis class="h-4 w-4 {hasTransition(scenes[index-1]?.id, scenes[index]?.id) ? 'text-blue-600' : 'text-gray-600'}" />
-              {#if hasTransition(scenes[index-1]?.id, scenes[index]?.id)}
-                <span class="text-xs text-blue-600">{getTransitionType(scenes[index-1]?.id, scenes[index]?.id)}</span>
-              {/if}
-            </div>
-          </button>
-          <button
-          type="button"
-          onclick={() => createSceneBetween(index-1, index)}
-          disabled={isCreatingSceneBetween[`${index-1}-${index}`]}
-          class="flex-shrink-0 mt-2 mb-2 mx-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer">
-          <div class="flex flex-col items-center justify-center">
-            <Plus class="h-4 w-4 text-gray-600" />
-          </div>
-        </button>
+              type="button"
+              onclick={() => openTransitionModal(index - 1, index)}
+              disabled={isCreatingSceneBetween[`${index - 1}-${index}`]}
+              class="flex-shrink-0 mx-1 border rounded {hasTransition(
+                scenes[index - 1]?.id,
+                scenes[index]?.id,
+              )
+                ? 'bg-blue-50 border-blue-200'
+                : 'bg-gray-50'} hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer"
+            >
+              <div class="flex flex-col items-center justify-center">
+                <ChevronsLeftRightEllipsis
+                  class="h-4 w-4 {hasTransition(
+                    scenes[index - 1]?.id,
+                    scenes[index]?.id,
+                  )
+                    ? 'text-blue-600'
+                    : 'text-gray-600'}"
+                />
+              </div>
+            </button>
+            <button
+              type="button"
+              onclick={() => createSceneBetween(index - 1, index)}
+              disabled={isCreatingSceneBetween[`${index - 1}-${index}`]}
+              class="flex-shrink-0 mt-2 mb-2 mx-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer"
+            >
+              <div class="flex flex-col items-center justify-center">
+                <Plus class="h-4 w-4 text-gray-600" />
+              </div>
+            </button>
           </div>
         {/if}
-        <div class="border rounded-md p-0 hover:shadow-md transition-shadow p-2 flex-shrink-0">
+        <div
+          class="border rounded-md p-0 hover:shadow-md transition-shadow p-2 flex-shrink-0"
+        >
           <div class="flex justify-between items-start mb-2">
             <div class="flex-1 min-w-0">
               <button
@@ -582,7 +669,8 @@
                 class="text-lg font-semibold hover:text-blue-600 cursor-pointer truncate text-left w-full"
                 title="Scene {index + 1}"
                 onclick={() => onSelectScene(scene.id)}
-                onkeydown={(e) => e.key === 'Enter' && onSelectScene(scene.id)}>
+                onkeydown={(e) => e.key === "Enter" && onSelectScene(scene.id)}
+              >
                 Scene {index + 1}
               </button>
               <div class="flex items-center text-sm text-muted-foreground">
@@ -595,14 +683,29 @@
             </div>
             <div class="flex gap-1 flex-shrink-0">
               {#if onPlayScene}
-                <Button variant="ghost" class="h-8 w-8 p-0" onclick={() => onPlayScene(scene.id)} title="Play Scene">
+                <Button
+                  variant="ghost"
+                  class="h-8 w-8 p-0"
+                  onclick={() => onPlayScene(scene.id)}
+                  title="Play Scene"
+                >
                   <Play class="h-4 w-4" />
                 </Button>
               {/if}
-              <Button variant="ghost" class="h-8 w-8 p-0" onclick={() => onEditScene(scene.id)} title="Edit Scene">
+              <Button
+                variant="ghost"
+                class="h-8 w-8 p-0"
+                onclick={() => onEditScene(scene.id)}
+                title="Edit Scene"
+              >
                 <Edit class="h-4 w-4" />
               </Button>
-              <Button variant="ghost" class="h-8 w-8 p-0" onclick={() => onDeleteScene(scene.id)} title="Delete Scene">
+              <Button
+                variant="ghost"
+                class="h-8 w-8 p-0"
+                onclick={() => onDeleteScene(scene.id)}
+                title="Delete Scene"
+              >
                 <Trash2 class="h-4 w-4" />
               </Button>
             </div>
@@ -617,7 +720,8 @@
                     type="button"
                     onclick={() => onSelectClip(clip)}
                     class="flex-shrink-0 w-auto h-[40px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
-                    title="Select Clip {clip.orderIndex}">
+                    title="Select Clip {clip.orderIndex}"
+                  >
                     {#if clip.imageUrl}
                       <img
                         src={`${clip.imageUrl}?t=${timestamp}`}
@@ -626,38 +730,53 @@
                         loading="lazy"
                         onerror={(e: Event) => {
                           // If image fails to load, show canvas preview instead
-                          if (clip.canvas && e.target instanceof HTMLImageElement) {
+                          if (
+                            clip.canvas &&
+                            e.target instanceof HTMLImageElement
+                          ) {
                             const imgElement = e.target as HTMLImageElement;
-                            imgElement.style.display = 'none';
+                            imgElement.style.display = "none";
                             // We can't directly switch to CanvasPreview here, so we'll show a fallback icon
                             if (imgElement.parentElement) {
-                              imgElement.parentElement.innerHTML = '<div class="flex items-center justify-center w-full h-full"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>';
+                              imgElement.parentElement.innerHTML =
+                                '<div class="flex items-center justify-center w-full h-full"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>';
                             }
                           }
                         }}
                       />
                     {:else if clip.canvas}
-                      <CanvasPreview canvasData={clip.canvas} width={50} height={33} />
+                      <CanvasPreview
+                        canvasData={clip.canvas}
+                        width={50}
+                        height={33}
+                      />
                     {:else}
                       <ImageIcon class="h-4 w-4 text-gray-400" />
                     {/if}
                   </button>
-                  <div class="absolute top-0.5 -right-0 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div
+                    class="absolute top-0.5 -right-0 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
                     {#if onUpdateClip}
                       <button
                         type="button"
                         onclick={(e) => handleEditNarration(clip, e)}
                         class="bg-white rounded-full p-0.5 shadow-sm border hover:bg-gray-100"
-                        title="Edit Narration & Description">
+                        title="Edit Narration & Description"
+                      >
                         <MessageSquare class="h-3 w-3 text-gray-600" />
                       </button>
                     {/if}
                     {#if onDuplicateClip}
                       <button
                         type="button"
-                        onclick={(e) => { e.stopPropagation(); onDuplicateClip(clip); }}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          onDuplicateClip(clip);
+                        }}
                         class="bg-white rounded-full p-0.5 shadow-sm border hover:bg-gray-100"
-                        title="Duplicate Clip">
+                        title="Duplicate Clip"
+                      >
                         <Copy class="h-3 w-3 text-gray-600" />
                       </button>
                     {/if}
@@ -665,7 +784,10 @@
                 </div>
               {/each}
               {#if scene.clips.length > 7}
-                <div class="flex-shrink-0 w-[50px] h-[33px] border rounded bg-gray-100 flex items-center justify-center text-xs text-muted-foreground" title="{scene.clips.length - 7} more clips">
+                <div
+                  class="flex-shrink-0 w-[50px] h-[33px] border rounded bg-gray-100 flex items-center justify-center text-xs text-muted-foreground"
+                  title="{scene.clips.length - 7} more clips"
+                >
                   + {scene.clips.length - 7}
                 </div>
               {/if}
@@ -677,28 +799,34 @@
               onclick={() => createNewClip(scene.id)}
               disabled={isCreatingClip[scene.id]}
               class="flex-shrink-0 w-[50px] h-[33px] mt-2 !mr-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
-              title="Add new clip">
+              title="Add new clip"
+            >
               <Plus class="h-4 w-4 text-gray-600" />
             </button>
           </div>
         </div>
       {/each}
-    {/if}  <!-- End of #if scenes.length > 0 -->
+    {/if}
+    <!-- End of #if scenes.length > 0 -->
 
     <!-- Add New Scene Button (This is the correct one, outside the #if) -->
     <button
       type="button"
       onclick={createNewScene}
       disabled={isCreatingScene}
-      class="border rounded-md p-4 mt-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
+      class="border rounded-md p-4 mt-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer"
+    >
       <div class="flex flex-col items-center justify-center h-full">
         <div class="rounded-full bg-gray-200 p-1.5 mb-2">
           <Plus class="h-5 w-5 text-gray-600" />
         </div>
-        <span class="text-gray-600 font-medium">{isCreatingScene ? 'Creating...' : 'New Scene'}</span>
+        <span class="text-gray-600 font-medium"
+          >{isCreatingScene ? "Creating..." : "New Scene"}</span
+        >
       </div>
     </button>
-  </div> <!-- End of flex container -->
+  </div>
+  <!-- End of flex container -->
 
   {#if scenes.length === 0}
     <!-- Optional: Add a message when there are no scenes -->
