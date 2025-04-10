@@ -6,7 +6,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers } from 'lucide-svelte';
 
   // Props passed down from the page
   let {
@@ -820,6 +820,9 @@
         </Button>
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.clearCanvas()} title="Clear Canvas" disabled={!canvasIsReady}>
           Clear All
+        </Button>
+        <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.showLayerOrderModal()} title="Manage Layers" disabled={!canvasIsReady}>
+          <Layers class="h-4 w-4 mr-2" /> Layers
         </Button>
       </div>
     </div>
