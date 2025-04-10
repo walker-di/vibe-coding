@@ -148,6 +148,7 @@ Start the loop from the beginning( no need to ask. just do it).
   - Fixed infinite loop issues in the SceneEditor and CanvasEditor components
   - Fixed issue with canvas not saving data and updating the preview image
   - Fixed issue with clip preview not updating after editing
+  - Fixed errors when loading invalid canvas data
 
 ### 6.4 Performance Optimization
 - [ ] Identify any performance bottlenecks in the refactored code

@@ -90,7 +90,29 @@
             if (jsonString && jsonString !== '{}' && jsonString !== '[]') {
               await new Promise<void>((resolve) => {
                 try {
-                  canvas.loadFromJSON(jsonString, () => {
+                  // Parse the JSON string to an object first
+                  const jsonObj = JSON.parse(jsonString);
+
+                  // Check if the JSON has the expected structure
+                  if (!jsonObj.objects || !Array.isArray(jsonObj.objects)) {
+                    console.warn('Invalid canvas JSON structure:', jsonObj);
+                    // Create a default empty canvas structure
+                    jsonObj.objects = [];
+                  }
+
+                  // Filter out any problematic objects
+                  jsonObj.objects = jsonObj.objects.filter((obj: any) => {
+                    // Keep only objects with valid types
+                    const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
+                    const isValid = obj && obj.type && validTypes.includes(obj.type.toLowerCase());
+                    if (!isValid) {
+                      console.warn('Filtering out invalid object:', obj);
+                    }
+                    return isValid;
+                  });
+
+                  // Load the sanitized JSON
+                  canvas.loadFromJSON(jsonObj, () => {
                     canvas.renderAll();
                     resolve();
                   }, (err: any) => {
@@ -179,36 +201,56 @@
 
   // Initialize canvas
   function initializeCanvas() {
-    const windowWithFabric = window as any;
-    if (!windowWithFabric.fabric) {
-      console.error('Fabric.js not loaded');
-      return;
+    try {
+      const windowWithFabric = window as any;
+      if (!windowWithFabric.fabric) {
+        console.error('Fabric.js not loaded');
+        return;
+      }
+
+      // Initialize with default dimensions, will be updated by parent if needed
+      canvas = new windowWithFabric.fabric.Canvas('canvas', {
+        width: 800,
+        height: 600,
+        backgroundColor: '#f0f0f0'
+      });
+      console.log('Canvas initialized.');
+
+      // Initial load is now fully handled by the parent calling loadCanvasData
+
+      // Set up event listeners
+      canvas.on('object:modified', saveCanvas);
+      canvas.on('object:added', saveCanvas);
+      canvas.on('object:removed', saveCanvas);
+      canvas.on('selection:created', updateSelection);
+      canvas.on('selection:updated', updateSelection);
+      canvas.on('selection:cleared', clearSelection);
+    } catch (error) {
+      console.error('Error initializing canvas:', error);
     }
-
-    // Initialize with default dimensions, will be updated by parent if needed
-    canvas = new windowWithFabric.fabric.Canvas('canvas', {
-      width: 800,
-      height: 600,
-      backgroundColor: '#f0f0f0'
-    });
-     console.log('Canvas initialized.');
-
-     // Initial load is now fully handled by the parent calling loadCanvasData
-
-     // Set up event listeners
-    canvas.on('object:modified', saveCanvas);
-    canvas.on('object:added', saveCanvas);
-    canvas.on('object:removed', saveCanvas);
-    canvas.on('selection:created', updateSelection);
-    canvas.on('selection:updated', updateSelection);
-    canvas.on('selection:cleared', clearSelection);
   }
 
   // Save canvas state
   function saveCanvas() {
     if (canvas) {
       try {
-        const json = JSON.stringify(canvas.toJSON());
+        // Get the canvas JSON
+        const canvasJson = canvas.toJSON();
+
+        // Ensure the objects array exists
+        if (!canvasJson.objects) {
+          canvasJson.objects = [];
+        }
+
+        // Filter out any problematic objects
+        canvasJson.objects = canvasJson.objects.filter((obj: any) => {
+          // Keep only objects with valid types
+          const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
+          return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
+        });
+
+        // Stringify the sanitized JSON
+        const json = JSON.stringify(canvasJson);
         console.log('Canvas changed, saving state');
         onCanvasChange(json);
       } catch (error) {
