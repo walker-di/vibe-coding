@@ -65,8 +65,6 @@
 
   // State for the selected clip
   let selectedClip = $state<Clip | null>(null);
-  // State to track which clip's data is currently loaded in the canvas
-  let loadedClipIdInCanvas = $state<number | null>(null);
   // State to track if the CanvasEditor child component is fully initialized
   let canvasIsReady = $state(false);
   // State to track if we need to force a scene refresh
@@ -103,165 +101,10 @@
     };
     console.log('Clip selected in SceneEditor:', clip.id, clip.orderIndex);
 
-    try {
-      // Fetch the latest clip data from the API to ensure we have the most up-to-date version
-      // Add retry parameter for newly created clips
-      const response = await fetch(`/api/clips/${clip.id}?retry=2`);
-      if (!response.ok) {
-        console.error(`Failed to fetch latest clip data. Status: ${response.status}`);
-        // We already set selectedClip = clip above, so no need to do it again
-        // Just log the error and continue with the local data
-
-        // If this is a newly created clip, we might need to generate a preview
-        if (!clip.imageUrl || clip.imageUrl.includes('undefined')) {
-          console.log('Newly created clip without valid imageUrl detected. Generating preview...');
-          await generateAndUploadPreview(clip);
-        }
-      } else {
-        // Use the fresh data from the database
-        const freshClipData = await response.json();
-
-        // Only update if we got valid data back
-        if (freshClipData && freshClipData.id) {
-          // Preserve the imageUrl from the local clip if it exists but is missing in the fresh data
-          // This helps with newly created clips where the imageUrl might not be saved yet
-          if (!freshClipData.imageUrl && clip.imageUrl) {
-            freshClipData.imageUrl = clip.imageUrl;
-          }
-
-          // Ensure duration is set to a default value if it's null
-          selectedClip = {
-            ...freshClipData,
-            duration: freshClipData.duration || 3000 // Default to 3 seconds if not set
-          };
-
-          // Also update the clip in the scenes array to keep everything in sync
-          scenes = scenes.map((scene: SceneWithRelations) => {
-            if (scene.clips) {
-              scene.clips = scene.clips.map((c: Clip) => {
-                if (c.id === freshClipData.id) {
-                  return freshClipData;
-                }
-                return c;
-              });
-            }
-            return scene;
-          });
-
-          // If this is a newly created clip, we might need to generate a preview
-          if (!freshClipData.imageUrl || freshClipData.imageUrl.includes('undefined')) {
-            console.log('Newly created clip without valid imageUrl detected. Generating preview...');
-            await generateAndUploadPreview(freshClipData);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching latest clip data:', error);
-      // We already set selectedClip = clip above, so no need to do it again
-    }
-
     // The $effect below will handle loading the canvas once selectedClip is updated
   }
 
-  // Helper function to generate and upload a preview for a clip
-  async function generateAndUploadPreview(clip: Clip) {
-    if (!clip || !clip.id) {
-      console.error('Cannot generate preview: Invalid clip data');
-      return;
-    }
 
-    // Create a blank canvas for the preview
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = 300;
-    tempCanvas.height = 200;
-    const ctx = tempCanvas.getContext('2d');
-
-    if (ctx) {
-      // Create a blank white canvas with a light gray border
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-      ctx.strokeStyle = '#e0e0e0';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(2, 2, tempCanvas.width - 4, tempCanvas.height - 4);
-
-      // Add some text to indicate it's a new clip
-      ctx.fillStyle = '#999999';
-      ctx.font = '16px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('New Clip', tempCanvas.width / 2, tempCanvas.height / 2);
-
-      // Get the data URL
-      const imageDataUrl = tempCanvas.toDataURL('image/png');
-
-      try {
-        // Upload the preview
-        const uploadResponse = await fetch('/api/upload/clip-preview', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            clipId: clip.id,
-            imageData: imageDataUrl
-          })
-        });
-
-        if (!uploadResponse.ok) {
-          console.warn(`Failed to upload preview for clip ${clip.id}. Status: ${uploadResponse.status}`);
-          return;
-        }
-
-        // Get the image URL from the response
-        const uploadData = await uploadResponse.json();
-        if (!uploadData.imageUrl) {
-          console.warn(`Upload endpoint for clip ${clip.id} did not return an imageUrl.`);
-          return;
-        }
-
-        // Update the clip with the image URL
-        const imageUrl = uploadData.imageUrl.split('?')[0]; // Remove any query parameters
-        const updateResponse = await fetch(`/api/clips/${clip.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ imageUrl })
-        });
-
-        if (!updateResponse.ok) {
-          console.warn(`Failed to update clip ${clip.id} with image URL. Status: ${updateResponse.status}`);
-          return;
-        }
-
-        // Update the local state with the new image URL
-        const updatedClip = await updateResponse.json();
-        // Ensure duration is set to a default value if it's null
-        selectedClip = {
-          ...updatedClip,
-          duration: updatedClip.duration || 3000 // Default to 3 seconds if not set
-        };
-
-        // Also update the clip in the scenes array
-        scenes = scenes.map((scene: SceneWithRelations) => {
-          if (scene.clips) {
-            scene.clips = scene.clips.map((c: Clip) => {
-              if (c.id === clip.id) {
-                return updatedClip;
-              }
-              return c;
-            });
-          }
-          return scene;
-        });
-
-        // Force a refresh of the scene list
-        forceSceneRefresh++;
-
-      } catch (error) {
-        console.error(`Error generating/uploading preview for clip ${clip.id}:`, error);
-      }
-    }
-  }
 
   // Handler for duplicating a clip
   async function handleDuplicateClip(clip: Clip) {
@@ -499,23 +342,14 @@
     // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready,
     // but only if the selected clip is different from the one already loaded.
    $effect(() => {
-     const newClipId = selectedClip?.id ?? null; // Use null if no clip is selected
-     const canvasData = selectedClip?.canvas ?? null;
-     const isInstanceAvailable = !!canvasEditorInstance; // Check if the instance binding exists
-
-     // Only proceed if the canvas instance is bound AND the canvas component signaled it's ready
-     if (isInstanceAvailable && canvasIsReady && newClipId !== loadedClipIdInCanvas && canvasEditorInstance) {
-       // Add a small delay before loading canvas data to ensure transitions work properly
+     // When selectedClip changes, load its canvas data
+     if (selectedClip && canvasEditorInstance && canvasIsReady) {
+       // Add a small delay to ensure the UI is updated
        setTimeout(() => {
-         try {
-           if (canvasEditorInstance) {
-             canvasEditorInstance.loadCanvasData(canvasData);
-             loadedClipIdInCanvas = newClipId; // Update the tracker *after* loading
-           }
-         } catch (error) {
-           console.error('Error loading canvas data:', error);
+         if (canvasEditorInstance && selectedClip) {
+           canvasEditorInstance.loadCanvasData(selectedClip.canvas);
          }
-       }, 100); // 100ms delay to allow UI to update
+       }, 200);
      }
    });
 

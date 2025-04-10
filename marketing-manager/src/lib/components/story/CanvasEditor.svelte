@@ -42,20 +42,42 @@
       isTransitioning = true;
       console.log('Transition started (fade out)');
       await tick(); // Allow fade-out to start
-      // Optional: Add a small delay if tick isn't enough for visual effect
-      // await new Promise(resolve => setTimeout(resolve, 50));
+      // Add a small delay to ensure the transition has started
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       try {
         if (canvasJson) {
-          // Validate JSON before loading
-          try {
-            // Check if it's a valid JSON string
-            if (typeof canvasJson === 'string') {
-              JSON.parse(canvasJson);
-            }
+          // Ensure we're working with a string
+          let jsonString = canvasJson;
 
+          // If it's already an object (not a string), stringify it first
+          if (typeof canvasJson !== 'string') {
+            try {
+              jsonString = JSON.stringify(canvasJson);
+              console.log('Converted object to JSON string');
+            } catch (stringifyError) {
+              console.error('Failed to stringify canvas data:', stringifyError);
+              throw stringifyError;
+            }
+          }
+
+          // Now parse it to validate and ensure it's a proper JSON string
+          try {
+            // Parse and re-stringify to ensure clean JSON
+            const parsedData = JSON.parse(jsonString);
+            jsonString = JSON.stringify(parsedData);
+          } catch (parseError) {
+            console.error('Invalid JSON format:', parseError);
+            throw parseError;
+          }
+
+          // Load the validated JSON string into the canvas
+          try {
             await new Promise<void>((resolve, reject) => {
-              canvas.loadFromJSON(canvasJson, () => {
+              // Clear the canvas first to prevent any issues with existing objects
+              canvas.clear();
+
+              canvas.loadFromJSON(jsonString, () => {
                 canvas.renderAll();
                 resolve();
               }, (err: any) => {
@@ -63,12 +85,9 @@
                 reject(err);
               });
             });
-          } catch (jsonError) {
-            console.error('Invalid canvas JSON data:', jsonError);
-            // If JSON is invalid, create a blank canvas instead of failing
-            canvas.clear();
-            canvas.backgroundColor = '#f0f0f0';
-            canvas.renderAll();
+          } catch (loadError) {
+            console.error('Failed to load canvas data:', loadError);
+            throw loadError;
           }
         } else {
           // Clear canvas if null is passed
@@ -87,6 +106,8 @@
           console.error('Failed to clear canvas:', clearError);
         }
       } finally {
+        // Add a small delay before ending the transition
+        await new Promise(resolve => setTimeout(resolve, 50));
         isTransitioning = false;
         console.log('Transition ended (fade in)');
       }
