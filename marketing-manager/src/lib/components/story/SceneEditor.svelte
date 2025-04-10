@@ -171,11 +171,15 @@
         throw new Error(`Failed to duplicate clip. Status: ${response.status}`);
       }
 
-      // Get the newly created clip from the response
-      const newClip = await response.json();
+      // Get the response data { success, data, message }
+      const responseData = await response.json();
+      if (!responseData.success || !responseData.data) {
+        throw new Error(responseData.message || 'Failed to get valid clip data from create API response.');
+      }
+      const newClip = responseData.data; // Extract the actual clip object
 
       // Set the image URL based on the clip ID
-      const imageUrl = `/clip-previews/clip-${newClip.id}.png`;
+      const imageUrl = `/clip-previews/clip-${newClip.id}.png`; // Use newClip.id
 
       // Update the clip with the image URL
       const updateResponse = await fetch(`/api/clips/${newClip.id}`, {
@@ -193,12 +197,23 @@
       }
 
       // Get the updated clip with the image URL
-      let updatedClip;
+      let updatedClipWithUrl;
       try {
-        updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+        if (updateResponse.ok) {
+          const updateResponseData = await updateResponse.json();
+          if (!updateResponseData.success || !updateResponseData.data) {
+            console.warn('Update response was ok but data structure is invalid:', updateResponseData);
+            updatedClipWithUrl = { ...newClip, imageUrl }; // Fallback
+          } else {
+            updatedClipWithUrl = updateResponseData.data; // Extract from data property
+          }
+        } else {
+          // If update failed, use the initially created clip but add the expected imageUrl
+          updatedClipWithUrl = { ...newClip, imageUrl };
+        }
       } catch (err) {
-        console.warn('Error parsing update response:', err);
-        updatedClip = { ...newClip, imageUrl };
+        console.warn('Error parsing update response JSON:', err);
+        updatedClipWithUrl = { ...newClip, imageUrl }; // Fallback
       }
 
       // Duplicate the preview image
@@ -338,13 +353,13 @@
         }
       }
 
-      // Add the new clip to the scene's clips array
+      // Add the new clip (with the image URL) to the scene's clips array
       const updatedScenes = scenes.map((s: SceneWithRelations) => {
         if (s.id === scene.id) {
-          // Add the new clip to the scene's clips array
-          const updatedClips = [...(s.clips || []), updatedClip];
+          // Add the updated clip (which now has imageUrl) to the scene's clips array
+          const updatedClips = [...(s.clips || []), updatedClipWithUrl];
           // Sort clips by orderIndex to ensure they appear in the correct order
-          updatedClips.sort((a, b) => a.orderIndex - b.orderIndex);
+          updatedClips.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0)); // Handle potential null orderIndex
           return {
             ...s,
             clips: updatedClips

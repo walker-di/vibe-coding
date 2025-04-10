@@ -201,8 +201,12 @@
         throw new Error(`Failed to create clip. Status: ${response.status}`);
       }
 
-      // Get the newly created clip from the response
-      const newClip = await response.json();
+      // Get the response data { success, data, message }
+      const responseData = await response.json();
+      if (!responseData.success || !responseData.data) {
+        throw new Error(responseData.message || 'Failed to get valid clip data from create API response.');
+      }
+      const newClip = responseData.data; // Extract the actual clip object
 
       // Create a blank canvas for the preview
       const tempCanvas = document.createElement('canvas');
@@ -279,11 +283,21 @@
 
         // Get the updated clip with the image URL
         try {
-          updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+          if (updateResponse.ok) {
+            const updateResponseData = await updateResponse.json();
+            if (!updateResponseData.success || !updateResponseData.data) {
+               console.warn('Update response was ok but data structure is invalid:', updateResponseData);
+               updatedClip = { ...newClip, imageUrl }; // Fallback
+            } else {
+               updatedClip = updateResponseData.data; // Extract from data property
+            }
+          } else {
+             // If update failed, use the initially created clip but add the expected imageUrl
+             updatedClip = { ...newClip, imageUrl };
+          }
         } catch (err) {
-          // If there's an error parsing the response, use the original clip with the image URL
-          console.warn('Error parsing update response:', err);
-          updatedClip = { ...newClip, imageUrl };
+          console.warn('Error parsing update response JSON:', err);
+          updatedClip = { ...newClip, imageUrl }; // Fallback
         }
       } else {
         // Fallback if canvas context is not available
@@ -302,14 +316,25 @@
         });
 
         try {
-          updatedClip = updateResponse.ok ? await updateResponse.json() : { ...newClip, imageUrl };
+           if (updateResponse.ok) {
+             const updateResponseData = await updateResponse.json();
+             if (!updateResponseData.success || !updateResponseData.data) {
+                console.warn('Update response was ok but data structure is invalid:', updateResponseData);
+                updatedClip = { ...newClip, imageUrl }; // Fallback
+             } else {
+                updatedClip = updateResponseData.data; // Extract from data property
+             }
+           } else {
+              // If update failed, use the initially created clip but add the expected imageUrl
+              updatedClip = { ...newClip, imageUrl };
+           }
         } catch (err) {
-          console.warn('Error parsing update response:', err);
-          updatedClip = { ...newClip, imageUrl };
+          console.warn('Error parsing update response JSON:', err);
+          updatedClip = { ...newClip, imageUrl }; // Fallback
         }
       }
 
-      // Add the new clip to the scene's clips array
+      // Add the new clip (which now has an ID and imageUrl) to the scene's clips array
       const updatedScenes = scenes.map((s: SceneWithRelations) => {
         if (s.id === sceneId) {
           return {
