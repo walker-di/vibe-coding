@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare } from 'lucide-svelte';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
@@ -26,7 +25,7 @@
   let canvas: any = null;
   let fabricLoaded = $state(false);
   let selectedObject = $state<any>(null);
-  let isTransitioning = $state(false); // State for managing fade transition
+  // Removed transition state
   let isNarrationModalOpen = $state(false); // State for narration modal
 
   // Getter for selectedObject to be used from outside
@@ -36,14 +35,22 @@
 
   // Getter for selectedObject to be used from outside
 
-  // --- Method to explicitly load canvas data with transition ---
+  // Track the last loaded canvas data to prevent redundant loads
+  let lastLoadedCanvasData = $state<string | null>(null);
+
+  // --- Method to load canvas data (no transition) ---
   export async function loadCanvasData(canvasJson: string | null) {
+    // Skip if the canvas data is the same as what's already loaded
+    if (canvasJson === lastLoadedCanvasData) {
+      console.log('Skipping loadCanvasData - same data already loaded');
+      return;
+    }
+
+    // Update the last loaded canvas data
+    lastLoadedCanvasData = canvasJson;
+
     if (canvas && fabricLoaded) {
-      isTransitioning = true;
-      console.log('Transition started (fade out)');
-      await tick(); // Allow fade-out to start
-      // Add a small delay to ensure the transition has started
-      await new Promise(resolve => setTimeout(resolve, 50));
+      console.log('Loading canvas data');
 
       try {
         if (canvasJson) {
@@ -73,21 +80,41 @@
 
           // Load the validated JSON string into the canvas
           try {
-            await new Promise<void>((resolve, reject) => {
-              // Clear the canvas first to prevent any issues with existing objects
-              canvas.clear();
+            // Clear the canvas first to prevent any issues with existing objects
+            canvas.clear();
 
-              canvas.loadFromJSON(jsonString, () => {
-                canvas.renderAll();
-                resolve();
-              }, (err: any) => {
-                console.warn('Error in fabric.loadFromJSON:', err);
-                reject(err);
+            // Set a default background color
+            canvas.backgroundColor = '#f0f0f0';
+
+            // Only try to load JSON if it's not empty
+            if (jsonString && jsonString !== '{}' && jsonString !== '[]') {
+              await new Promise<void>((resolve) => {
+                try {
+                  canvas.loadFromJSON(jsonString, () => {
+                    canvas.renderAll();
+                    resolve();
+                  }, (err: any) => {
+                    console.warn('Error in fabric.loadFromJSON:', err);
+                    // Don't reject, just log the error and continue
+                    resolve();
+                  });
+                } catch (err) {
+                  console.warn('Exception in loadFromJSON:', err);
+                  // Don't reject, just log the error and continue
+                  resolve();
+                }
               });
-            });
+            } else {
+              // Just render the empty canvas
+              canvas.renderAll();
+            }
           } catch (loadError) {
             console.error('Failed to load canvas data:', loadError);
-            throw loadError;
+            // Don't throw, just log the error
+            // Create a blank canvas instead
+            canvas.clear();
+            canvas.backgroundColor = '#f0f0f0';
+            canvas.renderAll();
           }
         } else {
           // Clear canvas if null is passed
@@ -106,10 +133,7 @@
           console.error('Failed to clear canvas:', clearError);
         }
       } finally {
-        // Add a small delay before ending the transition
-        await new Promise(resolve => setTimeout(resolve, 50));
-        isTransitioning = false;
-        console.log('Transition ended (fade in)');
+        console.log('Canvas data loaded');
       }
     } else {
        console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
@@ -183,8 +207,13 @@
   // Save canvas state
   function saveCanvas() {
     if (canvas) {
-      const json = JSON.stringify(canvas.toJSON());
-      onCanvasChange(json);
+      try {
+        const json = JSON.stringify(canvas.toJSON());
+        console.log('Canvas changed, saving state');
+        onCanvasChange(json);
+      } catch (error) {
+        console.error('Error saving canvas state:', error);
+      }
     }
   }
 
@@ -316,20 +345,13 @@
   {/if}
 
   <div class="border rounded-md overflow-hidden relative min-h-[500px]">
-    {#if !isTransitioning}
-      <div transition:fade={{ duration: 150 }}>
-        <canvas id="canvas"></canvas>
-      </div>
-    {:else}
-      <!-- Optional: Placeholder or spinner during transition -->
-       <div class="absolute inset-0 flex items-center justify-center bg-gray-100/50">
-         <!-- Loading... -->
-       </div>
-    {/if}
+    <div>
+      <canvas id="canvas"></canvas>
+    </div>
   </div>
 
 
-  {#if !fabricLoaded && !isTransitioning}
+  {#if !fabricLoaded}
     <div class="text-center py-4">
       <p>Loading canvas editor...</p>
     </div>

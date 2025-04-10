@@ -165,11 +165,11 @@
   }
 
   // Function to handle selecting a clip
+  // This is a no-op because the SceneEditor component has its own internal handleSelectClip
+  // that displays the clip in the canvas editor
   function handleSelectClip(clip: Clip) {
-    // Navigate to the clip detail page
-    if (creativeId && storyId) {
-      goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${clip.sceneId}/clips/${clip.id}`);
-    }
+    // Do nothing - let the SceneEditor handle this
+    console.log('Clip selected in page component, but letting SceneEditor handle it');
   }
 
   // Function to handle duplicating a clip

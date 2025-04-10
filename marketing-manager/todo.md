@@ -143,6 +143,11 @@ Start the loop from the beginning( no need to ask. just do it).
   - There are some accessibility warnings in the StoryList component that should be addressed in a future task
   - Fixed issue with story pages not displaying data correctly due to API response format changes
   - Fixed issue with SceneEditor component not properly handling clip selection and duplication
+  - Fixed issue with clip selection navigating to a new page instead of showing the clip in the canvas editor
+  - Removed fade transitions from the CanvasEditor component for smoother clip switching
+  - Fixed infinite loop issues in the SceneEditor and CanvasEditor components
+  - Fixed issue with canvas not saving data and updating the preview image
+  - Fixed issue with clip preview not updating after editing
 
 ### 6.4 Performance Optimization
 - [ ] Identify any performance bottlenecks in the refactored code

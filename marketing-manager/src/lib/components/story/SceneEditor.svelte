@@ -19,7 +19,7 @@
     onSelectScene,
     onPlayScene, // Optional
     onUpdateClip, // Optional
-    onSelectClip, // Optional - for navigating to clip detail page
+    // onSelectClip is not used here - we use our own handleSelectClip
     onDuplicateClip // Optional - for duplicating clips
   } = $props<{
     scenes: SceneWithRelations[];
@@ -73,6 +73,8 @@
   let canvasIsReady = $state(false);
   // State to track if we need to force a scene refresh
   let forceSceneRefresh = $state(0);
+  // Flag to prevent infinite loops when loading canvas data
+  let isLoadingCanvas = $state(false);
 
   // Reference to the CanvasEditor component instance
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
@@ -345,15 +347,31 @@
 
     // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready,
     // but only if the selected clip is different from the one already loaded.
+   let lastLoadedCanvas = $state<string | null>(null);
+
    $effect(() => {
      // When selectedClip changes, load its canvas data
-     if (selectedClip && canvasEditorInstance && canvasIsReady) {
-       // Add a small delay to ensure the UI is updated
-       setTimeout(() => {
-         if (canvasEditorInstance && selectedClip) {
+     if (selectedClip && canvasEditorInstance && canvasIsReady && !isLoadingCanvas) {
+       // Only load if the canvas data has changed
+       if (selectedClip.canvas !== lastLoadedCanvas) {
+         console.log('Loading new canvas data for clip', selectedClip.id);
+
+         // Set the loading flag to prevent infinite loops
+         isLoadingCanvas = true;
+         lastLoadedCanvas = selectedClip.canvas;
+
+         // Load canvas data
+         try {
            canvasEditorInstance.loadCanvasData(selectedClip.canvas);
+         } finally {
+           // Reset the loading flag after a short delay
+           setTimeout(() => {
+             isLoadingCanvas = false;
+           }, 100);
          }
-       }, 200);
+       } else {
+         console.log('Skipping canvas load - same data as before');
+       }
      }
    });
 
@@ -420,11 +438,27 @@
 
   // Handler for canvas changes (required by CanvasEditor)
   async function handleCanvasChange(canvasJson: string) {
+    // Skip if we're currently loading canvas data to prevent infinite loops
+    if (isLoadingCanvas) {
+      console.log('Skipping canvas change while loading');
+      return;
+    }
 
-    if (selectedClip && selectedClip.canvas !== canvasJson) {
+    // Skip if the canvas data is the same as what's already in the clip
+    if (selectedClip && selectedClip.canvas === canvasJson) {
+      console.log('Skipping canvas change - no changes detected');
+      return;
+    }
+
+    console.log('Canvas changed, updating clip data');
+
+    if (selectedClip) {
       // Update local state first for responsiveness
       const updatedClip = { ...selectedClip, canvas: canvasJson };
       selectedClip = updatedClip; // Update local state
+
+      // Update the lastLoadedCanvas to prevent reloading
+      lastLoadedCanvas = canvasJson;
 
       // --- Save to backend ---
       try {
@@ -446,8 +480,10 @@
 
           // --- Generate and Upload Image Preview ---
           if (canvasEditorInstance) {
+            console.log('Generating preview image for clip', selectedClip.id);
             const imageDataUrl = canvasEditorInstance.getCanvasImageDataUrl();
             if (imageDataUrl) {
+              console.log('Preview image generated, uploading...');
               try {
                 const uploadResponse = await fetch('/api/upload/clip-preview', {
                   method: 'POST',
@@ -465,20 +501,31 @@
                   console.error(`Failed to upload preview for clip ${selectedClip.id}:`, uploadResponse.status, errorData.message || uploadResponse.statusText);
                 } else {
                   const uploadData = await uploadResponse.json();
-                  if (uploadData.imageUrl) {
+                  console.log('Upload response data:', uploadData);
+
+                  // Extract the imageUrl from the response data
+                  // The API returns { data: { imageUrl: string }, message: string }
+                  const imageUrl = uploadData.data?.imageUrl || uploadData.imageUrl;
+
+                  if (imageUrl) {
+                    console.log('Got image URL from response:', imageUrl);
                     // Add a timestamp to the image URL to prevent caching
                     const timestamp = Date.now();
-                    const imageUrlWithTimestamp = `${uploadData.imageUrl}?t=${timestamp}`;
+                    const imageUrlWithTimestamp = `${imageUrl}?t=${timestamp}`;
 
                     // Store the base URL (without timestamp) in the database
                     // This ensures consistent URLs across page reloads
                     try {
+                      // Remove any timestamp query parameters from the URL
+                      const cleanImageUrl = imageUrl.split('?')[0];
+                      console.log('Updating clip with new image URL:', cleanImageUrl);
+
                       const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
                         method: 'PUT',
                         headers: {
                           'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ imageUrl: uploadData.imageUrl })
+                        body: JSON.stringify({ imageUrl: cleanImageUrl })
                       });
 
                       if (!updateResponse.ok) {
@@ -486,15 +533,21 @@
                         const errorText = await updateResponse.text().catch(() => 'Could not read error response');
                         console.error(`Error response: ${errorText}`);
                       } else {
+                        console.log('Successfully updated clip with new image URL');
                         // Get the updated clip data from the response
                         const updatedClip = await updateResponse.json().catch(() => null);
 
                         if (updatedClip) {
+                          console.log('Received updated clip data from server');
                           // Update the selectedClip with the data from the database, but use the timestamped URL for display
+                          // Also increment forceSceneRefresh to trigger a UI update
                           selectedClip = { ...updatedClip, imageUrl: imageUrlWithTimestamp };
 
                           // Update the clip in the scenes array to keep everything in sync
                           const clipId = updatedClip.id; // Use updatedClip.id which is guaranteed to exist
+
+                          // Force a refresh of the SceneList to show the updated preview
+                          forceSceneRefresh++;
                           scenes = scenes.map((scene: SceneWithRelations) => {
                             if (scene.clips) {
                               scene.clips = scene.clips.map((clip: Clip) => {
@@ -512,7 +565,25 @@
                         // Force a refresh of the scene list to show the updated preview
                         // Use setTimeout to ensure the image is fully saved before refreshing
                         setTimeout(() => {
+                          console.log('Forcing scene refresh to update preview');
                           forceSceneRefresh++;
+
+                          // Also refresh the scenes array to ensure it has the latest data
+                          if (storyId) {
+                            console.log('Fetching updated story data');
+                            fetch(`/api/stories/${storyId}`)
+                              .then(response => response.json())
+                              .then(storyData => {
+                                if (storyData.success && storyData.data) {
+                                  scenes = storyData.data.scenes || [];
+                                  console.log('Updated scenes from API');
+                                } else if (storyData.scenes) {
+                                  scenes = storyData.scenes;
+                                  console.log('Updated scenes from API (legacy format)');
+                                }
+                              })
+                              .catch(err => console.error('Error fetching updated story data:', err));
+                          }
                         }, 500); // 500ms delay
                       }
                     } catch (updateError) {
@@ -543,8 +614,8 @@
         // Optionally: Handle network errors, show message
       }
       // --- End Save ---
-    } else if (selectedClip && selectedClip.canvas === canvasJson) {
-       console.log('Canvas data unchanged, skipping save.');
+    } else {
+       console.log('No clip selected or canvas data unchanged, skipping save.');
     }
   }
 
@@ -684,7 +755,7 @@
         {onDeleteScene}
         {onSelectScene}
         {onPlayScene}
-        onSelectClip={onSelectClip || handleSelectClip}
+        onSelectClip={handleSelectClip}
         onDuplicateClip={onDuplicateClip || handleDuplicateClip}
         {onUpdateClip}
         refreshTrigger={forceSceneRefresh}
