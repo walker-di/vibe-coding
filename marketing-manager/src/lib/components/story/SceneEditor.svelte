@@ -3,7 +3,10 @@
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp } from 'lucide-svelte';
+  import { Input } from '$lib/components/ui/input';
+  import { Textarea } from '$lib/components/ui/textarea';
+  import { Label } from '$lib/components/ui/label';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock } from 'lucide-svelte';
 
   // Props passed down from the page
   let {
@@ -93,7 +96,11 @@
 
     // First, update the local state immediately to ensure UI responsiveness
     // This prevents the clip from disappearing from the UI
-    selectedClip = clip;
+    // Ensure duration is set to a default value if it's null
+    selectedClip = {
+      ...clip,
+      duration: clip.duration || 3000 // Default to 3 seconds if not set
+    };
     console.log('Clip selected in SceneEditor:', clip.id, clip.orderIndex);
 
     try {
@@ -122,7 +129,11 @@
             freshClipData.imageUrl = clip.imageUrl;
           }
 
-          selectedClip = freshClipData;
+          // Ensure duration is set to a default value if it's null
+          selectedClip = {
+            ...freshClipData,
+            duration: freshClipData.duration || 3000 // Default to 3 seconds if not set
+          };
 
           // Also update the clip in the scenes array to keep everything in sync
           scenes = scenes.map((scene: SceneWithRelations) => {
@@ -224,7 +235,11 @@
 
         // Update the local state with the new image URL
         const updatedClip = await updateResponse.json();
-        selectedClip = updatedClip;
+        // Ensure duration is set to a default value if it's null
+        selectedClip = {
+          ...updatedClip,
+          duration: updatedClip.duration || 3000 // Default to 3 seconds if not set
+        };
 
         // Also update the clip in the scenes array
         scenes = scenes.map((scene: SceneWithRelations) => {
@@ -488,14 +503,82 @@
      const canvasData = selectedClip?.canvas ?? null;
      const isInstanceAvailable = !!canvasEditorInstance; // Check if the instance binding exists
 
-
      // Only proceed if the canvas instance is bound AND the canvas component signaled it's ready
      if (isInstanceAvailable && canvasIsReady && newClipId !== loadedClipIdInCanvas && canvasEditorInstance) {
-        canvasEditorInstance.loadCanvasData(canvasData);
-        loadedClipIdInCanvas = newClipId; // Update the tracker *after* loading
+       // Add a small delay before loading canvas data to ensure transitions work properly
+       setTimeout(() => {
+         try {
+           if (canvasEditorInstance) {
+             canvasEditorInstance.loadCanvasData(canvasData);
+             loadedClipIdInCanvas = newClipId; // Update the tracker *after* loading
+           }
+         } catch (error) {
+           console.error('Error loading canvas data:', error);
+         }
+       }, 100); // 100ms delay to allow UI to update
      }
    });
 
+
+  // Handler for saving clip properties
+  async function handleSaveClip() {
+    if (!selectedClip) return;
+
+    try {
+      // Prepare the data to update
+      const updateData: Partial<Clip> = {
+        narration: selectedClip.narration,
+        description: selectedClip.description,
+        duration: selectedClip.duration,
+        orderIndex: selectedClip.orderIndex
+      };
+
+      // Call the API to update the clip
+      const response = await fetch(`/api/clips/${selectedClip.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update clip. Status: ${response.status}`);
+      }
+
+      // Get the updated clip from the response
+      const updatedClip = await response.json();
+
+      // Update the local state
+      selectedClip = updatedClip;
+
+      // Update the clip in the scenes array
+      scenes = scenes.map((scene: SceneWithRelations) => {
+        if (scene.clips) {
+          scene.clips = scene.clips.map((c: Clip) => {
+            if (c.id === updatedClip.id) {
+              return updatedClip;
+            }
+            return c;
+          });
+        }
+        return scene;
+      });
+
+      // Call the onUpdateClip callback if provided
+      if (onUpdateClip) {
+        await onUpdateClip(updatedClip.id, updateData);
+      }
+
+      // Force a refresh of the scene list
+      forceSceneRefresh++;
+
+      console.log('Clip properties saved successfully');
+    } catch (error) {
+      console.error('Error saving clip properties:', error);
+      alert('Failed to save clip properties. Please try again.');
+    }
+  }
 
   // Handler for canvas changes (required by CanvasEditor)
   async function handleCanvasChange(canvasJson: string) {
@@ -677,6 +760,80 @@
         {/if}
       </div>
     </div>
+
+    <!-- Right Panel: Clip Properties (only shown when a clip is selected) -->
+    {#if selectedClip}
+      <div class="w-80 border-l flex-shrink-0 overflow-y-auto">
+        <div class="p-4 space-y-4">
+          <h2 class="text-lg font-semibold">Edit Clip</h2>
+
+          <!-- Order Index -->
+          <div class="space-y-2">
+            <Label for="orderIndex" class="flex items-center">
+              <span>Order Index</span>
+            </Label>
+            <Input
+              id="orderIndex"
+              type="number"
+              bind:value={selectedClip.orderIndex}
+              min="0"
+            />
+          </div>
+
+          <!-- Duration -->
+          <div class="space-y-2">
+            <Label for="duration" class="flex items-center">
+              <Clock class="h-4 w-4 mr-1" /> <span>Duration</span>
+            </Label>
+            <div class="flex items-center gap-2">
+              <Input
+                id="duration"
+                type="number"
+                bind:value={selectedClip.duration}
+                min="500"
+                max="10000"
+                step="100"
+              />
+              <span class="text-sm text-gray-500">{((selectedClip.duration || 3000) / 1000).toFixed(1)}s</span>
+            </div>
+            <p class="text-xs text-muted-foreground">Duration in milliseconds (0.5s to 10s)</p>
+          </div>
+
+          <!-- Description -->
+          <div class="space-y-2">
+            <Label for="description" class="flex items-center">
+              <MessageSquare class="h-4 w-4 mr-1" /> <span>Description</span>
+            </Label>
+            <Textarea
+              id="description"
+              bind:value={selectedClip.description}
+              placeholder="Brief description of this clip"
+              rows={3}
+            />
+          </div>
+
+          <!-- Narration -->
+          <div class="space-y-2">
+            <Label for="narration" class="flex items-center">
+              <FileText class="h-4 w-4 mr-1" /> <span>Narration</span>
+            </Label>
+            <Textarea
+              id="narration"
+              bind:value={selectedClip.narration}
+              placeholder="Enter narration text for this clip"
+              rows={5}
+            />
+          </div>
+
+          <!-- Save Button -->
+          <div class="pt-2">
+            <Button onclick={handleSaveClip} class="w-full">
+              <Save class="h-4 w-4 mr-2" /> Save Changes
+            </Button>
+          </div>
+        </div>
+      </div>
+    {/if}
   </div>
 
   <!-- Scenes & Clips (Bottom Panel) -->

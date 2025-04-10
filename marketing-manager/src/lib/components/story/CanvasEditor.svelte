@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, FileText, MessageSquare } from 'lucide-svelte'; // Added MessageSquare, FileText
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare } from 'lucide-svelte';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
 
   // Props
@@ -19,12 +19,11 @@
     hideControls?: boolean;
     narration?: string;
     description?: string;
-    onNarrationChange?: (data: { narration: string | null; description: string | null }) => Promise<void>;
+    onNarrationChange?: (data: { narration: string | null; description: string | null; duration: number | null }) => Promise<void>;
   }>();
 
   // State
   let canvas: any = null;
-  let canvasContainer: HTMLDivElement;
   let fabricLoaded = $state(false);
   let selectedObject = $state<any>(null);
   let isTransitioning = $state(false); // State for managing fade transition
@@ -48,12 +47,29 @@
 
       try {
         if (canvasJson) {
-          await new Promise<void>((resolve, reject) => {
-            canvas.loadFromJSON(canvasJson, () => {
-              canvas.renderAll();
-              resolve();
-            }, (err: any) => reject(err)); // Added error handling for loadFromJSON
-          });
+          // Validate JSON before loading
+          try {
+            // Check if it's a valid JSON string
+            if (typeof canvasJson === 'string') {
+              JSON.parse(canvasJson);
+            }
+
+            await new Promise<void>((resolve, reject) => {
+              canvas.loadFromJSON(canvasJson, () => {
+                canvas.renderAll();
+                resolve();
+              }, (err: any) => {
+                console.warn('Error in fabric.loadFromJSON:', err);
+                reject(err);
+              });
+            });
+          } catch (jsonError) {
+            console.error('Invalid canvas JSON data:', jsonError);
+            // If JSON is invalid, create a blank canvas instead of failing
+            canvas.clear();
+            canvas.backgroundColor = '#f0f0f0';
+            canvas.renderAll();
+          }
         } else {
           // Clear canvas if null is passed
           canvas.clear();
@@ -62,7 +78,14 @@
         }
       } catch (error) {
         console.error('Error in loadCanvasData during transition:', error);
-        // Still finish transition even if loading fails
+        // Create a blank canvas if loading fails
+        try {
+          canvas.clear();
+          canvas.backgroundColor = '#f0f0f0';
+          canvas.renderAll();
+        } catch (clearError) {
+          console.error('Failed to clear canvas:', clearError);
+        }
       } finally {
         isTransitioning = false;
         console.log('Transition ended (fade in)');
@@ -271,7 +294,7 @@
   </div>
   {/if}
 
-  <div class="border rounded-md overflow-hidden relative min-h-[500px]" bind:this={canvasContainer}>
+  <div class="border rounded-md overflow-hidden relative min-h-[500px]">
     {#if !isTransitioning}
       <div transition:fade={{ duration: 150 }}>
         <canvas id="canvas"></canvas>
@@ -294,8 +317,11 @@
   {#if onNarrationChange}
     <ClipNarrationModal
       bind:open={isNarrationModalOpen}
-      narration={narration}
-      description={description}
+      clip={{
+        narration,
+        description,
+        duration: 3000 // Default duration
+      }}
       onSave={onNarrationChange}
     />
   {/if}
