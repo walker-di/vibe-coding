@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare, Layers } from 'lucide-svelte';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
+  import LayerOrderModal from './LayerOrderModal.svelte';
 
   // Props
   let {
@@ -27,6 +28,8 @@
   let selectedObject = $state<any>(null);
   // Removed transition state
   let isNarrationModalOpen = $state(false); // State for narration modal
+  let isLayerOrderModalOpen = $state(false); // State for layer order modal
+  let canvasLayers = $state<Array<{id: string, name: string, type: string, object: any}>>([]);
 
   // Getter for selectedObject to be used from outside
   export function hasSelectedObject(): boolean {
@@ -278,6 +281,130 @@
   function updateSelection(e: any) { selectedObject = e.selected[0]; }
   function clearSelection() { selectedObject = null; }
 
+  // Layer management functions
+  function openLayerOrderModal() {
+    if (!canvas || !fabricLoaded) return;
+
+    try {
+      console.log('Opening layer order modal...');
+
+      // Get all objects from the canvas
+      const objects = canvas.getObjects();
+      console.log('Canvas objects:', objects);
+
+      if (objects.length === 0) {
+        console.log('No objects found in canvas');
+        alert('No layers to reorder. Add some objects to the canvas first.');
+        return;
+      }
+
+      // Create a layer object for each canvas object
+      canvasLayers = objects.map((obj: any, index: number) => {
+        // Ensure each object has an ID for tracking
+        if (!obj.id) {
+          obj.id = `layer-${index}-${Date.now()}`;
+        }
+
+        const layerName = obj.name || `Layer ${index + 1}`;
+        const layerType = obj.type || 'unknown';
+
+        console.log(`Layer ${index}: ${layerName} (${layerType})`);
+
+        return {
+          id: obj.id,
+          name: layerName,
+          type: layerType,
+          object: obj
+        };
+      });
+
+      console.log('Prepared layers for modal:', canvasLayers);
+
+      // Open the modal
+      isLayerOrderModalOpen = true;
+    } catch (error) {
+      console.error('Error opening layer order modal:', error);
+    }
+  }
+
+  // Apply the new layer order to the canvas
+  function applyLayerOrder(newLayers: any[]) {
+    if (!canvas || !fabricLoaded) return;
+
+    try {
+      console.log('Applying new layer order using direct stacking methods...');
+
+      // Clear the canvas selection
+      canvas.discardActiveObject();
+
+      // Log the layers we're about to reorder
+      console.log('Reordering layers:', newLayers);
+
+      // First, bring all objects to the front in reverse order
+      // This effectively sets the z-index in the order we want
+      for (let i = 0; i < newLayers.length; i++) {
+        const layer = newLayers[i];
+        if (layer.object) {
+          try {
+            // First, bring the object to the front
+            // This ensures it's at the top of the stack
+            layer.object.bringToFront();
+            console.log(`Brought layer to front: ${layer.name} (${layer.type})`);
+          } catch (err) {
+            // If bringToFront is not available on the object, try using the canvas method
+            try {
+              canvas.bringToFront(layer.object);
+              console.log(`Used canvas.bringToFront for: ${layer.name} (${layer.type})`);
+            } catch (err2) {
+              console.error(`Could not bring object to front: ${layer.name}`, err2);
+            }
+          }
+        }
+      }
+
+      // Force a re-render of the canvas
+      canvas.requestRenderAll();
+
+      // Log the final object order
+      console.log('Final canvas objects order:', canvas.getObjects());
+
+      // Save the canvas state
+      saveCanvas();
+
+      // Try a different approach if the first one didn't work
+      // This is a fallback that uses a more direct approach
+      setTimeout(() => {
+        try {
+          console.log('Trying alternative approach to reorder layers...');
+
+          // Clear all objects from the canvas
+          console.log('Clearing canvas, current objects:', canvas.getObjects().length);
+          canvas.clear();
+
+          // Add them back in the desired order
+          for (let i = 0; i < newLayers.length; i++) {
+            const layer = newLayers[i];
+            if (layer.object) {
+              canvas.add(layer.object);
+              console.log(`Re-added layer: ${layer.name} (${layer.type})`);
+            }
+          }
+
+          // Force a re-render and save
+          canvas.requestRenderAll();
+          saveCanvas();
+          console.log('Alternative reordering completed');
+        } catch (fallbackErr) {
+          console.error('Error in fallback reordering:', fallbackErr);
+        }
+      }, 100);
+
+      console.log('Layer order applied successfully');
+    } catch (error) {
+      console.error('Error applying layer order:', error);
+    }
+  }
+
   // Export these methods so they can be called from SceneEditor
   export function addRectangle() { if (!canvas) return; const wf = window as any; const r = new wf.fabric.Rect({left: 100, top: 100, fill: '#3498db', width: 100, height: 100, strokeWidth: 2, stroke: '#2980b9'}); canvas.add(r); canvas.setActiveObject(r); }
   export function addCircle() { if (!canvas) return; const wf = window as any; const c = new wf.fabric.Circle({left: 100, top: 100, fill: '#e74c3c', radius: 50, strokeWidth: 2, stroke: '#c0392b'}); canvas.add(c); canvas.setActiveObject(c); }
@@ -419,6 +546,9 @@
     <Button variant="outline" onclick={clearCanvas} title="Clear Canvas" disabled={!fabricLoaded}>
       Clear All
     </Button>
+    <Button variant="outline" onclick={openLayerOrderModal} title="Manage Layers" disabled={!fabricLoaded}>
+      <Layers class="h-4 w-4 mr-2" /> Layers
+    </Button>
     {#if onNarrationChange}
       <Button variant="outline" onclick={() => isNarrationModalOpen = true} title="Edit Narration & Description" disabled={!fabricLoaded}>
         <MessageSquare class="h-4 w-4 mr-2" /> Edit Content
@@ -449,6 +579,16 @@
         duration: 3000 // Default duration
       }}
       onSave={onNarrationChange}
+    />
+  {/if}
+
+  <!-- Layer Order Modal -->
+  {#if isLayerOrderModalOpen}
+    <LayerOrderModal
+      open={isLayerOrderModalOpen}
+      layers={canvasLayers}
+      onSave={applyLayerOrder}
+      onClose={() => isLayerOrderModalOpen = false}
     />
   {/if}
 </div>
