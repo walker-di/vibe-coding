@@ -119,7 +119,7 @@
     </div>
   {/if}
 
-  <div class="mt-4">
+  <div class="!m-10">
     <Button variant="outline" onclick={onAddClip} class="w-full">
       <Plus class="h-4 w-4 mr-2" />
       Add New Clip

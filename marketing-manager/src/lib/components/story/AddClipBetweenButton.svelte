@@ -5,13 +5,13 @@
   // Props
   let {
     scene,
-    beforeClipIndex,
-    afterClipIndex,
+    beforeClip,
+    afterClip,
     onClipAdded
   } = $props<{
     scene: SceneWithRelations;
-    beforeClipIndex: number;
-    afterClipIndex: number;
+    beforeClip: Clip;
+    afterClip: Clip;
     onClipAdded?: () => void;
   }>();
 
@@ -28,12 +28,9 @@
         throw new Error(`Scene is invalid or has no clips`);
       }
 
-      // Get the clips we're inserting between
-      const beforeClip = scene.clips[beforeClipIndex];
-      const afterClip = scene.clips[afterClipIndex];
-
+      // We now receive the clips directly as props
       if (!beforeClip || !afterClip) {
-        throw new Error("Invalid clip indexes");
+        throw new Error("Invalid clips provided");
       }
 
       // Calculate the order index between the two clips
@@ -125,10 +122,7 @@
 
       // We need to update the scene's clips array with the new clip
       // and make sure it's properly sorted by orderIndex
-      const updatedClip = {
-        ...newClip,
-        imageUrl: `/clip-previews/clip-${newClip.id}.png`
-      };
+      // Note: We don't need to update the local state since we're forcing a page reload
 
       // Call the callback to notify parent component
       // This will trigger a refresh in the parent component
@@ -150,14 +144,14 @@
   }
 </script>
 
-<div class="relative flex-shrink-0 group mx-0.5 opacity-0 hover:opacity-100 transition-opacity">
+<div class="relative flex-shrink-0 group mx-0.5 transition-opacity">
   <button
     type="button"
     onclick={createClipBetween}
     disabled={isCreating}
-    class="flex-shrink-0 w-[15px] h-[33px] border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
+    class="flex-shrink-0 mt-7 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
     title="Add clip between"
   >
-    <Plus class="h-3 w-3 text-gray-600" />
+    <Plus class="h-4 w-4 text-gray-600" />
   </button>
 </div>

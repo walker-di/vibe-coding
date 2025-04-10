@@ -725,7 +725,7 @@
 
  </script>
 
-<div class="flex flex-col h-[calc(100vh-18vh)] w-full">
+<div class="flex flex-col h-[calc(100vh-15vh)] w-full">
   <div class="flex flex-grow overflow-hidden">
     <!-- Left Panel: Buttons/Tools -->
     <div class="w-48 border-r flex flex-col overflow-y-auto">

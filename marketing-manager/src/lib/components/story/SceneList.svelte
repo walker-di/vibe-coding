@@ -586,9 +586,9 @@
           // Add the new clip and sort by orderIndex
           const updatedClips = [...(s.clips || []), updatedClip].sort(
             (a, b) => {
-              // Handle possible undefined values
-              const orderA = a?.orderIndex ?? 0;
-              const orderB = b?.orderIndex ?? 0;
+              // Handle possible undefined values and ensure we're working with numbers
+              const orderA = a?.orderIndex !== undefined && a?.orderIndex !== null ? Number(a.orderIndex) : 0;
+              const orderB = b?.orderIndex !== undefined && b?.orderIndex !== null ? Number(b.orderIndex) : 0;
               return orderA - orderB;
             }
           );
@@ -673,7 +673,7 @@
         <div
           class="border rounded-md p-0 hover:shadow-md transition-shadow p-2 flex-shrink-0"
         >
-          <div class="flex justify-between items-start mb-2">
+          <div class="flex justify-between items-start mb-0">
             <div class="flex-1 min-w-0">
               <button
                 type="button"
@@ -723,23 +723,33 @@
           </div>
 
           <!-- Clip Preview Row -->
-          <div class="mt-2 flex overflow-x-auto pb-1">
+          <div class="mt-0 flex overflow-x-auto pl-1">
             {#if scene.clips && scene.clips.length > 0}
-              {#each scene.clips as clip, clipIndex (clip.id)}
+              <!-- Sort clips by orderIndex before rendering -->
+              {#each scene.clips.slice().sort((a: Clip, b: Clip) => {
+                const aIndex = a.orderIndex !== undefined && a.orderIndex !== null ? Number(a.orderIndex) : 0;
+                const bIndex = b.orderIndex !== undefined && b.orderIndex !== null ? Number(b.orderIndex) : 0;
+                return aIndex - bIndex;
+              }) as clip, clipIndex (clip.id)}
                 {#if clipIndex > 0}
                   <AddClipBetweenButton
                     scene={scene}
-                    beforeClipIndex={clipIndex - 1}
-                    afterClipIndex={clipIndex}
+                    beforeClip={scene.clips.slice().sort((a: Clip, b: Clip) => {
+                      const aIndex = a.orderIndex !== undefined && a.orderIndex !== null ? Number(a.orderIndex) : 0;
+                      const bIndex = b.orderIndex !== undefined && b.orderIndex !== null ? Number(b.orderIndex) : 0;
+                      return aIndex - bIndex;
+                    })[clipIndex - 1]}
+                    afterClip={clip}
                     onClipAdded={() => refreshTimestamp()}
                   />
                 {/if}
-                <div class="relative flex-shrink-0 group m-1 mr-0">
+                <div class="relative flex-shrink-0 group m-1 mr-0 ml-0">
+
                   <button
                     type="button"
                     onclick={() => onSelectClip(clip)}
-                    class="flex-shrink-0 w-auto h-[40px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
-                    title="Select Clip {clip.orderIndex}"
+                    class="flex-shrink-0 w-auto h-[65px] border rounded overflow-hidden bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
+                    title="Select Clip {clip.orderIndex} (ID: {clip.id})"
                   >
                     {#if clip.imageUrl}
                       <img
@@ -817,7 +827,7 @@
               type="button"
               onclick={() => createNewClip(scene.id)}
               disabled={isCreatingClip[scene.id]}
-              class="flex-shrink-0 w-[50px] h-[33px] mt-2 !mr-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
+              class="flex-shrink-0 w-[50px] h-[33px] mt-5 !mr-1 ml-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer p-0"
               title="Add new clip"
             >
               <Plus class="h-4 w-4 text-gray-600" />
@@ -833,7 +843,7 @@
       type="button"
       onclick={createNewScene}
       disabled={isCreatingScene}
-      class="border rounded-md p-4 mt-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer"
+      class="border rounded-md p-4 mt-6 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer"
     >
       <div class="flex flex-col items-center justify-center h-full">
         <div class="rounded-full bg-gray-200 p-1.5 mb-2">
