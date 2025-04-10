@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
-  import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon, Copy, MessageSquare } from 'lucide-svelte';
+  import { Edit, Trash2, Play, Plus, Music, Image as ImageIcon, Copy, MessageSquare, ChevronsLeftRightEllipsis } from 'lucide-svelte';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import CanvasPreview from '$lib/components/story/CanvasPreview.svelte';
@@ -67,9 +67,10 @@
 
   // State
   let isCreatingScene = $state(false);
+  let isCreatingSceneBetween = $state<{[key: string]: boolean}>({});
   let isCreatingClip = $state<{[sceneId: number]: boolean}>({});
 
-  // Create a new scene directly
+  // Create a new scene directly at the end
   async function createNewScene() {
     if (isCreatingScene) return;
     isCreatingScene = true;
@@ -118,6 +119,70 @@
     }
   }
 
+  // Create a new scene between two existing scenes
+  async function createSceneBetween(beforeIndex: number, afterIndex: number) {
+    const key = `${beforeIndex}-${afterIndex}`;
+    if (isCreatingSceneBetween[key]) return;
+    isCreatingSceneBetween = { ...isCreatingSceneBetween, [key]: true };
+
+    try {
+      // Get the scenes we're inserting between
+      const beforeScene = scenes[beforeIndex];
+      const afterScene = scenes[afterIndex];
+
+      if (!beforeScene || !afterScene) {
+        throw new Error('Invalid scene indexes');
+      }
+
+      // Calculate the order index between the two scenes
+      const newOrderIndex = (beforeScene.orderIndex + afterScene.orderIndex) / 2;
+
+      // Create a new scene with the calculated order index
+      const response = await fetch('/api/scenes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          storyId: storyId,
+          orderIndex: newOrderIndex, // Place between the two scenes
+          bgmUrl: null,
+          bgmName: null
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create scene. Status: ${response.status}`);
+      }
+
+      // Get the response which includes the { success, data, message } structure
+      const responseData = await response.json();
+
+      if (!responseData.success || !responseData.data) {
+        throw new Error(responseData.message || 'Failed to get valid scene data from API response.');
+      }
+
+      // Extract the actual scene object from the 'data' property
+      const newScene = responseData.data;
+
+      // Add the new scene to the scenes array and sort by orderIndex
+      scenes = [...scenes, { ...newScene, clips: [] }].sort((a, b) => a.orderIndex - b.orderIndex);
+
+      // Also call the parent's onAddScene if it exists
+      if (onAddScene) {
+        onAddScene();
+      }
+    } catch (error) {
+      console.error('Error creating scene between:', error);
+      alert('Failed to create new scene. Please try again.');
+    } finally {
+      isCreatingSceneBetween = { ...isCreatingSceneBetween, [key]: false };
+    }
+  }
+
+  async function openTransitionModal() {
+    alert('Transition modal is not implemented yet.');
+  }
   // Create a new clip directly
   // Handle opening the narration modal
   function handleEditNarration(clip: Clip, event: Event) {
@@ -380,6 +445,28 @@
   <div class="flex space-x-1 overflow-x-auto">
     {#if scenes.length > 0}
       {#each scenes as scene, index (scene.id)}
+        {#if index > 0}
+          <div>
+            <button
+            type="button"
+            onclick={() => openTransitionModal()}
+            disabled={isCreatingSceneBetween[`${index-1}-${index}`]}
+            class="flex-shrink-0 mx-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer">
+            <div class="flex flex-col items-center justify-center">
+              <ChevronsLeftRightEllipsis class="h-4 w-4 text-gray-600" />
+            </div>
+          </button>
+          <button
+          type="button"
+          onclick={() => createSceneBetween(index-1, index)}
+          disabled={isCreatingSceneBetween[`${index-1}-${index}`]}
+          class="flex-shrink-0 mt-2 mb-2 mx-1 border rounded bg-gray-50 hover:bg-gray-100 flex items-center justify-center relative hover:ring-2 hover:ring-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer">
+          <div class="flex flex-col items-center justify-center">
+            <Plus class="h-4 w-4 text-gray-600" />
+          </div>
+        </button>
+          </div>
+        {/if}
         <div class="border rounded-md p-0 hover:shadow-md transition-shadow p-2 flex-shrink-0">
           <div class="flex justify-between items-start mb-2">
             <div class="flex-1 min-w-0">

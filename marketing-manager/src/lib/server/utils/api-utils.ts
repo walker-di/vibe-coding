@@ -12,6 +12,7 @@ export enum HttpStatus {
   UNAUTHORIZED = 401,
   FORBIDDEN = 403,
   NOT_FOUND = 404,
+  CONFLICT = 409,
   INTERNAL_SERVER_ERROR = 500
 }
 
@@ -40,12 +41,12 @@ export function validateId(id: string | undefined, paramName: string = 'ID'): nu
   if (!id) {
     throw error(HttpStatus.BAD_REQUEST, `${paramName} parameter is missing`);
   }
-  
+
   const numericId = parseInt(id, 10);
   if (isNaN(numericId)) {
     throw error(HttpStatus.BAD_REQUEST, `Invalid ${paramName} format`);
   }
-  
+
   return numericId;
 }
 
@@ -57,13 +58,13 @@ export function validateId(id: string | undefined, paramName: string = 'ID'): nu
  */
 export function validateRequiredFields(data: any, requiredFields: string[]): void {
   const missingFields = requiredFields.filter(field => {
-    return data[field] === undefined || data[field] === null || 
+    return data[field] === undefined || data[field] === null ||
            (typeof data[field] === 'string' && data[field].trim() === '');
   });
-  
+
   if (missingFields.length > 0) {
     throw error(
-      HttpStatus.BAD_REQUEST, 
+      HttpStatus.BAD_REQUEST,
       `Missing required fields: ${missingFields.join(', ')}`
     );
   }
@@ -86,14 +87,14 @@ export function handleNotFoundError(message: string = 'Resource not found'): nev
  */
 export function handleServerError(err: any, message: string = 'Internal server error'): never {
   console.error('Server error:', err);
-  
+
   // If it's already a SvelteKit error, re-throw it
   if (err.status && err.body) {
     throw err;
   }
-  
+
   throw error(
-    HttpStatus.INTERNAL_SERVER_ERROR, 
+    HttpStatus.INTERNAL_SERVER_ERROR,
     `${message}: ${err.message || 'Unknown error'}`
   );
 }
@@ -112,7 +113,7 @@ export function withErrorHandling(handler: (event: RequestEvent) => Promise<Resp
       if (err.status && err.body) {
         throw err;
       }
-      
+
       // Otherwise, handle as a server error
       return handleServerError(err);
     }

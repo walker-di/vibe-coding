@@ -23,14 +23,20 @@ export const POST = withErrorHandling(async ({ request }: RequestEvent) => {
 
   const storyId = sceneData.storyId;
 
-  // Find the current maximum orderIndex for this story
-  const maxOrderResult = await db
-    .select({ maxOrder: sql<number>`max(${scenes.orderIndex})`.mapWith(Number) })
-    .from(scenes)
-    .where(eq(scenes.storyId, storyId));
+  // If orderIndex is provided, use it; otherwise, calculate the next available index
+  let newOrderIndex;
+  if (sceneData.orderIndex !== undefined) {
+    newOrderIndex = sceneData.orderIndex;
+  } else {
+    // Find the current maximum orderIndex for this story
+    const maxOrderResult = await db
+      .select({ maxOrder: sql<number>`max(${scenes.orderIndex})`.mapWith(Number) })
+      .from(scenes)
+      .where(eq(scenes.storyId, storyId));
 
-  const maxOrderIndex = maxOrderResult[0]?.maxOrder ?? -1; // Default to -1 if no scenes exist
-  const newOrderIndex = maxOrderIndex + 1;
+    const maxOrderIndex = maxOrderResult[0]?.maxOrder ?? -1; // Default to -1 if no scenes exist
+    newOrderIndex = maxOrderIndex + 1;
+  }
 
   let newScene;
   try {
