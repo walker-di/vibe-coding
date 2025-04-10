@@ -93,7 +93,13 @@
   }
 
   // Function to update a clip
-  async function handleUpdateClip(clipId: number, data: Partial<Clip>) {
+  async function handleUpdateClip(clipId: number | undefined, data: Partial<Clip>) {
+    // Validate clipId
+    if (!clipId) {
+      console.error('Cannot update clip: Invalid or undefined clip ID');
+      throw new Error('Cannot update clip: Invalid clip ID');
+    }
+
     try {
       const response = await fetch(`/api/clips/${clipId}`, {
         method: 'PUT',

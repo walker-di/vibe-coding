@@ -386,7 +386,11 @@
 
   // Handler for saving clip properties
   async function handleSaveClip() {
+    // Early return if no clip is selected
     if (!selectedClip) return;
+
+    // Store the clip ID for later use
+    const clipId = selectedClip.id;
 
     try {
       // Prepare the data to update
@@ -412,6 +416,11 @@
 
       // Get the updated clip from the response
       const updatedClip = await response.json();
+
+      // Ensure the updatedClip has an ID (use the original ID if missing)
+      if (!updatedClip.id && selectedClip.id) {
+        updatedClip.id = selectedClip.id;
+      }
 
       // Log the before and after state for debugging
       console.log('handleSaveClip - Before update - selectedClip:', JSON.stringify({
@@ -479,14 +488,13 @@
       });
 
       // Call the onUpdateClip callback if provided
-      if (onUpdateClip) {
-        await onUpdateClip(updatedClip.id, updateData);
+      // Use the stored clipId which we know is valid, not updatedClip.id which might be undefined
+      if (onUpdateClip && clipId) {
+        await onUpdateClip(clipId, updateData);
       }
 
-      // Force a refresh of the scene list
-      forceSceneRefresh++;
-
       console.log('Clip properties saved successfully');
+      // Removed: forceSceneRefresh++; // Rely on direct state updates
     } catch (error) {
       console.error('Error saving clip properties:', error);
       alert('Failed to save clip properties. Please try again.');
@@ -667,84 +675,9 @@
                           });
                         }
 
-                        // Force a refresh of the scene list to show the updated preview
-                        // Use setTimeout to ensure the image is fully saved before refreshing
-                        setTimeout(() => {
-                          console.log('Forcing scene refresh to update preview');
-                          forceSceneRefresh++;
-
-                          // Also refresh the scenes array to ensure it has the latest data
-                          if (storyId) {
-                            console.log('Fetching updated story data');
-                            // Store the current selectedClip ID before updating scenes
-                            const currentSelectedClipId = selectedClip?.id;
-
-                            fetch(`/api/stories/${storyId}`)
-                              .then(response => response.json())
-                              .then(storyData => {
-                                let newScenes = [];
-                                if (storyData.success && storyData.data) {
-                                  newScenes = storyData.data.scenes || [];
-                                  console.log('Updated scenes from API');
-                                } else if (storyData.scenes) {
-                                  newScenes = storyData.scenes;
-                                  console.log('Updated scenes from API (legacy format)');
-                                }
-
-                                // Store the current selectedClip before updating scenes
-                                const currentSelectedClip = selectedClip;
-
-                                // Update scenes
-                                scenes = newScenes;
-
-                                // Restore the selected clip after scenes update
-                                if (currentSelectedClipId && currentSelectedClip) {
-                                  // Find the clip in the updated scenes
-                                  let foundClip: Clip | null = null;
-                                  for (const scene of newScenes) {
-                                    if (scene.clips) {
-                                      const clip = scene.clips.find((c: Clip) => c.id === currentSelectedClipId);
-                                      if (clip) {
-                                        foundClip = clip;
-                                        break;
-                                      }
-                                    }
-                                  }
-
-                                  // If we found the clip, update selectedClip
-                                  if (foundClip) {
-                                    console.log('Restoring selected clip after scenes update:', foundClip.id);
-
-                                    // Create a complete clip object with all required properties
-                                    selectedClip = {
-                                      // Start with the found clip from the updated scenes
-                                      ...foundClip,
-                                      // Ensure these specific properties are preserved from the current selectedClip
-                                      narration: foundClip.narration ?? currentSelectedClip.narration ?? '',
-                                      description: foundClip.description ?? currentSelectedClip.description ?? '',
-                                      duration: foundClip.duration ?? currentSelectedClip.duration ?? 3000,
-                                      orderIndex: foundClip.orderIndex ?? currentSelectedClip.orderIndex ?? 0,
-                                      // Keep the canvas data from before to prevent unnecessary reloading
-                                      canvas: currentSelectedClip.canvas || foundClip.canvas || '',
-                                      // Keep the image URL from before if not in the found clip
-                                      imageUrl: foundClip.imageUrl || currentSelectedClip.imageUrl || ''
-                                    };
-
-                                    console.log('Restored clip properties:', JSON.stringify({
-                                      id: selectedClip.id,
-                                      narration: selectedClip.narration,
-                                      description: selectedClip.description,
-                                      duration: selectedClip.duration,
-                                      orderIndex: selectedClip.orderIndex,
-                                      hasCanvas: !!selectedClip.canvas,
-                                      hasImageUrl: !!selectedClip.imageUrl
-                                    }));
-                                  }
-                                }
-                              })
-                              .catch(err => console.error('Error fetching updated story data:', err));
-                          }
-                        }, 500); // 500ms delay
+                        // Removed forceSceneRefresh and full story refetch.
+                        // Direct updates to `scenes` and `selectedClip` should trigger UI updates.
+                        console.log('Clip canvas and preview updated successfully.');
                       }
                     } catch (updateError) {
                       // Use optional chaining to safely access selectedClip.id
