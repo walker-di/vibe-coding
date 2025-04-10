@@ -6,15 +6,10 @@ Update this file.
 If you finished the implemnentio,
 Run the project and test it using the browser
 Update this file with the bugs you found.
-Start the loop from the beginning.
+Start the loop from the beginning( no need to ask. just do it).
 
 
 ## 1. REST API Standardization
-
-### 1.1 Standardize API Response Format
-- [ ] Create a consistent response format for all API endpoints
-  - Success responses: `{ data: <result>, message: <optional message> }`
-  - Error responses: `{ error: <error message>, details: <optional details> }`
 
 ### 1.2 Standardize HTTP Status Codes
 - [x] Use appropriate HTTP status codes consistently across all endpoints:
@@ -37,7 +32,7 @@ Start the loop from the beginning.
 - [x] Standardize error handling and response format
 
 ### 2.2 Stories API
-- [x] Refactor `/api/stories` and `/api/stories/[id]` endpoints to use named exports
+- [x] Refactor `/api/stories` and `/api/stories/[id]` endpoints to use named exports       
 - [x] Add proper TypeScript types for all parameters and responses
 - [x] Standardize error handling and response format
 
@@ -153,7 +148,7 @@ Start the loop from the beginning.
 - [ ] Address high-priority bugs identified in initial testing
 - [ ] Fix UI/UX issues in the main user flows
 - [ ] Test fixes to ensure they resolve the identified issues
-- [ ] Update the bug list, removing fixed items and adding any newly discovered issues
+- [ ] Update the bug list, removing fixed items and adding any newly discovered issues     
 
 ### 7.3 Second Debugging Iteration
 - [ ] Address medium-priority bugs from the updated list
