@@ -1,91 +1,87 @@
+import type { RequestEvent } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { scenes } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import {
+  successResponse,
+  HttpStatus,
+  validateId,
+  validateRequiredFields,
+  handleNotFoundError,
+  handleServerError,
+  withErrorHandling
+} from '$lib/server/utils/api-utils';
 
-export async function GET({ params }) {
-  try {
-    const sceneId = parseInt(params.id);
-    if (isNaN(sceneId)) {
-      return json({ error: 'Invalid scene ID' }, { status: 400 });
-    }
+/**
+ * GET handler for retrieving a scene by ID
+ */
+export const GET = withErrorHandling(async ({ params }: RequestEvent) => {
+  // Validate and parse the ID parameter
+  const sceneId = validateId(params.id, 'scene ID');
 
-    const scene = await db.query.scenes.findFirst({
-      where: eq(scenes.id, sceneId),
-      with: {
-        clips: {
-          orderBy: (clips, { asc }) => [asc(clips.orderIndex)]
-        }
+  const scene = await db.query.scenes.findFirst({
+    where: eq(scenes.id, sceneId),
+    with: {
+      clips: {
+        orderBy: (clips, { asc }) => [asc(clips.orderIndex)]
       }
-    });
-
-    if (!scene) {
-      return json({ error: 'Scene not found' }, { status: 404 });
     }
+  });
 
-    return json(scene);
-  } catch (error) {
-    console.error('Error fetching scene:', error);
-    return json({ error: 'Failed to fetch scene' }, { status: 500 });
+  if (!scene) {
+    handleNotFoundError(`Scene with ID ${sceneId} not found`);
   }
-}
 
-export async function PUT({ params, request }) {
-  try {
-    const sceneId = parseInt(params.id);
-    if (isNaN(sceneId)) {
-      return json({ error: 'Invalid scene ID' }, { status: 400 });
-    }
+  return json(successResponse(scene), { status: HttpStatus.OK });
+});
 
-    const sceneData = await request.json();
+/**
+ * PUT handler for updating a scene by ID
+ */
+export const PUT = withErrorHandling(async ({ params, request }: RequestEvent) => {
+  // Validate and parse the ID parameter
+  const sceneId = validateId(params.id, 'scene ID');
 
-    // Validate required fields
-    if (sceneData.orderIndex === undefined || sceneData.orderIndex === null) {
-      return json({ error: 'Order index is required' }, { status: 400 });
-    }
+  const sceneData = await request.json();
 
-    // Update scene using type assertions to bypass TypeScript's type checking
-    const [updatedScene] = await db.update(scenes)
-      .set({
-        bgmUrl: sceneData.bgmUrl || null,
-        bgmName: sceneData.bgmName || null,
-        description: sceneData.description || null,
-        orderIndex: sceneData.orderIndex,
-        updatedAt: new Date() // Use new Date() object
-      } as any)
-      .where(eq(scenes.id, sceneId))
-      .returning();
+  // Validate required fields
+  validateRequiredFields(sceneData, ['orderIndex']);
 
-    if (!updatedScene) {
-      return json({ error: 'Scene not found' }, { status: 404 });
-    }
+  // Update scene
+  const [updatedScene] = await db.update(scenes)
+    .set({
+      bgmUrl: sceneData.bgmUrl || null,
+      bgmName: sceneData.bgmName || null,
+      description: sceneData.description || null,
+      orderIndex: sceneData.orderIndex,
+      updatedAt: new Date()
+    })
+    .where(eq(scenes.id, sceneId))
+    .returning();
 
-    return json(updatedScene);
-  } catch (error) {
-    console.error('Error updating scene:', error);
-    return json({ error: 'Failed to update scene' }, { status: 500 });
+  if (!updatedScene) {
+    handleNotFoundError(`Scene with ID ${sceneId} not found`);
   }
-}
 
-export async function DELETE({ params }) {
-  try {
-    const sceneId = parseInt(params.id);
-    if (isNaN(sceneId)) {
-      return json({ error: 'Invalid scene ID' }, { status: 400 });
-    }
+  return json(successResponse(updatedScene), { status: HttpStatus.OK });
+});
 
-    // Delete scene (cascade will handle related clips)
-    const [deletedScene] = await db.delete(scenes)
-      .where(eq(scenes.id, sceneId))
-      .returning();
+/**
+ * DELETE handler for removing a scene by ID
+ */
+export const DELETE = withErrorHandling(async ({ params }: RequestEvent) => {
+  // Validate and parse the ID parameter
+  const sceneId = validateId(params.id, 'scene ID');
 
-    if (!deletedScene) {
-      return json({ error: 'Scene not found' }, { status: 404 });
-    }
+  // Delete scene (cascade will handle related clips)
+  const [deletedScene] = await db.delete(scenes)
+    .where(eq(scenes.id, sceneId))
+    .returning();
 
-    return json({ success: true });
-  } catch (error) {
-    console.error('Error deleting scene:', error);
-    return json({ error: 'Failed to delete scene' }, { status: 500 });
+  if (!deletedScene) {
+    handleNotFoundError(`Scene with ID ${sceneId} not found`);
   }
-}
+
+  return json(successResponse({ success: true }, 'Scene deleted successfully'), { status: HttpStatus.OK });
+});

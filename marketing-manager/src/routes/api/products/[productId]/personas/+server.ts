@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { personas } from '$lib/server/db/schema';
-import { json, error as kitError } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import { desc, eq } from 'drizzle-orm'; // Import eq for filtering
 import type { RequestHandler } from './$types';
 import { z } from 'zod'; // For validation
@@ -40,7 +40,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	const productId = parseInt(productIdParam, 10);
 
 	if (isNaN(productId)) {
-		kitError(400, 'Invalid Product ID');
+		throw error(400, 'Invalid Product ID');
 	}
 
 	console.log(`API: Loading personas for product ID: ${productId}...`);
@@ -60,10 +60,13 @@ export const GET: RequestHandler = async ({ params }) => {
 
 		console.log(`API: Found ${productPersonas.length} personas for product ${productId}.`);
 		return json(productPersonas); // Return personas as JSON
-	} catch (error) {
-		console.error(`API: Failed to load personas for product ${productId}:`, error);
-		// Return a server error response
-		kitError(500, 'Failed to load personas');
+	} catch (err) {
+		console.error(`API: Failed to load personas for product ${productId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, 'Failed to load personas');
 	}
 };
 
@@ -73,7 +76,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	const productId = parseInt(productIdParam, 10);
 
 	if (isNaN(productId)) {
-		kitError(400, 'Invalid Product ID');
+		throw error(400, 'Invalid Product ID');
 	}
 
 	// TODO: Optionally, verify the product ID exists in the database first
@@ -86,7 +89,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	try {
 		requestData = await request.json();
 	} catch (e) {
-		return json({ message: 'Invalid JSON body' }, { status: 400 });
+		throw error(400, 'Invalid JSON body');
 	}
 
 	// Use the detailed schema for validation
@@ -94,7 +97,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
 	if (!validationResult.success) {
 		const errors = validationResult.error.flatten().fieldErrors;
-		return json({ message: 'Validation failed', errors }, { status: 400 });
+		throw error(400, { message: 'Validation failed', errors });
 	}
 
 	// Ensure ageRangeCustom is cleared if ageRangeSelection is not 'Custom'
@@ -138,9 +141,12 @@ export const POST: RequestHandler = async ({ request, params }) => {
 		// Return the newly created persona ID and name with a 201 status
 		return json({ id: newPersona.id, name: validatedData.name }, { status: 201 });
 
-	} catch (error) {
-		console.error(`API: Failed to create persona for product ${productId}:`, error);
-		// Use SvelteKit's error helper for internal errors
-		kitError(500, 'Failed to create persona. Please try again.');
+	} catch (err) {
+		console.error(`API: Failed to create persona for product ${productId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, 'Failed to create persona. Please try again.');
 	}
 };

@@ -1,6 +1,7 @@
 node_modules
 
 static/clip-previews
+static/template-previews
 # Output
 .output
 .vercel

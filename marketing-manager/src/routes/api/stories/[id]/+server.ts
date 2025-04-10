@@ -1,94 +1,100 @@
+import type { RequestEvent } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { stories } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import {
+  successResponse,
+  HttpStatus,
+  validateId,
+  validateRequiredFields,
+  handleNotFoundError,
+  handleServerError,
+  withErrorHandling
+} from '$lib/server/utils/api-utils';
 
-export async function GET({ params }) {
-  try {
-    const storyId = parseInt(params.id);
-    if (isNaN(storyId)) {
-      return json({ error: 'Invalid story ID' }, { status: 400 });
-    }
+/**
+ * GET handler for retrieving a story by ID
+ */
+export const GET = withErrorHandling(async ({ params }: RequestEvent) => {
+  // Validate and parse the ID parameter
+  const storyId = validateId(params.id, 'story ID');
 
-    const story = await db.query.stories.findFirst({
-      where: eq(stories.id, storyId),
-      with: {
-        scenes: {
-          with: {
-            clips: true
-          },
-          orderBy: (scenes, { asc }) => [asc(scenes.orderIndex)]
-        }
+  const story = await db.query.stories.findFirst({
+    where: eq(stories.id, storyId),
+    with: {
+      scenes: {
+        with: {
+          clips: true
+        },
+        orderBy: (scenes, { asc }) => [asc(scenes.orderIndex)]
       }
-    });
-
-    if (!story) {
-      return json({ error: 'Story not found' }, { status: 404 });
     }
+  });
 
-    return json(story);
-  } catch (error) {
-    console.error('Error fetching story:', error);
-    return json({ error: 'Failed to fetch story' }, { status: 500 });
+  if (!story) {
+    handleNotFoundError(`Story with ID ${storyId} not found`);
   }
-}
 
-export async function PUT({ params, request }) {
-  try {
-    const storyId = parseInt(params.id);
-    if (isNaN(storyId)) {
-      return json({ error: 'Invalid story ID' }, { status: 400 });
-    }
+  return json(successResponse(story), { status: HttpStatus.OK });
+});
 
-    const storyData = await request.json();
+/**
+ * PUT handler for updating a story by ID
+ */
+export const PUT = withErrorHandling(async ({ params, request }: RequestEvent) => {
+  // Validate and parse the ID parameter
+  const storyId = validateId(params.id, 'story ID');
 
-    // Validate required fields
-    if (!storyData.title) {
-      return json({ error: 'Title is required' }, { status: 400 });
-    }
+  const storyData = await request.json();
 
-    // Update story using type assertions to bypass TypeScript's type checking
-    const [updatedStory] = await db.update(stories)
-      .set({
-        title: storyData.title,
-        description: storyData.description || null,
-        aspectRatio: storyData.aspectRatio || undefined, // Only update if provided
-        resolution: storyData.resolution !== undefined ? storyData.resolution : undefined, // Only update if provided
-        updatedAt: new Date() // Use new Date() object
-      } as any)
-      .where(eq(stories.id, storyId))
-      .returning();
+  // Validate required fields
+  validateRequiredFields(storyData, ['title']);
 
-    if (!updatedStory) {
-      return json({ error: 'Story not found' }, { status: 404 });
-    }
+  // Build the update object
+  const updateData = {
+    title: storyData.title,
+    description: storyData.description || null,
+    updatedAt: new Date()
+  };
 
-    return json(updatedStory);
-  } catch (error) {
-    console.error('Error updating story:', error);
-    return json({ error: 'Failed to update story' }, { status: 500 });
+  // Only include optional fields if they are provided
+  if (storyData.aspectRatio !== undefined) {
+    updateData['aspectRatio'] = storyData.aspectRatio;
   }
-}
 
-export async function DELETE({ params }) {
-  try {
-    const storyId = parseInt(params.id);
-    if (isNaN(storyId)) {
-      return json({ error: 'Invalid story ID' }, { status: 400 });
-    }
-
-    // Delete story (cascade will handle related scenes and clips)
-    const [deletedStory] = await db.delete(stories)
-      .where(eq(stories.id, storyId))
-      .returning();
-
-    if (!deletedStory) {
-      return json({ error: 'Story not found' }, { status: 404 });
-    }
-
-    return json({ success: true });
-  } catch (error) {
-    console.error('Error deleting story:', error);
-    return json({ error: 'Failed to delete story' }, { status: 500 });
+  if (storyData.resolution !== undefined) {
+    updateData['resolution'] = storyData.resolution;
   }
-}
+
+  // Update story
+  const [updatedStory] = await db.update(stories)
+    .set(updateData)
+    .where(eq(stories.id, storyId))
+    .returning();
+
+  if (!updatedStory) {
+    handleNotFoundError(`Story with ID ${storyId} not found`);
+  }
+
+  return json(successResponse(updatedStory), { status: HttpStatus.OK });
+});
+
+/**
+ * DELETE handler for removing a story by ID
+ */
+export const DELETE = withErrorHandling(async ({ params }: RequestEvent) => {
+  // Validate and parse the ID parameter
+  const storyId = validateId(params.id, 'story ID');
+
+  // Delete story (cascade will handle related scenes and clips)
+  const [deletedStory] = await db.delete(stories)
+    .where(eq(stories.id, storyId))
+    .returning();
+
+  if (!deletedStory) {
+    handleNotFoundError(`Story with ID ${storyId} not found`);
+  }
+
+  return json(successResponse({ success: true }, 'Story deleted successfully'), { status: HttpStatus.OK });
+});

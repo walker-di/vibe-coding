@@ -39,7 +39,17 @@
       if (!response.ok) {
         throw new Error(`Failed to fetch story. Status: ${response.status}`);
       }
-      story = await response.json();
+      const responseData = await response.json();
+
+      // Handle the new response format with success, data, and message fields
+      if (responseData.success && responseData.data) {
+        story = responseData.data;
+      } else if (responseData.id) {
+        // Handle the old format for backward compatibility
+        story = responseData;
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (e: any) {
       console.error('Error fetching story:', e);
       error = e.message || 'Failed to load story';
@@ -151,8 +161,50 @@
     // rather by the SceneList within it.
     if (creativeId && storyId) {
       goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${sceneId}`);
-     }
-   }
+    }
+  }
+
+  // Function to handle selecting a clip
+  function handleSelectClip(clip: Clip) {
+    // Navigate to the clip detail page
+    if (creativeId && storyId) {
+      goto(`/creatives/${creativeId}/stories/${storyId}/scenes/${clip.sceneId}/clips/${clip.id}`);
+    }
+  }
+
+  // Function to handle duplicating a clip
+  async function handleDuplicateClip(clip: Clip) {
+    try {
+      // Create a new clip with the same data
+      const response = await fetch('/api/clips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sceneId: clip.sceneId,
+          orderIndex: clip.orderIndex + 0.5, // Position right after the current clip
+          canvas: clip.canvas,
+          narration: clip.narration,
+          description: clip.description,
+          duration: clip.duration,
+          imageUrl: clip.imageUrl
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to duplicate clip. Status: ${response.status}`);
+      }
+
+      // Refresh the story data to update the UI
+      if (storyId) {
+        fetchStory(storyId);
+      }
+    } catch (e: any) {
+      console.error('Error duplicating clip:', e);
+      alert(`Failed to duplicate clip: ${e.message}`);
+    }
+  }
 
 </script>
 
@@ -188,14 +240,13 @@
           <SceneEditor
             scenes={story.scenes || []}
             storyId={story.id}
-            creativeId={creativeId}
             aspectRatio={story.aspectRatio}
-            resolution={story.resolution}
-            onAddScene={handleAddScene}
             onEditScene={handleEditScene}
             onDeleteScene={handleDeleteScene}
             onSelectScene={handleSelectScene}
             onUpdateClip={handleUpdateClip}
+            onSelectClip={handleSelectClip}
+            onDuplicateClip={handleDuplicateClip}
           />
         {:else}
            <!-- Placeholder if IDs are missing, even if story loaded -->

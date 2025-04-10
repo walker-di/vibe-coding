@@ -52,7 +52,7 @@
 			}
 			const data = await response.json();
 			// API returns the array directly, assign it to the state
-			stories = Array.isArray(data) ? data : [];
+			stories = data;
 		} catch (error) {
 			console.error('Error fetching stories:', error);
 			stories = []; // Set to empty array on error

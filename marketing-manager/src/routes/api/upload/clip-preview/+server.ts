@@ -7,7 +7,10 @@ import { purgeUnusedClipPreviews } from '$lib/server/utils/purgeClipPreviews';
 const UPLOAD_DIR = path.join('static', 'clip-previews');
 await fs.mkdir(UPLOAD_DIR, { recursive: true });
 
-export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent type
+/**
+ * POST handler for uploading clip preview images
+ */
+export const POST = async ({ request }: RequestEvent) => {
   try {
     const body = await request.json();
     const imageDataUrl = body.imageData;
@@ -15,11 +18,11 @@ export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent t
 
     if (!clipId || typeof clipId !== 'number') {
       console.error('clip-preview API: Missing or invalid clipId');
-      throw error(400, 'Missing or invalid clipId.');
+      throw error(400, { message: 'Missing or invalid clipId.' });
     }
     if (!imageDataUrl || typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image/png;base64,')) {
       console.error('clip-preview API: Invalid image data format');
-      throw error(400, 'Invalid image data format. Expected PNG base64 data URL.');
+      throw error(400, { message: 'Invalid image data format. Expected PNG base64 data URL.' });
     }
 
     // Extract base64 data
@@ -51,7 +54,10 @@ export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent t
         console.error('[Purge] Error during automatic purge:', err);
       });
 
-    return json({ imageUrl: timestampedUrl });
+    return json({
+      data: { imageUrl: timestampedUrl },
+      message: 'Clip preview uploaded successfully'
+    }, { status: 200 });
 
   } catch (err: any) {
     console.error('Error processing image upload:', err);
@@ -60,6 +66,6 @@ export const POST = async ({ request }: RequestEvent) => { // Use RequestEvent t
       throw err; // Re-throw SvelteKit errors
     }
     // Throw a generic internal server error otherwise
-    throw error(500, `Failed to process image upload: ${err.message || 'Unknown error'}`);
+    throw error(500, { message: `Failed to process image upload: ${err.message || 'Unknown error'}` });
   }
 };

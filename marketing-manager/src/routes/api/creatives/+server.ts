@@ -2,8 +2,8 @@ import { db } from '$lib/server/db';
 // Import necessary tables and enums
 import { creatives, creativeText, creativeImage, creativeVideo, creativeLp } from '$lib/server/db/schema'; // Import tables
 import { creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/components/constants'; // Import constants
-import { json, error as kitError } from '@sveltejs/kit';
-import { desc, eq } from 'drizzle-orm';
+import { json, error } from '@sveltejs/kit';
+import { desc, eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { z } from 'zod'; // For validation
 
@@ -15,7 +15,7 @@ const baseCreativeSchema = z.object({
 	description: z.string().max(500).optional().nullable(),
 	campaignId: z.number().int().positive().optional().nullable(),
 	personaId: z.number().int().positive(), // Made required (removed optional/nullable)
-	// themeId field removed from schema
+	themeId: z.number().int().positive().optional().nullable(),
 	// Type will be validated specifically based on payload
 });
 
@@ -81,40 +81,69 @@ export const GET: RequestHandler = async ({ url }) => {
 	try {
 		// Read query parameters
 		const personaIdParam = url.searchParams.get('personaId');
-		// TODO: Add other filters (campaignId, themeId, type) later
-		// const campaignIdParam = url.searchParams.get('campaignId');
-		// const typeParam = url.searchParams.get('type');
+		const campaignIdParam = url.searchParams.get('campaignId');
+		const typeParam = url.searchParams.get('type');
 
-		let whereCondition = undefined;
+		// Build where conditions
+		let conditions = [];
+
 		if (personaIdParam) {
 			const personaId = parseInt(personaIdParam, 10);
-			if (!isNaN(personaId)) {
-				console.log(`API: Filtering creatives by personaId: ${personaId}`);
-				whereCondition = eq(creatives.personaId, personaId);
-			} else {
+			if (isNaN(personaId)) {
 				console.warn(`API: Invalid personaId parameter received: ${personaIdParam}`);
-				// Optionally return 400 Bad Request if personaId is invalid format
+				throw error(400, 'Invalid personaId parameter');
 			}
+			console.log(`API: Filtering creatives by personaId: ${personaId}`);
+			conditions.push(eq(creatives.personaId, personaId));
 		}
-		// TODO: Add conditions for other filters using `and()` if needed
+
+		if (campaignIdParam) {
+			const campaignId = parseInt(campaignIdParam, 10);
+			if (isNaN(campaignId)) {
+				console.warn(`API: Invalid campaignId parameter received: ${campaignIdParam}`);
+				throw error(400, 'Invalid campaignId parameter');
+			}
+			console.log(`API: Filtering creatives by campaignId: ${campaignId}`);
+			conditions.push(eq(creatives.campaignId, campaignId));
+		}
+
+		if (typeParam) {
+			if (!creativeTypes.includes(typeParam)) {
+				console.warn(`API: Invalid type parameter received: ${typeParam}`);
+				throw error(400, `Invalid type parameter. Must be one of: ${creativeTypes.join(', ')}`);
+			}
+			console.log(`API: Filtering creatives by type: ${typeParam}`);
+			conditions.push(eq(creatives.type, typeParam));
+		}
+
+		// Combine conditions if needed
+		let whereCondition = undefined;
+		if (conditions.length === 1) {
+			whereCondition = conditions[0];
+		} else if (conditions.length > 1) {
+			// Use and() to combine multiple conditions
+			whereCondition = and(...conditions);
+		}
 
 		const results = await db.query.creatives.findMany({
-			where: whereCondition, // Apply the where condition
+			where: whereCondition,
 			orderBy: [desc(creatives.createdAt)],
-			// Include basic related data for list display
 			with: {
 				campaign: { columns: { id: true, name: true } },
 				persona: { columns: { id: true, name: true } }
-				// Specific type data could be fetched on detail view
+				// theme relation is causing issues, removed for now
 			}
 		});
 
 		console.log(`API: Found ${results.length} creatives matching filter.`);
-		// If no results found for a specific filter, return empty array (not 404)
 		return json(results);
-	} catch (error) {
-		console.error('API: Failed to load creatives:', error);
-		kitError(500, 'Failed to load creatives');
+	} catch (err) {
+		console.error('API: Failed to load creatives:', err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, 'Failed to load creatives');
 	}
 };
 
@@ -123,28 +152,28 @@ export const POST: RequestHandler = async ({ request }) => {
 	let requestData;
 	try {
 		requestData = await request.json();
-		console.log('API POST /api/creatives: Received request data:', JSON.stringify(requestData, null, 2)); // Log received data
+		console.log('API POST /api/creatives: Received request data:', JSON.stringify(requestData, null, 2));
 	} catch (e) {
-		console.error('API POST /api/creatives: Invalid JSON format', e); // Log error
-		return json({ message: 'Invalid JSON body' }, { status: 400 });
+		console.error('API POST /api/creatives: Invalid JSON format', e);
+		throw error(400, 'Invalid JSON body');
 	}
 
-	console.log('API POST /api/creatives: Validating request data...'); // Log before validation
+	console.log('API POST /api/creatives: Validating request data...');
 	const validationResult = createCreativeSchema.safeParse(requestData);
 
 	if (!validationResult.success) {
-		const errors = validationResult.error.flatten(); // Use flatten for better error structure
+		const errors = validationResult.error.flatten();
 		console.error("API Creative Validation Failed:", errors);
-		return json({ message: 'Validation failed', errors: errors.fieldErrors }, { status: 400 });
+		throw error(400, { message: 'Validation failed', errors: errors.fieldErrors });
 	}
 
 	const validatedData = validationResult.data;
 
 	try {
-		console.log(`API: Creating new creative of type: ${validatedData.type}. Starting transaction...`); // Log before transaction
+		console.log(`API: Creating new creative of type: ${validatedData.type}. Starting transaction...`);
 
 		const newCreativeId = await db.transaction(async (tx) => {
-			console.log('API: Inside transaction - Inserting into creatives table...'); // Log inside transaction
+			console.log('API: Inside transaction - Inserting into creatives table...');
 			// 1. Insert into the main creatives table
 			const [newCreative] = await tx
 				.insert(creatives)
@@ -154,7 +183,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					type: validatedData.type,
 					campaignId: validatedData.campaignId,
 					personaId: validatedData.personaId,
-					// themeId field removed from schema
+					themeId: validatedData.themeId,
 					// createdAt/updatedAt handled by defaults/triggers or manual setting
 				})
 				.returning({ id: creatives.id });
@@ -169,11 +198,11 @@ export const POST: RequestHandler = async ({ request }) => {
 						headline: validatedData.textData.headline,
 						body: validatedData.textData.body,
 						callToAction: validatedData.textData.callToAction,
-						appealFeature: validatedData.textData.appealFeature, // Added
-						emotion: validatedData.textData.emotion, // Added
-						platformNotes: validatedData.textData.platformNotes // Added
+						appealFeature: validatedData.textData.appealFeature,
+						emotion: validatedData.textData.emotion,
+						platformNotes: validatedData.textData.platformNotes
 					});
-					console.log(`API: Transaction - Inserted text data for creative ID: ${creativeId}`); // Log specific type
+					console.log(`API: Transaction - Inserted text data for creative ID: ${creativeId}`);
 					break;
 				case 'image':
 					await tx.insert(creativeImage).values({
@@ -182,11 +211,11 @@ export const POST: RequestHandler = async ({ request }) => {
 						altText: validatedData.imageData.altText,
 						width: validatedData.imageData.width,
 						height: validatedData.imageData.height,
-						appealFeature: validatedData.imageData.appealFeature, // Added
-						emotion: validatedData.imageData.emotion, // Added
-						platformNotes: validatedData.imageData.platformNotes // Added
+						appealFeature: validatedData.imageData.appealFeature,
+						emotion: validatedData.imageData.emotion,
+						platformNotes: validatedData.imageData.platformNotes
 					});
-					console.log(`API: Transaction - Inserted image data for creative ID: ${creativeId}`); // Log specific type
+					console.log(`API: Transaction - Inserted image data for creative ID: ${creativeId}`);
 					break;
 				case 'video':
 					await tx.insert(creativeVideo).values({
@@ -199,38 +228,54 @@ export const POST: RequestHandler = async ({ request }) => {
 						emotion: validatedData.videoData.emotion,
 						templateId: validatedData.videoData.templateId
 					});
-					console.log(`API: Transaction - Inserted video data for creative ID: ${creativeId}`); // Log specific type
+					console.log(`API: Transaction - Inserted video data for creative ID: ${creativeId}`);
 					break;
 				case 'lp':
 					await tx.insert(creativeLp).values({
 						creativeId: creativeId,
 						pageUrl: validatedData.lpData.pageUrl,
 						headline: validatedData.lpData.headline,
-						keySections: validatedData.lpData.keySections, // Store parsed JSON
-						appealFeature: validatedData.lpData.appealFeature, // Added
-						emotion: validatedData.lpData.emotion, // Added
-						platformNotes: validatedData.lpData.platformNotes // Added
+						keySections: validatedData.lpData.keySections,
+						appealFeature: validatedData.lpData.appealFeature,
+						emotion: validatedData.lpData.emotion,
+						platformNotes: validatedData.lpData.platformNotes
 					});
-					console.log(`API: Transaction - Inserted LP data for creative ID: ${creativeId}`); // Log specific type
+					console.log(`API: Transaction - Inserted LP data for creative ID: ${creativeId}`);
 					break;
 				default:
 					// This case should be unreachable due to Zod validation
-					// If reached, the transaction will automatically roll back.
-					console.error(`API: Transaction - Reached default case for unhandled creative type.`); // Log unhandled type without accessing validatedData.type
+					console.error(`API: Transaction - Reached default case for unhandled creative type.`);
 					throw new Error(`Unhandled creative type.`);
 			}
 
-			console.log(`API: Transaction completed for creative ID: ${creativeId}`); // Log transaction end
+			console.log(`API: Transaction completed for creative ID: ${creativeId}`);
 			return creativeId; // Return the ID from the transaction
 		});
 
-		console.log(`API: New creative created successfully with ID: ${newCreativeId}. Returning response.`); // Log success
-		return json({ id: newCreativeId, name: validatedData.name, type: validatedData.type }, { status: 201 });
+		// Fetch the newly created creative to return complete data
+		const newCreative = await db.query.creatives.findFirst({
+			where: eq(creatives.id, newCreativeId),
+			with: {
+				campaign: { columns: { id: true, name: true } },
+				persona: { columns: { id: true, name: true } },
+				// theme relation is causing issues, removed for now
+				textData: validatedData.type === 'text',
+				imageData: validatedData.type === 'image',
+				videoData: validatedData.type === 'video',
+				lpData: validatedData.type === 'lp'
+			}
+		});
 
-	} catch (error: any) {
-		console.error('API: Failed to create creative (outside or after transaction):', error); // Log final catch block
-		// Check for specific DB errors if needed (e.g., foreign key constraint)
-		kitError(500, `Failed to create creative: ${error.message || 'Database error'}`);
+		console.log(`API: New creative created successfully with ID: ${newCreativeId}`);
+		return json(newCreative, { status: 201 });
+
+	} catch (err: any) {
+		console.error('API: Failed to create creative:', err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, `Failed to create creative: ${err.message || 'Database error'}`);
 	}
 };
 

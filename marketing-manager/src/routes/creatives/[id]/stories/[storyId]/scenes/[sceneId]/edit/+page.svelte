@@ -19,7 +19,7 @@
     const cId = $page.params.id;
     const sId = $page.params.storyId;
     const scId = $page.params.sceneId;
-    
+
     if (!cId || isNaN(parseInt(cId)) || !sId || isNaN(parseInt(sId)) || !scId || isNaN(parseInt(scId))) {
       error = 'Invalid ID parameters';
       isLoading = false;
@@ -41,7 +41,17 @@
       if (!response.ok) {
         throw new Error(`Failed to fetch scene. Status: ${response.status}`);
       }
-      scene = await response.json();
+      const responseData = await response.json();
+
+      // Handle the new response format with success, data, and message fields
+      if (responseData.success && responseData.data) {
+        scene = responseData.data;
+      } else if (responseData.id) {
+        // Handle the old format for backward compatibility
+        scene = responseData;
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (e: any) {
       console.error('Error fetching scene:', e);
       error = e.message || 'Failed to load scene';
@@ -92,7 +102,7 @@
     </div>
   {:else if scene}
     <div class="rounded border p-6 shadow">
-      <SceneForm 
+      <SceneForm
         {scene}
         storyId={storyId || 0}
         isEditing={true}

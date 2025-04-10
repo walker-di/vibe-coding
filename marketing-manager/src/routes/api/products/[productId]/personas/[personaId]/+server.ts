@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { personas } from '$lib/server/db/schema';
-import { json, error as kitError } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import { eq, and, sql } from 'drizzle-orm'; // Import and, sql
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
@@ -37,7 +37,7 @@ function parseIds(params: Partial<Record<string, string>>): { productId: number;
 	const personaId = parseInt(params.personaId ?? '', 10);
 
 	if (isNaN(productId) || isNaN(personaId)) {
-		kitError(400, 'Invalid Product or Persona ID');
+		throw error(400, 'Invalid Product or Persona ID');
 	}
 	return { productId, personaId };
 }
@@ -57,14 +57,18 @@ export const GET: RequestHandler = async ({ params }) => {
 		});
 
 		if (!persona) {
-			kitError(404, 'Persona not found for this product');
+			throw error(404, 'Persona not found for this product');
 		}
 
 		console.log(`API: Found persona: ${persona.name}`);
 		return json(persona);
-	} catch (error) {
-		console.error(`API: Failed to load persona ${personaId} for product ${productId}:`, error);
-		kitError(500, 'Failed to load persona');
+	} catch (err) {
+		console.error(`API: Failed to load persona ${personaId} for product ${productId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, 'Failed to load persona');
 	}
 };
 
@@ -81,19 +85,19 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	try {
 		requestData = await request.json();
 	} catch (e) {
-		return json({ message: 'Invalid JSON body' }, { status: 400 });
+		throw error(400, 'Invalid JSON body');
 	}
 
 	// Validate that at least one field is being updated
 	if (Object.keys(requestData).length === 0) {
-		return json({ message: 'No fields provided for update' }, { status: 400 });
+		throw error(400, 'No fields provided for update');
 	}
 
 	const validationResult = personaUpdateSchema.safeParse(requestData);
 
 	if (!validationResult.success) {
 		const errors = validationResult.error.flatten().fieldErrors;
-		return json({ message: 'Validation failed', errors }, { status: 400 });
+		throw error(400, { message: 'Validation failed', errors });
 	}
 
 	// Ensure ageRangeCustom is cleared if ageRangeSelection is not 'Custom'
@@ -115,7 +119,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		});
 
 		if (!existing) {
-			kitError(404, 'Persona not found for this product');
+			throw error(404, 'Persona not found for this product');
 		}
 
 		// Manually set updatedAt timestamp
@@ -144,9 +148,13 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 		return json(updatedPersona, { status: 200 });
 
-	} catch (error) {
-		console.error(`API: Failed to update persona ${personaId} for product ${productId}:`, error);
-		kitError(500, 'Failed to update persona');
+	} catch (err) {
+		console.error(`API: Failed to update persona ${personaId} for product ${productId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, 'Failed to update persona');
 	}
 };
 
@@ -166,7 +174,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		});
 
 		if (!existing) {
-			kitError(404, 'Persona not found for this product');
+			throw error(404, 'Persona not found for this product');
 		}
 
 		// Perform delete only if it exists and belongs to the product
@@ -179,9 +187,13 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		// Return 204 No Content for successful deletion
 		return new Response(null, { status: 204 });
 
-	} catch (error) {
-		console.error(`API: Failed to delete persona ${personaId} for product ${productId}:`, error);
+	} catch (err) {
+		console.error(`API: Failed to delete persona ${personaId} for product ${productId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
 		// Consider foreign key constraints (creatives linking to personas)
-		kitError(500, 'Failed to delete persona');
+		throw error(500, 'Failed to delete persona');
 	}
 };

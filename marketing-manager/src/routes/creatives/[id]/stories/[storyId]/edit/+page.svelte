@@ -17,7 +17,7 @@
   $effect(() => {
     const cId = $page.params.id;
     const sId = $page.params.storyId;
-    
+
     if (!cId || isNaN(parseInt(cId)) || !sId || isNaN(parseInt(sId))) {
       error = 'Invalid ID parameters';
       isLoading = false;
@@ -38,7 +38,17 @@
       if (!response.ok) {
         throw new Error(`Failed to fetch story. Status: ${response.status}`);
       }
-      story = await response.json();
+      const responseData = await response.json();
+
+      // Handle the new response format with success, data, and message fields
+      if (responseData.success && responseData.data) {
+        story = responseData.data;
+      } else if (responseData.id) {
+        // Handle the old format for backward compatibility
+        story = responseData;
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (e: any) {
       console.error('Error fetching story:', e);
       error = e.message || 'Failed to load story';
@@ -89,7 +99,7 @@
     </div>
   {:else if story}
     <div class="rounded border p-6 shadow">
-      <StoryForm 
+      <StoryForm
         {story}
         creativeId={creativeId || 0}
         isEditing={true}

@@ -1,9 +1,20 @@
-import { json } from '@sveltejs/kit';
+import type { RequestEvent } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { stories } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
+import {
+  successResponse,
+  HttpStatus,
+  validateRequiredFields,
+  handleServerError,
+  withErrorHandling
+} from '$lib/server/utils/api-utils';
 
-export async function GET({ url }) {
+/**
+ * GET handler for retrieving all stories with optional filtering
+ */
+export const GET = async ({ url }: RequestEvent) => {
   try {
     // Check if creativeId query parameter exists
     const creativeIdParam = url.searchParams.get('creativeId');
@@ -12,9 +23,10 @@ export async function GET({ url }) {
     // If creativeId is provided, filter stories by that creative
     if (creativeIdParam) {
       const creativeId = parseInt(creativeIdParam);
-      if (!isNaN(creativeId)) {
-        whereCondition = eq(stories.creativeId, creativeId);
+      if (isNaN(creativeId)) {
+        throw error(HttpStatus.BAD_REQUEST, 'Invalid creativeId parameter');
       }
+      whereCondition = eq(stories.creativeId, creativeId);
     }
 
     const allStories = await db.query.stories.findMany({
@@ -23,45 +35,43 @@ export async function GET({ url }) {
         scenes: {
           with: {
             clips: true
-          }
+          },
+          orderBy: (scenes, { asc }) => [asc(scenes.orderIndex)]
         }
       },
       orderBy: (stories, { desc }) => [desc(stories.createdAt)]
     });
 
     return json(allStories);
-  } catch (error) {
-    console.error('Error fetching stories:', error);
-    return json({ error: 'Failed to fetch stories' }, { status: 500 });
-  }
-}
-
-export async function POST({ request }) {
-  try {
-    const storyData = await request.json();
-
-    // Validate required fields
-    if (!storyData.creativeId) {
-      return json({ error: 'Creative ID is required' }, { status: 400 });
+  } catch (err) {
+    console.error('Error fetching stories:', err);
+    // Check if it's an error thrown by SvelteKit's error() helper
+    if (err.status && err.body) {
+      throw err; // Re-throw SvelteKit errors
     }
-    if (!storyData.title) {
-      return json({ error: 'Title is required' }, { status: 400 });
-    }
-
-    // Insert story using the schema field names
-    const [newStory] = await db.insert(stories).values({
-      creativeId: storyData.creativeId as any,
-      title: storyData.title,
-      description: storyData.description || null,
-      aspectRatio: storyData.aspectRatio || '16:9', // Default to 16:9 if not provided
-      resolution: storyData.resolution || null,
-      createdAt: new Date(), // Use new Date() object
-      updatedAt: new Date()  // Use new Date() object
-    } as any).returning();
-
-    return json(newStory, { status: 201 });
-  } catch (error) {
-    console.error('Error creating story:', error);
-    return json({ error: 'Failed to create story' }, { status: 500 });
+    throw error(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch stories');
   }
-}
+};
+
+/**
+ * POST handler for creating a new story
+ */
+export const POST = withErrorHandling(async ({ request }: RequestEvent) => {
+  const storyData = await request.json();
+
+  // Validate required fields
+  validateRequiredFields(storyData, ['creativeId', 'title']);
+
+  // Insert story with proper error handling
+  const [newStory] = await db.insert(stories).values({
+    creativeId: storyData.creativeId,
+    title: storyData.title,
+    description: storyData.description || null,
+    aspectRatio: storyData.aspectRatio || '16:9', // Default to 16:9 if not provided
+    resolution: storyData.resolution || null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }).returning();
+
+  return json(successResponse(newStory), { status: HttpStatus.CREATED });
+});

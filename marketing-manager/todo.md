@@ -46,8 +46,8 @@ Start the loop from the beginning( no need to ask. just do it).
 - [x] Standardize response format and error handling
 
 ### 2.5 Products API
-- [ ] Ensure all `/api/products` endpoints follow REST conventions
-- [ ] Standardize response format and error handling
+- [x] Ensure all `/api/products` endpoints follow REST conventions
+- [x] Standardize response format and error handling
 
 ### 2.6 Personas API
 - [ ] Ensure all `/api/personas` endpoints follow REST conventions
@@ -125,14 +125,24 @@ Start the loop from the beginning( no need to ask. just do it).
 ### 6.2 Bug Fixing
 - [x] Prioritize and fix identified bugs
   - Fixed issue with theme relation in Creatives API by temporarily removing theme relation from queries
+  - Fixed issue with Stories API returning 500 error when fetching stories by creativeId
+  - Fixed issue with API utility functions by creating a dedicated api-utils.ts file
 - [x] Retest fixed functionality to ensure issues are resolved
   - Verified that Creatives API endpoints now work correctly
+  - Verified that Stories API endpoints now work correctly
 - [x] Update documentation as needed
 
 ### 6.3 Regression Testing
-- [ ] Perform regression testing on all fixed issues
-- [ ] Verify that fixes don't introduce new problems
-- [ ] Document any remaining issues or edge cases
+- [x] Perform regression testing on all fixed issues
+  - Tested Creatives API endpoints
+  - Tested Stories API endpoints
+- [x] Verify that fixes don't introduce new problems
+  - No new issues found during testing
+- [x] Document any remaining issues or edge cases
+  - There's still a warning about "Creative 5's persona (5) has mismatching productId (undefined) compared to route productId (3). Links might be incorrect." - this is likely a data consistency issue that needs to be addressed in a future task
+  - There are some accessibility warnings in the StoryList component that should be addressed in a future task
+  - Fixed issue with story pages not displaying data correctly due to API response format changes
+  - Fixed issue with SceneEditor component not properly handling clip selection and duplication
 
 ### 6.4 Performance Optimization
 - [ ] Identify any performance bottlenecks in the refactored code

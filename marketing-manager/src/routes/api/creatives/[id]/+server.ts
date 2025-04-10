@@ -8,7 +8,7 @@ import {
 } from '$lib/server/db/schema';
 // Import constants from the correct path
 import { creativeTypes, videoPlatforms, videoFormats, videoEmotions } from '$lib/components/constants';
-import { json, error as kitError } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import { eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
@@ -20,7 +20,7 @@ const baseCreativeSchema = z.object({
 	description: z.string().max(500).optional().nullable(),
 	campaignId: z.number().int().positive().optional().nullable(),
 	personaId: z.number().int().positive().optional(), // Keep optional for PUT, but ensure non-null if provided
-	// themeId field removed from schema
+	themeId: z.number().int().positive().optional().nullable(),
 	// Type cannot be changed via PUT
 });
 
@@ -89,7 +89,7 @@ async function getCreativeAndType(id: number) {
 export const GET: RequestHandler = async ({ params }) => {
 	const creativeId = parseInt(params.id, 10);
 	if (isNaN(creativeId)) {
-		return json({ message: 'Invalid creative ID' }, { status: 400 });
+		throw error(400, 'Invalid creative ID');
 	}
 
 	console.log(`API: Loading creative with ID: ${creativeId}`);
@@ -100,23 +100,28 @@ export const GET: RequestHandler = async ({ params }) => {
 			with: {
 				campaign: { columns: { id: true, name: true } },
 				persona: { columns: { id: true, name: true } },
+				// theme relation is causing issues, removed for now
 				// Include relations for all possible types
 				textData: true,
 				imageData: true,
-				videoData: true, // <-- Uncommented
-				lpData: true      // <-- Uncommented
+				videoData: true,
+				lpData: true
 			}
 		});
 
 		if (!creative) {
-			return json({ message: 'Creative not found' }, { status: 404 });
+			throw error(404, 'Creative not found');
 		}
 
 		console.log(`API: Found creative: ${creative.name} (Type: ${creative.type})`);
 		return json(creative);
-	} catch (error) {
-		console.error(`API: Failed to load creative ${creativeId}:`, error);
-		kitError(500, 'Failed to load creative');
+	} catch (err) {
+		console.error(`API: Failed to load creative ${creativeId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, 'Failed to load creative');
 	}
 };
 
@@ -124,14 +129,14 @@ export const GET: RequestHandler = async ({ params }) => {
 export const PUT: RequestHandler = async ({ params, request }) => {
 	const creativeId = parseInt(params.id, 10);
 	if (isNaN(creativeId)) {
-		return json({ message: 'Invalid creative ID' }, { status: 400 });
+		throw error(400, 'Invalid creative ID');
 	}
 
 	let requestData;
 	try {
 		requestData = await request.json();
 	} catch (e) {
-		return json({ message: 'Invalid JSON body' }, { status: 400 });
+		throw error(400, 'Invalid JSON body');
 	}
 
 	// Separate base data and type-specific data
@@ -140,7 +145,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	// Validate base data
 	const baseValidation = baseCreativeSchema.safeParse(baseData);
 	if (!baseValidation.success) {
-		return json({ message: 'Validation failed (base)', errors: baseValidation.error.flatten().fieldErrors }, { status: 400 });
+		throw error(400, { message: 'Validation failed (base)', errors: baseValidation.error.flatten().fieldErrors });
 	}
 	const validatedBaseData = baseValidation.data;
 
@@ -150,7 +155,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		// Get existing creative type
 		const existingCreative = await getCreativeAndType(creativeId);
 		if (!existingCreative) {
-			return json({ message: 'Creative not found' }, { status: 404 });
+			throw error(404, 'Creative not found');
 		}
 		const creativeType = existingCreative.type;
 
@@ -164,22 +169,16 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		} else if (creativeType === 'image' && imageData) {
 			typeValidationResult = imageDataSchema.safeParse(imageData);
 			if (typeValidationResult.success) validatedTypeData = typeValidationResult.data;
-		}
-		// --- Add Start ---
-		else if (creativeType === 'video' && videoData) {
+		} else if (creativeType === 'video' && videoData) {
 			typeValidationResult = videoDataSchema.safeParse(videoData);
 			if (typeValidationResult.success) validatedTypeData = typeValidationResult.data;
 		} else if (creativeType === 'lp' && lpData) {
-			// Special handling for keySections JSON parsing if needed (similar to POST?)
-			// For simplicity here, assume lpData is already structured correctly or handle parsing if needed.
 			typeValidationResult = lpDataSchema.safeParse(lpData);
 			if (typeValidationResult.success) validatedTypeData = typeValidationResult.data;
 		}
-		// --- Add End ---
-
 
 		if (typeValidationResult && !typeValidationResult.success) {
-			return json({ message: `Validation failed (${creativeType} data)`, errors: typeValidationResult.error.flatten().fieldErrors }, { status: 400 });
+			throw error(400, { message: `Validation failed (${creativeType} data)`, errors: typeValidationResult.error.flatten().fieldErrors });
 		}
 
 		// Use transaction to update base and specific tables
@@ -213,7 +212,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 						await tx.update(creativeImage).set(validatedTypeData).where(eq(creativeImage.creativeId, creativeId));
 						console.log(`API: Updated image data for creative ID: ${creativeId}`);
 						break;
-					// --- Add Start ---
 					case 'video':
 						await tx.update(creativeVideo).set(validatedTypeData).where(eq(creativeVideo.creativeId, creativeId));
 						console.log(`API: Updated video data for creative ID: ${creativeId}`);
@@ -223,7 +221,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 						await tx.update(creativeLp).set(validatedTypeData).where(eq(creativeLp.creativeId, creativeId));
 						console.log(`API: Updated LP data for creative ID: ${creativeId}`);
 						break;
-					// --- Add End ---
 				}
 				// Also update the base table's updatedAt timestamp if only type-specific data changed and base data wasn't already updated
 				if (!baseDataUpdated) {
@@ -237,20 +234,25 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				with: {
 					campaign: { columns: { id: true, name: true } },
 					persona: { columns: { id: true, name: true } },
+					// theme relation is causing issues, removed for now
 					textData: true,
 					imageData: true,
-					videoData: true, // <-- Uncommented
-					lpData: true      // <-- Uncommented
+					videoData: true,
+					lpData: true
 				}
 			});
 		});
 
 		console.log(`API: Creative ${creativeId} updated successfully.`);
-		return json(updatedCreativeResult, { status: 200 });
+		return json(updatedCreativeResult);
 
-	} catch (error: any) {
-		console.error(`API: Failed to update creative ${creativeId}:`, error);
-		kitError(500, `Failed to update creative: ${error.message || 'Database error'}`);
+	} catch (err: any) {
+		console.error(`API: Failed to update creative ${creativeId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, `Failed to update creative: ${err.message || 'Database error'}`);
 	}
 };
 
@@ -259,7 +261,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 export const DELETE: RequestHandler = async ({ params }) => {
 	const creativeId = parseInt(params.id, 10);
 	if (isNaN(creativeId)) {
-		return json({ message: 'Invalid creative ID' }, { status: 400 });
+		throw error(400, 'Invalid creative ID');
 	}
 
 	console.log(`API: Deleting creative with ID: ${creativeId}`);
@@ -267,21 +269,22 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		// Check if creative exists
 		const existing = await getCreativeAndType(creativeId);
 		if (!existing) {
-			return json({ message: 'Creative not found' }, { status: 404 });
+			throw error(404, 'Creative not found');
 		}
 
 		// Deleting from 'creatives' table should cascade to the specific type table
 		// due to `onDelete: 'cascade'` in the schema definition.
-		const result = await db.delete(creatives).where(eq(creatives.id, creativeId));
-
-		// Drizzle's delete doesn't throw error if row not found, might return changes=0
-		// We already checked existence, so assume success if no exception.
+		await db.delete(creatives).where(eq(creatives.id, creativeId));
 
 		console.log(`API: Creative ${creativeId} deleted successfully.`);
-		return json({ message: 'Creative deleted successfully' }, { status: 200 }); // Or 204
+		return json({ message: 'Creative deleted successfully' }, { status: 200 });
 
-	} catch (error: any) {
-		console.error(`API: Failed to delete creative ${creativeId}:`, error);
-		kitError(500, `Failed to delete creative: ${error.message || 'Database error'}`);
+	} catch (err: any) {
+		console.error(`API: Failed to delete creative ${creativeId}:`, err);
+		// Check if it's an error thrown by SvelteKit's error() helper
+		if (err.status && err.body) {
+			throw err; // Re-throw SvelteKit errors
+		}
+		throw error(500, `Failed to delete creative: ${err.message || 'Database error'}`);
 	}
 };

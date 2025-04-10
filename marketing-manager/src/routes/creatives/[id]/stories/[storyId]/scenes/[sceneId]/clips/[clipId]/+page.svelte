@@ -50,7 +50,17 @@
       if (!response.ok) {
         throw new Error(`Failed to fetch clip. Status: ${response.status}`);
       }
-      clip = await response.json();
+      const responseData = await response.json();
+
+      // Handle the new response format with success, data, and message fields
+      if (responseData.success && responseData.data) {
+        clip = responseData.data;
+      } else if (responseData.id) {
+        // Handle the old format for backward compatibility
+        clip = responseData;
+      } else {
+        throw new Error('Invalid response format');
+      }
 
       // No need to parse canvas data here anymore
       // if (clip && clip.canvas) {

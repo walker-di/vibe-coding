@@ -1,17 +1,29 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { stories } from '$lib/server/db/schema';
+import { stories, creatives } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import type { RequestHandler } from './$types';
 
-export async function GET({ params }) {
+// GET /api/creatives/[id]/stories
+export const GET: RequestHandler = async ({ params }) => {
   try {
     const creativeId = parseInt(params.id);
     if (isNaN(creativeId)) {
-      return json({ error: 'Invalid creative ID' }, { status: 400 });
+      throw error(400, 'Invalid creative ID');
+    }
+
+    // Check if creative exists
+    const creative = await db.query.creatives.findFirst({
+      where: eq(creatives.id, creativeId),
+      columns: { id: true }
+    });
+
+    if (!creative) {
+      throw error(404, 'Creative not found');
     }
 
     const creativeStories = await db.query.stories.findMany({
-      where: eq(stories.creativeId as any, creativeId),
+      where: eq(stories.creativeId, creativeId),
       with: {
         scenes: {
           with: {
@@ -24,8 +36,12 @@ export async function GET({ params }) {
     });
 
     return json(creativeStories);
-  } catch (error) {
-    console.error('Error fetching stories for creative:', error);
-    return json({ error: 'Failed to fetch stories' }, { status: 500 });
+  } catch (err) {
+    console.error('Error fetching stories for creative:', err);
+    // Check if it's an error thrown by SvelteKit's error() helper
+    if (err.status && err.body) {
+      throw err; // Re-throw SvelteKit errors
+    }
+    throw error(500, 'Failed to fetch stories');
   }
-}
+};
