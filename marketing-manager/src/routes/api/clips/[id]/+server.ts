@@ -93,6 +93,13 @@ export async function PUT({ params, request }: RequestEvent) { // Add type
         }
         updateData.imageUrl = clipData.imageUrl;
     }
+    if (clipData.duration !== undefined) {
+        // Allow setting duration to null or a number
+        if (clipData.duration !== null && typeof clipData.duration !== 'number') {
+             throw error(400, 'Invalid duration format');
+        }
+        updateData.duration = clipData.duration;
+    }
 
     // Ensure at least one field is being updated besides updatedAt
     if (Object.keys(updateData).length <= 1) {

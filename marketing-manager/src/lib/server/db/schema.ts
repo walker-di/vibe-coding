@@ -194,6 +194,7 @@ export const clips = sqliteTable('clips', {
   imageUrl: text('image_url'), // Added for preview image
   narration: text('narration'),
   description: text('description'),
+  duration: integer('duration'), // Duration in milliseconds
   orderIndex: integer('order_index').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),

@@ -34,6 +34,7 @@
   let canvas = $state(clip?.canvas || '{}');
   let narration = $state(clip?.narration || '');
   let description = $state(clip?.description || '');
+  let duration = $state(clip?.duration || 3000); // Default to 3 seconds (3000ms)
   let orderIndex = $state(clip?.orderIndex !== undefined ? clip.orderIndex : 0);
   let imageUrl = $state(clip?.imageUrl || ''); // Added imageUrl state
   let isSubmitting = $state(false); // Removed duplicate declaration
@@ -80,6 +81,14 @@
 
     if (orderIndex < 0) {
       newErrors.orderIndex = 'Order index must be a non-negative number';
+    }
+
+    if (duration !== null) {
+      if (duration < 500) {
+        newErrors.duration = 'Duration must be at least 0.5 seconds (500ms)';
+      } else if (duration > 10000) {
+        newErrors.duration = 'Duration cannot exceed 10 seconds (10000ms)';
+      }
     }
 
     errors = newErrors;
@@ -176,6 +185,7 @@
           imageUrl: finalImageUrl || null,
           narration: narration || null,
           description: description || null,
+          duration,
           orderIndex
         });
 
@@ -189,6 +199,7 @@
           imageUrl: null, // Send null initially
           narration: narration || null,
           description: description || null,
+          duration,
           orderIndex
         });
 
@@ -238,18 +249,39 @@
   </div>
 
   <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-4">
-    <div class="space-y-2">
-      <Label for="orderIndex">Order Index</Label>
-      <Input
-        id="orderIndex"
-        type="number"
-        bind:value={orderIndex}
-        min="0"
-        class={errors.orderIndex ? 'border-red-500' : ''}
-      />
-      {#if errors.orderIndex}
-        <p class="text-xs text-red-500">{errors.orderIndex}</p>
-      {/if}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="space-y-2">
+        <Label for="orderIndex">Order Index</Label>
+        <Input
+          id="orderIndex"
+          type="number"
+          bind:value={orderIndex}
+          min="0"
+          class={errors.orderIndex ? 'border-red-500' : ''}
+        />
+        {#if errors.orderIndex}
+          <p class="text-xs text-red-500">{errors.orderIndex}</p>
+        {/if}
+      </div>
+
+      <div class="space-y-2">
+        <Label for="duration">Duration (seconds)</Label>
+        <div class="flex items-center gap-2">
+          <Input
+            id="duration"
+            type="number"
+            bind:value={duration}
+            min="500"
+            max="10000"
+            step="100"
+            class={errors.duration ? 'border-red-500' : ''}
+          />
+          <span class="text-sm text-gray-500">{(duration / 1000).toFixed(1)}s</span>
+        </div>
+        {#if errors.duration}
+          <p class="text-xs text-red-500">{errors.duration}</p>
+        {/if}
+      </div>
     </div>
 
     <div class="border-t pt-4 mt-4">

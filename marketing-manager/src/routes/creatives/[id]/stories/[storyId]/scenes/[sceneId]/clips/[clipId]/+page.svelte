@@ -79,7 +79,7 @@
     isNarrationModalOpen = true;
   }
 
-  async function handleSaveNarration(data: { narration: string | null; description: string | null }) {
+  async function handleSaveNarration(data: { narration: string | null; description: string | null; duration: number | null }) {
     if (!clipId) return;
 
     const response = await fetch(`/api/clips/${clipId}`, {
@@ -170,7 +170,10 @@
             <span>{clip.description}</span>
           </div>
         {/if}
-        <p class="text-muted-foreground">Order: {clip.orderIndex}</p>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+          <p>Order: {clip.orderIndex}</p>
+          <p>Duration: {clip.duration ? (clip.duration / 1000).toFixed(1) + 's' : 'Not set'}</p>
+        </div>
       </div>
 
       <div class="rounded border p-6 shadow">

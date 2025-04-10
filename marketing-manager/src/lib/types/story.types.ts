@@ -30,6 +30,7 @@ export interface Clip {
   imageUrl: string | null; // URL for the generated preview image (can be null)
   narration: string | null;
   description: string | null;
+  duration: number | null; // Duration in milliseconds
   orderIndex: number;
   createdAt: Date; // Expect Date object
   updatedAt: Date | null; // Expect Date object or null

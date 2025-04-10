@@ -2,39 +2,45 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import { Button } from '$lib/components/ui/button';
   import { Textarea } from '$lib/components/ui/textarea';
-  import { FileText, MessageSquare, Save } from 'lucide-svelte';
+  import { Input } from '$lib/components/ui/input';
+  import { FileText, MessageSquare, Save, Clock } from 'lucide-svelte';
 
   // Props
   let {
     open = $bindable(false),
-    narration = '',
-    description = '',
+    clip,
     onSave
   } = $props<{
     open?: boolean;
-    narration?: string;
-    description?: string;
-    onSave: (data: { narration: string | null; description: string | null }) => Promise<void>;
+    clip: {
+      narration?: string | null;
+      description?: string | null;
+      duration?: number | null;
+    };
+    onSave: (data: { narration: string | null; description: string | null; duration: number | null }) => Promise<void>;
   }>();
 
   // Local state
-  let localNarration = $state(narration || '');
-  let localDescription = $state(description || '');
+  let localNarration = $state(clip?.narration || '');
+  let localDescription = $state(clip?.description || '');
+  let localDuration = $state(clip?.duration || 3000); // Default to 3 seconds (3000ms)
   let isSaving = $state(false);
   let error = $state<string | null>(null);
 
   // Reset form when modal opens or props change
   $effect(() => {
     if (open) {
-      localNarration = narration || '';
-      localDescription = description || '';
+      localNarration = clip?.narration || '';
+      localDescription = clip?.description || '';
+      localDuration = clip?.duration || 3000;
       error = null;
     }
   });
 
   $effect(() => {
-    localNarration = narration || '';
-    localDescription = description || '';
+    localNarration = clip?.narration || '';
+    localDescription = clip?.description || '';
+    localDuration = clip?.duration || 3000;
   });
 
   // Handle save
@@ -47,13 +53,14 @@
     try {
       await onSave({
         narration: localNarration.trim() || null,
-        description: localDescription.trim() || null
+        description: localDescription.trim() || null,
+        duration: localDuration
       });
 
       // Close modal on success
       open = false;
     } catch (e: any) {
-      console.error('Error saving clip narration/description:', e);
+      console.error('Error saving clip content:', e);
       error = e.message || 'Failed to save changes';
     } finally {
       isSaving = false;
@@ -66,7 +73,7 @@
     <Dialog.Header>
       <Dialog.Title>Edit Clip Content</Dialog.Title>
       <Dialog.Description>
-        Update the narration and description for this clip.
+        Update the narration, description, and duration for this clip.
       </Dialog.Description>
     </Dialog.Header>
 
@@ -85,6 +92,27 @@
         />
         <p class="text-xs text-muted-foreground">
           A short description to help identify this clip.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <label for="duration" class="text-sm font-medium flex items-center">
+          <Clock class="h-4 w-4 mr-2" />
+          Duration
+        </label>
+        <div class="flex items-center gap-2">
+          <Input
+            id="duration"
+            type="number"
+            bind:value={localDuration}
+            min="500"
+            max="10000"
+            step="100"
+          />
+          <span class="text-sm text-gray-500">{(localDuration / 1000).toFixed(1)}s</span>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          The duration of this clip in milliseconds (0.5s to 10s).
         </p>
       </div>
 
