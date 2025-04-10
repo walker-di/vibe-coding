@@ -442,7 +442,7 @@
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            imageUrl: imageUrl.split('?')[0] // Remove any query parameters
+            imageUrl: imageUrl ? imageUrl.split('?')[0] : imageUrl // Remove any query parameters if imageUrl exists
           })
         });
 

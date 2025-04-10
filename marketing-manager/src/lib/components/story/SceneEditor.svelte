@@ -634,7 +634,7 @@
 
                   // Store the base URL (without timestamp) in the database
                   try {
-                    const cleanImageUrl = imageUrl.split('?')[0];
+                    const cleanImageUrl = imageUrl ? imageUrl.split('?')[0] : imageUrl;
                     console.log('Debounced: Updating clip with new image URL:', cleanImageUrl);
 
                     const updateResponse = await fetch(`/api/clips/${clipToUpdate.id}`, {
