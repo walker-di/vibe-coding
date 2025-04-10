@@ -124,15 +124,21 @@
     isNarrationModalOpen = true;
   }
 
-  // Handle saving narration and description
-  async function handleSaveNarration(data: { narration: string | null; description: string | null }) {
+  // Handle saving narration, description, and duration from the modal
+  async function handleSaveNarration(data: { narration: string | null; description: string | null; duration: number | null }) {
     if (!currentEditingClip || !onUpdateClip) return;
 
     try {
-      await onUpdateClip(currentEditingClip.id, {
+      // Prepare data to update, including duration if provided
+      const updateData: Partial<Clip> = {
         narration: data.narration,
         description: data.description
-      });
+      };
+      if (data.duration !== null) {
+        updateData.duration = data.duration;
+      }
+
+      await onUpdateClip(currentEditingClip.id, updateData);
 
       // Update the local clip data
       if (currentEditingClip) {
@@ -456,28 +462,34 @@
           </div>
         </div>
       {/each}
+    {/if}  <!-- End of #if scenes.length > 0 -->
 
-      <!-- Add New Scene Button -->
-      <button
-        type="button"
-        onclick={createNewScene}
-        disabled={isCreatingScene}
-        class="border rounded-md p-4 mt-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
-        <div class="flex flex-col items-center justify-center h-full">
-          <div class="rounded-full bg-gray-200 p-1.5 mb-2">
-            <Plus class="h-5 w-5 text-gray-600" />
-          </div>
-          <span class="text-gray-600 font-medium">{isCreatingScene ? 'Creating...' : 'New Scene'}</span>
+    <!-- Add New Scene Button (This is the correct one, outside the #if) -->
+    <button
+      type="button"
+      onclick={createNewScene}
+      disabled={isCreatingScene}
+      class="border rounded-md p-4 mt-4 hover:shadow-md transition-shadow w-30 flex-shrink-0 flex flex-col items-center justify-center h-[80px] bg-gray-50 hover:bg-gray-100 cursor-pointer">
+      <div class="flex flex-col items-center justify-center h-full">
+        <div class="rounded-full bg-gray-200 p-1.5 mb-2">
+          <Plus class="h-5 w-5 text-gray-600" />
         </div>
-      </button>
-    {/if}
-  </div>
+        <span class="text-gray-600 font-medium">{isCreatingScene ? 'Creating...' : 'New Scene'}</span>
+      </div>
+    </button>
+  </div> <!-- End of flex container -->
+
+  {#if scenes.length === 0}
+    <!-- Optional: Add a message when there are no scenes -->
+    <div class="text-center text-muted-foreground p-4">
+      No scenes yet. Click "New Scene" to get started.
+    </div>
+  {/if}
 
   {#if currentEditingClip}
     <ClipNarrationModal
       bind:open={isNarrationModalOpen}
-      narration={currentEditingClip.narration || ''}
-      description={currentEditingClip.description || ''}
+      clip={currentEditingClip}
       onSave={handleSaveNarration}
     />
   {/if}
