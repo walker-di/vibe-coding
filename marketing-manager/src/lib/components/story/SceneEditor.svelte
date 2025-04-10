@@ -100,10 +100,16 @@
 
     // First, update the local state immediately to ensure UI responsiveness
     // This prevents the clip from disappearing from the UI
-    // Ensure duration is set to a default value if it's null
+    // Ensure all required properties have default values if they're null
     selectedClip = {
       ...clip,
-      duration: clip.duration || 3000 // Default to 3 seconds if not set
+      duration: clip.duration || 3000, // Default to 3 seconds if not set
+      narration: clip.narration || '', // Ensure narration is not null
+      description: clip.description || '', // Ensure description is not null
+      orderIndex: clip.orderIndex ?? 0, // Ensure orderIndex is not null
+      // Make sure canvas and imageUrl are preserved
+      canvas: clip.canvas || '', // Empty string instead of null for canvas
+      imageUrl: clip.imageUrl || ''
     };
     console.log('Clip selected in SceneEditor:', clip.id, clip.orderIndex);
 
@@ -407,15 +413,64 @@
       // Get the updated clip from the response
       const updatedClip = await response.json();
 
-      // Update the local state
-      selectedClip = updatedClip;
+      // Log the before and after state for debugging
+      console.log('handleSaveClip - Before update - selectedClip:', JSON.stringify({
+        id: selectedClip.id,
+        narration: selectedClip.narration,
+        description: selectedClip.description,
+        duration: selectedClip.duration,
+        orderIndex: selectedClip.orderIndex,
+        hasCanvas: !!selectedClip.canvas,
+        hasImageUrl: !!selectedClip.imageUrl
+      }));
 
-      // Update the clip in the scenes array
+      console.log('handleSaveClip - Server response - updatedClip:', JSON.stringify({
+        id: updatedClip.id,
+        narration: updatedClip.narration,
+        description: updatedClip.description,
+        duration: updatedClip.duration,
+        orderIndex: updatedClip.orderIndex,
+        hasCanvas: !!updatedClip.canvas,
+        hasImageUrl: !!updatedClip.imageUrl
+      }));
+
+      // Create a complete clip object with all required properties
+      const completeClip = {
+        // Start with all properties from the current selectedClip
+        ...selectedClip,
+        // Override with properties from the updatedClip
+        ...updatedClip,
+        // Ensure these specific properties are preserved
+        narration: updatedClip.narration ?? selectedClip.narration ?? '',
+        description: updatedClip.description ?? selectedClip.description ?? '',
+        duration: updatedClip.duration ?? selectedClip.duration ?? 3000,
+        orderIndex: updatedClip.orderIndex ?? selectedClip.orderIndex ?? 0,
+        // Preserve canvas data to prevent the canvas from disappearing
+        canvas: selectedClip.canvas || updatedClip.canvas || '',
+        // Preserve image URL if not returned by the API
+        imageUrl: updatedClip.imageUrl || selectedClip.imageUrl || ''
+      };
+
+      // Update the selectedClip with the complete object
+      selectedClip = completeClip;
+
+      console.log('handleSaveClip - After update - selectedClip:', JSON.stringify({
+        id: completeClip.id,
+        narration: completeClip.narration,
+        description: completeClip.description,
+        duration: completeClip.duration,
+        orderIndex: completeClip.orderIndex,
+        hasCanvas: !!completeClip.canvas,
+        hasImageUrl: !!completeClip.imageUrl
+      }));
+
+      // Update the clip in the scenes array with the same complete clip object
       scenes = scenes.map((scene: SceneWithRelations) => {
         if (scene.clips) {
           scene.clips = scene.clips.map((c: Clip) => {
             if (c.id === updatedClip.id) {
-              return updatedClip;
+              // Use the same complete clip object we created above
+              return completeClip;
             }
             return c;
           });
@@ -541,33 +596,69 @@
 
                         if (updatedClip) {
                           console.log('Received updated clip data from server');
-                          // Update the selectedClip with the data from the database, but use the timestamped URL for display
-                          // Also increment forceSceneRefresh to trigger a UI update
-                          // Preserve the canvas data to prevent unnecessary reloading
-                          const currentCanvas = selectedClip.canvas;
-                          selectedClip = {
+                          console.log('Before update - selectedClip:', JSON.stringify({
+                            id: selectedClip.id,
+                            narration: selectedClip.narration,
+                            description: selectedClip.description,
+                            duration: selectedClip.duration,
+                            orderIndex: selectedClip.orderIndex,
+                            hasCanvas: !!selectedClip.canvas,
+                            hasImageUrl: !!selectedClip.imageUrl
+                          }));
+                          console.log('Server response - updatedClip:', JSON.stringify({
+                            id: updatedClip.id,
+                            narration: updatedClip.narration,
+                            description: updatedClip.description,
+                            duration: updatedClip.duration,
+                            orderIndex: updatedClip.orderIndex,
+                            hasCanvas: !!updatedClip.canvas,
+                            hasImageUrl: !!updatedClip.imageUrl
+                          }));
+
+                          // Create a complete clip object with all required properties
+                          // Keep all properties from the current selectedClip
+                          const completeClip = {
+                            // Start with all properties from the current selectedClip
+                            ...selectedClip,
+                            // Override with properties from the updatedClip
                             ...updatedClip,
+                            // Ensure these specific properties are preserved
+                            narration: updatedClip.narration ?? selectedClip.narration ?? '',
+                            description: updatedClip.description ?? selectedClip.description ?? '',
+                            duration: updatedClip.duration ?? selectedClip.duration ?? 3000,
+                            orderIndex: updatedClip.orderIndex ?? selectedClip.orderIndex ?? 0,
+                            // Use the timestamped URL for display
                             imageUrl: imageUrlWithTimestamp,
                             // Keep the current canvas data to prevent the canvas from disappearing
-                            canvas: currentCanvas || updatedClip.canvas
+                            canvas: selectedClip.canvas || updatedClip.canvas || ''
                           };
+
+                          // Update the selectedClip with the complete object
+                          selectedClip = completeClip;
+
+                          // selectedClip is guaranteed to be non-null here since we just assigned it
+                          console.log('After update - selectedClip:', JSON.stringify({
+                            id: completeClip.id,
+                            narration: completeClip.narration,
+                            description: completeClip.description,
+                            duration: completeClip.duration,
+                            orderIndex: completeClip.orderIndex,
+                            hasCanvas: !!completeClip.canvas,
+                            hasImageUrl: !!completeClip.imageUrl
+                          }));
 
                           // Update the clip in the scenes array to keep everything in sync
                           const clipId = updatedClip.id; // Use updatedClip.id which is guaranteed to exist
 
                           // Force a refresh of the SceneList to show the updated preview
                           forceSceneRefresh++;
+                          // Use the same complete clip object for the scenes array
                           scenes = scenes.map((scene: SceneWithRelations) => {
                             if (scene.clips) {
                               scene.clips = scene.clips.map((clip: Clip) => {
                                 if (clip.id === clipId) {
-                                  // Use the same timestamped URL for consistency and preserve canvas data
-                                  return {
-                                    ...updatedClip,
-                                    imageUrl: imageUrlWithTimestamp,
-                                    // Keep the current canvas data to prevent the canvas from disappearing
-                                    canvas: clip.canvas || updatedClip.canvas
-                                  };
+                                  // Use the same complete clip object we created above
+                                  return completeClip;
                                 }
                                 return clip;
                               });
@@ -600,11 +691,14 @@
                                   console.log('Updated scenes from API (legacy format)');
                                 }
 
+                                // Store the current selectedClip before updating scenes
+                                const currentSelectedClip = selectedClip;
+
                                 // Update scenes
                                 scenes = newScenes;
 
                                 // Restore the selected clip after scenes update
-                                if (currentSelectedClipId) {
+                                if (currentSelectedClipId && currentSelectedClip) {
                                   // Find the clip in the updated scenes
                                   let foundClip: Clip | null = null;
                                   for (const scene of newScenes) {
@@ -620,13 +714,31 @@
                                   // If we found the clip, update selectedClip
                                   if (foundClip) {
                                     console.log('Restoring selected clip after scenes update:', foundClip.id);
-                                    // Preserve the canvas data from the previous selectedClip
-                                    const canvasData = selectedClip?.canvas;
+
+                                    // Create a complete clip object with all required properties
                                     selectedClip = {
+                                      // Start with the found clip from the updated scenes
                                       ...foundClip,
+                                      // Ensure these specific properties are preserved from the current selectedClip
+                                      narration: foundClip.narration ?? currentSelectedClip.narration ?? '',
+                                      description: foundClip.description ?? currentSelectedClip.description ?? '',
+                                      duration: foundClip.duration ?? currentSelectedClip.duration ?? 3000,
+                                      orderIndex: foundClip.orderIndex ?? currentSelectedClip.orderIndex ?? 0,
                                       // Keep the canvas data from before to prevent unnecessary reloading
-                                      canvas: canvasData || foundClip.canvas
+                                      canvas: currentSelectedClip.canvas || foundClip.canvas || '',
+                                      // Keep the image URL from before if not in the found clip
+                                      imageUrl: foundClip.imageUrl || currentSelectedClip.imageUrl || ''
                                     };
+
+                                    console.log('Restored clip properties:', JSON.stringify({
+                                      id: selectedClip.id,
+                                      narration: selectedClip.narration,
+                                      description: selectedClip.description,
+                                      duration: selectedClip.duration,
+                                      orderIndex: selectedClip.orderIndex,
+                                      hasCanvas: !!selectedClip.canvas,
+                                      hasImageUrl: !!selectedClip.imageUrl
+                                    }));
                                   }
                                 }
                               })
