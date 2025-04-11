@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { scenes, clips, stories, creatives, personas, products } from '$lib/server/db/schema';
+import { scenes, clips, stories, creatives } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 // This endpoint handles the entire auto-create process in one go
@@ -55,13 +55,14 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     let contextData = {};
     if (creativeId) {
       try {
-        // Fetch creative with related persona
+        // Fetch creative with related persona and product with all fields
         const creative = await db.query.creatives.findFirst({
           where: eq(creatives.id, creativeId),
           with: {
             persona: {
               with: {
-                product: true
+                product: true,
+                // Include all persona fields
               }
             },
             textData: true,
@@ -71,7 +72,13 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
           }
         });
 
+        console.log('API: Found creative:', creative?.name + ' - ' + creative?.description + ' (Type: ' + creative?.type + ')');
+
         if (creative) {
+          // Use type assertion to handle the complex structure
+          const creativeAny = creative as any;
+
+          // Create a deep copy of the data
           contextData = {
             creative: {
               id: creative.id,
@@ -79,13 +86,20 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
               type: creative.type,
               description: creative.description,
               // Include type-specific data
-              textData: creative.textData,
-              imageData: creative.imageData,
-              videoData: creative.videoData,
-              lpData: creative.lpData
+              textData: creativeAny.textData,
+              imageData: creativeAny.imageData,
+              videoData: creativeAny.videoData,
+              lpData: creativeAny.lpData
             },
-            persona: creative.persona,
-            product: creative.persona?.product
+            persona: creativeAny.persona ? {
+              ...creativeAny.persona,
+              // Add any additional persona properties here
+              valuesText: creativeAny.persona.personaValues ?
+                creativeAny.persona.personaValues.map((v: any) => v.value).join(', ') : ''
+            } : null,
+            product: creativeAny.persona?.product ? {
+              ...creativeAny.persona.product
+            } : null
           };
           console.log(`Fetched context data for creative ID: ${creativeId}`);
         }
@@ -98,9 +112,11 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     // Generate a context-aware scene description
     let sceneDescription = `Scene for ${storyRecord.title || 'story'}`;
     if (Object.keys(contextData).length > 0) {
-      const creative = contextData.creative;
-      const persona = contextData.persona;
-      const product = contextData.product;
+      // Use type assertion to handle the complex structure
+      const typedContext = contextData as any;
+      const creative = typedContext.creative;
+      const persona = typedContext.persona;
+      const product = typedContext.product;
 
       if (creative?.type) {
         sceneDescription = `${creative.type.charAt(0).toUpperCase() + creative.type.slice(1)} ad scene`;
@@ -146,9 +162,9 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
         const errorData = await storyboardResponse.json().catch(() => ({}));
         throw new Error(errorData.message || `API Error: ${storyboardResponse.statusText}`);
       }
-    } catch (fetchError) {
+    } catch (fetchError: any) {
       console.error('Error connecting to AI storyboard creator:', fetchError);
-      throw new Error(`Failed to connect to AI storyboard creator. Make sure the service is running at http://localhost:5173. Error: ${fetchError.message}`);
+      throw new Error(`Failed to connect to AI storyboard creator. Make sure the service is running at http://localhost:5173. Error: ${fetchError.message || 'Unknown error'}`);
     }
 
     const storyboardResult = await storyboardResponse.json();
@@ -171,12 +187,12 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
         const errorData = await framesResponse.json().catch(() => ({}));
         throw new Error(errorData.message || `API Error: ${framesResponse.statusText}`);
       }
-    } catch (fetchError) {
+    } catch (fetchError: any) {
       console.error('Error generating frames:', fetchError);
-      throw new Error(`Failed to generate frames. Error: ${fetchError.message}`);
+      throw new Error(`Failed to generate frames. Error: ${fetchError.message || 'Unknown error'}`);
     }
 
-    const framesResult = await framesResponse.json();
+    await framesResponse.json(); // We don't need to use the result
     console.log(`Generated frames for storyboard ${storyboardId}`);
 
     // Step 4: Fetch the generated frames from the AI storyboard creator
@@ -187,9 +203,9 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
         const errorData = await storyboardDataResponse.json().catch(() => ({}));
         throw new Error(errorData.message || `API Error: ${storyboardDataResponse.statusText}`);
       }
-    } catch (fetchError) {
+    } catch (fetchError: any) {
       console.error('Error fetching storyboard data:', fetchError);
-      throw new Error(`Failed to fetch storyboard data. Error: ${fetchError.message}`);
+      throw new Error(`Failed to fetch storyboard data. Error: ${fetchError.message || 'Unknown error'}`);
     }
 
     const storyboardData = await storyboardDataResponse.json();
@@ -345,6 +361,69 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     // Determine if context was used
     const contextUsed = Object.keys(contextData).length > 0;
 
+    // Create a detailed context summary
+    let contextSummary = null;
+    if (contextUsed) {
+      // Use type assertion to help TypeScript understand the structure
+      const typedContextData = contextData as {
+        creative?: {
+          type?: string;
+          name?: string;
+          description?: string;
+          textData?: { headline?: string; body?: string; callToAction?: string };
+          imageData?: { appealFeature?: string; emotion?: string };
+          videoData?: { emotion?: string; duration?: string };
+          lpData?: { headline?: string };
+        };
+        persona?: {
+          name?: string;
+          personaTitle?: string;
+          needsPainPoints?: string;
+          goalsExpectations?: string;
+          valuesText?: string;
+        };
+        product?: {
+          name?: string;
+          featuresStrengths?: string;
+          overview?: string;
+          competitiveAdvantage?: string;
+        };
+      };
+
+      contextSummary = {
+        // Creative information
+        creativeType: typedContextData.creative?.type || null,
+        creativeName: typedContextData.creative?.name || null,
+        creativeDescription: typedContextData.creative?.description || null,
+
+        // Type-specific creative information
+        textHeadline: typedContextData.creative?.textData?.headline || null,
+        textBody: typedContextData.creative?.textData?.body || null,
+        textCTA: typedContextData.creative?.textData?.callToAction || null,
+
+        imageAppeal: typedContextData.creative?.imageData?.appealFeature || null,
+        imageEmotion: typedContextData.creative?.imageData?.emotion || null,
+
+        videoEmotion: typedContextData.creative?.videoData?.emotion || null,
+        videoDuration: typedContextData.creative?.videoData?.duration || null,
+
+        lpHeadline: typedContextData.creative?.lpData?.headline || null,
+
+        // Persona information
+        personaName: typedContextData.persona?.name || null,
+        personaTitle: typedContextData.persona?.personaTitle || null,
+        personaPainPoints: typedContextData.persona?.needsPainPoints || null,
+        personaGoals: typedContextData.persona?.goalsExpectations || null,
+        personaValues: typedContextData.persona?.valuesText || null,
+
+        // Product information
+        productName: typedContextData.product?.name || null,
+        productFeatures: typedContextData.product?.featuresStrengths || null,
+        productOverview: typedContextData.product?.overview || null,
+        productAdvantage: typedContextData.product?.competitiveAdvantage || null
+      };
+    }
+
     return json({
       success: true,
       message: `Successfully created ${createdClips.length} clips from AI storyboard${contextUsed ? ' with context-aware content' : ''}`,
@@ -353,11 +432,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
       clipCount: createdClips.length,
       clips: createdClips,
       contextUsed,
-      contextSummary: contextUsed ? {
-        creativeType: contextData.creative?.type || null,
-        personaName: contextData.persona?.name || null,
-        productName: contextData.product?.name || null
-      } : null
+      contextSummary
     });
 
   } catch (err) {
@@ -367,10 +442,11 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
       throw error(400, 'Invalid JSON in request body');
     }
 
-    if (err.status) {
-      throw error(err.status, err.body?.message || 'API Error');
+    const errAny = err as any;
+    if (errAny.status) {
+      throw error(errAny.status, errAny.body?.message || 'API Error');
     }
 
-    throw error(500, `Internal Server Error: ${err.message || 'Unknown error'}`);
+    throw error(500, `Internal Server Error: ${errAny.message || 'Unknown error'}`);
   }
 };

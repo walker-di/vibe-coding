@@ -7,12 +7,12 @@ export const frameSchema = {
   properties: {
     narration: {
       type: SchemaType.STRING,
-      description: 'Professional voice-over script for this frame. Should be concise, impactful, and align with the visual.',
+      description: 'Professional voice-over script for this frame in Brazilian Portuguese Should be concise, impactful, and align with the visual.',
       nullable: false
     },
     visualDescription: {
       type: SchemaType.STRING,
-      description: 'Detailed visual description of what appears in this frame. Include composition, lighting, subjects, and mood.',
+      description: 'Detailed visual description in English of what appears in this frame. Include composition, lighting, subjects, and mood. this message will be used to send to AI to generate image',
       nullable: false
     }
   },

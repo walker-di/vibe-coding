@@ -280,15 +280,45 @@
       // Add context information to the success message if it was used
       if (result.contextUsed && result.contextSummary) {
         successMessage += '\n\nContext-aware content was generated using:';
+
+        // Product information
         if (result.contextSummary.productName) {
-          successMessage += `\n- Product: ${result.contextSummary.productName}`;
+          successMessage += `\n\nProduct: ${result.contextSummary.productName}`;
+          if (result.contextSummary.productFeatures) {
+            successMessage += `\n- Features: ${result.contextSummary.productFeatures}`;
+          }
         }
+
+        // Persona information
         if (result.contextSummary.personaName) {
-          successMessage += `\n- Persona: ${result.contextSummary.personaName}`;
+          successMessage += `\n\nTarget Audience: ${result.contextSummary.personaName}`;
+          if (result.contextSummary.personaTitle) {
+            successMessage += ` (${result.contextSummary.personaTitle})`;
+          }
+          if (result.contextSummary.personaPainPoints) {
+            successMessage += `\n- Pain Points: ${result.contextSummary.personaPainPoints}`;
+          }
+          if (result.contextSummary.personaGoals) {
+            successMessage += `\n- Goals: ${result.contextSummary.personaGoals}`;
+          }
         }
+
+        // Creative information
         if (result.contextSummary.creativeType) {
-          successMessage += `\n- Creative Type: ${result.contextSummary.creativeType}`;
+          successMessage += `\n\nCreative: ${result.contextSummary.creativeName || 'Unnamed'}`;
+          successMessage += `\n- Type: ${result.contextSummary.creativeType}`;
+
+          // Type-specific information
+          if (result.contextSummary.creativeType === 'text' && result.contextSummary.textHeadline) {
+            successMessage += `\n- Headline: ${result.contextSummary.textHeadline}`;
+          } else if (result.contextSummary.creativeType === 'image' && result.contextSummary.imageAppeal) {
+            successMessage += `\n- Appeal: ${result.contextSummary.imageAppeal}`;
+          } else if (result.contextSummary.creativeType === 'video' && result.contextSummary.videoEmotion) {
+            successMessage += `\n- Emotion: ${result.contextSummary.videoEmotion}`;
+          }
         }
+
+        successMessage += '\n\nThe generated content has been tailored to this specific context.';
       }
 
       alert(successMessage);
@@ -1159,17 +1189,83 @@
           </div>
         {:else}
           {#if creativeContext}
-            <div class="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+            <div class="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200 overflow-auto max-h-60">
               <h3 class="text-sm font-medium mb-2">Context Information</h3>
-              <div class="text-xs space-y-1">
-                <p><span class="font-semibold">Creative:</span> {creativeContext.name}</p>
-                <p><span class="font-semibold">Type:</span> {creativeContext.type}</p>
-                {#if creativeContext.persona}
-                  <p><span class="font-semibold">Persona:</span> {creativeContext.persona.name}</p>
-                {/if}
-                {#if creativeContext.persona?.product}
-                  <p><span class="font-semibold">Product:</span> {creativeContext.persona.product.name}</p>
-                {/if}
+
+              <!-- Product Information -->
+              {#if creativeContext.persona?.product}
+                <div class="mb-2">
+                  <h4 class="text-xs font-semibold text-blue-700 border-b border-blue-100 pb-1 mb-1">Product</h4>
+                  <div class="text-xs space-y-1 pl-2">
+                    <p><span class="font-semibold">Name:</span> {creativeContext.persona.product.name}</p>
+                    {#if creativeContext.persona.product.overview}
+                      <p><span class="font-semibold">Overview:</span> {creativeContext.persona.product.overview}</p>
+                    {/if}
+                    {#if creativeContext.persona.product.featuresStrengths}
+                      <p><span class="font-semibold">Features:</span> {creativeContext.persona.product.featuresStrengths}</p>
+                    {/if}
+                  </div>
+                </div>
+              {/if}
+
+              <!-- Persona Information -->
+              {#if creativeContext.persona}
+                <div class="mb-2">
+                  <h4 class="text-xs font-semibold text-green-700 border-b border-green-100 pb-1 mb-1">Target Audience</h4>
+                  <div class="text-xs space-y-1 pl-2">
+                    <p>
+                      <span class="font-semibold">Persona:</span>
+                      {creativeContext.persona.name}
+                      {#if creativeContext.persona.personaTitle}
+                        ({creativeContext.persona.personaTitle})
+                      {/if}
+                    </p>
+                    {#if creativeContext.persona.needsPainPoints}
+                      <p><span class="font-semibold">Pain Points:</span> {creativeContext.persona.needsPainPoints}</p>
+                    {/if}
+                    {#if creativeContext.persona.goalsExpectations}
+                      <p><span class="font-semibold">Goals:</span> {creativeContext.persona.goalsExpectations}</p>
+                    {/if}
+                  </div>
+                </div>
+              {/if}
+
+              <!-- Creative Information -->
+              <div class="mb-2">
+                <h4 class="text-xs font-semibold text-purple-700 border-b border-purple-100 pb-1 mb-1">Creative</h4>
+                <div class="text-xs space-y-1 pl-2">
+                  <p><span class="font-semibold">Name:</span> {creativeContext.name}</p>
+                  <p><span class="font-semibold">Type:</span> {creativeContext.type}</p>
+
+                  <!-- Type-specific information -->
+                  {#if creativeContext.type === 'text' && creativeContext.textData}
+                    <p><span class="font-semibold">Headline:</span> {creativeContext.textData.headline || 'N/A'}</p>
+                    {#if creativeContext.textData.body}
+                      <p><span class="font-semibold">Body:</span> {creativeContext.textData.body}</p>
+                    {/if}
+                    {#if creativeContext.textData.callToAction}
+                      <p><span class="font-semibold">CTA:</span> {creativeContext.textData.callToAction}</p>
+                    {/if}
+                  {:else if creativeContext.type === 'image' && creativeContext.imageData}
+                    {#if creativeContext.imageData.appealFeature}
+                      <p><span class="font-semibold">Appeal:</span> {creativeContext.imageData.appealFeature}</p>
+                    {/if}
+                    {#if creativeContext.imageData.emotion}
+                      <p><span class="font-semibold">Emotion:</span> {creativeContext.imageData.emotion}</p>
+                    {/if}
+                  {:else if creativeContext.type === 'video' && creativeContext.videoData}
+                    {#if creativeContext.videoData.duration}
+                      <p><span class="font-semibold">Duration:</span> {creativeContext.videoData.duration}</p>
+                    {/if}
+                    {#if creativeContext.videoData.emotion}
+                      <p><span class="font-semibold">Emotion:</span> {creativeContext.videoData.emotion}</p>
+                    {/if}
+                  {:else if creativeContext.type === 'lp' && creativeContext.lpData}
+                    {#if creativeContext.lpData.headline}
+                      <p><span class="font-semibold">Headline:</span> {creativeContext.lpData.headline}</p>
+                    {/if}
+                  {/if}
+                </div>
               </div>
             </div>
           {/if}
