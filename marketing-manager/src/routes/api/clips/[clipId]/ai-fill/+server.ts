@@ -229,14 +229,6 @@ function generatePromptForPlaceholder(placeholderParams: ReturnType<typeof parse
 
 // Function to create an image object from a placeholder
 function createImageObject(placeholderObj: any, imageUrl: string) {
-  // Calculate the visual dimensions of the placeholder
-  const placeholderWidth = placeholderObj.width || 200;
-  const placeholderHeight = placeholderObj.height || 200;
-  const placeholderScaleX = placeholderObj.scaleX || 1;
-  const placeholderScaleY = placeholderObj.scaleY || 1;
-  const targetWidth = placeholderWidth * placeholderScaleX;
-  const targetHeight = placeholderHeight * placeholderScaleY;
-
   // Create a new image object based on the placeholder's properties
   // Ensure placeholderObj has expected properties or provide defaults
   return {
@@ -246,11 +238,9 @@ function createImageObject(placeholderObj: any, imageUrl: string) {
     originY: placeholderObj.originY || 'top',
     left: placeholderObj.left || 0, // Keep position
     top: placeholderObj.top || 0,   // Keep position
-    // Set width and height to the placeholder's visual bounds
-    // Fabric.js will scale the loaded image to fit these dimensions
-    // while preserving aspect ratio by default.
-    width: targetWidth,
-    height: targetHeight,
+    // Omit width and height - let Fabric load the image with its intrinsic dimensions
+    // width: undefined, // Explicitly undefined or just omit
+    // height: undefined, // Explicitly undefined or just omit
     fill: placeholderObj.fill || 'rgb(0,0,0)', // Keep placeholder fill? Or default?
     stroke: placeholderObj.stroke || null,
     strokeWidth: placeholderObj.strokeWidth || 0,
@@ -260,9 +250,9 @@ function createImageObject(placeholderObj: any, imageUrl: string) {
     strokeLineJoin: placeholderObj.strokeLineJoin || 'miter',
     strokeUniform: placeholderObj.strokeUniform || false,
     strokeMiterLimit: placeholderObj.strokeMiterLimit || 4,
-    // Reset scale to 1, as width/height now define the target size
-    scaleX: 1,
-    scaleY: 1,
+    // Keep the original placeholder's scale
+    scaleX: placeholderObj.scaleX || 1,
+    scaleY: placeholderObj.scaleY || 1,
     angle: placeholderObj.angle || 0, // Keep angle
     flipX: placeholderObj.flipX || false,
     flipY: placeholderObj.flipY || false,
