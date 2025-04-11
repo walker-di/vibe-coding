@@ -8,7 +8,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers, Wand, Mic } from 'lucide-svelte'; // Wand is already here, no change needed in this block, but keeping for context if needed later.
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers, Wand, Mic, RefreshCw } from 'lucide-svelte';
   import { tick } from 'svelte'; // Import tick
 
   // Props passed down from the page
@@ -1252,9 +1252,9 @@
   // Add function to handle AI fill
   async function handleAiFill() {
     if (!selectedClip) return;
-    
+
     isAiFillLoading = true;
-    
+
     try {
       const response = await fetch(`/api/clips/${selectedClip.id}/ai-fill`, {
         method: 'POST',
@@ -1262,15 +1262,15 @@
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Failed to AI fill clip. Status: ${response.status}`);
       }
-      
+
       const result = await response.json();
       console.log('AI fill result:', result);
-      
+
       // Update the clip with the new data
       if (result.success && result.data) {
         isProcessingAiFill = true; // Set flag before loading new canvas
@@ -1291,7 +1291,7 @@
           narrationAudioUrl: result.data.narrationAudioUrl || selectedClip.narrationAudioUrl || null
         };
         selectedClip = updatedClipData;
-        
+
         // Load the new canvas data into the editor instance
         if (canvasEditorInstance) {
           console.log('AI Fill: Loading new canvas data...');
@@ -1305,7 +1305,7 @@
         } else {
            isProcessingAiFill = false; // Clear flag if no instance
         }
-        
+
         // Update the scenes array to reflect the changes
         scenes = scenes.map((s: SceneWithRelations) => {
           if (s.id === selectedClip?.sceneId) { // Use optional chaining for safety
@@ -1322,7 +1322,7 @@
           }
           return s;
         });
-        
+
         // Force a refresh of the scene list to show updated preview
         forceSceneRefresh++;
         alert('Clip successfully filled with AI content!');
@@ -1374,6 +1374,9 @@
         </Button>
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.showLayerOrderModal()} title="Manage Layers" disabled={!canvasIsReady}>
           <Layers class="h-4 w-4 mr-2" /> Layers
+        </Button>
+        <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.resetView()} title="Fix Canvas Display" disabled={!canvasIsReady}>
+          <RefreshCw class="h-4 w-4 mr-2" /> Fix Display
         </Button>
         <div class="border-t my-2"></div>
         <Button variant="outline" class="w-full justify-start" onclick={handleAiFill} disabled={!selectedClip || isAiFillLoading} title="AI Fill Clip">

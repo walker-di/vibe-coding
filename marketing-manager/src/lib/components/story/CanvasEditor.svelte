@@ -152,19 +152,25 @@
                   // Check for and fix extreme values in the JSON data
                   let hasExtremeValues = false;
                   jsonObj.objects.forEach((obj: any) => {
-                    // Check for extreme positions (very negative or very large values)
-                    if (obj.left !== undefined && (obj.left < -canvasWidth || obj.left > canvasWidth * 2)) {
-                      console.warn(`Object has extreme X position: ${obj.left}`, obj);
+                    // Store original values for logging
+                    const originalLeft = obj.left;
+                    const originalTop = obj.top;
+
+                    // More aggressive check for extreme positions (very negative or very large values)
+                    if (obj.left !== undefined && (obj.left < -canvasWidth / 2 || obj.left > canvasWidth * 1.5)) {
+                      console.warn(`Object has extreme X position: ${originalLeft}`, obj);
                       hasExtremeValues = true;
-                      // Center horizontally
-                      obj.left = canvasWidth / 2 - (obj.width || 100) / 2;
+                      // Center horizontally with better calculation
+                      obj.left = canvasWidth / 2 - ((obj.width || 100) * (obj.scaleX || 1)) / 2;
+                      console.log(`Fixed extreme X position: ${originalLeft} -> ${obj.left}`);
                     }
 
-                    if (obj.top !== undefined && (obj.top < -canvasHeight || obj.top > canvasHeight * 2)) {
-                      console.warn(`Object has extreme Y position: ${obj.top}`, obj);
+                    if (obj.top !== undefined && (obj.top < -canvasHeight / 2 || obj.top > canvasHeight * 1.5)) {
+                      console.warn(`Object has extreme Y position: ${originalTop}`, obj);
                       hasExtremeValues = true;
-                      // Center vertically
-                      obj.top = canvasHeight / 2 - (obj.height || 100) / 2;
+                      // Center vertically with better calculation
+                      obj.top = canvasHeight / 2 - ((obj.height || 100) * (obj.scaleY || 1)) / 2;
+                      console.log(`Fixed extreme Y position: ${originalTop} -> ${obj.top}`);
                     }
 
                     // Check for extreme scale values
@@ -221,16 +227,37 @@
                       }
                     });
 
-                    // First normalize any objects with extreme scales or positions
-                    const normalized = normalizeObjects();
-                    if (normalized) {
-                      console.log('Objects were normalized in the canvas');
-                    }
+                    // Check if any objects have extreme positions
+                    let hasExtremePositions = false;
+                    objects.forEach((obj: any) => {
+                      if (!obj) return;
 
-                    // Then try to center objects if they're outside the visible area
-                    const centered = centerAllObjects();
-                    if (centered) {
-                      console.log('Objects were centered in the canvas');
+                      // Check for extreme positions that would cause display issues
+                      if (obj.left < -canvas.width / 2 || obj.left > canvas.width * 1.5 ||
+                          obj.top < -canvas.height / 2 || obj.top > canvas.height * 1.5) {
+                        hasExtremePositions = true;
+                        console.log(`Object ${obj.name || 'unnamed'} has extreme position: left=${obj.left}, top=${obj.top}`);
+                      }
+                    });
+
+                    // If extreme positions are detected, use resetCanvasView to fix everything
+                    if (hasExtremePositions) {
+                      console.log('Extreme positions detected, using resetCanvasView to fix');
+                      // Use setTimeout to ensure the canvas is fully loaded before resetting
+                      setTimeout(() => {
+                        resetCanvasView();
+                      }, 100);
+                    } else {
+                      // Otherwise, use the normal approach
+                      const normalized = normalizeObjects();
+                      if (normalized) {
+                        console.log('Objects were normalized in the canvas');
+                      }
+
+                      const centered = centerAllObjects();
+                      if (centered) {
+                        console.log('Objects were centered in the canvas');
+                      }
                     }
 
                     canvas.renderAll();
@@ -463,17 +490,40 @@
 
   function fitToView() {
     if (!canvas || !canvasContainer || !fabricLoaded) return;
+
+    // First ensure all objects are normalized and centered
+    normalizeObjects();
+    centerAllObjects();
+
     // Account for padding in the container
     const containerWidth = canvasContainer.clientWidth - 40; // 20px padding on each side
     const containerHeight = canvasContainer.clientHeight - 40; // 20px padding on each side
     const scaleX = containerWidth / canvasWidth;
     const scaleY = containerHeight / canvasHeight;
-    const newZoom = Math.min(scaleX, scaleY) * 0.95; // Add a little padding (95% of available space)
+
+    // Calculate zoom with a bit more padding for safety
+    const newZoom = Math.min(scaleX, scaleY) * 0.9; // Add more padding (90% of available space)
+
+    // Apply the zoom
     setZoom(newZoom);
-    // Center the canvas after fitting
+
+    // Reset pan to center the canvas
     canvas.absolutePan({ x: 0, y: 0 });
+
+    // Force a render
     canvas.renderAll();
+
+    // Log the fit operation
     console.log(`Fit to view: container ${containerWidth}x${containerHeight}, canvas ${canvasWidth}x${canvasHeight}, zoom ${newZoom}`);
+
+    // Force all objects to be marked as dirty to ensure they render
+    const objects = canvas.getObjects();
+    objects.forEach((obj: any) => {
+      if (obj) obj.dirty = true;
+    });
+
+    // Render again after marking objects as dirty
+    canvas.renderAll();
   }
 
   function handleMouseWheel(opt: any) {
@@ -544,15 +594,24 @@
       const canvasHeight = canvas.height;
 
       // If position is way outside canvas bounds, move it to a reasonable position
-      if (obj.left !== undefined && (obj.left < -canvasWidth || obj.left > canvasWidth * 2)) {
-        obj.set('left', canvasWidth / 2 - obj.width / 2);
-        console.log(`Fixed extreme X position for ${obj.name || 'unnamed'}: ${obj.left} -> ${canvasWidth / 2 - obj.width / 2}`);
+      // Store original values for logging
+      const originalLeft = obj.left;
+      const originalTop = obj.top;
+
+      // More aggressive check for extreme positions
+      if (obj.left !== undefined && (obj.left < -canvasWidth / 2 || obj.left > canvasWidth * 1.5)) {
+        // Center the object horizontally
+        const newLeft = canvasWidth / 2 - (obj.width * (obj.scaleX || 1)) / 2;
+        obj.set('left', newLeft);
+        console.log(`Fixed extreme X position for ${obj.name || 'unnamed'}: ${originalLeft} -> ${newLeft}`);
         modified = true;
       }
 
-      if (obj.top !== undefined && (obj.top < -canvasHeight || obj.top > canvasHeight * 2)) {
-        obj.set('top', canvasHeight / 2 - obj.height / 2);
-        console.log(`Fixed extreme Y position for ${obj.name || 'unnamed'}: ${obj.top} -> ${canvasHeight / 2 - obj.height / 2}`);
+      if (obj.top !== undefined && (obj.top < -canvasHeight / 2 || obj.top > canvasHeight * 1.5)) {
+        // Center the object vertically
+        const newTop = canvasHeight / 2 - (obj.height * (obj.scaleY || 1)) / 2;
+        obj.set('top', newTop);
+        console.log(`Fixed extreme Y position for ${obj.name || 'unnamed'}: ${originalTop} -> ${newTop}`);
         modified = true;
       }
 
@@ -585,6 +644,158 @@
     let maxX = -Infinity;
     let maxY = -Infinity;
 
+    // First pass: check if any objects have extreme positions that would skew the calculation
+    let hasExtremePositions = false;
+    objects.forEach((obj: any) => {
+      if (!obj) return;
+
+      // Check for extreme positions that would skew the calculation
+      if (obj.left < -canvas.width * 2 || obj.left > canvas.width * 3 ||
+          obj.top < -canvas.height * 2 || obj.top > canvas.height * 3) {
+        hasExtremePositions = true;
+        console.log(`Object ${obj.name || 'unnamed'} has extreme position: left=${obj.left}, top=${obj.top}`);
+      }
+    });
+
+    // If we have extreme positions, recreate all objects with correct positions
+    if (hasExtremePositions) {
+      console.log('Extreme positions detected, recreating objects with correct positions');
+
+      // Store the original objects to recreate them
+      const objectsToRecreate: any[] = [];
+      objects.forEach((obj: any) => {
+        if (!obj) return;
+
+        // Store all the properties we need to recreate the object
+        const objData = {
+          type: obj.type,
+          name: obj.name,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          fill: obj.fill,
+          stroke: obj.stroke,
+          strokeWidth: obj.strokeWidth,
+          src: obj.getSrc ? obj.getSrc() : null, // For images
+          text: obj.text, // For text objects
+          fontSize: obj.fontSize, // For text objects
+          fontFamily: obj.fontFamily // For text objects
+        };
+        objectsToRecreate.push(objData);
+      });
+
+      // Clear the canvas
+      canvas.clear();
+
+      // Set background color
+      canvas.backgroundColor = '#f0f0f0';
+
+      // Recreate each object with proper positioning
+      let imageLoadCount = 0;
+      const totalImages = objectsToRecreate.filter(obj => obj.type === 'image').length;
+
+      objectsToRecreate.forEach((objData: any, index: number) => {
+        let newObj;
+        const wf = window as any;
+
+        // Calculate centered position
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        // Stagger objects vertically and horizontally for visibility
+        const offsetX = (index % 3) * 50 - 50;
+        const offsetY = Math.floor(index / 3) * 50 - 50;
+
+        // Create different types of objects
+        if (objData.type === 'rect') {
+          newObj = new wf.fabric.Rect({
+            left: centerX - (objData.width / 2) + offsetX,
+            top: centerY - (objData.height / 2) + offsetY,
+            width: objData.width,
+            height: objData.height,
+            fill: objData.fill || '#3498db',
+            stroke: objData.stroke,
+            strokeWidth: objData.strokeWidth,
+            name: objData.name
+          });
+        } else if (objData.type === 'circle') {
+          newObj = new wf.fabric.Circle({
+            left: centerX - (objData.width / 2) + offsetX,
+            top: centerY - (objData.height / 2) + offsetY,
+            radius: Math.min(objData.width, objData.height) / 2,
+            fill: objData.fill || '#3498db',
+            stroke: objData.stroke,
+            strokeWidth: objData.strokeWidth,
+            name: objData.name
+          });
+        } else if (objData.type === 'text' || objData.type === 'textbox') {
+          newObj = new wf.fabric.Textbox(objData.text || 'Text', {
+            left: centerX - (objData.width / 2) + offsetX,
+            top: centerY - (objData.height / 2) + offsetY,
+            width: objData.width,
+            fontSize: objData.fontSize || 24,
+            fontFamily: objData.fontFamily || 'Arial',
+            fill: objData.fill || '#2c3e50',
+            name: objData.name
+          });
+        } else if (objData.type === 'image') {
+          // For images, we need to load them asynchronously
+          // Use a placeholder URL if src is not available
+          const imageUrl = objData.src || `https://via.placeholder.com/${objData.width}x${objData.height}?text=${encodeURIComponent(objData.name || 'Image')}`;
+
+          wf.fabric.Image.fromURL(imageUrl, (img: any) => {
+            // Scale the image to match the original dimensions
+            const scale = Math.min(
+              objData.width / (img.width || 1),
+              objData.height / (img.height || 1)
+            );
+
+            img.set({
+              left: centerX - (objData.width / 2) + offsetX,
+              top: centerY - (objData.height / 2) + offsetY,
+              scaleX: scale,
+              scaleY: scale,
+              name: objData.name
+            });
+
+            canvas.add(img);
+            imageLoadCount++;
+
+            // When all images are loaded, render the canvas
+            if (imageLoadCount >= totalImages) {
+              canvas.renderAll();
+              console.log('All images loaded and rendered');
+            }
+          }, { crossOrigin: 'anonymous' });
+          return; // Skip the add below for images
+        } else {
+          // Default fallback - create a rectangle with the object's name
+          newObj = new wf.fabric.Rect({
+            left: centerX - 50 + offsetX,
+            top: centerY - 50 + offsetY,
+            width: 100,
+            height: 100,
+            fill: '#e74c3c',
+            name: objData.name || `Unknown object ${index}`
+          });
+        }
+
+        if (newObj) {
+          canvas.add(newObj);
+        }
+      });
+
+      // If there were no images, render the canvas now
+      if (totalImages === 0) {
+        canvas.renderAll();
+      }
+
+      console.log('Objects recreated with proper positioning');
+      return true;
+    }
+
+    // If no extreme positions, proceed with normal centering
     objects.forEach((obj: any) => {
       if (!obj) return;
 
@@ -610,8 +821,9 @@
       const offsetX = canvasCenterX - objectsCenterX;
       const offsetY = canvasCenterY - objectsCenterY;
 
-      // Only apply offset if it's significant
-      if (Math.abs(offsetX) > 10 || Math.abs(offsetY) > 10) {
+      // Apply offset if it's significant or if objects are outside the visible area
+      if (Math.abs(offsetX) > 5 || Math.abs(offsetY) > 5 ||
+          minX < 0 || minY < 0 || maxX > canvas.width || maxY > canvas.height) {
         console.log(`Centering objects: offset (${offsetX}, ${offsetY})`);
 
         // Move all objects by the offset
@@ -633,6 +845,172 @@
   }
 
   // --- End Zoom Functions ---
+
+  // Function to completely reset the canvas view
+  function resetCanvasView() {
+    if (!canvas || !fabricLoaded) return;
+
+    console.log('Starting complete canvas view reset...');
+
+    // Step 1: Reset zoom to 1
+    setZoom(1);
+    console.log('Reset zoom to 1');
+
+    // Step 2: Reset pan
+    canvas.absolutePan({ x: 0, y: 0 });
+    console.log('Reset pan to origin');
+
+    // Step 3: Force recreation of all objects with proper positioning
+    const objects = canvas.getObjects();
+    if (objects && objects.length > 0) {
+      // Force recreation of objects with proper positioning
+
+      // Store the original objects to recreate them
+      const objectsToRecreate: any[] = [];
+      objects.forEach((obj: any) => {
+        if (!obj) return;
+
+        // Store all the properties we need to recreate the object
+        const objData = {
+          type: obj.type,
+          name: obj.name,
+          width: obj.width || 100,
+          height: obj.height || 100,
+          scaleX: obj.scaleX || 1,
+          scaleY: obj.scaleY || 1,
+          fill: obj.fill,
+          stroke: obj.stroke,
+          strokeWidth: obj.strokeWidth,
+          src: obj.getSrc ? obj.getSrc() : null, // For images
+          text: obj.text, // For text objects
+          fontSize: obj.fontSize, // For text objects
+          fontFamily: obj.fontFamily // For text objects
+        };
+        objectsToRecreate.push(objData);
+      });
+
+      // Clear the canvas
+      canvas.clear();
+
+      // Set background color
+      canvas.backgroundColor = '#f0f0f0';
+
+      // Recreate each object with proper positioning
+      let imageLoadCount = 0;
+      const totalImages = objectsToRecreate.filter(obj => obj.type === 'image').length;
+
+      objectsToRecreate.forEach((objData: any, index: number) => {
+        let newObj;
+        const wf = window as any;
+
+        // Calculate centered position
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        // Stagger objects vertically and horizontally for visibility
+        const offsetX = (index % 3) * 50 - 50;
+        const offsetY = Math.floor(index / 3) * 50 - 50;
+
+        // Create different types of objects
+        if (objData.type === 'rect') {
+          newObj = new wf.fabric.Rect({
+            left: centerX - (objData.width / 2) + offsetX,
+            top: centerY - (objData.height / 2) + offsetY,
+            width: objData.width,
+            height: objData.height,
+            fill: objData.fill || '#3498db',
+            stroke: objData.stroke,
+            strokeWidth: objData.strokeWidth,
+            name: objData.name
+          });
+        } else if (objData.type === 'circle') {
+          newObj = new wf.fabric.Circle({
+            left: centerX - (objData.width / 2) + offsetX,
+            top: centerY - (objData.height / 2) + offsetY,
+            radius: Math.min(objData.width, objData.height) / 2,
+            fill: objData.fill || '#3498db',
+            stroke: objData.stroke,
+            strokeWidth: objData.strokeWidth,
+            name: objData.name
+          });
+        } else if (objData.type === 'text' || objData.type === 'textbox') {
+          newObj = new wf.fabric.Textbox(objData.text || 'Text', {
+            left: centerX - (objData.width / 2) + offsetX,
+            top: centerY - (objData.height / 2) + offsetY,
+            width: objData.width,
+            fontSize: objData.fontSize || 24,
+            fontFamily: objData.fontFamily || 'Arial',
+            fill: objData.fill || '#2c3e50',
+            name: objData.name
+          });
+        } else if (objData.type === 'image') {
+          // For images, we need to load them asynchronously
+          // Use a placeholder URL if src is not available
+          const imageUrl = objData.src || `https://via.placeholder.com/${objData.width}x${objData.height}?text=${encodeURIComponent(objData.name || 'Image')}`;
+
+          wf.fabric.Image.fromURL(imageUrl, (img: any) => {
+            // Scale the image to match the original dimensions
+            const scale = Math.min(
+              objData.width / (img.width || 1),
+              objData.height / (img.height || 1)
+            );
+
+            img.set({
+              left: centerX - (objData.width / 2) + offsetX,
+              top: centerY - (objData.height / 2) + offsetY,
+              scaleX: scale,
+              scaleY: scale,
+              name: objData.name
+            });
+
+            canvas.add(img);
+            imageLoadCount++;
+
+            // When all images are loaded, render the canvas
+            if (imageLoadCount >= totalImages) {
+              canvas.renderAll();
+              console.log('All images loaded and rendered');
+              // Fit to view after all images are loaded
+              fitToView();
+            }
+          }, { crossOrigin: 'anonymous' });
+          return; // Skip the add below for images
+        } else {
+          // Default fallback - create a rectangle with the object's name
+          newObj = new wf.fabric.Rect({
+            left: centerX - 50 + offsetX,
+            top: centerY - 50 + offsetY,
+            width: 100,
+            height: 100,
+            fill: '#e74c3c',
+            name: objData.name || `Unknown object ${index}`
+          });
+        }
+
+        if (newObj) {
+          canvas.add(newObj);
+        }
+      });
+
+      // If there were no images, render the canvas now and fit to view
+      if (totalImages === 0) {
+        canvas.renderAll();
+        fitToView();
+      }
+
+      console.log('Objects recreated with proper positioning');
+    } else {
+      // If no objects, just fit to view
+      fitToView();
+    }
+
+    // Final render
+    canvas.renderAll();
+    console.log('Canvas reset: normalized, centered, and fitted to view');
+
+    // Log the final state
+    logCanvasState();
+  }
 
   // Debug function to log canvas state
   function logCanvasState() {
@@ -1075,6 +1453,11 @@
     return canvas;
   }
 
+  // Expose the reset function for parent components
+  export function resetView() {
+    resetCanvasView();
+  }
+
   // --- Method to update canvas dimensions ---
   export function updateDimensions(newWidth: number, newHeight: number) {
     if (canvas && fabricLoaded) {
@@ -1271,13 +1654,8 @@
       size="icon"
       onclick={() => {
         if (canvas && fabricLoaded) {
-          // First normalize all objects
-          normalizeObjects();
-          // Then center them
-          centerAllObjects();
-          // Finally fit to view
-          fitToView();
-          console.log('Canvas reset: normalized, centered, and fitted to view');
+          // Complete canvas reset function
+          resetCanvasView();
         }
       }}
       title="Reset Canvas View"
@@ -1304,6 +1682,38 @@
       disabled={!fabricLoaded}
     >
       Refresh
+    </Button>
+    <Button
+      variant="outline"
+      onclick={() => {
+        if (canvas && fabricLoaded) {
+          // Complete canvas reset and fix
+          resetCanvasView();
+        }
+      }}
+      title="Fix Canvas Display"
+      disabled={!fabricLoaded}
+    >
+      Fix Display
+    </Button>
+    <Button
+      variant="outline"
+      onclick={() => {
+        if (canvas && fabricLoaded) {
+          if (confirm('This will recreate all objects with proper positioning. Continue?')) {
+            // Force recreation of all objects
+            resetCanvasView();
+            // Save the canvas after reset
+            setTimeout(() => {
+              saveCanvas();
+            }, 500);
+          }
+        }
+      }}
+      title="Recreate All Objects"
+      disabled={!fabricLoaded}
+    >
+      Recreate Objects
     </Button>
     <span class="text-sm ml-2">Zoom: {Math.round(zoomLevel * 100)}%</span>
     <span class="text-sm ml-auto">Canvas: {canvasWidth} x {canvasHeight} px</span>
