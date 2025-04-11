@@ -1,0 +1,10 @@
+/* Fix for upper canvas background */
+.upper-canvas {
+  background-color: transparent !important;
+}
+
+/* Ensure canvas is visible with a subtle border, but only apply to lower-canvas */
+.lower-canvas {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  background-color: white;
+}

@@ -1574,13 +1574,12 @@
     justify-content: center;
     align-items: center;
   }
-
-  /* Ensure canvas is visible with a subtle border */
-  canvas {
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
-    background-color: white;
-  }
 </style>
+
+<!-- Add global canvas styles -->
+<svelte:head>
+  <link rel="stylesheet" href="/canvas-styles.css">
+</svelte:head>
 
 <div class="space-y-4">
   {#if !hideControls}
