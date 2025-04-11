@@ -142,10 +142,101 @@
   // State for the auto-create modal
   let isAutoCreating = $state(false);
   let storyPrompt = $state('');
+  let creativeContext = $state<any>(null);
+  let isLoadingContext = $state(false);
 
   // Handler for opening the auto-create modal
-  function openAutoCreateModal() {
+  async function openAutoCreateModal() {
+    // Reset state
+    storyPrompt = '';
+    isLoadingContext = true;
+    creativeContext = null;
     showAutoCreateModal = true;
+
+    // Fetch creative context if we have a creativeId
+    if (creativeId) {
+      try {
+        const response = await fetch(`/api/creatives/${creativeId}`);
+        if (response.ok) {
+          const creative = await response.json();
+          creativeContext = creative;
+
+          // Pre-populate the prompt with context-aware suggestions
+          if (creative) {
+            let contextPrompt = '';
+
+            // Add creative type-specific context
+            if (creative.type === 'text' && creative.textData) {
+              contextPrompt += `Create a professional, high-quality storyboard for a text ad campaign with headline "${creative.textData.headline || ''}" `;
+              contextPrompt += `and body "${creative.textData.body || ''}"\n\n`;
+              contextPrompt += `The storyboard should have a clear narrative flow with a compelling introduction, detailed middle section, and strong conclusion. `;
+              contextPrompt += `Use a professional, ${creative.textData.emotion || 'confident'} tone throughout.\n\n`;
+            } else if (creative.type === 'image' && creative.imageData) {
+              contextPrompt += `Create a professional, high-quality storyboard for an image-based campaign focusing on ${creative.imageData.appealFeature || 'key features'}\n\n`;
+              contextPrompt += `The visuals should be modern, clean, and visually striking with a cohesive color scheme. `;
+              contextPrompt += `Each frame should have a clear focal point and professional composition.\n\n`;
+            } else if (creative.type === 'video' && creative.videoData) {
+              contextPrompt += `Create a professional, high-quality storyboard for a ${creative.videoData.duration || '30-second'} video ad `;
+              contextPrompt += `with a ${creative.videoData.emotion || 'engaging'} tone\n\n`;
+              contextPrompt += `The storyboard should include dynamic scene transitions, professional camera angles, and a cohesive visual style. `;
+              contextPrompt += `The narration should be concise, impactful, and aligned with the visuals.\n\n`;
+            } else if (creative.type === 'lp' && creative.lpData) {
+              contextPrompt += `Create a professional, high-quality storyboard for a landing page campaign with headline "${creative.lpData.headline || ''}"\n\n`;
+              contextPrompt += `The storyboard should showcase the landing page's key sections, with a focus on user journey and conversion points. `;
+              contextPrompt += `Include clear visual hierarchy and compelling call-to-action elements.\n\n`;
+            }
+
+            // Add persona context if available
+            if (creative.persona) {
+              contextPrompt += `Target audience: ${creative.persona.personaTitle || creative.persona.name}\n`;
+              if (creative.persona.needsPainPoints) {
+                contextPrompt += `Address these specific pain points: ${creative.persona.needsPainPoints}\n`;
+              }
+              if (creative.persona.goalsExpectations) {
+                contextPrompt += `Focus on these customer goals: ${creative.persona.goalsExpectations}\n`;
+              }
+              if (creative.persona.valuesText) {
+                contextPrompt += `Appeal to these values: ${creative.persona.valuesText}\n`;
+              }
+              if (creative.persona.interestsHobbies) {
+                contextPrompt += `Reference these interests where relevant: ${creative.persona.interestsHobbies}\n`;
+              }
+            }
+
+            // Add product context if available
+            if (creative.persona?.product) {
+              const product = creative.persona.product;
+              contextPrompt += `Product: ${product.name}\n`;
+              if (product.featuresStrengths) {
+                contextPrompt += `Highlight these key features and strengths: ${product.featuresStrengths}\n`;
+              }
+              if (product.overview) {
+                contextPrompt += `Product overview: ${product.overview}\n`;
+              }
+              if (product.industry) {
+                contextPrompt += `Industry context: ${product.industry}\n`;
+              }
+            }
+
+            // Add specific instructions for high-quality output
+            contextPrompt += `\n\nImportant requirements for excellent content:\n`;
+            contextPrompt += `1. Use professional, polished language throughout\n`;
+            contextPrompt += `2. Create visually descriptive scenes that would be easy to visualize\n`;
+            contextPrompt += `3. Ensure narration is concise but impactful\n`;
+            contextPrompt += `4. Maintain a cohesive narrative across all frames\n`;
+            contextPrompt += `5. Include specific details rather than generic descriptions\n`;
+
+            storyPrompt = contextPrompt;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching creative context:', error);
+      } finally {
+        isLoadingContext = false;
+      }
+    } else {
+      isLoadingContext = false;
+    }
   }
 
   // Handler for auto-creating a story using AI
@@ -183,8 +274,24 @@
       // Refresh the scene list
       forceSceneRefresh++;
 
-      // Show success message
-      alert(`Successfully created ${result.clipCount} clips from the AI storyboard!`);
+      // Show success message with context information if available
+      let successMessage = `Successfully created ${result.clipCount} clips from the AI storyboard!`;
+
+      // Add context information to the success message if it was used
+      if (result.contextUsed && result.contextSummary) {
+        successMessage += '\n\nContext-aware content was generated using:';
+        if (result.contextSummary.productName) {
+          successMessage += `\n- Product: ${result.contextSummary.productName}`;
+        }
+        if (result.contextSummary.personaName) {
+          successMessage += `\n- Persona: ${result.contextSummary.personaName}`;
+        }
+        if (result.contextSummary.creativeType) {
+          successMessage += `\n- Creative Type: ${result.contextSummary.creativeType}`;
+        }
+      }
+
+      alert(successMessage);
 
     } catch (error: any) {
       console.error('Error auto-creating story:', error);
@@ -1045,18 +1152,53 @@
       </div>
 
       <div class="mb-4">
-        <label for="storyPrompt" class="mb-2 block">Story Prompt</label>
-        <Textarea
-          id="storyPrompt"
-          bind:value={storyPrompt}
-          placeholder="Describe the story you want to create..."
-          rows={5}
-          disabled={isAutoCreating}
-          class="w-full"
-        />
-        <p class="text-xs text-gray-500 mt-1">
-          Provide a detailed description of the story you want to create. The AI will generate multiple clips based on your prompt.
-        </p>
+        {#if isLoadingContext}
+          <div class="flex items-center justify-center py-4">
+            <div class="animate-spin h-5 w-5 border-2 border-purple-500 border-t-transparent rounded-full mr-2"></div>
+            <span>Loading context information...</span>
+          </div>
+        {:else}
+          {#if creativeContext}
+            <div class="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+              <h3 class="text-sm font-medium mb-2">Context Information</h3>
+              <div class="text-xs space-y-1">
+                <p><span class="font-semibold">Creative:</span> {creativeContext.name}</p>
+                <p><span class="font-semibold">Type:</span> {creativeContext.type}</p>
+                {#if creativeContext.persona}
+                  <p><span class="font-semibold">Persona:</span> {creativeContext.persona.name}</p>
+                {/if}
+                {#if creativeContext.persona?.product}
+                  <p><span class="font-semibold">Product:</span> {creativeContext.persona.product.name}</p>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+          <label for="storyPrompt" class="mb-2 block font-medium">Story Prompt</label>
+          <Textarea
+            id="storyPrompt"
+            bind:value={storyPrompt}
+            placeholder="Describe the story you want to create..."
+            rows={6}
+            disabled={isAutoCreating}
+            class="w-full"
+          />
+          <div class="text-xs text-gray-500 mt-2 space-y-2">
+            <p>
+              Provide a detailed description of the story you want to create. The AI will generate multiple clips based on your prompt and the context information above.
+            </p>
+            <div class="p-2 bg-blue-50 rounded border border-blue-100">
+              <p class="font-medium text-blue-700 mb-1">Tips for excellent content:</p>
+              <ul class="list-disc pl-4 space-y-1">
+                <li>Be specific about the tone (professional, friendly, authoritative)</li>
+                <li>Mention key benefits or features you want to highlight</li>
+                <li>Describe the visual style you prefer (modern, classic, minimalist)</li>
+                <li>Include any specific call-to-action you want to emphasize</li>
+                <li>Specify if you want a particular narrative structure (problem-solution, testimonial, etc.)</li>
+              </ul>
+            </div>
+          </div>
+        {/if}
       </div>
 
       <div class="flex justify-end space-x-2">

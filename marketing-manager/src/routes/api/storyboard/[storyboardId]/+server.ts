@@ -1,42 +1,33 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { getFrames, getDefaultFrames, setFrames } from '$lib/server/storyboardStore';
 
 // This endpoint forwards the request to the AI storyboard creator service
-export const GET: RequestHandler = async ({ params, fetch }) => {
+export const GET: RequestHandler = async ({ params }) => {
   const storyboardId = params.storyboardId;
   if (!storyboardId) {
     throw error(400, 'Missing storyboardId parameter');
   }
 
   try {
-    // Generate a mock response instead of calling the same endpoint
-    // This avoids the infinite loop
-    const mockResult = {
+    // Get frames from our store
+    let frames = getFrames(storyboardId);
+
+    // If no frames exist yet, create default ones
+    if (!frames) {
+      frames = getDefaultFrames();
+
+      // Store these default frames
+      setFrames(storyboardId, frames);
+    }
+
+    const result = {
       storyboardId: storyboardId,
-      name: 'Mock Storyboard',
-      frames: [
-        {
-          id: '1',
-          narration: 'This is a mock narration for frame 1',
-          mainImagePrompt: 'A beautiful landscape with mountains and a lake',
-          imageUrl: null
-        },
-        {
-          id: '2',
-          narration: 'This is a mock narration for frame 2',
-          mainImagePrompt: 'A city skyline at sunset with tall buildings',
-          imageUrl: null
-        },
-        {
-          id: '3',
-          narration: 'This is a mock narration for frame 3',
-          mainImagePrompt: 'A close-up of a flower with a bee collecting pollen',
-          imageUrl: null
-        }
-      ]
+      name: 'Professional Storyboard',
+      frames: frames
     };
 
-    console.log(`Generated mock data for storyboard ${storyboardId}:`, mockResult);
+    console.log(`Retrieved frames for storyboard ${storyboardId}:`, result);
 
     // Uncomment this when you have a proper external service
     /*
@@ -56,15 +47,17 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
     console.log(`Fetched storyboard ${storyboardId} from AI Storyboard Creator API:`, result);
     */
 
-    return json(mockResult);
+    return json(result);
   } catch (err) {
     console.error(`Error in /api/storyboard/${storyboardId}:`, err);
 
+    const error_obj = err as any;
+
     // Handle errors thrown during API call
-    if (err.status) {
-      throw error(err.status, err.body?.message || 'API Error');
+    if (error_obj.status) {
+      throw error(error_obj.status, error_obj.body?.message || 'API Error');
     }
     // Generic internal server error
-    throw error(500, `Internal Server Error fetching storyboard: ${err.message}`);
+    throw error(500, `Internal Server Error fetching storyboard: ${error_obj.message || 'Unknown error'}`);
   }
 };
