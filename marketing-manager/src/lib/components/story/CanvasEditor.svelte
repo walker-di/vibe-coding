@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare, Layers, Upload } from 'lucide-svelte';
+  import { Slider } from '$lib/components/ui/slider'; // Import Slider
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare, Layers, Upload, ZoomIn, ZoomOut, RefreshCw, Maximize } from 'lucide-svelte';
   import { FileUpload } from '$lib/components/ui/file-upload';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
   import LayerOrderModal from './LayerOrderModal.svelte';
@@ -31,6 +32,15 @@
   let isNarrationModalOpen = $state(false); // State for narration modal
   let isLayerOrderModalOpen = $state(false); // State for layer order modal
   let canvasLayers = $state<Array<{id: string, name: string, type: string, object: any}>>([]);
+  let canvasContainer: HTMLDivElement | null = $state(null); // Reference to the container div
+
+  // Zoom State
+  const MIN_ZOOM = 0.1;
+  const MAX_ZOOM = 5;
+  const ZOOM_STEP = 0.1;
+  let zoomLevel = $state(1);
+  let canvasWidth = $state(800); // Default, will be updated
+  let canvasHeight = $state(600); // Default, will be updated
 
   // Getter for selectedObject to be used from outside
   export function hasSelectedObject(): boolean {
@@ -208,12 +218,12 @@
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js';
       script.async = true;
 
-       script.onload = () => {
-         initializeCanvas();
-         fabricLoaded = true;
-         onReady?.(); // Signal readiness to the parent
-         // Initial load is now fully handled by the parent calling loadCanvasData
-       };
+      script.onload = () => {
+        initializeCanvas();
+        fabricLoaded = true;
+        onReady?.(); // Signal readiness to the parent
+        // Initial load is now fully handled by the parent calling loadCanvasData
+      };
 
        document.body.appendChild(script);
 
@@ -261,10 +271,82 @@
       canvas.on('selection:created', updateSelection);
       canvas.on('selection:updated', updateSelection);
       canvas.on('selection:cleared', clearSelection);
+
+      // Add mouse wheel zoom listener
+      canvas.on('mouse:wheel', handleMouseWheel);
+
     } catch (error) {
       console.error('Error initializing canvas:', error);
     }
   }
+
+  // --- Zoom Functions ---
+  function setZoom(newZoom: number, point?: { x: number; y: number }) {
+    if (!canvas || !fabricLoaded) return;
+    const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+    zoomLevel = clampedZoom;
+
+    if (point) {
+      canvas.zoomToPoint(point, clampedZoom);
+    } else {
+      // Zoom to center if no point is provided
+      const center = canvas.getCenter();
+      canvas.zoomToPoint({ x: center.left, y: center.top }, clampedZoom);
+    }
+    canvas.renderAll();
+    // Note: We don't save canvas on zoom/pan
+  }
+
+  function zoomIn() {
+    setZoom(zoomLevel + ZOOM_STEP);
+  }
+
+  function zoomOut() {
+    setZoom(zoomLevel - ZOOM_STEP);
+  }
+
+  function resetZoom() {
+    setZoom(1);
+    // Reset pan as well (optional, might need pan state later)
+    canvas.absolutePan({ x: 0, y: 0 });
+    canvas.renderAll();
+  }
+
+  function fitToView() {
+    if (!canvas || !canvasContainer || !fabricLoaded) return;
+    const containerWidth = canvasContainer.clientWidth;
+    const containerHeight = canvasContainer.clientHeight;
+    const scaleX = containerWidth / canvasWidth;
+    const scaleY = containerHeight / canvasHeight;
+    const newZoom = Math.min(scaleX, scaleY) * 0.95; // Add a little padding
+    setZoom(newZoom);
+    // Center the canvas after fitting
+    canvas.absolutePan({ x: 0, y: 0 });
+    canvas.renderAll();
+  }
+
+  function handleMouseWheel(opt: any) {
+    if (!canvas || !fabricLoaded) return;
+    const delta = opt.e.deltaY;
+    let newZoom = canvas.getZoom();
+    newZoom *= 0.999 ** delta; // Adjust multiplier for sensitivity
+    if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
+    if (newZoom < MIN_ZOOM) newZoom = MIN_ZOOM;
+
+    // Zoom towards the mouse pointer
+    setZoom(newZoom, { x: opt.e.offsetX, y: opt.e.offsetY });
+
+    opt.e.preventDefault();
+    opt.e.stopPropagation();
+  }
+
+  // Cleanup mouse wheel listener
+  onDestroy(() => {
+    if (canvas) {
+      canvas.off('mouse:wheel', handleMouseWheel);
+    }
+  });
+  // --- End Zoom Functions ---
 
   // Save canvas state
   function saveCanvas() {
@@ -682,13 +764,20 @@
   export function updateDimensions(newWidth: number, newHeight: number) {
     if (canvas && fabricLoaded) {
       console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
-      // Use setDimensions which is more efficient than separate setWidth/setHeight calls
-      canvas.setDimensions({ width: newWidth, height: newHeight });
-      // Adjust background image scaling if necessary? Might need more complex logic if background image exists.
+      canvasWidth = newWidth;
+      canvasHeight = newHeight;
+      // Update the fabric canvas dimensions
+      canvas.setWidth(newWidth);
+      canvas.setHeight(newHeight);
+      // Re-center viewport if needed, or fit to view
+      fitToView(); // Fit to view after dimension change
       canvas.renderAll();
-      saveCanvas(); // Save state after resize
+      // Don't save canvas on dimension change itself, only on content change
     } else {
       console.warn(`updateDimensions called but canvas not ready. W: ${newWidth}, H: ${newHeight}`);
+      // Store dimensions even if canvas isn't ready yet, for initialization
+      canvasWidth = newWidth;
+      canvasHeight = newHeight;
     }
   }
   // --- End Method ---
@@ -793,14 +882,48 @@
   </div>
   {/if}
 
-  <div class="border rounded-md overflow-hidden relative min-h-[500px]">
-    <div>
-      <canvas id="canvas"></canvas>
-    </div>
+  <!-- Zoom Controls -->
+  <div class="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/50">
+    <Button variant="outline" size="icon" onclick={zoomOut} title="Zoom Out" disabled={!fabricLoaded || zoomLevel <= MIN_ZOOM}>
+      <ZoomOut class="h-4 w-4" />
+    </Button>
+    <Slider
+      min={MIN_ZOOM}
+      max={MAX_ZOOM}
+      step={ZOOM_STEP / 10} 
+      value={[zoomLevel]}
+      onValueChange={(value) => setZoom(value[0])}
+      class="w-32"
+      disabled={!fabricLoaded}
+    />
+    <Button variant="outline" size="icon" onclick={zoomIn} title="Zoom In" disabled={!fabricLoaded || zoomLevel >= MAX_ZOOM}>
+      <ZoomIn class="h-4 w-4" />
+    </Button>
+    <Button variant="outline" size="icon" onclick={resetZoom} title="Reset Zoom (100%)" disabled={!fabricLoaded}>
+      <RefreshCw class="h-4 w-4" />
+    </Button>
+     <Button variant="outline" size="icon" onclick={fitToView} title="Fit to View" disabled={!fabricLoaded || !canvasContainer}>
+      <Maximize class="h-4 w-4" />
+    </Button>
+    <span class="text-sm ml-2">Zoom: {Math.round(zoomLevel * 100)}%</span>
+    <span class="text-sm ml-auto">Canvas: {canvasWidth} x {canvasHeight} px</span>
   </div>
+  <!-- End Zoom Controls -->
+
+  <!-- Canvas Container -->
+  <div bind:this={canvasContainer} class="border rounded-md overflow-auto relative bg-gray-200 dark:bg-gray-700" style="height: 60vh; min-height: 500px;">
+    <canvas id="canvas"></canvas>
+    {#if !fabricLoaded}
+      <div class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50">
+        <p>Loading canvas...</p>
+      </div>
+    {/if}
+  </div>
+  <!-- End Canvas Container -->
+
 
   {#if showFileUploadDialog}
-    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
         <h3 class="text-lg font-medium mb-4">Add Image</h3>
         <div class="space-y-4">
@@ -831,13 +954,7 @@
     </div>
   {/if}
 
-
-  {#if !fabricLoaded}
-    <div class="text-center py-4">
-      <p>Loading canvas editor...</p>
-    </div>
-  {/if}
-
+  <!-- Modals remain the same -->
   {#if onNarrationChange}
     <ClipNarrationModal
       bind:open={isNarrationModalOpen}

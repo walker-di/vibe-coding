@@ -19,6 +19,9 @@
 	let canvasDataJson = $state<string | null>(null);
 	let isSaving = $state(false);
 	let canvasEditorRef: CanvasEditor | null = $state(null); // To call methods on the editor
+	let isCanvasReady = $state(false); // Track if canvas editor is initialized
+	let currentCanvasWidth = $state(800); // Default, will be updated
+	let currentCanvasHeight = $state(600); // Default, will be updated
 
 	// Filter resolutions based on selected aspect ratio
 function getCompatibleResolutions(selectedAspectRatio: CanvasAspectRatio): CommonResolution[] {
@@ -53,49 +56,69 @@ $effect(() => {
 // Derived state for the final resolution value to be saved
 let finalResolution = $derived(resolutionSelection === 'Custom' ? customResolution.trim() : resolutionSelection);
 
-// Helper function to parse aspect ratio string and calculate dimensions
-function calculateDimensions(ratioString: CanvasAspectRatio, fixedWidth: number): { width: number; height: number } {
-	// Handle special cases
-	if (ratioString === 'Other') {
-		return { width: fixedWidth, height: Math.round(fixedWidth * (9/16)) };
+// Helper function to parse resolution string (e.g., "1920x1080 (...)" or "800x600")
+function calculateDimensions(resolutionString: string | null): { width: number; height: number } {
+	const defaultDims = { width: 800, height: 600 }; // Default fallback
+	if (!resolutionString || typeof resolutionString !== 'string') {
+		console.warn(`Invalid resolution string: ${resolutionString}. Defaulting to ${defaultDims.width}x${defaultDims.height}.`);
+		return defaultDims;
 	}
 
-	// Handle 1.91:1 aspect ratio specifically
-	if (ratioString === '1.91:1') {
-		return { width: fixedWidth, height: Math.round(fixedWidth / 1.91) };
+	// Regex to extract WxH from the start of the string
+	const match = resolutionString.match(/^(\d+)\s*x\s*(\d+)/i);
+
+	if (match && match[1] && match[2]) {
+		const width = parseInt(match[1], 10);
+		const height = parseInt(match[2], 10);
+
+		if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+			return { width, height };
+		}
 	}
 
-	if (!ratioString || typeof ratioString !== 'string' || !ratioString.includes(':')) {
-		console.warn(`Invalid aspect ratio string: ${ratioString}. Defaulting to 600x400.`);
-		return { width: fixedWidth, height: 400 }; // Default or fallback
-	}
-	const parts = ratioString.split(':');
-	const ratioW = parseFloat(parts[0]);
-	const ratioH = parseFloat(parts[1]);
-
-	if (isNaN(ratioW) || isNaN(ratioH) || ratioW <= 0 || ratioH <= 0) {
-		console.warn(`Invalid aspect ratio numbers: ${ratioString}. Defaulting to 600x400.`);
-		return { width: fixedWidth, height: 400 }; // Default or fallback
-	}
-
-	const newHeight = Math.round((fixedWidth / ratioW) * ratioH);
-	return { width: fixedWidth, height: newHeight };
+	console.warn(`Could not parse resolution: "${resolutionString}". Defaulting to ${defaultDims.width}x${defaultDims.height}.`);
+	return defaultDims;
 }
 
-// Effect to update canvas dimensions when aspect ratio changes
+// Effect to update canvas dimensions when finalResolution changes or canvas becomes ready
 $effect(() => {
-	if (canvasEditorRef && aspectRatio) {
-		console.log(`Effect: Aspect ratio changed to ${aspectRatio}. Updating canvas dimensions.`);
-		const { width, height } = calculateDimensions(aspectRatio, 600); // Keep width fixed at 600 for now
-		canvasEditorRef.updateDimensions(width, height);
+	if (isCanvasReady && canvasEditorRef && finalResolution) {
+		console.log(`Effect: finalResolution changed to ${finalResolution} or canvas ready. Updating dimensions.`);
+		const { width, height } = calculateDimensions(finalResolution);
+		// Only update if dimensions actually changed
+		if (width !== currentCanvasWidth || height !== currentCanvasHeight) {
+			console.log(`Updating canvas dimensions to ${width}x${height}`);
+			currentCanvasWidth = width;
+			currentCanvasHeight = height;
+			canvasEditorRef.updateDimensions(width, height);
+		} else {
+			console.log(`Dimensions (${width}x${height}) haven't changed. Skipping update.`);
+		}
 	} else {
-		console.log(`Effect: Canvas dimension update skipped. Ref: ${!!canvasEditorRef}, Ratio: ${aspectRatio}`);
+		console.log(`Effect: Canvas dimension update skipped. Ready: ${isCanvasReady}, Ref: ${!!canvasEditorRef}, Resolution: ${finalResolution}`);
 	}
 });
 
 function handleCanvasChange(json: string) {
 	canvasDataJson = json;
 	// console.log('New canvas data received in parent:', json.substring(0, 50) + '...');
+}
+
+function handleCanvasReady() {
+	console.log('CanvasEditor signaled ready.');
+	isCanvasReady = true;
+
+	// Set initial dimensions when canvas is ready
+	if (canvasEditorRef) {
+		const initialDims = calculateDimensions(finalResolution); // Use derived state
+		console.log(`Setting initial canvas dimensions: ${initialDims.width}x${initialDims.height}`);
+		currentCanvasWidth = initialDims.width;
+		currentCanvasHeight = initialDims.height;
+		canvasEditorRef.updateDimensions(initialDims.width, initialDims.height);
+		// No initial data to load for new templates
+	} else {
+		console.warn('Canvas ready, but editor ref missing.');
+	}
 }
 
 	async function saveTemplate() {
@@ -354,9 +377,13 @@ function handleCanvasChange(json: string) {
 				<CanvasEditor
 					bind:this={canvasEditorRef}
 					onCanvasChange={handleCanvasChange}
+					onReady={handleCanvasReady}
 					hideControls
 				/>
 			</div>
+			{#if !isCanvasReady}
+				<p class="text-sm text-yellow-600 mt-1">Waiting for canvas editor to initialize...</p>
+			{/if}
 			<p class="text-sm text-gray-500 mt-1">Design the template content above.</p>
 		</div>
 
@@ -365,7 +392,7 @@ function handleCanvasChange(json: string) {
 			<Button type="button" variant="outline" href="/settings/canvas-templates" disabled={isSaving}>
 				Cancel
 			</Button>
-			<Button type="submit" disabled={isSaving || !name}>
+			<Button type="submit" disabled={isSaving || !name || !isCanvasReady}>
 				{#if isSaving}
 					Saving...
 				{:else}
