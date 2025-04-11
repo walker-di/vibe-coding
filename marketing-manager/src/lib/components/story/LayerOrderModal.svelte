@@ -41,13 +41,21 @@
     console.log('Saving layer order changes...');
     console.log('Ordered layers:', orderedLayers);
 
-    // Make sure all layers have their object property intact
+    // Make sure all layers have their object property intact and names are updated
     const validLayers = orderedLayers.filter((layer: {id: string, name: string, type: string, object: any}) => {
       const hasObject = !!layer.object;
       if (!hasObject) {
         console.warn('Layer missing object property:', layer);
+        return false;
       }
-      return hasObject;
+
+      // Ensure the name is set on the fabric object
+      if (layer.name && layer.object.name !== layer.name) {
+        console.log(`Updating layer name from '${layer.object.name}' to '${layer.name}' during save`);
+        layer.object.name = layer.name;
+      }
+
+      return true;
     });
 
     if (validLayers.length !== orderedLayers.length) {
@@ -93,7 +101,9 @@
 
     // Also update the name in the fabric object if possible
     if (updatedLayer.object) {
+      // Directly set the name property on the fabric object
       updatedLayer.object.name = updatedLayer.name;
+      console.log(`Updated fabric object name to: ${updatedLayer.name}`);
     }
 
     // Update the layer in the array

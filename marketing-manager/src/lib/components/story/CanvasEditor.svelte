@@ -136,9 +136,14 @@
                     objects.forEach((obj: any, index: number) => {
                       // If the object doesn't have a name from the JSON, set a default one
                       if (!obj.name) {
-                        obj.name = `Layer ${index + 1}`;
-                        console.log(`Set default name for object ${index}: ${obj.name}`);
+                        const defaultName = `Layer ${index + 1}`;
+                        obj.name = defaultName;
+                        // Force the canvas to recognize the change
+                        obj.set('name', defaultName);
+                        console.log(`Set default name for object ${index}: ${defaultName}`);
                       } else {
+                        // Ensure the name is properly set using the set method
+                        obj.set('name', obj.name);
                         console.log(`Loaded object ${index} with name: ${obj.name}`);
                       }
                     });
@@ -269,7 +274,10 @@
         objects.forEach((obj: any, index: number) => {
           // If the object doesn't have a name, set a default one
           if (!obj.name) {
-            obj.name = `Layer ${index + 1}`;
+            const defaultName = `Layer ${index + 1}`;
+            obj.name = defaultName;
+            // Force the canvas to recognize the change
+            obj.set('name', defaultName);
           }
         });
 
@@ -380,6 +388,8 @@
             if (layer.name && layer.object.name !== layer.name) {
               console.log(`Updating layer name from '${layer.object.name}' to '${layer.name}'`);
               layer.object.name = layer.name;
+              // Force the canvas to recognize the change
+              layer.object.set('name', layer.name);
             }
 
             // First, bring the object to the front
@@ -430,6 +440,8 @@
               if (layer.name && layer.object.name !== layer.name) {
                 console.log(`Updating layer name in fallback from '${layer.object.name}' to '${layer.name}'`);
                 layer.object.name = layer.name;
+                // Force the canvas to recognize the change
+                layer.object.set('name', layer.name);
               }
 
               canvas.add(layer.object);
@@ -458,6 +470,7 @@
     const wf = window as any;
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
+    const objectName = `Rectangle ${objectCount + 1}`;
     const r = new wf.fabric.Rect({
       left: 100,
       top: 100,
@@ -466,8 +479,10 @@
       height: 100,
       strokeWidth: 2,
       stroke: '#2980b9',
-      name: `Rectangle ${objectCount + 1}` // Add a name
+      name: objectName // Add a name
     });
+    // Ensure the name is set using the set method
+    r.set('name', objectName);
     canvas.add(r);
     canvas.setActiveObject(r);
     // Save canvas after adding object
@@ -479,6 +494,7 @@
     const wf = window as any;
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
+    const objectName = `Circle ${objectCount + 1}`;
     const c = new wf.fabric.Circle({
       left: 100,
       top: 100,
@@ -486,8 +502,10 @@
       radius: 50,
       strokeWidth: 2,
       stroke: '#c0392b',
-      name: `Circle ${objectCount + 1}` // Add a name
+      name: objectName // Add a name
     });
+    // Ensure the name is set using the set method
+    c.set('name', objectName);
     canvas.add(c);
     canvas.setActiveObject(c);
     // Save canvas after adding object
@@ -508,14 +526,17 @@
     const wf = window as any;
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
+    const objectName = `Text ${objectCount + 1}`;
     const t = new wf.fabric.Textbox('Text', {
       left: 100,
       top: 100,
       fill: '#2c3e50',
       fontSize: 24,
       width: 200,
-      name: `Text ${objectCount + 1}` // Add a name
+      name: objectName // Add a name
     });
+    // Ensure the name is set using the set method
+    t.set('name', objectName);
     canvas.add(t);
     canvas.setActiveObject(t);
     // Save canvas after adding object
@@ -537,7 +558,10 @@
         img.scale(scale);
       }
       // Set a name for the image
-      img.name = `Image ${objectCount + 1}`;
+      const objectName = `Image ${objectCount + 1}`;
+      img.name = objectName;
+      // Ensure the name is set using the set method
+      img.set('name', objectName);
       canvas.add(img);
       canvas.setActiveObject(img);
       saveCanvas();
@@ -649,7 +673,10 @@
         objects.forEach((obj: any, index: number) => {
           // If the object doesn't have a name, set a default one
           if (!obj.name) {
-            obj.name = `Layer ${index + 1}`;
+            const defaultName = `Layer ${index + 1}`;
+            obj.name = defaultName;
+            // Force the canvas to recognize the change
+            obj.set('name', defaultName);
           }
         });
 
