@@ -8,7 +8,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers, Wand, Mic } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers, Wand, Mic } from 'lucide-svelte'; // Wand is already here, no change needed in this block, but keeping for context if needed later.
   import { tick } from 'svelte'; // Import tick
 
   // Props passed down from the page
@@ -77,6 +77,10 @@
   let canvasIsReady = $state(false);
   // State to track if we need to force a scene refresh
   let forceSceneRefresh = $state(0);
+  // State for AI fill loading UI
+  let isAiFillLoading = $state(false);
+  // State to prevent saving during AI fill canvas load
+  let isProcessingAiFill = $state(false);
   // State for modals
   let showAutoCreateModal = $state(false);
   let isImageUploadModalOpen = $state(false);
@@ -1055,6 +1059,12 @@
   const processCanvasChange = debounce(async (canvasJson: string) => {
     console.log('Debounced: Processing canvas change');
 
+    // Skip saving if we are currently processing an AI fill canvas load
+    if (isProcessingAiFill) {
+      console.log('Debounced: Skipping save during AI fill processing.');
+      return;
+    }
+
     // Check again if clip is selected, as it might have changed during the debounce period
     if (!selectedClip) {
       console.log('Debounced: No clip selected, skipping save.');
@@ -1239,6 +1249,94 @@
     processCanvasChange(canvasJson);
   }
 
+  // Add function to handle AI fill
+  async function handleAiFill() {
+    if (!selectedClip) return;
+    
+    isAiFillLoading = true;
+    
+    try {
+      const response = await fetch(`/api/clips/${selectedClip.id}/ai-fill`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to AI fill clip. Status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('AI fill result:', result);
+      
+      // Update the clip with the new data
+      if (result.success && result.data) {
+        isProcessingAiFill = true; // Set flag before loading new canvas
+
+        // Update the local state
+        // Ensure all required properties have default values if they're null
+        const updatedClipData = {
+          ...selectedClip, // Keep existing properties
+          canvas: result.data.canvas, // Update canvas
+          updatedAt: result.data.updatedAt, // Update timestamp
+          // Ensure other potentially missing fields have defaults
+          duration: result.data.duration || selectedClip.duration || 3000,
+          narration: result.data.narration || selectedClip.narration || '',
+          description: result.data.description || selectedClip.description || '',
+          orderIndex: result.data.orderIndex ?? selectedClip.orderIndex ?? 0,
+          imageUrl: result.data.imageUrl || selectedClip.imageUrl || '',
+          voiceName: result.data.voiceName || selectedClip.voiceName || 'pt-BR-FranciscaNeural',
+          narrationAudioUrl: result.data.narrationAudioUrl || selectedClip.narrationAudioUrl || null
+        };
+        selectedClip = updatedClipData;
+        
+        // Load the new canvas data into the editor instance
+        if (canvasEditorInstance) {
+          console.log('AI Fill: Loading new canvas data...');
+          canvasEditorInstance.loadCanvasData(result.data.canvas);
+          // Wait a moment for the canvas to potentially render before clearing the flag
+          await tick(); // Wait for Svelte's next update cycle
+          setTimeout(() => {
+             isProcessingAiFill = false;
+             console.log('AI Fill: Processing flag cleared.');
+          }, 100); // Add a small delay just in case tick isn't enough
+        } else {
+           isProcessingAiFill = false; // Clear flag if no instance
+        }
+        
+        // Update the scenes array to reflect the changes
+        scenes = scenes.map((s: SceneWithRelations) => {
+          if (s.id === selectedClip?.sceneId) { // Use optional chaining for safety
+            return {
+              ...s,
+              clips: (s.clips || []).map((c: Clip) => {
+                if (c.id === selectedClip?.id) { // Use optional chaining
+                  // Return the fully updated clip data
+                  return updatedClipData;
+                }
+                return c;
+              })
+            };
+          }
+          return s;
+        });
+        
+        // Force a refresh of the scene list to show updated preview
+        forceSceneRefresh++;
+        alert('Clip successfully filled with AI content!');
+      } else {
+         throw new Error(result.message || 'AI fill completed but returned no data.');
+      }
+    } catch (error: any) {
+      console.error('Error during AI fill:', error);
+      alert(`Failed to AI fill clip: ${error.message}`);
+    } finally {
+      isAiFillLoading = false;
+    }
+  }
+
  </script>
 
 <div class="flex flex-col h-[calc(100vh-15vh)] w-full">
@@ -1276,6 +1374,10 @@
         </Button>
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.showLayerOrderModal()} title="Manage Layers" disabled={!canvasIsReady}>
           <Layers class="h-4 w-4 mr-2" /> Layers
+        </Button>
+        <div class="border-t my-2"></div>
+        <Button variant="outline" class="w-full justify-start" onclick={handleAiFill} disabled={!selectedClip || isAiFillLoading} title="AI Fill Clip">
+          <Wand class="h-4 w-4 mr-2" /> {isAiFillLoading ? 'Filling...' : 'AI Fill'}
         </Button>
       </div>
     </div>
