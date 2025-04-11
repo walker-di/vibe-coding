@@ -24,6 +24,8 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
     const { storyPrompt, contextData } = requestData;
 
+    console.log('Received context data in add-frame:', JSON.stringify(contextData, null, 2));
+
     if (!storyPrompt) {
       throw error(400, 'Missing required parameter: storyPrompt');
     }
@@ -50,6 +52,12 @@ Story prompt: ${storyPrompt}`;
 
     // Add context information if available
     if (contextData && Object.keys(contextData).length > 0) {
+      console.log('Context data is available with keys:', Object.keys(contextData));
+
+      // Check if we have the expected structure
+      if (!contextData.product && !contextData.persona && !contextData.creative) {
+        console.warn('Context data is missing expected structure (product, persona, creative)');
+      }
       prompt += '\n\nDETAILED CONTEXT INFORMATION:\n';
 
       // Product context (most important)
@@ -226,7 +234,8 @@ Story prompt: ${storyPrompt}`;
 
     prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard that specifically references the product and target audience\n- Create exactly 3 frames with professional narration and visual descriptions\n- Each frame should have high-quality, detailed content that is directly relevant to the context provided\n- The narration should be concise but impactful, using language that would resonate with the target audience\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Ensure the frames tell a cohesive story with a clear beginning (problem/need), middle (solution/product), and end (benefit/call to action)\n- Use a tone and style that matches the creative type and emotional context\n- Include specific product features and benefits mentioned in the context\n- Address the specific pain points and goals of the target persona`;
 
-    console.log('Sending prompt to Gemini:', prompt);
+    // Log the full prompt for debugging
+    console.log('FULL PROMPT TO GEMINI:\n' + prompt);
 
     // Generate content with Gemini
     const result = await model.generateContent(prompt);

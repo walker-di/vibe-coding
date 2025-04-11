@@ -156,9 +156,11 @@
     // Fetch creative context if we have a creativeId
     if (creativeId) {
       try {
+        console.log('Fetching creative context for ID:', creativeId);
         const response = await fetch(`/api/creatives/${creativeId}`);
         if (response.ok) {
           const creative = await response.json();
+          console.log('Fetched creative context:', creative);
           creativeContext = creative;
 
           // Pre-populate the prompt with context-aware suggestions
@@ -249,20 +251,98 @@
       // Get the current story ID from props
       // storyId is already available from props
 
-      // Call the unified auto-create API endpoint
-      const response = await fetch('/api/storyboard/auto-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyPrompt,
-          storyId, // Pass the current storyId if available
-          creativeId // Pass the creativeId for creating a new story if needed
-        })
-      });
+      let response;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Failed to auto-create story. Status: ${response.status}`);
+      // If we have a creativeId, use the context-aware endpoint
+      if (creativeId) {
+        let creativeData;
+        try {
+          // First, we need to get the product and persona IDs from the creative
+          console.log('Fetching creative details for context-aware generation with creativeId:', creativeId);
+          const creativeResponse = await fetch(`/api/creatives/${creativeId}`);
+
+          if (!creativeResponse.ok) {
+            throw new Error(`Failed to fetch creative details. Status: ${creativeResponse.status}`);
+          }
+
+          creativeData = await creativeResponse.json();
+        } catch (err: any) {
+          console.error('Error fetching creative details:', err);
+          throw new Error(`Failed to fetch creative details: ${err.message || 'Unknown error'}`);
+        }
+        console.log('Creative data for context:', creativeData);
+
+        if (!creativeData.personaId) {
+          throw new Error('Creative does not have an associated persona');
+        }
+
+        // Get the persona to find the product ID
+        let personaData;
+        try {
+          const personaResponse = await fetch(`/api/personas/${creativeData.personaId}`);
+
+          if (!personaResponse.ok) {
+            throw new Error(`Failed to fetch persona details. Status: ${personaResponse.status}`);
+          }
+
+          personaData = await personaResponse.json();
+        } catch (err: any) {
+          console.error('Error fetching persona details:', err);
+          throw new Error(`Failed to fetch persona details: ${err.message || 'Unknown error'}`);
+        }
+        console.log('Persona data for context:', personaData);
+
+        if (!personaData.productId) {
+          throw new Error('Persona does not have an associated product');
+        }
+
+        // Now we have all the IDs we need for the context-aware endpoint
+        console.log(`Using context-aware endpoint with productId: ${personaData.productId}, personaId: ${creativeData.personaId}, creativeId: ${creativeId}`);
+
+        try {
+          response = await fetch(`/api/products/${personaData.productId}/personas/${creativeData.personaId}/creatives/${creativeId}/stories/auto-create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storyPrompt,
+              storyId // Pass the current storyId if available
+            })
+          });
+
+          console.log('Auto-create API response status:', response.status);
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to auto-create story. Status: ${response.status}`);
+          }
+        } catch (err: any) {
+          console.error('Error calling auto-create API:', err);
+          throw new Error(`Failed to auto-create story: ${err.message || 'Unknown error'}`);
+        }
+      } else {
+        // Fall back to the regular auto-create endpoint if no creativeId
+        console.log('No creativeId available, using standard auto-create endpoint');
+        try {
+          response = await fetch('/api/storyboard/auto-create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storyPrompt,
+              storyId, // Pass the current storyId if available
+              creativeId // Pass the creativeId for creating a new story if needed
+            })
+          });
+
+          console.log('Standard auto-create API response status:', response.status);
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to auto-create story. Status: ${response.status}`);
+          }
+        } catch (err: any) {
+          console.error('Error calling standard auto-create API:', err);
+          throw new Error(`Failed to auto-create story: ${err.message || 'Unknown error'}`);
+        }
       }
 
       const result = await response.json();

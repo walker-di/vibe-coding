@@ -20,6 +20,13 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     }
 
     console.log(`Auto-create story request received with prompt: "${storyPrompt.substring(0, 50)}..."`);
+    console.log(`Creative ID received: ${creativeId || 'None'}`);
+
+    if (creativeId) {
+      console.log('API: Loading creative with ID:', creativeId);
+    } else {
+      console.warn('No creativeId provided - context-aware generation will be limited');
+    }
 
     // Get or create a story
     let storyRecord;
@@ -149,7 +156,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     // Step 2: Create a storyboard in the AI storyboard creator
     let storyboardResponse;
     try {
-      storyboardResponse = await fetch('http://localhost:5173/api/storyboard/create', {
+      storyboardResponse = await fetch('/api/storyboard/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -157,6 +164,8 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
           contextData: Object.keys(contextData).length > 0 ? contextData : undefined
         })
       });
+
+      console.log('Sending context data to storyboard creator:', JSON.stringify(contextData, null, 2));
 
       if (!storyboardResponse.ok) {
         const errorData = await storyboardResponse.json().catch(() => ({}));
@@ -174,14 +183,67 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     // Step 3: Generate frames for the storyboard in the AI storyboard creator
     let framesResponse;
     try {
-      framesResponse = await fetch(`http://localhost:5173/api/storyboard/${storyboardId}/add-frame`, {
+      // Create a simplified version of the context data for better serialization
+      const simplifiedContextData: any = {};
+
+      if (Object.keys(contextData).length > 0) {
+        // Use type assertion to handle the complex structure
+        const typedContextData = contextData as any;
+        // Create a simplified version of the creative data
+        if (typedContextData.creative) {
+          simplifiedContextData.creative = {
+            id: typedContextData.creative.id,
+            name: typedContextData.creative.name,
+            type: typedContextData.creative.type,
+            description: typedContextData.creative.description
+          };
+
+          // Add type-specific data
+          if (typedContextData.creative.type === 'text' && typedContextData.creative.textData) {
+            simplifiedContextData.creative.textData = { ...typedContextData.creative.textData };
+          } else if (typedContextData.creative.type === 'image' && typedContextData.creative.imageData) {
+            simplifiedContextData.creative.imageData = { ...typedContextData.creative.imageData };
+          } else if (typedContextData.creative.type === 'video' && typedContextData.creative.videoData) {
+            simplifiedContextData.creative.videoData = { ...typedContextData.creative.videoData };
+          } else if (typedContextData.creative.type === 'lp' && typedContextData.creative.lpData) {
+            simplifiedContextData.creative.lpData = { ...typedContextData.creative.lpData };
+          }
+        }
+
+        // Create a simplified version of the persona data
+        if (typedContextData.persona) {
+          simplifiedContextData.persona = {
+            name: typedContextData.persona.name,
+            personaTitle: typedContextData.persona.personaTitle,
+            needsPainPoints: typedContextData.persona.needsPainPoints,
+            goalsExpectations: typedContextData.persona.goalsExpectations,
+            valuesText: typedContextData.persona.valuesText
+          };
+        }
+
+        // Create a simplified version of the product data
+        if (typedContextData.product) {
+          simplifiedContextData.product = {
+            name: typedContextData.product.name,
+            featuresStrengths: typedContextData.product.featuresStrengths,
+            overview: typedContextData.product.overview,
+            competitiveAdvantage: typedContextData.product.competitiveAdvantage
+          };
+        }
+      }
+
+      console.log('Simplified context data for add-frame:', JSON.stringify(simplifiedContextData, null, 2));
+
+      framesResponse = await fetch(`/api/storyboard/${storyboardId}/add-frame`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storyPrompt,
-          contextData: Object.keys(contextData).length > 0 ? contextData : undefined
+          contextData: Object.keys(simplifiedContextData).length > 0 ? simplifiedContextData : undefined
         })
       });
+
+
 
       if (!framesResponse.ok) {
         const errorData = await framesResponse.json().catch(() => ({}));
@@ -198,7 +260,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     // Step 4: Fetch the generated frames from the AI storyboard creator
     let storyboardDataResponse;
     try {
-      storyboardDataResponse = await fetch(`http://localhost:5173/api/storyboard/${storyboardId}`);
+      storyboardDataResponse = await fetch(`/api/storyboard/${storyboardId}`);
       if (!storyboardDataResponse.ok) {
         const errorData = await storyboardDataResponse.json().catch(() => ({}));
         throw new Error(errorData.message || `API Error: ${storyboardDataResponse.statusText}`);

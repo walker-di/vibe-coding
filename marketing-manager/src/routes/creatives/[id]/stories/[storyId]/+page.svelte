@@ -262,6 +262,7 @@
           <SceneEditor
             scenes={story.scenes || []}
             storyId={story.id}
+            creativeId={creativeId}
             aspectRatio={story.aspectRatio}
             onEditScene={handleEditScene}
             onDeleteScene={handleDeleteScene}

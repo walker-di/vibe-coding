@@ -9,6 +9,11 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     requestData = await request.json();
     console.log('Received data at /api/storyboard/create:', requestData);
 
+    // Log context data if available
+    if (requestData.contextData) {
+      console.log('Context data received in create endpoint:', JSON.stringify(requestData.contextData, null, 2));
+    }
+
     // Use a different URL for the AI storyboard creator service
     // If the service is running on a different port or host, update this URL
     // For now, we'll generate a mock response to avoid the infinite loop
@@ -55,11 +60,13 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     if (err instanceof SyntaxError) {
       throw error(400, 'Invalid JSON in request body');
     }
+
     // Handle errors thrown during API call
-    if (err.status) {
-      throw error(err.status, err.body?.message || 'API Error');
+    const errAny = err as any;
+    if (errAny.status) {
+      throw error(errAny.status, errAny.body?.message || 'API Error');
     }
     // Generic internal server error
-    throw error(500, `Internal Server Error creating storyboard: ${err.message}`);
+    throw error(500, `Internal Server Error creating storyboard: ${errAny.message || 'Unknown error'}`);
   }
 };
