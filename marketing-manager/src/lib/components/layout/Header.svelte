@@ -9,6 +9,7 @@ import { Button } from '$lib/components/ui/button'; // Import Button
 		{ href: '/campaigns', label: 'Campaigns' },
 		// { href: '/personas', label: 'Personas' },
 		// { href: '/creatives', label: 'Creatives' },
+		{ href: '/test/ai-features', label: 'AI Test' }, // Added link for AI Test page
 		{ href: '/settings', label: 'Settings' }
 	];
 
