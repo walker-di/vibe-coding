@@ -225,8 +225,8 @@ export async function generateImage(
   const modelIdentifier = "black-forest-labs/flux-1.1-pro";
 
   try {
-    // Ensure static/clip-previews directory exists
-    const imageDir = path.join('static', 'clip-previews');
+    // Ensure the correct target directory exists
+    const imageDir = path.join('static', 'uploads', 'gen'); // Corrected directory
     try {
       await fsPromises.mkdir(imageDir, { recursive: true });
     } catch (mkdirError) {
@@ -286,14 +286,14 @@ export async function generateImage(
       const imageBuffer = Buffer.from(imageArrayBuffer);
       console.log(`Downloaded image data (length: ${imageBuffer.byteLength}) for clip ${clipId}.`);
 
-      // Save the image buffer to a file
+      // Save the image buffer to a file with a unique name
       const extension = input.output_format === 'png' ? '.png' : '.jpg';
-      const filename = `clip-${clipId}.png`;
-      const outputPath = path.join(imageDir, filename);
+      const uniqueFilename = `${randomUUID()}${extension}`; // Generate unique filename
+      const outputPath = path.join(imageDir, uniqueFilename);
 
       await fsPromises.writeFile(outputPath, imageBuffer);
       console.log(`Image file saved to: ${outputPath}`);
-      const relativeUrl = `/clip-previews/${filename}`;
+      const relativeUrl = `/uploads/gen/${uniqueFilename}`; // Corrected relative URL
       console.log(`Returning local image URL for clip ${clipId}: ${relativeUrl}`);
       return relativeUrl;
 
