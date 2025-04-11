@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui/button';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare, Layers } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare, Layers, Upload } from 'lucide-svelte';
+  import { FileUpload } from '$lib/components/ui/file-upload';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
   import LayerOrderModal from './LayerOrderModal.svelte';
 
@@ -558,10 +559,20 @@
     saveCanvas();
   }
 
-  export function addImage() {
-    if (!canvas) return;
-    const url = prompt('Enter image URL:');
-    if (!url) return;
+  // Show file upload dialog for image
+  let showFileUploadDialog = $state(false);
+
+  // Handle file upload completion
+  function handleImageUpload(event: CustomEvent<{ url: string, file: File }>) {
+    const { url } = event.detail;
+    addImageFromUrl(url);
+    showFileUploadDialog = false;
+  }
+
+  // Add image from URL
+  function addImageFromUrl(url: string) {
+    if (!canvas || !url) return;
+
     const wf = window as any;
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
@@ -581,6 +592,20 @@
       canvas.setActiveObject(img);
       saveCanvas();
     }, { crossOrigin: 'anonymous' });
+  }
+
+  // Legacy method for backward compatibility
+  export function addImage() {
+    // Show a dialog with options: URL or Upload
+    showFileUploadDialog = true;
+  }
+
+  // Method to add image from URL (for backward compatibility)
+  export function addImageFromUrlPrompt() {
+    if (!canvas) return;
+    const url = prompt('Enter image URL:');
+    if (!url) return;
+    addImageFromUrl(url);
   }
 
   export function deleteSelected() {
@@ -767,6 +792,38 @@
       <canvas id="canvas"></canvas>
     </div>
   </div>
+
+  {#if showFileUploadDialog}
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <h3 class="text-lg font-medium mb-4">Add Image</h3>
+        <div class="space-y-4">
+          <div>
+            <p class="mb-2">Upload a new image:</p>
+            <FileUpload
+              buttonText="Choose Image"
+              accept="image/*"
+              on:upload={handleImageUpload}
+            />
+          </div>
+          <div class="border-t pt-4">
+            <p class="mb-2">Or add from URL:</p>
+            <Button variant="outline" onclick={() => {
+              showFileUploadDialog = false;
+              addImageFromUrlPrompt();
+            }}>
+              <ImageUp class="h-4 w-4 mr-2" /> Enter Image URL
+            </Button>
+          </div>
+          <div class="flex justify-end mt-4">
+            <Button variant="ghost" onclick={() => showFileUploadDialog = false}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 
 
   {#if !fabricLoaded}

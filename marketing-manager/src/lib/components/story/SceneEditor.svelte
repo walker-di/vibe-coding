@@ -1,6 +1,7 @@
 <script lang="ts">
   import SceneList from '$lib/components/story/SceneList.svelte';
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
+  import ImageUploadModal from '$lib/components/story/ImageUploadModal.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -74,6 +75,10 @@
   let canvasIsReady = $state(false);
   // State to track if we need to force a scene refresh
   let forceSceneRefresh = $state(0);
+  // State for modals
+  let showAutoCreateModal = $state(false);
+  let isImageUploadModalOpen = $state(false);
+  let isBackgroundImageModalOpen = $state(false);
   // Removed isLoadingCanvas state
 
   // Reference to the CanvasEditor component instance
@@ -135,7 +140,6 @@
 
 
   // State for the auto-create modal
-  let showAutoCreateModal = $state(false);
   let isAutoCreating = $state(false);
   let storyPrompt = $state('');
 
@@ -806,13 +810,13 @@
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.addText()} title="Add Text" disabled={!canvasIsReady}>
           <Type class="h-4 w-4 mr-2" /> Text
         </Button>
-        <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.addImage()} title="Add Image" disabled={!canvasIsReady}>
+        <Button variant="outline" class="w-full justify-start" onclick={() => isImageUploadModalOpen = true} title="Add Image" disabled={!canvasIsReady}>
           <ImageIcon class="h-4 w-4 mr-2" /> Image
         </Button>
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.setBackgroundColor()} title="Set Background Color" disabled={!canvasIsReady}>
           <Palette class="h-4 w-4 mr-2" /> BG Color
         </Button>
-        <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.setBackgroundImageFromUrl()} title="Set Background Image" disabled={!canvasIsReady}>
+        <Button variant="outline" class="w-full justify-start" onclick={() => isBackgroundImageModalOpen = true} title="Set Background Image" disabled={!canvasIsReady}>
           <ImageUp class="h-4 w-4 mr-2" /> BG Image
         </Button>
         <Button variant="outline" class="w-full justify-start" onclick={() => canvasEditorInstance?.deleteSelected()} title="Delete Selected" disabled={!canvasIsReady || !canvasEditorInstance?.hasSelectedObject()}>
@@ -937,6 +941,76 @@
     </div>
   </div>
 </div>
+
+<!-- Image Upload Modal -->
+<ImageUploadModal
+  open={isImageUploadModalOpen}
+  onClose={() => isImageUploadModalOpen = false}
+  onImageSelected={(url) => {
+    if (canvasEditorInstance && url) {
+      // Use the existing addImage method with the URL
+      const wf = window as any;
+      const canvas = canvasEditorInstance.getCanvasInstance();
+      if (canvas && wf.fabric) {
+        const objectCount = canvas.getObjects().length;
+        wf.fabric.Image.fromURL(url, (img: any) => {
+          const maxW = canvas.width * 0.8;
+          const maxH = canvas.height * 0.8;
+          if (img.width > maxW || img.height > maxH) {
+            const scale = Math.min(maxW / img.width, maxH / img.height);
+            img.scale(scale);
+          }
+          // Set a name for the image
+          const objectName = `Image ${objectCount + 1}`;
+          img.name = objectName;
+          // Ensure the name is set using the set method
+          img.set('name', objectName);
+          canvas.add(img);
+          canvas.setActiveObject(img);
+          canvas.renderAll();
+          // Trigger canvas change
+          const json = canvas.toJSON(['name', 'id']);
+          handleCanvasChange(JSON.stringify(json));
+        }, { crossOrigin: 'anonymous' });
+      }
+    }
+  }}
+/>
+
+<!-- Background Image Modal -->
+<ImageUploadModal
+  open={isBackgroundImageModalOpen}
+  onClose={() => isBackgroundImageModalOpen = false}
+  onImageSelected={(url) => {
+    if (canvasEditorInstance && url) {
+      // Set background image
+      const wf = window as any;
+      const canvas = canvasEditorInstance.getCanvasInstance();
+      if (canvas && wf.fabric) {
+        wf.fabric.Image.fromURL(url, (img: any) => {
+          // Scale the image to fit the canvas dimensions
+          const canvasWidth = canvas.width;
+          const canvasHeight = canvas.height;
+          const scaleX = canvasWidth / img.width;
+          const scaleY = canvasHeight / img.height;
+          const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
+
+          img.set({
+            scaleX: scale,
+            scaleY: scale,
+            originX: 'left',
+            originY: 'top'
+          });
+
+          canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+          // Trigger canvas change
+          const json = canvas.toJSON(['name', 'id']);
+          handleCanvasChange(JSON.stringify(json));
+        }, { crossOrigin: 'anonymous' });
+      }
+    }
+  }}
+/>
 
 <!-- Auto-Create Story Modal -->
 {#if showAutoCreateModal}

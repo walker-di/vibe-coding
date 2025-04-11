@@ -5,6 +5,8 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Select from '$lib/components/ui/select/index.js'; // Import Select
 	import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
+	import ImageUploadModal from '$lib/components/story/ImageUploadModal.svelte';
+	import { FileUpload } from '$lib/components/ui/file-upload';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types'; // Import PageData type
@@ -33,6 +35,8 @@ let customResolution = $state(data.template.resolution && getInitialResolutionSe
 	let canvasEditorRef: CanvasEditor | null = $state(null);
 	let isCanvasReady = $state(false); // Track if canvas editor is initialized
 	let canvasHasChanged = $state(false); // Track if user modified the canvas
+	let isImageUploadModalOpen = $state(false); // Track if image upload modal is open
+	let isBackgroundImageModalOpen = $state(false); // Track if background image modal is open
 
 	// Filter resolutions based on selected aspect ratio
 function getCompatibleResolutions(selectedAspectRatio: CanvasAspectRatio): CommonResolution[] {
@@ -325,7 +329,7 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 						<Button variant="outline" onclick={() => canvasEditorRef?.addText()} title="Add Text">
 							<Type class="h-4 w-4 mr-2" /> Text
 						</Button>
-						<Button variant="outline" onclick={() => canvasEditorRef?.addImage()} title="Add Image">
+						<Button variant="outline" onclick={() => isImageUploadModalOpen = true} title="Add Image">
 							<ImageIcon class="h-4 w-4 mr-2" /> Image
 						</Button>
 						<Button variant="outline" onclick={() => canvasEditorRef?.deleteSelected()} title="Delete Selected">
@@ -334,11 +338,64 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 						<Button variant="outline" onclick={() => canvasEditorRef?.clearCanvas()} title="Clear Canvas">
 							Clear All
 						</Button>
+						<Button variant="outline" onclick={() => isBackgroundImageModalOpen = true} title="Set Background Image">
+							<ImageIcon class="h-4 w-4 mr-2" /> BG Image
+						</Button>
 						<Button variant="outline" onclick={() => canvasEditorRef?.showLayerOrderModal()} title="Manage Layers">
 							<Layers class="h-4 w-4 mr-2" /> Layers
 						</Button>
 					</div>
 				{/if}
+
+				<!-- Direct file upload button -->
+				<div class="mb-4">
+					<div class="flex flex-col space-y-2">
+						<h3 class="text-sm font-medium">Upload Image to Library</h3>
+						<FileUpload
+							buttonText="Choose Image"
+							accept="image/*"
+							on:upload={(event) => {
+								const { url } = event.detail;
+								toast.success('Image uploaded successfully');
+								console.log('Uploaded image URL:', url);
+
+								// Add the image to the canvas
+								if (canvasEditorRef && url) {
+									// Use the existing addImage method with the URL
+									const wf = window as any;
+									const canvas = canvasEditorRef.getCanvasInstance();
+									if (canvas && wf.fabric) {
+										const objectCount = canvas.getObjects().length;
+										wf.fabric.Image.fromURL(url, (img: any) => {
+											const maxW = canvas.width * 0.8;
+											const maxH = canvas.height * 0.8;
+											if (img.width > maxW || img.height > maxH) {
+												const scale = Math.min(maxW / img.width, maxH / img.height);
+												img.scale(scale);
+											}
+											// Set a name for the image
+											const objectName = `Image ${objectCount + 1}`;
+											img.name = objectName;
+											// Ensure the name is set using the set method
+											img.set('name', objectName);
+											canvas.add(img);
+											canvas.setActiveObject(img);
+											canvas.renderAll();
+											// Mark canvas as changed
+											canvasHasChanged = true;
+										}, { crossOrigin: 'anonymous' });
+									}
+								}
+							}}
+							on:error={(event) => {
+								const { message } = event.detail;
+								toast.error(`Upload failed: ${message}`);
+								console.error('Upload error:', message);
+							}}
+						/>
+						<p class="text-xs text-gray-500 mt-1">Upload images to use in your templates</p>
+					</div>
+				</div>
 
 				<!-- Canvas Editor -->
 				{#if data.template} <!-- Ensure template data is loaded before rendering editor -->
@@ -373,4 +430,72 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 			</Button>
 		</div>
 	</form>
+
+	<!-- Image Upload Modal -->
+	<ImageUploadModal
+		open={isImageUploadModalOpen}
+		onClose={() => isImageUploadModalOpen = false}
+		onImageSelected={(url) => {
+			if (canvasEditorRef && url) {
+				// Use the existing addImage method with the URL
+				const wf = window as any;
+				const canvas = canvasEditorRef.getCanvasInstance();
+				if (canvas && wf.fabric) {
+					const objectCount = canvas.getObjects().length;
+					wf.fabric.Image.fromURL(url, (img: any) => {
+						const maxW = canvas.width * 0.8;
+						const maxH = canvas.height * 0.8;
+						if (img.width > maxW || img.height > maxH) {
+							const scale = Math.min(maxW / img.width, maxH / img.height);
+							img.scale(scale);
+						}
+						// Set a name for the image
+						const objectName = `Image ${objectCount + 1}`;
+						img.name = objectName;
+						// Ensure the name is set using the set method
+						img.set('name', objectName);
+						canvas.add(img);
+						canvas.setActiveObject(img);
+						canvas.renderAll();
+						// Mark canvas as changed
+						canvasHasChanged = true;
+					}, { crossOrigin: 'anonymous' });
+				}
+			}
+		}}
+	/>
+
+	<!-- Background Image Modal -->
+	<ImageUploadModal
+		open={isBackgroundImageModalOpen}
+		onClose={() => isBackgroundImageModalOpen = false}
+		onImageSelected={(url) => {
+			if (canvasEditorRef && url) {
+				// Set background image
+				const wf = window as any;
+				const canvas = canvasEditorRef.getCanvasInstance();
+				if (canvas && wf.fabric) {
+					wf.fabric.Image.fromURL(url, (img: any) => {
+						// Scale the image to fit the canvas dimensions
+						const canvasWidth = canvas.width;
+						const canvasHeight = canvas.height;
+						const scaleX = canvasWidth / img.width;
+						const scaleY = canvasHeight / img.height;
+						const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
+
+						img.set({
+							scaleX: scale,
+							scaleY: scale,
+							originX: 'left',
+							originY: 'top'
+						});
+
+						canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+						// Mark canvas as changed
+						canvasHasChanged = true;
+					}, { crossOrigin: 'anonymous' });
+				}
+			}
+		}}
+	/>
 </div>
