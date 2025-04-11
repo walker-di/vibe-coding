@@ -7,22 +7,6 @@
 
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 		<a
-			href="/settings/themes"
-			class="block rounded border p-4 transition-colors hover:bg-muted hover:text-muted-foreground"
-		>
-			<h2 class="mb-1 text-lg font-semibold">Themes</h2>
-			<p class="text-sm text-muted-foreground">Manage creative themes and associated pain points.</p>
-		</a>
-
-		<a
-			href="/settings/video-templates"
-			class="block rounded border p-4 transition-colors hover:bg-muted hover:text-muted-foreground"
-		>
-			<h2 class="mb-1 text-lg font-semibold">Video Templates</h2>
-			<p class="text-sm text-muted-foreground">Manage video templates, formats, and properties.</p>
-		</a>
-
-		<a
 			href="/settings/canvas-templates"
 			class="block rounded border p-4 transition-colors hover:bg-muted hover:text-muted-foreground"
 		>
