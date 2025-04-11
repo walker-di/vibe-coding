@@ -32,6 +32,7 @@
   let isLayerOrderModalOpen = $state(false); // State for layer order modal
   let canvasLayers = $state<Array<{id: string, name: string, type: string, object: any}>>([]);
   let canvasContainer: HTMLDivElement | null = $state(null); // Reference to the container div
+  let canvasBorder: any = null; // Reference to the canvas border object
 
   // Zoom State
   const MIN_ZOOM = 0.1;
@@ -200,6 +201,9 @@
                   if (hasExtremeValues) {
                     console.log('Extreme values detected and fixed in JSON data before loading');
                   }
+
+                  // Ensure preserveObjectStacking is set before loading
+                  canvas.preserveObjectStacking = true;
 
                   // Load the sanitized JSON
                   canvas.loadFromJSON(jsonObj, () => {
@@ -426,9 +430,13 @@
         height: 600,
         backgroundColor: '#f0f0f0',
         renderOnAddRemove: true,
-        stateful: true
+        stateful: true,
+        preserveObjectStacking: true // Add this to prevent layer shuffling
       });
       console.log('Canvas initialized.');
+
+      // Add canvas border/outline that will be visible when zooming out
+      addCanvasBorder();
 
       // Initial load is now fully handled by the parent calling loadCanvasData
 
@@ -469,6 +477,23 @@
       const center = canvas.getCenter();
       canvas.zoomToPoint({ x: center.left, y: center.top }, clampedZoom);
     }
+
+    // Ensure the border is always visible and properly sized
+    if (canvasBorder) {
+      // Update the border to match the canvas dimensions
+      canvasBorder.set({
+        width: canvas.width,
+        height: canvas.height,
+        // Adjust stroke width based on zoom level to maintain visual consistency
+        strokeWidth: 8 / clampedZoom
+      });
+      canvasBorder.setCoords();
+      canvasBorder.sendToBack();
+    } else {
+      // If border doesn't exist, create it
+      addCanvasBorder();
+    }
+
     canvas.renderAll();
     // Note: We don't save canvas on zoom/pan
   }
@@ -844,6 +869,75 @@
     return false; // No centering was needed or possible
   }
 
+  // Function to add a canvas border/outline
+  function addCanvasBorder() {
+    if (!canvas || !fabricLoaded) return;
+
+    const wf = window as any;
+    if (!wf.fabric) return;
+
+    // Remove existing border if it exists
+    if (canvasBorder) {
+      canvas.remove(canvasBorder);
+    }
+
+    // Create a rectangle that matches the canvas dimensions exactly
+    canvasBorder = new wf.fabric.Rect({
+      left: 0,
+      top: 0,
+      width: canvas.width,
+      height: canvas.height,
+      fill: 'transparent',
+      stroke: '#FF0000', // Bright red border
+      strokeWidth: 8,
+      strokeDashArray: [15, 15], // Dashed line for better visibility
+      selectable: false, // Cannot be selected
+      evented: false, // Does not receive events
+      name: 'Canvas Border',
+      excludeFromExport: true, // Won't be included in exports
+      hoverCursor: 'default',
+      // Make sure it's always visible
+      strokeUniform: true, // Stroke width is not affected by scaling
+      absolutePositioned: true // Position is absolute in the canvas
+    });
+
+    // Add the border to the canvas
+    canvas.add(canvasBorder);
+
+    // Send to back so it doesn't interfere with other objects
+    canvasBorder.sendToBack();
+
+    // Render the canvas
+    canvas.renderAll();
+    console.log('Canvas border added');
+  }
+
+  // Update canvas dimensions and border
+  export function updateCanvasDimensions(width: number, height: number) {
+    if (!canvas || !fabricLoaded) return;
+
+    // Update canvas dimensions
+    canvas.setDimensions({ width, height });
+    canvasWidth = width;
+    canvasHeight = height;
+
+    // Update the border to match new dimensions
+    if (canvasBorder) {
+      canvasBorder.set({
+        width: width,
+        height: height
+      });
+      canvasBorder.setCoords();
+    } else {
+      // If border doesn't exist, create it
+      addCanvasBorder();
+    }
+
+    // Render the canvas
+    canvas.renderAll();
+    console.log(`Canvas dimensions updated to ${width}x${height}`);
+  }
+
   // --- End Zoom Functions ---
 
   // Function to completely reset the canvas view
@@ -859,6 +953,18 @@
     // Step 2: Reset pan
     canvas.absolutePan({ x: 0, y: 0 });
     console.log('Reset pan to origin');
+
+    // Ensure canvas border is visible and up-to-date
+    if (canvasBorder) {
+      canvasBorder.set({
+        width: canvas.width,
+        height: canvas.height
+      });
+      canvasBorder.setCoords();
+      canvasBorder.sendToBack();
+    } else {
+      addCanvasBorder();
+    }
 
     // Step 3: Force recreation of all objects with proper positioning
     const objects = canvas.getObjects();
@@ -884,7 +990,10 @@
           src: obj.getSrc ? obj.getSrc() : null, // For images
           text: obj.text, // For text objects
           fontSize: obj.fontSize, // For text objects
-          fontFamily: obj.fontFamily // For text objects
+          fontFamily: obj.fontFamily, // For text objects
+          left: obj.left, // Store original position
+          top: obj.top, // Store original position
+          angle: obj.angle || 0 // Store original rotation
         };
         objectsToRecreate.push(objData);
       });
@@ -903,45 +1012,48 @@
         let newObj;
         const wf = window as any;
 
-        // Calculate centered position
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
+        // Calculate default position if original is not available
+        const defaultLeft = canvas.width / 2 - (objData.width / 2);
+        const defaultTop = canvas.height / 2 - (objData.height / 2);
 
-        // Stagger objects vertically and horizontally for visibility
-        const offsetX = (index % 3) * 50 - 50;
-        const offsetY = Math.floor(index / 3) * 50 - 50;
+        // Use original position if available, otherwise use default centered position
+        const left = objData.left !== undefined ? objData.left : defaultLeft;
+        const top = objData.top !== undefined ? objData.top : defaultTop;
 
         // Create different types of objects
         if (objData.type === 'rect') {
           newObj = new wf.fabric.Rect({
-            left: centerX - (objData.width / 2) + offsetX,
-            top: centerY - (objData.height / 2) + offsetY,
+            left: left,
+            top: top,
             width: objData.width,
             height: objData.height,
             fill: objData.fill || '#3498db',
             stroke: objData.stroke,
             strokeWidth: objData.strokeWidth,
-            name: objData.name
+            name: objData.name,
+            angle: objData.angle || 0
           });
         } else if (objData.type === 'circle') {
           newObj = new wf.fabric.Circle({
-            left: centerX - (objData.width / 2) + offsetX,
-            top: centerY - (objData.height / 2) + offsetY,
+            left: left,
+            top: top,
             radius: Math.min(objData.width, objData.height) / 2,
             fill: objData.fill || '#3498db',
             stroke: objData.stroke,
             strokeWidth: objData.strokeWidth,
-            name: objData.name
+            name: objData.name,
+            angle: objData.angle || 0
           });
         } else if (objData.type === 'text' || objData.type === 'textbox') {
           newObj = new wf.fabric.Textbox(objData.text || 'Text', {
-            left: centerX - (objData.width / 2) + offsetX,
-            top: centerY - (objData.height / 2) + offsetY,
+            left: left,
+            top: top,
             width: objData.width,
             fontSize: objData.fontSize || 24,
             fontFamily: objData.fontFamily || 'Arial',
             fill: objData.fill || '#2c3e50',
-            name: objData.name
+            name: objData.name,
+            angle: objData.angle || 0
           });
         } else if (objData.type === 'image') {
           // For images, we need to load them asynchronously
@@ -956,11 +1068,12 @@
             );
 
             img.set({
-              left: centerX - (objData.width / 2) + offsetX,
-              top: centerY - (objData.height / 2) + offsetY,
+              left: left,
+              top: top,
               scaleX: scale,
               scaleY: scale,
-              name: objData.name
+              name: objData.name,
+              angle: objData.angle || 0
             });
 
             canvas.add(img);
@@ -978,12 +1091,13 @@
         } else {
           // Default fallback - create a rectangle with the object's name
           newObj = new wf.fabric.Rect({
-            left: centerX - 50 + offsetX,
-            top: centerY - 50 + offsetY,
+            left: left,
+            top: top,
             width: 100,
             height: 100,
             fill: '#e74c3c',
-            name: objData.name || `Unknown object ${index}`
+            name: objData.name || `Unknown object ${index}`,
+            angle: objData.angle || 0
           });
         }
 
@@ -1210,35 +1324,54 @@
       // Save the canvas state
       saveCanvas();
 
-      // Try a different approach if the first one didn't work
-      // This is a fallback that uses a more direct approach
-      setTimeout(() => {
-        try {
-          console.log('Trying alternative approach to reorder layers...');
+      // Only use the fallback approach if the first approach didn't work correctly
+      // Check if the current order matches what we want
+      const currentObjects = canvas.getObjects();
+      let needsFallback = false;
 
-          // Clear all objects from the canvas
-          console.log('Clearing canvas, current objects:', canvas.getObjects().length);
-          canvas.clear();
-
-          // Create a new reversed copy for the fallback approach
-          const fallbackOrderLayers = [...newLayers].reverse();
-
-          // Add them back in the desired order
-          for (let i = 0; i < fallbackOrderLayers.length; i++) {
-            const layer = fallbackOrderLayers[i];
-            if (layer.object) {
-              // Update the object name if it has changed
-              if (layer.name && layer.object.name !== layer.name) {
-                console.log(`Updating layer name in fallback from '${layer.object.name}' to '${layer.name}'`);
-                layer.object.name = layer.name;
-                // Force the canvas to recognize the change
-                layer.object.set('name', layer.name);
-              }
-
-              canvas.add(layer.object);
-              console.log(`Re-added layer: ${layer.name} (${layer.type})`);
-            }
+      // Compare the current order with the desired order
+      if (currentObjects.length === canvasOrderLayers.length) {
+        for (let i = 0; i < currentObjects.length; i++) {
+          if (currentObjects[i] !== canvasOrderLayers[i].object) {
+            console.log(`Order mismatch at position ${i}: expected ${canvasOrderLayers[i].name}, got ${currentObjects[i].name || 'unnamed'}`);
+            needsFallback = true;
+            break;
           }
+        }
+      } else {
+        console.log(`Length mismatch: current ${currentObjects.length}, expected ${canvasOrderLayers.length}`);
+        needsFallback = true;
+      }
+
+      // Only use fallback if needed
+      if (needsFallback) {
+        setTimeout(() => {
+          try {
+            console.log('Using fallback approach to reorder layers...');
+
+            // Clear all objects from the canvas
+            console.log('Clearing canvas, current objects:', canvas.getObjects().length);
+            canvas.clear();
+
+            // Create a new reversed copy for the fallback approach
+            const fallbackOrderLayers = [...newLayers].reverse();
+
+            // Add them back in the desired order
+            for (let i = 0; i < fallbackOrderLayers.length; i++) {
+              const layer = fallbackOrderLayers[i];
+              if (layer.object) {
+                // Update the object name if it has changed
+                if (layer.name && layer.object.name !== layer.name) {
+                  console.log(`Updating layer name in fallback from '${layer.object.name}' to '${layer.name}'`);
+                  layer.object.name = layer.name;
+                  // Force the canvas to recognize the change
+                  layer.object.set('name', layer.name);
+                }
+
+                canvas.add(layer.object);
+                console.log(`Re-added layer: ${layer.name} (${layer.type})`);
+              }
+            }
 
           // Force a re-render and save
           canvas.requestRenderAll();
@@ -1248,6 +1381,7 @@
           console.error('Error in fallback reordering:', fallbackErr);
         }
       }, 100);
+      }
 
       console.log('Layer order applied successfully');
     } catch (error) {
@@ -1467,6 +1601,18 @@
       // Update the fabric canvas dimensions
       canvas.setWidth(newWidth);
       canvas.setHeight(newHeight);
+
+      // Update the border to match new dimensions
+      if (canvasBorder) {
+        canvasBorder.set({
+          width: newWidth,
+          height: newHeight
+        });
+        canvasBorder.setCoords();
+        canvasBorder.sendToBack();
+      } else {
+        addCanvasBorder();
+      }
 
       // Wait a brief moment to ensure the DOM has updated
       setTimeout(() => {
