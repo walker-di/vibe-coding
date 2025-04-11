@@ -8,3 +8,20 @@
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
   background-color: white;
 }
+
+/* Ensure Canvas Border objects are properly displayed */
+.canvas-border-element {
+  pointer-events: none !important;
+}
+
+/* Fix for multiple border objects */
+.canvas-element-wrapper {
+  position: relative;
+}
+
+/* Ensure proper z-index for canvas layers */
+.canvas-element-wrapper canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}

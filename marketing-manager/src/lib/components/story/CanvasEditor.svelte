@@ -135,8 +135,14 @@
                     jsonObj.objects = [];
                   }
 
-                  // Filter out any problematic objects
+                  // Filter out any problematic objects and Canvas Border objects
                   jsonObj.objects = jsonObj.objects.filter((obj: any) => {
+                    // Filter out Canvas Border objects
+                    if (obj && obj.name === 'Canvas Border') {
+                      console.log('Filtering out Canvas Border object from loaded JSON');
+                      return false;
+                    }
+
                     // Keep only objects with valid types
                     const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
                     const isValid = obj && obj.type && validTypes.includes(obj.type.toLowerCase());
@@ -208,8 +214,21 @@
                   // Load the sanitized JSON
                   canvas.loadFromJSON(jsonObj, () => {
                     // After loading, ensure all objects have their names properly set
+                    // Also check for any Canvas Border objects that might have been loaded
                     const objects = canvas.getObjects();
-                    objects.forEach((obj: any, index: number) => {
+                    const borderObjects = objects.filter((obj: any) => obj.name === 'Canvas Border');
+
+                    // Remove any Canvas Border objects that were loaded from JSON
+                    if (borderObjects.length > 0) {
+                      console.log(`Found ${borderObjects.length} Canvas Border objects in loaded JSON, removing them...`);
+                      borderObjects.forEach((border: any) => {
+                        canvas.remove(border);
+                      });
+                    }
+
+                    // Process remaining objects
+                    const remainingObjects = canvas.getObjects();
+                    remainingObjects.forEach((obj: any, index: number) => {
                       // If the object doesn't have a name from the JSON, set a default one
                       if (!obj.name) {
                         const defaultName = `Layer ${index + 1}`;
@@ -478,19 +497,32 @@
       canvas.zoomToPoint({ x: center.left, y: center.top }, clampedZoom);
     }
 
-    // Ensure the border is always visible and properly sized
+    // Toggle the zoomed-in class on the canvas wrapper based on zoom level
+    // This controls the visibility of the CSS-based outline
+    if (canvasContainer) {
+      if (clampedZoom > 0.5) {
+        canvasContainer.classList.add('zoomed-in');
+      } else {
+        canvasContainer.classList.remove('zoomed-in');
+      }
+    }
+
+    // Update the existing border or create a new one if it doesn't exist
     if (canvasBorder) {
-      // Update the border to match the canvas dimensions
+      // Update the existing border
+      const scaleFactor = 1 / clampedZoom;
       canvasBorder.set({
-        width: canvas.width,
-        height: canvas.height,
-        // Adjust stroke width based on zoom level to maintain visual consistency
+        width: canvas.width * scaleFactor,
+        height: canvas.height * scaleFactor,
+        left: -canvas.viewportTransform[4] * scaleFactor,
+        top: -canvas.viewportTransform[5] * scaleFactor,
         strokeWidth: 8 / clampedZoom
       });
       canvasBorder.setCoords();
+      // Make sure it's at the back
       canvasBorder.sendToBack();
     } else {
-      // If border doesn't exist, create it
+      // Create a new border if it doesn't exist
       addCanvasBorder();
     }
 
@@ -876,40 +908,86 @@
     const wf = window as any;
     if (!wf.fabric) return;
 
-    // Remove existing border if it exists
-    if (canvasBorder) {
-      canvas.remove(canvasBorder);
+    // First, remove any existing border objects by name
+    const objects = canvas.getObjects();
+    const existingBorders = objects.filter((obj: any) => obj.name === 'Canvas Border');
+
+    if (existingBorders.length > 0) {
+      console.log(`Found ${existingBorders.length} existing border objects, removing them...`);
+      existingBorders.forEach((border: any) => {
+        canvas.remove(border);
+      });
     }
 
-    // Create a rectangle that matches the canvas dimensions exactly
-    canvasBorder = new wf.fabric.Rect({
-      left: 0,
-      top: 0,
-      width: canvas.width,
-      height: canvas.height,
-      fill: 'transparent',
-      stroke: '#FF0000', // Bright red border
-      strokeWidth: 8,
-      strokeDashArray: [15, 15], // Dashed line for better visibility
-      selectable: false, // Cannot be selected
-      evented: false, // Does not receive events
-      name: 'Canvas Border',
-      excludeFromExport: true, // Won't be included in exports
-      hoverCursor: 'default',
-      // Make sure it's always visible
-      strokeUniform: true, // Stroke width is not affected by scaling
-      absolutePositioned: true // Position is absolute in the canvas
-    });
+    // Also remove the reference if it exists
+    if (canvasBorder) {
+      canvas.remove(canvasBorder);
+      canvasBorder = null;
+    }
 
-    // Add the border to the canvas
-    canvas.add(canvasBorder);
+    // Get current zoom level and viewport transform
+    const currentZoom = canvas.getZoom() || 1;
+    const scaleFactor = 1 / currentZoom;
 
-    // Send to back so it doesn't interfere with other objects
-    canvasBorder.sendToBack();
+    // Calculate position based on current viewport transform
+    const left = canvas.viewportTransform ? -canvas.viewportTransform[4] * scaleFactor : 0;
+    const top = canvas.viewportTransform ? -canvas.viewportTransform[5] * scaleFactor : 0;
 
-    // Render the canvas
-    canvas.renderAll();
-    console.log('Canvas border added');
+    try {
+      // Create a rectangle that matches the canvas dimensions exactly
+      canvasBorder = new wf.fabric.Rect({
+        left: left,
+        top: top,
+        width: canvas.width * scaleFactor,
+        height: canvas.height * scaleFactor,
+        fill: 'transparent',
+        stroke: '#FF0000', // Bright red border
+        strokeWidth: 8 / currentZoom, // Adjust stroke width based on zoom
+        strokeDashArray: [15, 15], // Dashed line for better visibility
+        selectable: false, // Cannot be selected
+        evented: false, // Does not receive events
+        name: 'Canvas Border',
+        excludeFromExport: true, // Won't be included in exports
+        hoverCursor: 'default',
+        // Make sure it's always visible
+        strokeUniform: true, // Stroke width is not affected by scaling
+        absolutePositioned: true, // Position is absolute in the canvas
+        perPixelTargetFind: false, // Improves performance
+        hasBorders: false,
+        hasControls: false,
+        lockMovementX: true,
+        lockMovementY: true,
+        lockRotation: true,
+        lockScalingX: true,
+        lockScalingY: true,
+        // Additional properties to ensure it doesn't interfere with interactions
+        globalCompositeOperation: 'destination-over' // Draw behind everything
+      });
+
+      // Add the border to the canvas
+      canvas.add(canvasBorder);
+
+      // Send to back so it doesn't interfere with other objects
+      canvasBorder.sendToBack();
+
+      // Explicitly set the border as non-selectable again after adding
+      canvasBorder.selectable = false;
+      canvasBorder.evented = false;
+
+      // Add a special class to the border element in the DOM
+      if (canvasBorder._element) {
+        canvasBorder._element.classList.add('canvas-border-element');
+      }
+
+      // Make sure it's at the very back
+      canvas.sendToBack(canvasBorder);
+
+      // Render the canvas
+      canvas.renderAll();
+      console.log('Canvas border added');
+    } catch (error) {
+      console.error('Error creating canvas border:', error);
+    }
   }
 
   // Update canvas dimensions and border
@@ -954,17 +1032,15 @@
     canvas.absolutePan({ x: 0, y: 0 });
     console.log('Reset pan to origin');
 
-    // Ensure canvas border is visible and up-to-date
+    // Remove existing border
     if (canvasBorder) {
-      canvasBorder.set({
-        width: canvas.width,
-        height: canvas.height
-      });
-      canvasBorder.setCoords();
-      canvasBorder.sendToBack();
-    } else {
-      addCanvasBorder();
+      canvas.remove(canvasBorder);
+      canvasBorder = null;
     }
+    // Create a new border after a short delay to ensure the canvas is fully reset
+    setTimeout(() => {
+      addCanvasBorder();
+    }, 50);
 
     // Step 3: Force recreation of all objects with proper positioning
     const objects = canvas.getObjects();
@@ -1176,8 +1252,14 @@
           canvasJson.objects = [];
         }
 
-        // Filter out any problematic objects
+        // Filter out any problematic objects and Canvas Border objects
         canvasJson.objects = canvasJson.objects.filter((obj: any) => {
+          // Filter out Canvas Border objects
+          if (obj && obj.name === 'Canvas Border') {
+            console.log('Filtering out Canvas Border object from saved JSON');
+            return false;
+          }
+
           // Keep only objects with valid types
           const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
           return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
@@ -1602,17 +1684,18 @@
       canvas.setWidth(newWidth);
       canvas.setHeight(newHeight);
 
-      // Update the border to match new dimensions
+      // Remove existing border
       if (canvasBorder) {
-        canvasBorder.set({
-          width: newWidth,
-          height: newHeight
-        });
-        canvasBorder.setCoords();
-        canvasBorder.sendToBack();
-      } else {
-        addCanvasBorder();
+        canvas.remove(canvasBorder);
+        canvasBorder = null;
       }
+      // Wait a brief moment to ensure the canvas dimensions are updated
+      setTimeout(() => {
+        // Only add a new border if it doesn't already exist
+        if (!canvasBorder) {
+          addCanvasBorder();
+        }
+      }, 50);
 
       // Wait a brief moment to ensure the DOM has updated
       setTimeout(() => {
@@ -1684,8 +1767,15 @@
         if (!canvasJson.objects) {
           canvasJson.objects = [];
         }
-        // Filter out any problematic objects (optional, but good practice)
+        // Filter out any problematic objects and Canvas Border objects
         canvasJson.objects = canvasJson.objects.filter((obj: any) => {
+          // Filter out Canvas Border objects
+          if (obj && obj.name === 'Canvas Border') {
+            console.log('Filtering out Canvas Border object from JSON');
+            return false;
+          }
+
+          // Keep only objects with valid types
           const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
           return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
         });
@@ -1721,11 +1811,6 @@
     align-items: center;
   }
 </style>
-
-<!-- Add global canvas styles -->
-<svelte:head>
-  <link rel="stylesheet" href="/canvas-styles.css">
-</svelte:head>
 
 <div class="space-y-4">
   {#if !hideControls}
