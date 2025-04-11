@@ -7,7 +7,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers, Wand, Mic } from 'lucide-svelte';
 
   // Props passed down from the page
   let {
@@ -144,6 +144,10 @@
   let storyPrompt = $state('');
   let creativeContext = $state<any>(null);
   let isLoadingContext = $state(false);
+
+  // State for image generation and narration generation
+  let isGeneratingImage = $state(false);
+  let isGeneratingNarration = $state(false);
 
   // Handler for opening the auto-create modal
   async function openAutoCreateModal() {
@@ -418,6 +422,221 @@
   }
 
   // Handler for duplicating a clip
+  // Function to generate an image from the clip description
+  async function handleGenerateImage() {
+    if (!selectedClip || !selectedClip.description) {
+      alert('Please add a description first to generate an image.');
+      return;
+    }
+
+    isGeneratingImage = true;
+
+    try {
+      // Call our proxy API to generate an image
+      const response = await fetch('/api/ai-storyboard/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: selectedClip.description,
+          clipId: selectedClip.id,
+          aspectRatio: '1:1' // Default to square aspect ratio
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to generate image. Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Image generation result:', result);
+
+      if (result.imageUrl) {
+        // Download the image and upload it to our system
+        const imageResponse = await fetch(result.imageUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to download generated image. Status: ${imageResponse.status}`);
+        }
+
+        const imageBlob = await imageResponse.blob();
+        const reader = new FileReader();
+        const imageDataUrlPromise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+        });
+        reader.readAsDataURL(imageBlob);
+
+        // Wait for the data URL
+        const imageDataUrl = await imageDataUrlPromise;
+
+        // Upload the image to our system
+        const uploadResponse = await fetch('/api/upload/clip-preview', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            clipId: selectedClip.id,
+            imageData: imageDataUrl
+          })
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error(`Failed to upload generated image. Status: ${uploadResponse.status}`);
+        }
+
+        const uploadResult = await uploadResponse.json();
+        console.log('Image upload result:', uploadResult);
+
+        // Update the clip with the new image URL
+        if (uploadResult.data?.imageUrl) {
+          const imageUrl = uploadResult.data.imageUrl;
+
+          // Update the clip with the new image URL
+          const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              imageUrl: imageUrl
+            })
+          });
+
+          if (!updateResponse.ok) {
+            throw new Error(`Failed to update clip with new image URL. Status: ${updateResponse.status}`);
+          }
+
+          // Update the local state
+          selectedClip = { ...selectedClip, imageUrl };
+
+          // Update the clip in the scenes array
+          scenes = scenes.map((scene: SceneWithRelations) => {
+            if (scene.clips) {
+              scene.clips = scene.clips.map((c: Clip) => {
+                if (c.id === selectedClip!.id) {
+                  return { ...c, imageUrl };
+                }
+                return c;
+              });
+            }
+            return scene;
+          });
+
+          // Force a refresh of the scene list
+          forceSceneRefresh++;
+
+          alert('Image generated and applied successfully!');
+        }
+      } else {
+        throw new Error('No image URL returned from the generation service.');
+      }
+    } catch (error: any) {
+      console.error('Error generating image:', error);
+      alert(`Failed to generate image: ${error.message || 'Unknown error'}`);
+    } finally {
+      isGeneratingImage = false;
+    }
+  }
+
+  // Function to generate narration for the clip
+  async function handleGenerateNarration() {
+    if (!selectedClip) {
+      alert('Please select a clip first.');
+      return;
+    }
+
+    if (!selectedClip.description) {
+      alert('Please add a description first to generate narration.');
+      return;
+    }
+
+    isGeneratingNarration = true;
+
+    try {
+      // Call our proxy API to generate narration
+      const response = await fetch('/api/ai-storyboard/generate-narration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: selectedClip.description,
+          clipId: selectedClip.id
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to generate narration. Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Narration generation result:', result);
+
+      if (result.narration) {
+        // Prepare the update data
+        const updateData: Partial<Clip> = {
+          narration: result.narration
+        };
+
+        // Add narrationAudioUrl if available
+        if (result.narrationAudioUrl) {
+          updateData.narrationAudioUrl = result.narrationAudioUrl;
+        }
+
+        // Update the clip with the new narration and audio URL
+        const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updateData)
+        });
+
+        if (!updateResponse.ok) {
+          throw new Error(`Failed to update clip with new narration. Status: ${updateResponse.status}`);
+        }
+
+        // Update the local state
+        selectedClip = {
+          ...selectedClip,
+          narration: result.narration,
+          narrationAudioUrl: result.narrationAudioUrl || selectedClip.narrationAudioUrl
+        };
+
+        // Update the clip in the scenes array
+        scenes = scenes.map((scene: SceneWithRelations) => {
+          if (scene.clips) {
+            scene.clips = scene.clips.map((c: Clip) => {
+              if (c.id === selectedClip!.id) {
+                return {
+                  ...c,
+                  narration: result.narration,
+                  narrationAudioUrl: result.narrationAudioUrl || c.narrationAudioUrl
+                };
+              }
+              return c;
+            });
+          }
+          return scene;
+        });
+
+        // Show success message with audio info
+        if (result.narrationAudioUrl) {
+          alert('Narration text and audio generated and applied successfully!');
+        } else {
+          alert('Narration text generated and applied successfully! (Audio generation failed)');
+        }
+      } else {
+        throw new Error('No narration returned from the generation service.');
+      }
+    } catch (error: any) {
+      console.error('Error generating narration:', error);
+      alert(`Failed to generate narration: ${error.message || 'Unknown error'}`);
+    } finally {
+      isGeneratingNarration = false;
+    }
+  }
+
   async function handleDuplicateClip(clip: Clip) {
     try {
       // Find the scene that contains this clip
@@ -1127,10 +1346,41 @@
               placeholder="Enter narration text for this clip"
               rows={5}
             />
+
+            <!-- Narration Audio Player (if available) -->
+            {#if selectedClip?.narrationAudioUrl}
+              <div class="mt-2">
+                <Label class="text-xs text-muted-foreground mb-1 block">Narration Audio</Label>
+                <audio controls class="w-full h-8">
+                  <source src={selectedClip.narrationAudioUrl} type="audio/mpeg">
+                  Your browser does not support the audio element.
+                </audio>
+              </div>
+            {/if}
           </div>
 
-          <!-- Save Button -->
-          <div class="pt-2">
+          <!-- AI Generation Buttons -->
+          <div class="pt-2 space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <Button
+                onclick={handleGenerateImage}
+                variant="outline"
+                class="w-full"
+                disabled={isGeneratingImage || !selectedClip?.description}
+              >
+                <Wand class="h-4 w-4 mr-2" /> {isGeneratingImage ? 'Generating...' : 'Generate Image'}
+              </Button>
+              <Button
+                onclick={handleGenerateNarration}
+                variant="outline"
+                class="w-full"
+                disabled={isGeneratingNarration || !selectedClip?.description}
+              >
+                <Mic class="h-4 w-4 mr-2" /> {isGeneratingNarration ? 'Generating...' : 'Generate Narration'}
+              </Button>
+            </div>
+
+            <!-- Save Button -->
             <Button onclick={handleSaveClip} class="w-full">
               <Save class="h-4 w-4 mr-2" /> Save Changes
             </Button>

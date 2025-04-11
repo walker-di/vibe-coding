@@ -29,6 +29,7 @@ export interface Clip {
   canvas: string; // JSON string of fabric.js canvas data
   imageUrl: string | null; // URL for the generated preview image (can be null)
   narration: string | null;
+  narrationAudioUrl: string | null; // URL for the generated narration audio (can be null)
   description: string | null;
   duration: number | null; // Duration in milliseconds
   orderIndex: number;

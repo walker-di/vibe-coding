@@ -10,9 +10,6 @@ import fs from 'fs'; // Use standard fs for createWriteStream (if needed, maybe 
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { Buffer } from 'node:buffer'; // Needed for handling fetch response
-// Writable might not be needed if we handle Web Streams directly
-// import { Writable } from 'stream';
-// Node's built-in fetch is globally available in recent versions
 
 // --- Google Gemini Configuration ---
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
@@ -23,7 +20,7 @@ if (!GOOGLE_API_KEY) {
 const genAI = GOOGLE_API_KEY ? new GoogleGenerativeAI(GOOGLE_API_KEY) : null;
 
 // --- Azure Speech (TTS) Configuration ---
-const AZURE_API_KEY = env.AZURE_API_KEY;
+const AZURE_API_KEY = process.env.AZURE_API_KEY;
 const AZURE_SPEECH_REGION = env.AZURE_SPEECH_REGION; // Required for Azure Speech SDK
 const AZURE_SPEECH_VOICE_NAME = env.AZURE_SPEECH_VOICE_NAME || 'en-US-JennyNeural'; // Default voice if not set
 if (!AZURE_API_KEY || !AZURE_SPEECH_REGION) {
@@ -33,7 +30,7 @@ if (!AZURE_API_KEY || !AZURE_SPEECH_REGION) {
 }
 
 // --- Replicate Configuration ---
-const REPLICATE_API_KEY = env.REPLICATE_API_KEY;
+const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY;
 if (!REPLICATE_API_KEY) {
     console.warn('REPLICATE_API_KEY environment variable is not set. Image generation will fail.');
 }
