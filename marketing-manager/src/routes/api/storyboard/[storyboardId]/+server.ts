@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getFrames, getDefaultFrames, setFrames } from '$lib/server/storyboardStore';
+import { getFrames, getDefaultFrames, setFrames, getMetadata, getDefaultMetadata } from '$lib/server/storyboardStore';
 
 // This endpoint forwards the request to the AI storyboard creator service
 export const GET: RequestHandler = async ({ params }) => {
@@ -21,9 +21,18 @@ export const GET: RequestHandler = async ({ params }) => {
       setFrames(storyboardId, frames);
     }
 
+    // Get the storyboard metadata if available
+    let metadata = getMetadata(storyboardId);
+
+    // If no metadata exists, use default
+    if (!metadata) {
+      metadata = getDefaultMetadata();
+    }
+
     const result = {
       storyboardId: storyboardId,
-      name: 'Professional Storyboard',
+      name: metadata.title,
+      description: metadata.description,
       frames: frames
     };
 

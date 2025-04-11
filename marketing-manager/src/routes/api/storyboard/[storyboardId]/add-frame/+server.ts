@@ -1,7 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { setFrames } from '$lib/server/storyboardStore';
+import { setFrames, setMetadata } from '$lib/server/storyboardStore';
+import { storyboardSchema } from '$lib/server/storyboardSchema';
 
 // This endpoint forwards the request to the AI storyboard creator service
 export const POST: RequestHandler = async ({ request, params }) => {
@@ -35,15 +36,15 @@ export const POST: RequestHandler = async ({ request, params }) => {
         temperature: 0.7,
         topP: 0.9,
         maxOutputTokens: 2048,
+        responseMimeType: 'application/json',
+        responseSchema: storyboardSchema as any // Type casting needed due to schema type mismatch
       }
     });
 
     // Create a context-aware prompt for generating frames
-    let prompt = `Create a professional storyboard with 3 frames for a marketing campaign. For each frame, provide:
-1. A detailed narration (voice-over script)
-2. A detailed detailed visual description for the frame in english
+    let prompt = `Create a professional storyboard with 3 frames for a marketing campaign.
 
-The storyboard should tell a cohesive story across all frames, with a clear beginning, middle, and end.
+Your output MUST be valid JSON conforming to the provided schema. The storyboard should tell a cohesive story across all frames, with a clear beginning, middle, and end.
 
 Story prompt: ${storyPrompt}`;
 
@@ -91,7 +92,7 @@ Story prompt: ${storyPrompt}`;
       }
     }
 
-    prompt += `\n\nFormat your response as follows for each frame:\n\nFrame 1:\nNarration: [detailed voice-over script]\nVisual: [detailed visual description]\n\nFrame 2:\nNarration: [detailed voice-over script]\nVisual: [detailed visual description]\n\nFrame 3:\nNarration: [detailed voice-over script]\nVisual: [detailed visual description]`;
+    prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard\n- Create exactly 3 frames with professional narration and visual descriptions\n- Each frame should have high-quality, detailed content\n- The narration should be concise but impactful\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Ensure the frames tell a cohesive story with a clear beginning, middle, and end`;
 
     console.log('Sending prompt to Gemini:', prompt);
 
@@ -102,23 +103,47 @@ Story prompt: ${storyPrompt}`;
 
     console.log('Received response from Gemini');
 
-    // Parse the generated frames
-    const frames = parseFramesFromText(text);
+    // Parse the generated content
+    let storyboardData;
+    try {
+      storyboardData = JSON.parse(text);
+      console.log('Parsed storyboard data:', storyboardData);
 
-    // Store the frames in memory (in a real app, you'd store them in a database)
-    // For now, we'll just return them directly
+      // Validate the response structure
+      if (!storyboardData.frames || !Array.isArray(storyboardData.frames) || storyboardData.frames.length === 0) {
+        throw new Error('Invalid response structure: missing or empty frames array');
+      }
 
-    const mockResult = {
-      success: true,
-      storyboardId: storyboardId,
-      message: 'Frames added successfully',
-      framesAdded: frames.length
-    };
+      // Convert the structured data to our frame format
+      const frames = storyboardData.frames.map((frame: any, index: number) => ({
+        id: String(index + 1),
+        narration: frame.narration || 'Professional narration for this frame.',
+        mainImagePrompt: frame.visualDescription || 'Professional visual for this marketing frame.',
+        imageUrl: null
+      }));
 
-    // Store the frames in our storyboard store
-    setFrames(storyboardId, frames);
+      // Store the frames in our storyboard store
+      setFrames(storyboardId, frames);
 
-    console.log(`Generated ${frames.length} frames for storyboard ${storyboardId}:`, frames);
+      // Store the metadata
+      const title = storyboardData.title || 'Professional Marketing Storyboard';
+      const description = storyboardData.description || 'A cohesive marketing narrative.';
+
+      setMetadata(storyboardId, {
+        title,
+        description
+      });
+
+      const result = {
+        success: true,
+        storyboardId: storyboardId,
+        title,
+        description,
+        message: 'Frames added successfully',
+        framesAdded: frames.length
+      };
+
+      console.log(`Generated ${frames.length} frames for storyboard ${storyboardId}:`, frames);
 
     // Uncomment this when you have a proper external service
     /*
@@ -139,7 +164,11 @@ Story prompt: ${storyPrompt}`;
     console.log('AI Storyboard Creator API Response:', result);
     */
 
-    return json(mockResult, { status: 201 });
+    return json(result, { status: 201 });
+    } catch (parseError: any) {
+      console.error('Error parsing or processing AI response:', parseError);
+      throw error(500, `Failed to process AI response: ${parseError.message || 'Unknown error'}`);
+    }
   } catch (err) {
     const error_obj = err as any;
     console.error(`Error in /api/storyboard/${storyboardId}/add-frame:`, err);
@@ -157,45 +186,4 @@ Story prompt: ${storyPrompt}`;
   }
 };
 
-// Helper function to parse frames from Gemini's text response
-function parseFramesFromText(text: string) {
-  const frames: Array<{
-    id: string;
-    narration: string;
-    mainImagePrompt: string;
-    imageUrl: string | null;
-  }> = [];
 
-  // Split the text by frame sections
-  const frameRegex = /Frame \d+:\s*\n/g;
-  const frameSections = text.split(frameRegex).filter((section: string) => section.trim().length > 0);
-
-  // Process each frame section
-  frameSections.forEach((section: string, index: number) => {
-    // Extract narration and visual description
-    const narrationMatch = section.match(/Narration:\s*(.+?)(?=\n\s*Visual:|$)/s);
-    const visualMatch = section.match(/Visual:\s*(.+?)(?=\n\s*(?:Frame|$)|$)/s);
-
-    const narration = narrationMatch ? narrationMatch[1].trim() : '';
-    const mainImagePrompt = visualMatch ? visualMatch[1].trim() : '';
-
-    frames.push({
-      id: String(index + 1),
-      narration,
-      mainImagePrompt,
-      imageUrl: null // We're not generating actual images in this example
-    });
-  });
-
-  // If no frames were parsed, create at least one frame with the original text
-  if (frames.length === 0) {
-    frames.push({
-      id: '1',
-      narration: 'Generated narration',
-      mainImagePrompt: text.substring(0, 200) + '...',
-      imageUrl: null
-    });
-  }
-
-  return frames;
-}

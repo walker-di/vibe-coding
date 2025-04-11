@@ -1,4 +1,4 @@
-// Simple in-memory store for storyboard frames
+// Simple in-memory store for storyboard frames and metadata
 // In a real application, this would be replaced with a database
 
 // Type definitions
@@ -9,20 +9,39 @@ interface Frame {
   imageUrl: string | null;
 }
 
+interface StoryboardMetadata {
+  title: string;
+  description: string;
+}
+
 interface StoryboardFrames {
   [storyboardId: string]: Frame[];
 }
 
+interface StoryboardMetadataStore {
+  [storyboardId: string]: StoryboardMetadata;
+}
+
 // In-memory storage
 let storyboardFrames: StoryboardFrames = {};
+let storyboardMetadata: StoryboardMetadataStore = {};
 
-// Store functions
+// Store functions for frames
 export function getFrames(storyboardId: string): Frame[] | null {
   return storyboardFrames[storyboardId] || null;
 }
 
 export function setFrames(storyboardId: string, frames: Frame[]): void {
   storyboardFrames[storyboardId] = frames;
+}
+
+// Store functions for metadata
+export function getMetadata(storyboardId: string): StoryboardMetadata | null {
+  return storyboardMetadata[storyboardId] || null;
+}
+
+export function setMetadata(storyboardId: string, metadata: StoryboardMetadata): void {
+  storyboardMetadata[storyboardId] = metadata;
 }
 
 // Default professional frames for fallback
@@ -47,4 +66,12 @@ export function getDefaultFrames(): Frame[] {
       imageUrl: null
     }
   ];
+}
+
+// Default metadata for fallback
+export function getDefaultMetadata(): StoryboardMetadata {
+  return {
+    title: 'Professional Marketing Storyboard',
+    description: 'A cohesive marketing narrative that effectively communicates value proposition.'
+  };
 }
