@@ -27,6 +27,7 @@ export const POST = withErrorHandling(async ({ request }: RequestEvent) => {
     imageUrl: clipData.imageUrl || null,
     narration: clipData.narration || null,
     narrationAudioUrl: clipData.narrationAudioUrl || null,
+    voiceName: clipData.voiceName || null,
     description: clipData.description || null,
     duration: clipData.duration || null,
     orderIndex: clipData.orderIndex,

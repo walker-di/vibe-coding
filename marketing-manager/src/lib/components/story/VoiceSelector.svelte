@@ -33,9 +33,9 @@
     <Mic class="h-4 w-4 mr-2" />
     <span>Voice</span>
   </Label>
-  
+
   <div class="flex gap-2">
-    <Select.Root bind:value={language} class="w-1/3">
+    <Select.Root bind:value={language} type="single" class="w-1/3">
       <Select.Trigger id="language-selector">
         <Select.Value placeholder="Select language" />
       </Select.Trigger>
@@ -44,8 +44,8 @@
         <Select.Item value="en-US">English (US)</Select.Item>
       </Select.Content>
     </Select.Root>
-    
-    <Select.Root bind:value={selectedVoice} class="flex-1">
+
+    <Select.Root bind:value={selectedVoice} type="single" class="flex-1">
       <Select.Trigger id="voice-selector">
         <Select.Value placeholder="Select voice" />
       </Select.Trigger>
@@ -56,7 +56,7 @@
       </Select.Content>
     </Select.Root>
   </div>
-  
+
   <p class="text-xs text-muted-foreground">
     Select the voice that will be used to generate the narration audio.
   </p>

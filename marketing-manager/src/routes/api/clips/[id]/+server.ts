@@ -74,6 +74,13 @@ export const PUT = withErrorHandling(async ({ params, request }: RequestEvent) =
     }
     updateData.narrationAudioUrl = clipData.narrationAudioUrl;
   }
+  if (clipData.voiceName !== undefined) {
+    // Allow setting voiceName to null or a string
+    if (clipData.voiceName !== null && typeof clipData.voiceName !== 'string') {
+      handleServerError(null, 'Invalid voiceName format');
+    }
+    updateData.voiceName = clipData.voiceName;
+  }
   if (clipData.description !== undefined) {
     // Allow setting description to null or empty string
     updateData.description = clipData.description;

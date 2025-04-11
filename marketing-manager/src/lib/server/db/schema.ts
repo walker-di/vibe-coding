@@ -174,6 +174,7 @@ export const clips = sqliteTable('clips', {
   imageUrl: text('image_url'), // URL for the generated preview image
   narration: text('narration'),
   narrationAudioUrl: text('narration_audio_url'), // URL for the generated narration audio
+  voiceName: text('voice_name'), // Voice used for narration audio
   description: text('description'),
   duration: integer('duration'), // Duration in milliseconds
   orderIndex: integer('order_index').notNull(),

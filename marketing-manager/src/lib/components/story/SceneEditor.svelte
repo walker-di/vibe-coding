@@ -562,7 +562,8 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clipId: selectedClip.id
+          clipId: selectedClip.id,
+          voiceName: selectedVoice
         })
       });
 
@@ -1330,6 +1331,9 @@
                 </audio>
               </div>
             {/if}
+
+            <!-- Voice Selector -->
+            <VoiceSelector bind:selectedVoice bind:language={voiceLanguage} />
           </div>
 
           <!-- AI Generation Buttons -->

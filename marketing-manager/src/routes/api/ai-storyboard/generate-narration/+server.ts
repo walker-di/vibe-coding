@@ -44,10 +44,11 @@ export const POST: RequestHandler = async ({ request }) => {
       throw error(500, 'Failed to generate narration audio');
     }
 
-    // Update the clip with the new narrationAudioUrl
+    // Update the clip with the new narrationAudioUrl and voiceName
     await db.update(clips)
       .set({
         narrationAudioUrl: narrationAudioUrl,
+        voiceName: voiceName || 'pt-BR-FranciscaNeural', // Store the voice used
         updatedAt: new Date()
       })
       .where(eq(clips.id, clipId));

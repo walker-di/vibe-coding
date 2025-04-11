@@ -30,6 +30,7 @@ export interface Clip {
   imageUrl: string | null; // URL for the generated preview image (can be null)
   narration: string | null;
   narrationAudioUrl: string | null; // URL for the generated narration audio (can be null)
+  voiceName: string | null; // Voice used for narration audio (can be null)
   description: string | null;
   duration: number | null; // Duration in milliseconds
   orderIndex: number;

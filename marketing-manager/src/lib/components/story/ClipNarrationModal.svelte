@@ -4,6 +4,7 @@
   import { Textarea } from '$lib/components/ui/textarea';
   import { Input } from '$lib/components/ui/input';
   import { FileText, MessageSquare, Save, Clock } from 'lucide-svelte';
+  import VoiceSelector from '$lib/components/story/VoiceSelector.svelte';
 
   // Props
   let {
@@ -16,14 +17,17 @@
       narration?: string | null;
       description?: string | null;
       duration?: number | null;
+      voiceName?: string | null;
     };
-    onSave: (data: { narration: string | null; description: string | null; duration: number | null }) => Promise<void>;
+    onSave: (data: { narration: string | null; description: string | null; duration: number | null; voiceName?: string | null }) => Promise<void>;
   }>();
 
   // Local state
   let localNarration = $state(clip?.narration || '');
   let localDescription = $state(clip?.description || '');
   let localDuration = $state(clip?.duration || 3000); // Default to 3 seconds (3000ms)
+  let localVoice = $state(clip?.voiceName || 'pt-BR-FranciscaNeural');
+  let localLanguage = $state(localVoice.startsWith('pt-BR') ? 'pt-BR' : 'en-US');
   let isSaving = $state(false);
   let error = $state<string | null>(null);
 
@@ -33,6 +37,8 @@
       localNarration = clip?.narration || '';
       localDescription = clip?.description || '';
       localDuration = clip?.duration || 3000;
+      localVoice = clip?.voiceName || 'pt-BR-FranciscaNeural';
+      localLanguage = localVoice.startsWith('pt-BR') ? 'pt-BR' : 'en-US';
       error = null;
     }
   });
@@ -41,6 +47,8 @@
     localNarration = clip?.narration || '';
     localDescription = clip?.description || '';
     localDuration = clip?.duration || 3000;
+    localVoice = clip?.voiceName || 'pt-BR-FranciscaNeural';
+    localLanguage = localVoice.startsWith('pt-BR') ? 'pt-BR' : 'en-US';
   });
 
   // Handle save
@@ -54,7 +62,8 @@
       await onSave({
         narration: localNarration.trim() || null,
         description: localDescription.trim() || null,
-        duration: localDuration
+        duration: localDuration,
+        voiceName: localVoice
       });
 
       // Close modal on success
@@ -132,6 +141,9 @@
           The narration text that will be read or displayed with this clip.
         </p>
       </div>
+
+      <!-- Voice Selector -->
+      <VoiceSelector bind:selectedVoice={localVoice} bind:language={localLanguage} />
 
       {#if error}
         <div class="text-sm text-red-500 p-2 bg-red-50 rounded border border-red-200">
