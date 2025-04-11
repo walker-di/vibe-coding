@@ -4,7 +4,6 @@ import type { RequestHandler, RequestEvent } from './$types';
 import { db } from '$lib/server/db';
 import { products, personas, creatives, scenes, clips, stories } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
 
 // Get the API key from environment variables
 const GEMINI_API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
@@ -36,7 +35,7 @@ const storyboardSchema = {
   required: ['title', 'description', 'frames']
 };
 
-export const POST: RequestHandler = async ({ request, params, fetch }: RequestEvent) => {
+export const POST: RequestHandler = async ({ request, params }: RequestEvent) => {
   // Check if the API key is available
   if (!GEMINI_API_KEY) {
     console.error('API key is missing. Check your environment variables.');
@@ -78,8 +77,7 @@ export const POST: RequestHandler = async ({ request, params, fetch }: RequestEv
         industry: true,
         overview: true,
         details: true,
-        featuresStrengths: true,
-        competitiveAdvantage: true
+        featuresStrengths: true
       }
     });
 
@@ -195,17 +193,66 @@ Story prompt: ${storyPrompt}`;
       prompt += `Industry: ${product.industry}\n`;
     }
 
-    if (product.featuresStrengths) {
-      prompt += `Key Features and Strengths:\n${product.featuresStrengths}\n`;
+    if (product.details) {
+      prompt += `Details: ${product.details}\n`;
     }
 
-    if (product.competitiveAdvantage) {
-      prompt += `Competitive Advantage: ${product.competitiveAdvantage}\n`;
+    if (product.featuresStrengths) {
+      prompt += `Key Features and Strengths:\n${product.featuresStrengths}\n`;
     }
 
     // Persona context
     prompt += `\n## TARGET AUDIENCE ##\n`;
     prompt += `Persona: ${persona.name}${persona.personaTitle ? ` (${persona.personaTitle})` : ''}\n`;
+
+    // Demographics
+    prompt += `\nDemographics\n`;
+
+    if (persona.ageRangeSelection && persona.ageRangeSelection !== 'Unspecified') {
+      prompt += `Age Range\n${persona.ageRangeSelection === 'Custom' ? persona.ageRangeCustom : persona.ageRangeSelection}\n`;
+    }
+
+    if (persona.gender && persona.gender !== 'Unspecified') {
+      prompt += `Gender\n${persona.gender}\n`;
+    }
+
+    if (persona.location) {
+      prompt += `Location\n${persona.location}\n`;
+    }
+
+    if (persona.jobTitle) {
+      prompt += `Job Title\n${persona.jobTitle}\n`;
+    }
+
+    if (persona.incomeLevel) {
+      prompt += `Income Level\n${persona.incomeLevel}\n`;
+    }
+
+    // Psychographics
+    prompt += `\nPsychographics\n`;
+
+    if (persona.personalityTraits) {
+      prompt += `Personality Traits\n${persona.personalityTraits}\n`;
+    }
+
+    if (persona.valuesText) {
+      prompt += `Values\n${persona.valuesText}\n`;
+    }
+
+    if (persona.spendingHabits) {
+      prompt += `Spending Habits\n${persona.spendingHabits}\n`;
+    }
+
+    if (persona.interestsHobbies) {
+      prompt += `Interests & Hobbies\n${persona.interestsHobbies}\n`;
+    }
+
+    if (persona.lifestyle) {
+      prompt += `Lifestyle\n${persona.lifestyle}\n`;
+    }
+
+    // Needs & Goals
+    prompt += `\nNeeds & Goals\n`;
 
     if (persona.needsPainPoints) {
       prompt += `Pain Points: ${persona.needsPainPoints}\n`;
@@ -215,18 +262,21 @@ Story prompt: ${storyPrompt}`;
       prompt += `Goals: ${persona.goalsExpectations}\n`;
     }
 
-    if (persona.valuesText) {
-      prompt += `Values: ${persona.valuesText}\n`;
+    // Story & Behavior
+    prompt += `\nStory & Behavior\n`;
+
+    if (persona.backstory) {
+      prompt += `Backstory\n${persona.backstory}\n`;
     }
 
-    if (persona.interestsHobbies) {
-      prompt += `Interests: ${persona.interestsHobbies}\n`;
+    if (persona.purchaseProcess) {
+      prompt += `Purchase Process\n${persona.purchaseProcess}\n`;
     }
 
     // Creative context
     prompt += `\n## CREATIVE DETAILS ##\n`;
     prompt += `Creative Name: ${creative.name}\n`;
-    prompt += `Creative Type: ${creative.type}\n`;
+    prompt += `Creative Type: ${creative.type.toUpperCase()}\n`;
 
     if (creative.description) {
       prompt += `Description: ${creative.description}\n`;
@@ -238,19 +288,26 @@ Story prompt: ${storyPrompt}`;
       if (creative.textData.headline) prompt += `Headline: ${creative.textData.headline}\n`;
       if (creative.textData.body) prompt += `Body: ${creative.textData.body}\n`;
       if (creative.textData.callToAction) prompt += `Call to Action: ${creative.textData.callToAction}\n`;
+      if (creative.textData.appealFeature) prompt += `Appeal Feature: ${creative.textData.appealFeature}\n`;
       if (creative.textData.emotion) prompt += `Emotion: ${creative.textData.emotion}\n`;
+      if (creative.textData.platformNotes) prompt += `Platform Notes: ${creative.textData.platformNotes}\n`;
     } else if (creative.type === 'image' && creative.imageData) {
       prompt += `\nImage Creative Details:\n`;
       if (creative.imageData.appealFeature) prompt += `Appeal Feature: ${creative.imageData.appealFeature}\n`;
       if (creative.imageData.emotion) prompt += `Emotion: ${creative.imageData.emotion}\n`;
+      if (creative.imageData.platformNotes) prompt += `Platform Notes: ${creative.imageData.platformNotes}\n`;
     } else if (creative.type === 'video' && creative.videoData) {
       prompt += `\nVideo Creative Details:\n`;
       if (creative.videoData.duration) prompt += `Duration: ${creative.videoData.duration}\n`;
+      if (creative.videoData.appealFeature) prompt += `Appeal Feature: ${creative.videoData.appealFeature}\n`;
       if (creative.videoData.emotion) prompt += `Emotion: ${creative.videoData.emotion}\n`;
       if (creative.videoData.platform) prompt += `Platform: ${creative.videoData.platform}\n`;
     } else if (creative.type === 'lp' && creative.lpData) {
       prompt += `\nLanding Page Creative Details:\n`;
       if (creative.lpData.headline) prompt += `Headline: ${creative.lpData.headline}\n`;
+      if (creative.lpData.appealFeature) prompt += `Appeal Feature: ${creative.lpData.appealFeature}\n`;
+      if (creative.lpData.emotion) prompt += `Emotion: ${creative.lpData.emotion}\n`;
+      if (creative.lpData.platformNotes) prompt += `Platform Notes: ${creative.lpData.platformNotes}\n`;
     }
 
     prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard that specifically references the product and target audience\n- Create exactly 3 frames with professional narration and visual descriptions\n- Each frame should have high-quality, detailed content that is directly relevant to the context provided\n- The narration should be concise but impactful, using language that would resonate with the target audience\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Ensure the frames tell a cohesive story with a clear beginning (problem/need), middle (solution/product), and end (benefit/call to action)\n- Use a tone and style that matches the creative type and emotional context\n- Include specific product features and benefits mentioned in the context\n- Address the specific pain points and goals of the target persona`;
@@ -281,7 +338,6 @@ Story prompt: ${storyPrompt}`;
       // Create a new scene for this story with context-aware description
       const [newScene] = await db.insert(scenes).values({
         storyId: storyRecord.id,
-        title: storyboardData.title || 'Auto-generated scene',
         description: storyboardData.description || 'Generated from AI storyboard',
         orderIndex: 0, // First scene
         createdAt: new Date(),
@@ -346,7 +402,7 @@ Story prompt: ${storyPrompt}`;
         productName: product.name,
         productFeatures: product.featuresStrengths,
         productOverview: product.overview,
-        productAdvantage: product.competitiveAdvantage
+        productDetails: product.details
       };
 
       return json({
