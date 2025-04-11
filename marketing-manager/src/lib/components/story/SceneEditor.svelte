@@ -9,6 +9,7 @@
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
   import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, Save, FileText, MessageSquare, Clock, Sparkles, Layers, Wand, Mic } from 'lucide-svelte';
+  import { tick } from 'svelte'; // Import tick
 
   // Props passed down from the page
   let {
@@ -81,6 +82,7 @@
   let isImageUploadModalOpen = $state(false);
   let isBackgroundImageModalOpen = $state(false);
   // Removed isLoadingCanvas state
+  let initialCheckDone = $state(false); // Track if initial check/action is done
 
   // Reference to the CanvasEditor component instance
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
@@ -870,6 +872,27 @@
   $effect(() => {
     if (selectedClip && currentVoice) {
       selectedClip.voiceName = currentVoice;
+    }
+  });
+
+  // Effect to run on initial load to select first clip or open auto-create modal
+  $effect(() => {
+    // Only run once when scenes are loaded and no clip is selected yet
+    if (!initialCheckDone && scenes && selectedClip === null) {
+      console.log('Running initial scene/clip check...');
+      if (scenes.length > 0 && scenes[0].clips && scenes[0].clips.length > 0) {
+        // Scenes and clips exist, select the first one after the next tick
+        const firstClip = scenes[0].clips[0];
+        console.log('Selecting first clip after tick:', firstClip.id);
+        tick().then(() => {
+          handleSelectClip(firstClip);
+        });
+      } else {
+        // No scenes or no clips in the first scene, open auto-create modal
+        console.log('No scenes/clips found, opening auto-create modal.');
+        openAutoCreateModal();
+      }
+      initialCheckDone = true; // Mark check as done
     }
   });
 
