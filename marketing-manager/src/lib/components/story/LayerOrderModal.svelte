@@ -151,7 +151,10 @@
 
       <div class="mb-4">
         <p class="text-sm text-muted-foreground mb-2">
-          Drag and drop to reorder layers. Items at the top will appear in front of items below them.
+          Drag and drop to reorder layers. <strong>Items at the top will appear in front</strong> of items below them.
+        </p>
+        <p class="text-xs text-muted-foreground">
+          The list is ordered from top to bottom, with the topmost layer (frontmost) at the top of the list.
         </p>
       </div>
 

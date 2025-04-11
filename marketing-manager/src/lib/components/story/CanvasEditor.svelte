@@ -331,22 +331,28 @@
       }
 
       // Create a layer object for each canvas object
-      canvasLayers = objects.map((obj: any, index: number) => {
+      // Reverse the objects array to show top layers first in the modal
+      // In fabric.js, the last object in the array is on top (highest z-index)
+      const reversedObjects = [...objects].reverse();
+
+      canvasLayers = reversedObjects.map((obj: any, index: number) => {
         // Ensure each object has an ID for tracking
         if (!obj.id) {
           obj.id = `layer-${index}-${Date.now()}`;
         }
 
         // Use the existing name if available, otherwise generate a default name
-        const layerName = obj.name || `Layer ${index + 1}`;
+        const layerName = obj.name || `Layer ${(objects.length - index)} of ${objects.length}`;
         const layerType = obj.type || 'unknown';
 
         // Store the name on the object for persistence
         if (!obj.name) {
           obj.name = layerName;
+          // Force the canvas to recognize the change
+          obj.set('name', layerName);
         }
 
-        console.log(`Layer ${index}: ${layerName} (${layerType})`);
+        console.log(`Layer ${index} (top to bottom): ${layerName} (${layerType})`);
 
         return {
           id: obj.id,
@@ -378,10 +384,14 @@
       // Log the layers we're about to reorder
       console.log('Reordering layers:', newLayers);
 
-      // First, bring all objects to the front in reverse order
+      // Reverse the layers back to canvas order (bottom to top)
+      // Since the modal shows them in reverse (top to bottom)
+      const canvasOrderLayers = [...newLayers].reverse();
+
+      // First, bring all objects to the front in the order we want
       // This effectively sets the z-index in the order we want
-      for (let i = 0; i < newLayers.length; i++) {
-        const layer = newLayers[i];
+      for (let i = 0; i < canvasOrderLayers.length; i++) {
+        const layer = canvasOrderLayers[i];
         if (layer.object) {
           try {
             // Update the object name if it has changed
@@ -402,6 +412,8 @@
               // Still update the name
               if (layer.name) {
                 layer.object.name = layer.name;
+                // Force the canvas to recognize the change
+                layer.object.set('name', layer.name);
               }
 
               canvas.bringToFront(layer.object);
@@ -432,9 +444,12 @@
           console.log('Clearing canvas, current objects:', canvas.getObjects().length);
           canvas.clear();
 
+          // Create a new reversed copy for the fallback approach
+          const fallbackOrderLayers = [...newLayers].reverse();
+
           // Add them back in the desired order
-          for (let i = 0; i < newLayers.length; i++) {
-            const layer = newLayers[i];
+          for (let i = 0; i < fallbackOrderLayers.length; i++) {
+            const layer = fallbackOrderLayers[i];
             if (layer.object) {
               // Update the object name if it has changed
               if (layer.name && layer.object.name !== layer.name) {
