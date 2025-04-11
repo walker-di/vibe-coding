@@ -510,12 +510,13 @@
     // Update the existing border or create a new one if it doesn't exist
     if (canvasBorder) {
       // Update the existing border
-      const scaleFactor = 1 / clampedZoom;
+      // Use exact canvas dimensions without scaling factor
+      const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
       canvasBorder.set({
-        width: canvas.width * scaleFactor,
-        height: canvas.height * scaleFactor,
-        left: -canvas.viewportTransform[4] * scaleFactor,
-        top: -canvas.viewportTransform[5] * scaleFactor,
+        width: canvas.width,  // Use exact canvas width
+        height: canvas.height, // Use exact canvas height
+        left: -vpt[4] / clampedZoom, // Adjust position based on current pan
+        top: -vpt[5] / clampedZoom,
         strokeWidth: 8 / clampedZoom
       });
       canvasBorder.setCoords();
@@ -927,19 +928,21 @@
 
     // Get current zoom level and viewport transform
     const currentZoom = canvas.getZoom() || 1;
-    const scaleFactor = 1 / currentZoom;
 
     // Calculate position based on current viewport transform
-    const left = canvas.viewportTransform ? -canvas.viewportTransform[4] * scaleFactor : 0;
-    const top = canvas.viewportTransform ? -canvas.viewportTransform[5] * scaleFactor : 0;
+    // We need to account for the current pan position
+    const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+    const left = -vpt[4] / currentZoom;
+    const top = -vpt[5] / currentZoom;
 
     try {
       // Create a rectangle that matches the canvas dimensions exactly
+      // No scaling factor applied to width/height to ensure it matches canvas dimensions
       canvasBorder = new wf.fabric.Rect({
         left: left,
         top: top,
-        width: canvas.width * scaleFactor,
-        height: canvas.height * scaleFactor,
+        width: canvas.width,  // Use exact canvas width
+        height: canvas.height, // Use exact canvas height
         fill: 'transparent',
         stroke: '#FF0000', // Bright red border
         strokeWidth: 8 / currentZoom, // Adjust stroke width based on zoom
@@ -984,7 +987,7 @@
 
       // Render the canvas
       canvas.renderAll();
-      console.log('Canvas border added');
+      console.log('Canvas border added with dimensions:', canvas.width, 'x', canvas.height);
     } catch (error) {
       console.error('Error creating canvas border:', error);
     }
@@ -1001,6 +1004,7 @@
 
     // Update the border to match new dimensions
     if (canvasBorder) {
+      // Use exact dimensions without scaling
       canvasBorder.set({
         width: width,
         height: height
