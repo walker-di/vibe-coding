@@ -2,6 +2,7 @@
   import SceneList from '$lib/components/story/SceneList.svelte';
   import CanvasEditor from '$lib/components/story/CanvasEditor.svelte';
   import ImageUploadModal from '$lib/components/story/ImageUploadModal.svelte';
+  import VoiceSelector from '$lib/components/story/VoiceSelector.svelte';
   import type { SceneWithRelations, Clip } from '$lib/types/story.types';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -148,6 +149,8 @@
   // State for image generation and narration generation
   let isGeneratingImage = $state(false);
   let isGeneratingNarration = $state(false);
+  let selectedVoice = $state('pt-BR-FranciscaNeural'); // Default voice
+  let voiceLanguage = $state('pt-BR'); // Default language
 
   // Handler for opening the auto-create modal
   async function openAutoCreateModal() {
@@ -539,68 +542,43 @@
     }
   }
 
-  // Function to generate narration for the clip
+  // Function to generate narration audio for the clip
   async function handleGenerateNarration() {
     if (!selectedClip) {
       alert('Please select a clip first.');
       return;
     }
 
-    if (!selectedClip.description) {
-      alert('Please add a description first to generate narration.');
+    if (!selectedClip.narration) {
+      alert('Please add narration text first to generate audio.');
       return;
     }
 
     isGeneratingNarration = true;
 
     try {
-      // Call our proxy API to generate narration
+      // Call our proxy API to generate narration audio
       const response = await fetch('/api/ai-storyboard/generate-narration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description: selectedClip.description,
           clipId: selectedClip.id
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Failed to generate narration. Status: ${response.status}`);
+        throw new Error(errorData.message || `Failed to generate narration audio. Status: ${response.status}`);
       }
 
       const result = await response.json();
-      console.log('Narration generation result:', result);
+      console.log('Narration audio generation result:', result);
 
-      if (result.narration) {
-        // Prepare the update data
-        const updateData: Partial<Clip> = {
-          narration: result.narration
-        };
-
-        // Add narrationAudioUrl if available
-        if (result.narrationAudioUrl) {
-          updateData.narrationAudioUrl = result.narrationAudioUrl;
-        }
-
-        // Update the clip with the new narration and audio URL
-        const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(updateData)
-        });
-
-        if (!updateResponse.ok) {
-          throw new Error(`Failed to update clip with new narration. Status: ${updateResponse.status}`);
-        }
-
+      if (result.narrationAudioUrl) {
         // Update the local state
         selectedClip = {
           ...selectedClip,
-          narration: result.narration,
-          narrationAudioUrl: result.narrationAudioUrl || selectedClip.narrationAudioUrl
+          narrationAudioUrl: result.narrationAudioUrl
         };
 
         // Update the clip in the scenes array
@@ -610,8 +588,7 @@
               if (c.id === selectedClip!.id) {
                 return {
                   ...c,
-                  narration: result.narration,
-                  narrationAudioUrl: result.narrationAudioUrl || c.narrationAudioUrl
+                  narrationAudioUrl: result.narrationAudioUrl
                 };
               }
               return c;
@@ -620,18 +597,14 @@
           return scene;
         });
 
-        // Show success message with audio info
-        if (result.narrationAudioUrl) {
-          alert('Narration text and audio generated and applied successfully!');
-        } else {
-          alert('Narration text generated and applied successfully! (Audio generation failed)');
-        }
+        // Show success message
+        alert('Narration audio generated and applied successfully!');
       } else {
-        throw new Error('No narration returned from the generation service.');
+        throw new Error('No narration audio URL returned from the generation service.');
       }
     } catch (error: any) {
-      console.error('Error generating narration:', error);
-      alert(`Failed to generate narration: ${error.message || 'Unknown error'}`);
+      console.error('Error generating narration audio:', error);
+      alert(`Failed to generate narration audio: ${error.message || 'Unknown error'}`);
     } finally {
       isGeneratingNarration = false;
     }
@@ -1374,9 +1347,9 @@
                 onclick={handleGenerateNarration}
                 variant="outline"
                 class="w-full"
-                disabled={isGeneratingNarration || !selectedClip?.description}
+                disabled={isGeneratingNarration || !selectedClip?.narration}
               >
-                <Mic class="h-4 w-4 mr-2" /> {isGeneratingNarration ? 'Generating...' : 'Generate Narration'}
+                <Mic class="h-4 w-4 mr-2" /> {isGeneratingNarration ? 'Generating...' : 'Generate Audio'}
               </Button>
             </div>
 

@@ -24,7 +24,9 @@ export const POST = withErrorHandling(async ({ request }: RequestEvent) => {
   const [newClip] = await db.insert(clips).values({
     sceneId: clipData.sceneId,
     canvas: clipData.canvas,
+    imageUrl: clipData.imageUrl || null,
     narration: clipData.narration || null,
+    narrationAudioUrl: clipData.narrationAudioUrl || null,
     description: clipData.description || null,
     duration: clipData.duration || null,
     orderIndex: clipData.orderIndex,

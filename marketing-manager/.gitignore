@@ -2,6 +2,7 @@ node_modules
 
 static/uploads
 static/clip-previews
+static/narration
 static/template-previews
 # Output
 .output
