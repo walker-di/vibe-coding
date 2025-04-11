@@ -15,7 +15,7 @@ import { Buffer } from 'node:buffer'; // Needed for handling fetch response
 // Node's built-in fetch is globally available in recent versions
 
 // --- Google Gemini Configuration ---
-const GOOGLE_API_KEY = env.GOOGLE_API_KEY;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 if (!GOOGLE_API_KEY) {
   console.warn('GOOGLE_API_KEY environment variable is not set. Story prompt generation will fail.');
 }
