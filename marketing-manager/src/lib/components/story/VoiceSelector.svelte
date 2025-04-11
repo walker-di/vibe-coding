@@ -9,15 +9,22 @@
     selectedVoice = $bindable('pt-BR-FranciscaNeural'),
     language = $bindable('pt-BR')
   } = $props<{
-    selectedVoice?: string;
+    selectedVoice?: string | null;
     language?: 'pt-BR' | 'en-US';
   }>();
 
+  // Ensure selectedVoice is never null
+  $effect(() => {
+    if (!selectedVoice) {
+      selectedVoice = 'pt-BR-FranciscaNeural';
+    }
+  });
+
   // Computed property for available voices based on language
   $effect(() => {
-    if (language === 'en-US' && !selectedVoice.startsWith('en-US')) {
+    if (language === 'en-US' && selectedVoice && !selectedVoice.startsWith('en-US')) {
       selectedVoice = 'en-US-JennyNeural'; // Default English voice
-    } else if (language === 'pt-BR' && !selectedVoice.startsWith('pt-BR')) {
+    } else if (language === 'pt-BR' && selectedVoice && !selectedVoice.startsWith('pt-BR')) {
       selectedVoice = 'pt-BR-FranciscaNeural'; // Default Portuguese voice
     }
   });

@@ -131,7 +131,9 @@
       orderIndex: clip.orderIndex ?? 0, // Ensure orderIndex is not null
       // Make sure canvas and imageUrl are preserved
       canvas: clip.canvas || '', // Empty string instead of null for canvas
-      imageUrl: clip.imageUrl || ''
+      imageUrl: clip.imageUrl || '',
+      // Set default voice if not already set
+      voiceName: clip.voiceName || 'pt-BR-FranciscaNeural'
     };
     console.log('Clip selected in SceneEditor:', clip.id, clip.orderIndex);
 
@@ -149,8 +151,7 @@
   // State for image generation and narration generation
   let isGeneratingImage = $state(false);
   let isGeneratingNarration = $state(false);
-  let selectedVoice = $state('pt-BR-FranciscaNeural'); // Default voice
-  let voiceLanguage = $state('pt-BR'); // Default language
+  let currentVoice = $state(''); // Temporary state for voice selection
 
   // Handler for opening the auto-create modal
   async function openAutoCreateModal() {
@@ -563,7 +564,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clipId: selectedClip.id,
-          voiceName: selectedVoice
+          voiceName: currentVoice || 'pt-BR-FranciscaNeural'
         })
       });
 
@@ -858,7 +859,21 @@
     }
   }
 
-    // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready.
+    // Effect to update currentVoice when selectedClip changes
+  $effect(() => {
+    if (selectedClip) {
+      currentVoice = selectedClip.voiceName || 'pt-BR-FranciscaNeural';
+    }
+  });
+
+  // Effect to update selectedClip.voiceName when currentVoice changes
+  $effect(() => {
+    if (selectedClip && currentVoice) {
+      selectedClip.voiceName = currentVoice;
+    }
+  });
+
+  // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready.
    $effect(() => {
      // When selectedClip changes, load its canvas data if it differs from the current editor state
      // Removed isLoadingCanvas check here, effect should run based on clip/ready state
@@ -909,7 +924,8 @@
         narration: selectedClip.narration,
         description: selectedClip.description,
         duration: selectedClip.duration,
-        orderIndex: selectedClip.orderIndex
+        orderIndex: selectedClip.orderIndex,
+        voiceName: selectedClip.voiceName
       };
 
       // Call the API to update the clip
@@ -1333,7 +1349,12 @@
             {/if}
 
             <!-- Voice Selector -->
-            <VoiceSelector bind:selectedVoice bind:language={voiceLanguage} />
+            {#if selectedClip}
+              <VoiceSelector
+                bind:selectedVoice={currentVoice}
+                language={currentVoice?.startsWith('pt-BR') ? 'pt-BR' : 'en-US'}
+              />
+            {/if}
           </div>
 
           <!-- AI Generation Buttons -->
