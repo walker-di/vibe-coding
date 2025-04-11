@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '$lib/components/ui/card';
-	import { PlusCircle, Edit, Trash2 } from 'lucide-svelte';
+	import { PlusCircle, Edit, Trash2, Copy } from 'lucide-svelte'; // Added Copy icon
 	import type { CanvasTemplateListItem } from '$lib/types/canvasTemplate.types';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner'; // Assuming svelte-sonner is used for notifications
@@ -10,6 +10,7 @@
 	let templates = $state<CanvasTemplateListItem[]>([]);
 	let isLoading = $state(true);
 	let error = $state<string | null>(null);
+	let isDuplicating = $state<number | null>(null); // State to track duplication
 
 	async function fetchTemplates() {
 		isLoading = true;
@@ -59,6 +60,36 @@
 			console.error('Error deleting template:', err);
 			error = err.message || 'An unknown error occurred while deleting.';
 			toast.error(`Failed to delete template: ${error}`);
+		}
+	}
+
+	async function handleDuplicate(id: number, name: string) {
+		if (isDuplicating) return; // Prevent multiple clicks
+		isDuplicating = id;
+		error = null; // Clear previous errors
+
+		try {
+			const response = await fetch(`/api/canvas-templates/${id}/duplicate`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({ message: response.statusText }));
+				throw new Error(errorData.message || `Failed to duplicate template (Status: ${response.status})`);
+			}
+
+			const duplicatedTemplate: CanvasTemplateListItem = await response.json();
+
+			toast.success(`Template "${name}" duplicated successfully as "${duplicatedTemplate.name}".`);
+			// Refresh the list to show the new template
+			await fetchTemplates(); // Re-fetch to get the updated list including the new one
+
+		} catch (err: any) {
+			console.error('Error duplicating template:', err);
+			error = err.message || 'An unknown error occurred while duplicating.';
+			toast.error(`Failed to duplicate template: ${error}`);
+		} finally {
+			isDuplicating = null; // Reset duplication state
 		}
 	}
 
@@ -134,6 +165,22 @@
 							title="Edit Template"
 						>
 							<Edit class="h-4 w-4" />
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() => handleDuplicate(template.id, template.name)}
+							title="Duplicate Template"
+							disabled={isDuplicating === template.id}
+						>
+							{#if isDuplicating === template.id}
+								<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+							{:else}
+								<Copy class="h-4 w-4" />
+							{/if}
 						</Button>
 						<Button
 							variant="destructive"
