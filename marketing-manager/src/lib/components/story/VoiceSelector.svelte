@@ -37,7 +37,13 @@
   <div class="flex gap-2">
     <Select.Root bind:value={language} type="single" class="w-1/3">
       <Select.Trigger id="language-selector">
-        <Select.Value placeholder="Select language" />
+        {#if language === 'pt-BR'}
+          Portuguese (BR)
+        {:else if language === 'en-US'}
+          English (US)
+        {:else}
+          <Select.Value placeholder="Select language" />
+        {/if}
       </Select.Trigger>
       <Select.Content>
         <Select.Item value="pt-BR">Portuguese (BR)</Select.Item>
@@ -47,7 +53,11 @@
 
     <Select.Root bind:value={selectedVoice} type="single" class="flex-1">
       <Select.Trigger id="voice-selector">
-        <Select.Value placeholder="Select voice" />
+        {#if selectedVoice}
+          {getVoiceOptions().find(v => v.value === selectedVoice)?.name || selectedVoice}
+        {:else}
+          <Select.Value placeholder="Select voice" />
+        {/if}
       </Select.Trigger>
       <Select.Content>
         {#each getVoiceOptions() as voice}
