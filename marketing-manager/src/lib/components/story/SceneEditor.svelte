@@ -981,6 +981,19 @@
 <ImageUploadModal
   open={isBackgroundImageModalOpen}
   onClose={() => isBackgroundImageModalOpen = false}
+  isForBackground={true}
+  onUnsetBackground={() => {
+    if (canvasEditorInstance) {
+      const canvas = canvasEditorInstance.getCanvasInstance();
+      if (canvas) {
+        // Remove background image
+        canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
+        // Trigger canvas change
+        const json = canvas.toJSON(['name', 'id']);
+        handleCanvasChange(JSON.stringify(json));
+      }
+    }
+  }}
   onImageSelected={(url) => {
     if (canvasEditorInstance && url) {
       // Set background image

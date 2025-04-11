@@ -8,11 +8,15 @@
   let {
     open = false,
     onImageSelected,
-    onClose
+    onClose,
+    isForBackground = false,
+    onUnsetBackground
   } = $props<{
     open?: boolean;
     onImageSelected?: (url: string) => void;
     onClose?: () => void;
+    isForBackground?: boolean;
+    onUnsetBackground?: () => void;
   }>();
 
   // State
@@ -117,7 +121,15 @@
           </div>
         {/if}
 
-        <div class="flex justify-end">
+        <div class="flex justify-end gap-2">
+          {#if isForBackground}
+            <Button variant="destructive" onclick={() => {
+              onUnsetBackground?.();
+              close();
+            }}>
+              Remove Background
+            </Button>
+          {/if}
           <Button variant="ghost" onclick={close}>
             Cancel
           </Button>

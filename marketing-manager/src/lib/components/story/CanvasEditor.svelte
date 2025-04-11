@@ -664,6 +664,12 @@
       saveCanvas();
     }, { crossOrigin: 'anonymous' });
   }
+
+  export function unsetBackgroundImage() {
+    if (!canvas) return;
+    canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
+    saveCanvas();
+  }
   // --- End Background Functions ---
 
 

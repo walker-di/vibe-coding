@@ -469,6 +469,19 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 	<ImageUploadModal
 		open={isBackgroundImageModalOpen}
 		onClose={() => isBackgroundImageModalOpen = false}
+		isForBackground={true}
+		onUnsetBackground={() => {
+			if (canvasEditorRef) {
+				const canvas = canvasEditorRef.getCanvasInstance();
+				if (canvas) {
+					// Remove background image
+					canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
+					// Mark canvas as changed
+					canvasHasChanged = true;
+					toast.success('Background image removed');
+				}
+			}
+		}}
 		onImageSelected={(url) => {
 			if (canvasEditorRef && url) {
 				// Set background image
@@ -493,6 +506,7 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 						canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
 						// Mark canvas as changed
 						canvasHasChanged = true;
+						toast.success('Background image set');
 					}, { crossOrigin: 'anonymous' });
 				}
 			}
