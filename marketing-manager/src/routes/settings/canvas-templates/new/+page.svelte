@@ -286,7 +286,7 @@ function handleCanvasReady() {
 	<title>New Canvas Template</title>
 </svelte:head>
 
-<div class="container mx-auto p-4 md:p-6 lg:p-8">
+<div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
 	<h1 class="text-2xl font-bold mb-6">Create New Canvas Template</h1>
 
 	<form onsubmit={saveTemplate} class="space-y-6">
@@ -343,9 +343,9 @@ function handleCanvasReady() {
 			</div>
 		</div>
 
-		<div>
-			<Label>Canvas Content</Label>
-			<div class="border rounded-md p-4">
+		<div class="mt-8">
+			<Label class="text-lg font-semibold">Canvas Content</Label>
+			<div class="border rounded-md p-4 mt-2">
 				<!-- Canvas Controls -->
 				{#if canvasEditorRef}
 					<div class="flex flex-wrap gap-2 mb-4">

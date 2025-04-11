@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { Button } from '$lib/components/ui/button';
-  import { Slider } from '$lib/components/ui/slider'; // Import Slider
-  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare, Layers, Upload, ZoomIn, ZoomOut, RefreshCw, Maximize } from 'lucide-svelte';
+  import { Square, Circle, Type, Image as ImageIcon, Trash2, Palette, ImageUp, MessageSquare, Layers, ZoomIn, ZoomOut, RefreshCw, Maximize, Target, RotateCcw } from 'lucide-svelte';
   import { FileUpload } from '$lib/components/ui/file-upload';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
   import LayerOrderModal from './LayerOrderModal.svelte';
@@ -71,6 +70,12 @@
         canvas.clear();
         canvas.backgroundColor = '#f0f0f0';
         canvas.renderAll();
+        // Ensure canvas is properly sized in the view
+        setTimeout(() => {
+          fitToView();
+          canvas.renderAll();
+          console.log('Empty canvas loaded and fitted to view');
+        }, 50);
       }
       return;
     }
@@ -140,6 +145,56 @@
                     return isValid;
                   });
 
+                  // Normalize object positions and scales in the JSON before loading
+                  const canvasWidth = jsonObj.width || canvas.width;
+                  const canvasHeight = jsonObj.height || canvas.height;
+
+                  // Check for and fix extreme values in the JSON data
+                  let hasExtremeValues = false;
+                  jsonObj.objects.forEach((obj: any) => {
+                    // Check for extreme positions (very negative or very large values)
+                    if (obj.left !== undefined && (obj.left < -canvasWidth || obj.left > canvasWidth * 2)) {
+                      console.warn(`Object has extreme X position: ${obj.left}`, obj);
+                      hasExtremeValues = true;
+                      // Center horizontally
+                      obj.left = canvasWidth / 2 - (obj.width || 100) / 2;
+                    }
+
+                    if (obj.top !== undefined && (obj.top < -canvasHeight || obj.top > canvasHeight * 2)) {
+                      console.warn(`Object has extreme Y position: ${obj.top}`, obj);
+                      hasExtremeValues = true;
+                      // Center vertically
+                      obj.top = canvasHeight / 2 - (obj.height || 100) / 2;
+                    }
+
+                    // Check for extreme scale values
+                    if (obj.scaleX !== undefined && (obj.scaleX > 5 || obj.scaleX < 0.1)) {
+                      console.warn(`Object has extreme scaleX: ${obj.scaleX}`, obj);
+                      hasExtremeValues = true;
+
+                      // Calculate actual dimensions and reset scale
+                      if (obj.width) {
+                        obj.width = obj.width * obj.scaleX;
+                        obj.scaleX = 1;
+                      }
+                    }
+
+                    if (obj.scaleY !== undefined && (obj.scaleY > 5 || obj.scaleY < 0.1)) {
+                      console.warn(`Object has extreme scaleY: ${obj.scaleY}`, obj);
+                      hasExtremeValues = true;
+
+                      // Calculate actual dimensions and reset scale
+                      if (obj.height) {
+                        obj.height = obj.height * obj.scaleY;
+                        obj.scaleY = 1;
+                      }
+                    }
+                  });
+
+                  if (hasExtremeValues) {
+                    console.log('Extreme values detected and fixed in JSON data before loading');
+                  }
+
                   // Load the sanitized JSON
                   canvas.loadFromJSON(jsonObj, () => {
                     // After loading, ensure all objects have their names properly set
@@ -159,10 +214,58 @@
                       }
                     });
 
+                    // Force all objects to be marked as dirty to ensure they render
+                    objects.forEach((obj: any) => {
+                      if (obj) {
+                        obj.dirty = true;
+                      }
+                    });
+
+                    // First normalize any objects with extreme scales or positions
+                    const normalized = normalizeObjects();
+                    if (normalized) {
+                      console.log('Objects were normalized in the canvas');
+                    }
+
+                    // Then try to center objects if they're outside the visible area
+                    const centered = centerAllObjects();
+                    if (centered) {
+                      console.log('Objects were centered in the canvas');
+                    }
+
                     canvas.renderAll();
+                    // Ensure canvas is properly sized in the view after loading
+                    setTimeout(() => {
+                      fitToView();
+                      canvas.renderAll();
+                      console.log('Canvas data loaded and fitted to view');
+                    }, 50);
                     resolve();
                   }, (err: any) => {
                     console.warn('Error in fabric.loadFromJSON:', err);
+
+                    // If we get an error, try to recover by checking if the object was added despite the error
+                    // This can happen with objects that have extreme positions but are otherwise valid
+                    const objects = canvas.getObjects();
+                    if (objects && objects.length > 0) {
+                      console.log(`Recovered ${objects.length} objects despite loading errors`);
+
+                      // Try to normalize any problematic objects
+                      const normalized = normalizeObjects();
+                      if (normalized) {
+                        console.log('Objects were normalized after loading error');
+                      }
+
+                      // Try to center objects
+                      const centered = centerAllObjects();
+                      if (centered) {
+                        console.log('Objects were centered after loading error');
+                      }
+
+                      // Force a render
+                      canvas.renderAll();
+                    }
+
                     // Don't reject, just log the error and continue
                     resolve();
                   });
@@ -213,19 +316,48 @@
   // Load fabric.js and initialize canvas
   onMount(async (): Promise<any> => {
     try {
+      // Log initial mount
+      console.log('CanvasEditor component mounted');
+
       // Load fabric.js from CDN
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js';
       script.async = true;
 
       script.onload = () => {
+        console.log('Fabric.js loaded successfully');
         initializeCanvas();
         fabricLoaded = true;
         onReady?.(); // Signal readiness to the parent
         // Initial load is now fully handled by the parent calling loadCanvasData
       };
 
-       document.body.appendChild(script);
+      document.body.appendChild(script);
+
+      // Add window resize handler to adjust canvas view
+      const handleResize = () => {
+        if (fabricLoaded && canvas) {
+          // Use setTimeout to ensure the container has been resized
+          setTimeout(fitToView, 100);
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      // Add ResizeObserver to monitor container size changes
+      let resizeObserver: ResizeObserver | null = null;
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          if (fabricLoaded && canvas && canvasContainer) {
+            setTimeout(fitToView, 100);
+          }
+        });
+
+        // Start observing once the container is available
+        if (canvasContainer) {
+          resizeObserver.observe(canvasContainer);
+        }
+      }
 
       return () => {
         // Clean up
@@ -235,6 +367,13 @@
         const existingScript = document.querySelector(`script[src="${script.src}"]`);
         if (existingScript && document.body.contains(existingScript)) {
            document.body.removeChild(existingScript);
+        }
+        window.removeEventListener('resize', handleResize);
+
+        // Clean up ResizeObserver
+        if (resizeObserver && canvasContainer) {
+          resizeObserver.unobserve(canvasContainer);
+          resizeObserver.disconnect();
         }
       };
     } catch (error) {
@@ -258,7 +397,9 @@
       canvas = new windowWithFabric.fabric.Canvas('canvas', {
         width: 800,
         height: 600,
-        backgroundColor: '#f0f0f0'
+        backgroundColor: '#f0f0f0',
+        renderOnAddRemove: true,
+        stateful: true
       });
       console.log('Canvas initialized.');
 
@@ -274,6 +415,14 @@
 
       // Add mouse wheel zoom listener
       canvas.on('mouse:wheel', handleMouseWheel);
+
+      // Force a render after initialization
+      setTimeout(() => {
+        if (canvas) {
+          canvas.renderAll();
+          console.log('Forced initial render');
+        }
+      }, 100);
 
     } catch (error) {
       console.error('Error initializing canvas:', error);
@@ -314,15 +463,17 @@
 
   function fitToView() {
     if (!canvas || !canvasContainer || !fabricLoaded) return;
-    const containerWidth = canvasContainer.clientWidth;
-    const containerHeight = canvasContainer.clientHeight;
+    // Account for padding in the container
+    const containerWidth = canvasContainer.clientWidth - 40; // 20px padding on each side
+    const containerHeight = canvasContainer.clientHeight - 40; // 20px padding on each side
     const scaleX = containerWidth / canvasWidth;
     const scaleY = containerHeight / canvasHeight;
-    const newZoom = Math.min(scaleX, scaleY) * 0.95; // Add a little padding
+    const newZoom = Math.min(scaleX, scaleY) * 0.95; // Add a little padding (95% of available space)
     setZoom(newZoom);
     // Center the canvas after fitting
     canvas.absolutePan({ x: 0, y: 0 });
     canvas.renderAll();
+    console.log(`Fit to view: container ${containerWidth}x${containerHeight}, canvas ${canvasWidth}x${canvasHeight}, zoom ${newZoom}`);
   }
 
   function handleMouseWheel(opt: any) {
@@ -346,7 +497,168 @@
       canvas.off('mouse:wheel', handleMouseWheel);
     }
   });
+  // Function to normalize object scales and positions
+  function normalizeObjects() {
+    if (!canvas || !fabricLoaded) return false;
+
+    const objects = canvas.getObjects();
+    if (!objects || objects.length === 0) return false;
+
+    let modified = false;
+
+    // Process each object
+    objects.forEach((obj: any) => {
+      if (!obj) return;
+
+      // Check for extreme scale values
+      let needsRescale = false;
+      if (obj.scaleX && (obj.scaleX > 5 || obj.scaleX < 0.1)) {
+        console.log(`Object ${obj.name || 'unnamed'} has extreme scaleX: ${obj.scaleX}`);
+        needsRescale = true;
+      }
+      if (obj.scaleY && (obj.scaleY > 5 || obj.scaleY < 0.1)) {
+        console.log(`Object ${obj.name || 'unnamed'} has extreme scaleY: ${obj.scaleY}`);
+        needsRescale = true;
+      }
+
+      // Normalize scale and dimensions
+      if (needsRescale) {
+        // Calculate actual dimensions
+        const actualWidth = obj.width * obj.scaleX;
+        const actualHeight = obj.height * obj.scaleY;
+
+        // Reset scale to 1 and set width/height to actual dimensions
+        obj.set({
+          width: actualWidth,
+          height: actualHeight,
+          scaleX: 1,
+          scaleY: 1
+        });
+
+        console.log(`Normalized scale for ${obj.name || 'unnamed'}: width=${actualWidth}, height=${actualHeight}`);
+        modified = true;
+      }
+
+      // Check for extreme positions
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+
+      // If position is way outside canvas bounds, move it to a reasonable position
+      if (obj.left !== undefined && (obj.left < -canvasWidth || obj.left > canvasWidth * 2)) {
+        obj.set('left', canvasWidth / 2 - obj.width / 2);
+        console.log(`Fixed extreme X position for ${obj.name || 'unnamed'}: ${obj.left} -> ${canvasWidth / 2 - obj.width / 2}`);
+        modified = true;
+      }
+
+      if (obj.top !== undefined && (obj.top < -canvasHeight || obj.top > canvasHeight * 2)) {
+        obj.set('top', canvasHeight / 2 - obj.height / 2);
+        console.log(`Fixed extreme Y position for ${obj.name || 'unnamed'}: ${obj.top} -> ${canvasHeight / 2 - obj.height / 2}`);
+        modified = true;
+      }
+
+      // Update coordinates if modified
+      if (modified) {
+        obj.setCoords();
+      }
+    });
+
+    if (modified) {
+      canvas.renderAll();
+    }
+
+    return modified;
+  }
+
+  // Function to center all objects in the canvas view
+  function centerAllObjects() {
+    if (!canvas || !fabricLoaded) return false;
+
+    // First normalize any objects with extreme scales or positions
+    normalizeObjects();
+
+    const objects = canvas.getObjects();
+    if (!objects || objects.length === 0) return false;
+
+    // Calculate the bounding box of all objects
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    objects.forEach((obj: any) => {
+      if (!obj) return;
+
+      // Get object bounds considering its width, height, scale, and position
+      const objBounds = obj.getBoundingRect();
+      minX = Math.min(minX, objBounds.left);
+      minY = Math.min(minY, objBounds.top);
+      maxX = Math.max(maxX, objBounds.left + objBounds.width);
+      maxY = Math.max(maxY, objBounds.top + objBounds.height);
+    });
+
+    // If we have valid bounds
+    if (minX !== Infinity && minY !== Infinity && maxX !== -Infinity && maxY !== -Infinity) {
+      // Calculate center of all objects
+      const objectsCenterX = (minX + maxX) / 2;
+      const objectsCenterY = (minY + maxY) / 2;
+
+      // Calculate canvas center
+      const canvasCenterX = canvas.width / 2;
+      const canvasCenterY = canvas.height / 2;
+
+      // Calculate offset to move objects to center
+      const offsetX = canvasCenterX - objectsCenterX;
+      const offsetY = canvasCenterY - objectsCenterY;
+
+      // Only apply offset if it's significant
+      if (Math.abs(offsetX) > 10 || Math.abs(offsetY) > 10) {
+        console.log(`Centering objects: offset (${offsetX}, ${offsetY})`);
+
+        // Move all objects by the offset
+        objects.forEach((obj: any) => {
+          if (!obj) return;
+          obj.set({
+            left: obj.left + offsetX,
+            top: obj.top + offsetY
+          });
+          obj.setCoords(); // Update coordinates
+        });
+
+        canvas.renderAll();
+        return true; // Indicate that centering was applied
+      }
+    }
+
+    return false; // No centering was needed or possible
+  }
+
   // --- End Zoom Functions ---
+
+  // Debug function to log canvas state
+  function logCanvasState() {
+    if (!canvas || !fabricLoaded) return;
+
+    try {
+      const objects = canvas.getObjects();
+      console.log('Canvas state:', {
+        width: canvas.width,
+        height: canvas.height,
+        zoom: canvas.getZoom(),
+        objectCount: objects.length,
+        objects: objects.map((obj: any, index: number) => ({
+          type: obj.type,
+          name: obj.name || `Unnamed ${obj.type} ${index}`,
+          visible: obj.visible !== false,
+          width: obj.width,
+          height: obj.height,
+          left: obj.left,
+          top: obj.top
+        }))
+      });
+    } catch (error) {
+      console.error('Error logging canvas state:', error);
+    }
+  }
 
   // Save canvas state
   function saveCanvas() {
@@ -386,6 +698,9 @@
         const json = JSON.stringify(canvasJson);
         console.log('Canvas changed, saving state');
         onCanvasChange(json);
+
+        // Log canvas state after saving
+        logCanvasState();
       } catch (error) {
         console.error('Error saving canvas state:', error);
       }
@@ -769,9 +1084,27 @@
       // Update the fabric canvas dimensions
       canvas.setWidth(newWidth);
       canvas.setHeight(newHeight);
-      // Re-center viewport if needed, or fit to view
-      fitToView(); // Fit to view after dimension change
-      canvas.renderAll();
+
+      // Wait a brief moment to ensure the DOM has updated
+      setTimeout(() => {
+        // Re-center viewport if needed, or fit to view
+        fitToView(); // Fit to view after dimension change
+        canvas.renderAll();
+
+        // Apply another fit after a longer delay to ensure everything is settled
+        setTimeout(() => {
+          fitToView();
+          // Force a re-render of all objects
+          if (canvas) {
+            const objects = canvas.getObjects();
+            objects.forEach((obj: any) => {
+              if (obj) obj.dirty = true;
+            });
+            canvas.renderAll();
+          }
+        }, 300);
+      }, 50);
+
       // Don't save canvas on dimension change itself, only on content change
     } else {
       console.warn(`updateDimensions called but canvas not ready. W: ${newWidth}, H: ${newHeight}`);
@@ -844,6 +1177,28 @@
 
 </script>
 
+<style>
+  /* Canvas container styles */
+  .canvas-wrapper {
+    position: relative;
+    overflow: hidden;
+    transition: height 0.2s ease;
+  }
+
+  .canvas-element-wrapper {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Ensure canvas is visible with a subtle border */
+  canvas {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+    background-color: white;
+  }
+</style>
+
 <div class="space-y-4">
   {#if !hideControls}
   <div class="flex flex-wrap gap-2 mb-4">
@@ -887,32 +1242,83 @@
     <Button variant="outline" size="icon" onclick={zoomOut} title="Zoom Out" disabled={!fabricLoaded || zoomLevel <= MIN_ZOOM}>
       <ZoomOut class="h-4 w-4" />
     </Button>
-    <Slider
-      min={MIN_ZOOM}
-      max={MAX_ZOOM}
-      step={ZOOM_STEP / 10} 
-      value={[zoomLevel]}
-      onValueChange={(value) => setZoom(value[0])}
-      class="w-32"
-      disabled={!fabricLoaded}
-    />
+    <div class="w-32">
+      <input
+        type="range"
+        min={MIN_ZOOM}
+        max={MAX_ZOOM}
+        step={ZOOM_STEP / 10}
+        value={zoomLevel}
+        oninput={(e) => setZoom(parseFloat(e.currentTarget.value))}
+        disabled={!fabricLoaded}
+        class="w-full h-2 bg-secondary rounded-full"
+      />
+    </div>
     <Button variant="outline" size="icon" onclick={zoomIn} title="Zoom In" disabled={!fabricLoaded || zoomLevel >= MAX_ZOOM}>
       <ZoomIn class="h-4 w-4" />
     </Button>
     <Button variant="outline" size="icon" onclick={resetZoom} title="Reset Zoom (100%)" disabled={!fabricLoaded}>
       <RefreshCw class="h-4 w-4" />
     </Button>
-     <Button variant="outline" size="icon" onclick={fitToView} title="Fit to View" disabled={!fabricLoaded || !canvasContainer}>
+    <Button variant="outline" size="icon" onclick={fitToView} title="Fit to View" disabled={!fabricLoaded || !canvasContainer}>
       <Maximize class="h-4 w-4" />
+    </Button>
+    <Button variant="outline" size="icon" onclick={centerAllObjects} title="Center All Objects" disabled={!fabricLoaded}>
+      <Target class="h-4 w-4" />
+    </Button>
+    <Button
+      variant="outline"
+      size="icon"
+      onclick={() => {
+        if (canvas && fabricLoaded) {
+          // First normalize all objects
+          normalizeObjects();
+          // Then center them
+          centerAllObjects();
+          // Finally fit to view
+          fitToView();
+          console.log('Canvas reset: normalized, centered, and fitted to view');
+        }
+      }}
+      title="Reset Canvas View"
+      disabled={!fabricLoaded}
+    >
+      <RotateCcw class="h-4 w-4" />
+    </Button>
+    <Button
+      variant="outline"
+      onclick={() => {
+        if (canvas && fabricLoaded) {
+          // Force re-render all objects
+          const objects = canvas.getObjects();
+          objects.forEach((obj: any) => {
+            if (obj) obj.dirty = true;
+          });
+          canvas.renderAll();
+          console.log('Forced re-render of all canvas objects');
+          // Log detailed canvas state
+          logCanvasState();
+        }
+      }}
+      title="Force Refresh"
+      disabled={!fabricLoaded}
+    >
+      Refresh
     </Button>
     <span class="text-sm ml-2">Zoom: {Math.round(zoomLevel * 100)}%</span>
     <span class="text-sm ml-auto">Canvas: {canvasWidth} x {canvasHeight} px</span>
   </div>
   <!-- End Zoom Controls -->
 
-  <!-- Canvas Container -->
-  <div bind:this={canvasContainer} class="border rounded-md overflow-auto relative bg-gray-200 dark:bg-gray-700" style="height: 60vh; min-height: 500px;">
-    <canvas id="canvas"></canvas>
+  <!-- Canvas Container Wrapper -->
+  <div class="canvas-wrapper border rounded-md relative bg-gray-200 dark:bg-gray-700" style="height: 75vh; min-height: 650px;">
+    <!-- Fixed Inner Container (no scrolling) -->
+    <div bind:this={canvasContainer} class="relative flex items-center justify-center" style="width: 100%; height: 100%; padding: 20px;">
+      <!-- Canvas Element -->
+      <div class="canvas-element-wrapper">
+        <canvas id="canvas"></canvas>
+      </div>
+    </div>
     {#if !fabricLoaded}
       <div class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50">
         <p>Loading canvas...</p>
