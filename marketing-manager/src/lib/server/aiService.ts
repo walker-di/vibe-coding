@@ -214,7 +214,7 @@ export async function generateNarration(
 export async function generateImage(
   prompt: string,
   clipId: number,
-  aspectRatio: '1:1' | '16:9' = '1:1'
+  aspectRatio: '1:1' | '16:9' | '9:16' = '1:1' // Added '9:16' to the allowed types
 ): Promise<string | null> {
   if (!replicate) {
     console.error('Replicate client not configured.');
