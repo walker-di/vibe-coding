@@ -478,6 +478,8 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 					canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
 					// Mark canvas as changed
 					canvasHasChanged = true;
+					// Get the updated canvas JSON and update the state
+					canvasDataJson = canvasEditorRef.getCurrentCanvasJson();
 					toast.success('Background image removed');
 				}
 			}
@@ -506,6 +508,8 @@ let finalResolution = $derived(resolutionSelection === 'Custom' ? customResoluti
 						canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
 						// Mark canvas as changed
 						canvasHasChanged = true;
+						// Get the updated canvas JSON and update the state
+						canvasDataJson = canvasEditorRef.getCurrentCanvasJson();
 						toast.success('Background image set');
 					}, { crossOrigin: 'anonymous' });
 				}
