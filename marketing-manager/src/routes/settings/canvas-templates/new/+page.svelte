@@ -9,6 +9,7 @@
 	import { toast } from 'svelte-sonner';
 	import { canvasAspectRatios, commonResolutions } from '$lib/constants'; // Import constants
 	import type { CanvasAspectRatio, CommonResolution } from '$lib/constants'; // Import types
+	import { Square, Circle, Type, Image as ImageIcon, Trash2, Layers } from 'lucide-svelte';
 
 	let name = $state('');
 	let description = $state('');
@@ -321,8 +322,40 @@ function handleCanvasChange(json: string) {
 
 		<div>
 			<Label>Canvas Content</Label>
-			<div class="border rounded-md p-1">
-				<CanvasEditor bind:this={canvasEditorRef} onCanvasChange={handleCanvasChange} />
+			<div class="border rounded-md p-4">
+				<!-- Canvas Controls -->
+				{#if canvasEditorRef}
+					<div class="flex flex-wrap gap-2 mb-4">
+						<Button variant="outline" onclick={() => canvasEditorRef?.addRectangle()} title="Add Rectangle">
+							<Square class="h-4 w-4 mr-2" /> Rectangle
+						</Button>
+						<Button variant="outline" onclick={() => canvasEditorRef?.addCircle()} title="Add Circle">
+							<Circle class="h-4 w-4 mr-2" /> Circle
+						</Button>
+						<Button variant="outline" onclick={() => canvasEditorRef?.addText()} title="Add Text">
+							<Type class="h-4 w-4 mr-2" /> Text
+						</Button>
+						<Button variant="outline" onclick={() => canvasEditorRef?.addImage()} title="Add Image">
+							<ImageIcon class="h-4 w-4 mr-2" /> Image
+						</Button>
+						<Button variant="outline" onclick={() => canvasEditorRef?.deleteSelected()} title="Delete Selected">
+							<Trash2 class="h-4 w-4 mr-2" /> Delete
+						</Button>
+						<Button variant="outline" onclick={() => canvasEditorRef?.clearCanvas()} title="Clear Canvas">
+							Clear All
+						</Button>
+						<Button variant="outline" onclick={() => canvasEditorRef?.showLayerOrderModal()} title="Manage Layers">
+							<Layers class="h-4 w-4 mr-2" /> Layers
+						</Button>
+					</div>
+				{/if}
+
+				<!-- Canvas Editor -->
+				<CanvasEditor
+					bind:this={canvasEditorRef}
+					onCanvasChange={handleCanvasChange}
+					hideControls
+				/>
 			</div>
 			<p class="text-sm text-gray-500 mt-1">Design the template content above.</p>
 		</div>

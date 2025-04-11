@@ -131,6 +131,18 @@
 
                   // Load the sanitized JSON
                   canvas.loadFromJSON(jsonObj, () => {
+                    // After loading, ensure all objects have their names properly set
+                    const objects = canvas.getObjects();
+                    objects.forEach((obj: any, index: number) => {
+                      // If the object doesn't have a name from the JSON, set a default one
+                      if (!obj.name) {
+                        obj.name = `Layer ${index + 1}`;
+                        console.log(`Set default name for object ${index}: ${obj.name}`);
+                      } else {
+                        console.log(`Loaded object ${index} with name: ${obj.name}`);
+                      }
+                    });
+
                     canvas.renderAll();
                     resolve();
                   }, (err: any) => {
@@ -252,8 +264,17 @@
   function saveCanvas() {
     if (canvas) {
       try {
-        // Get the canvas JSON
-        const canvasJson = canvas.toJSON();
+        // Ensure all objects have their names set before saving
+        const objects = canvas.getObjects();
+        objects.forEach((obj: any, index: number) => {
+          // If the object doesn't have a name, set a default one
+          if (!obj.name) {
+            obj.name = `Layer ${index + 1}`;
+          }
+        });
+
+        // Get the canvas JSON with additional properties
+        const canvasJson = canvas.toJSON(['name', 'id']); // Include custom properties in serialization
 
         // Ensure the objects array exists
         if (!canvasJson.objects) {
@@ -266,6 +287,9 @@
           const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
           return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
         });
+
+        // Log the objects being saved to verify names are included
+        console.log('Saving canvas with objects:', canvasJson.objects);
 
         // Stringify the sanitized JSON
         const json = JSON.stringify(canvasJson);
@@ -429,13 +453,114 @@
   }
 
   // Export these methods so they can be called from SceneEditor
-  export function addRectangle() { if (!canvas) return; const wf = window as any; const r = new wf.fabric.Rect({left: 100, top: 100, fill: '#3498db', width: 100, height: 100, strokeWidth: 2, stroke: '#2980b9'}); canvas.add(r); canvas.setActiveObject(r); }
-  export function addCircle() { if (!canvas) return; const wf = window as any; const c = new wf.fabric.Circle({left: 100, top: 100, fill: '#e74c3c', radius: 50, strokeWidth: 2, stroke: '#c0392b'}); canvas.add(c); canvas.setActiveObject(c); }
-  export function showLayerOrderModal() { if (!canvas || !fabricLoaded) return; try { console.log('Opening layer order modal from external call'); openLayerOrderModal(); } catch (error) { console.error('Error opening layer order modal:', error); } }
-  export function addText() { if (!canvas) return; const wf = window as any; const t = new wf.fabric.Textbox('Text', {left: 100, top: 100, fill: '#2c3e50', fontSize: 24, width: 200}); canvas.add(t); canvas.setActiveObject(t); }
-  export function addImage() { if (!canvas) return; const url = prompt('Enter image URL:'); if (!url) return; const wf = window as any; wf.fabric.Image.fromURL(url, (img: any) => { const maxW = canvas.width * 0.8; const maxH = canvas.height * 0.8; if (img.width > maxW || img.height > maxH) { const scale = Math.min(maxW / img.width, maxH / img.height); img.scale(scale); } canvas.add(img); canvas.setActiveObject(img); saveCanvas(); }, { crossOrigin: 'anonymous' }); }
-  export function deleteSelected() { if (!canvas || !selectedObject) return; canvas.remove(selectedObject); selectedObject = null; }
-  export function clearCanvas() { if (!canvas) return; if (confirm('Are you sure?')) { canvas.clear(); canvas.backgroundColor = '#f0f0f0'; canvas.renderAll(); saveCanvas(); } }
+  export function addRectangle() {
+    if (!canvas) return;
+    const wf = window as any;
+    // Get the current number of objects to create a unique name
+    const objectCount = canvas.getObjects().length;
+    const r = new wf.fabric.Rect({
+      left: 100,
+      top: 100,
+      fill: '#3498db',
+      width: 100,
+      height: 100,
+      strokeWidth: 2,
+      stroke: '#2980b9',
+      name: `Rectangle ${objectCount + 1}` // Add a name
+    });
+    canvas.add(r);
+    canvas.setActiveObject(r);
+    // Save canvas after adding object
+    saveCanvas();
+  }
+
+  export function addCircle() {
+    if (!canvas) return;
+    const wf = window as any;
+    // Get the current number of objects to create a unique name
+    const objectCount = canvas.getObjects().length;
+    const c = new wf.fabric.Circle({
+      left: 100,
+      top: 100,
+      fill: '#e74c3c',
+      radius: 50,
+      strokeWidth: 2,
+      stroke: '#c0392b',
+      name: `Circle ${objectCount + 1}` // Add a name
+    });
+    canvas.add(c);
+    canvas.setActiveObject(c);
+    // Save canvas after adding object
+    saveCanvas();
+  }
+
+  export function showLayerOrderModal() {
+    if (!canvas || !fabricLoaded) return;
+    try {
+      console.log('Opening layer order modal from external call');
+      openLayerOrderModal();
+    } catch (error) {
+      console.error('Error opening layer order modal:', error);
+    }
+  }
+  export function addText() {
+    if (!canvas) return;
+    const wf = window as any;
+    // Get the current number of objects to create a unique name
+    const objectCount = canvas.getObjects().length;
+    const t = new wf.fabric.Textbox('Text', {
+      left: 100,
+      top: 100,
+      fill: '#2c3e50',
+      fontSize: 24,
+      width: 200,
+      name: `Text ${objectCount + 1}` // Add a name
+    });
+    canvas.add(t);
+    canvas.setActiveObject(t);
+    // Save canvas after adding object
+    saveCanvas();
+  }
+
+  export function addImage() {
+    if (!canvas) return;
+    const url = prompt('Enter image URL:');
+    if (!url) return;
+    const wf = window as any;
+    // Get the current number of objects to create a unique name
+    const objectCount = canvas.getObjects().length;
+    wf.fabric.Image.fromURL(url, (img: any) => {
+      const maxW = canvas.width * 0.8;
+      const maxH = canvas.height * 0.8;
+      if (img.width > maxW || img.height > maxH) {
+        const scale = Math.min(maxW / img.width, maxH / img.height);
+        img.scale(scale);
+      }
+      // Set a name for the image
+      img.name = `Image ${objectCount + 1}`;
+      canvas.add(img);
+      canvas.setActiveObject(img);
+      saveCanvas();
+    }, { crossOrigin: 'anonymous' });
+  }
+
+  export function deleteSelected() {
+    if (!canvas || !selectedObject) return;
+    canvas.remove(selectedObject);
+    selectedObject = null;
+    // Save canvas after removing object
+    saveCanvas();
+  }
+
+  export function clearCanvas() {
+    if (!canvas) return;
+    if (confirm('Are you sure?')) {
+      canvas.clear();
+      canvas.backgroundColor = '#f0f0f0';
+      canvas.renderAll();
+      saveCanvas();
+    }
+  }
 
   // --- Background Functions ---
   export function setBackgroundColor() {
@@ -519,8 +644,18 @@
   export function getCurrentCanvasJson(): string {
     if (canvas && fabricLoaded) {
       try {
-        // Get the canvas JSON
-        const canvasJson = canvas.toJSON();
+        // Ensure all objects have their names set before saving
+        const objects = canvas.getObjects();
+        objects.forEach((obj: any, index: number) => {
+          // If the object doesn't have a name, set a default one
+          if (!obj.name) {
+            obj.name = `Layer ${index + 1}`;
+          }
+        });
+
+        // Get the canvas JSON with additional properties
+        const canvasJson = canvas.toJSON(['name', 'id']); // Include custom properties in serialization
+
         // Ensure the objects array exists
         if (!canvasJson.objects) {
           canvasJson.objects = [];
@@ -530,6 +665,10 @@
           const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
           return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
         });
+
+        // Log the objects being saved to verify names are included
+        console.log('Getting current canvas JSON with objects:', canvasJson.objects);
+
         return JSON.stringify(canvasJson);
       } catch (error) {
         console.error('Error getting current canvas JSON:', error);
