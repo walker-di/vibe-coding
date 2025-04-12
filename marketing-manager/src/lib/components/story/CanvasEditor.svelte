@@ -50,42 +50,19 @@
 
   // Getter for selectedObject to be used from outside
 
-  // Track the last loaded canvas data to prevent redundant loads
-  let lastLoadedCanvasData = $state<string | null>(null);
   // Flag to temporarily disable canvas events during loading
   let isLoadingCanvas = $state(false);
 
   // --- Method to load canvas data (no transition) ---
   export async function loadCanvasData(canvasJson: string | null) {
-    // Skip if the canvas data is the same as what's already loaded
-    // Use a more robust comparison by normalizing the JSON
-    if (canvasJson && lastLoadedCanvasData) {
-      try {
-        // Parse and re-stringify both to normalize format
-        const normalizedNew = JSON.stringify(JSON.parse(canvasJson));
-        const normalizedLast = JSON.stringify(JSON.parse(lastLoadedCanvasData));
+    console.log('loadCanvasData called with data length:', canvasJson?.length || 0);
 
-        if (normalizedNew === normalizedLast) {
-          console.log('Skipping loadCanvasData - same data already loaded (normalized comparison)');
-          return;
-        }
-      } catch (e) {
-        // If parsing fails, fall back to direct comparison
-        if (canvasJson === lastLoadedCanvasData) {
-          console.log('Skipping loadCanvasData - same data already loaded (direct comparison)');
-          return;
-        }
-      }
-    } else if (canvasJson === lastLoadedCanvasData) {
-      console.log('Skipping loadCanvasData - same data already loaded (direct comparison)');
-      return;
-    }
+    // Always load the canvas data, even if it's the same as what's already loaded
+    // This ensures the canvas is properly updated when switching between clips
 
     // Handle undefined or null canvas data
     if (!canvasJson) {
       console.log('Canvas data is null or undefined, loading empty canvas');
-      // Still update lastLoadedCanvasData to prevent reloading
-      lastLoadedCanvasData = canvasJson;
 
       // If canvas is ready, clear it and set default background
       if (canvas && fabricLoaded) {
@@ -113,14 +90,12 @@
       return;
     }
 
-    // Update the last loaded canvas data
-    lastLoadedCanvasData = canvasJson;
-
     if (canvas && fabricLoaded) {
       console.log('Loading canvas data');
 
       // Set loading flag to prevent event handling during load
       isLoadingCanvas = true;
+      console.log('[DEBUG] isLoadingCanvas set to true');
 
       try {
         if (canvasJson) {
@@ -416,7 +391,7 @@
           canvas.renderAll();
         }
       } catch (error) {
-        console.error('Error in loadCanvasData during transition:', error);
+        console.error('Error in loadCanvasData:', error);
         // Create a blank canvas if loading fails
         try {
           canvas.clear();
@@ -427,8 +402,27 @@
         }
       } finally {
         console.log('Canvas data loaded');
-        // Reset loading flag
-        isLoadingCanvas = false;
+
+        // Force multiple renders to ensure everything is properly displayed
+        if (canvas) {
+          // Immediate render
+          canvas.renderAll();
+
+          // Delayed render after a short delay
+          setTimeout(() => {
+            if (canvas) {
+              canvas.renderAll();
+              console.log('Delayed canvas render completed');
+
+              // Reset loading flag after rendering is complete
+              isLoadingCanvas = false;
+              console.log('isLoadingCanvas set to false');
+            }
+          }, 50);
+        } else {
+          // Reset loading flag if canvas is not available
+          isLoadingCanvas = false;
+        }
       }
     } else {
        console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
@@ -587,6 +581,9 @@
         // Skip if the object is the canvas border
         if (e.target.name === 'Canvas Border') return;
 
+        // Ensure isZooming is false during object movement
+        isZooming = false;
+
         const obj = e.target;
         const objBounds = obj.getBoundingRect();
 
@@ -603,6 +600,26 @@
         if (objBounds.top + objBounds.height > canvas.height) {
           obj.top = canvas.height - objBounds.height + (obj.top - objBounds.top) - 1;
         }
+      });
+
+      // Add object moved event to save canvas after movement is complete
+      canvas.on('object:moved', (e: any) => {
+        if (!e.target) return;
+
+        // Skip if the object is the canvas border
+        if (e.target.name === 'Canvas Border') return;
+
+        // Skip if we're currently loading canvas data
+        if (isLoadingCanvas) {
+          console.log('Skipping object:moved event during canvas loading');
+          return;
+        }
+
+        // Ensure isZooming is false after object movement
+        isZooming = false;
+
+        // Save the canvas after movement is complete
+        saveCanvas();
       });
 
       // Add mouse wheel zoom listener
@@ -1448,8 +1465,9 @@
       return;
     }
 
-    // Skip saving if we're currently zooming
-    if (isZooming) {
+    // Skip saving if we're currently zooming - but only if the save is triggered by a zoom event
+    // This check was causing issues with element movement not being saved
+    if (isZooming && !canvas.getActiveObject()) {
       console.log('Skipping saveCanvas during zoom operation');
       return;
     }
@@ -1459,6 +1477,8 @@
       console.log('Already saving, skipping recursive call');
       return;
     }
+
+    console.log('Starting saveCanvas operation');
 
     try {
       isSaving = true;
@@ -1522,12 +1542,15 @@
       });
 
       // Log the objects being saved to verify names are included
-      console.log('Saving canvas with objects:', canvasJson.objects);
+      console.log('Saving canvas with objects:', canvasJson.objects.length);
 
       // Stringify the sanitized JSON
       const json = JSON.stringify(canvasJson);
-      console.log('Canvas changed, saving state');
+      console.log('Canvas changed, saving state with JSON length:', json.length);
+
+      // Call onCanvasChange directly without setTimeout to ensure immediate update
       onCanvasChange(json);
+      console.log('onCanvasChange called with canvas data');
 
       // Add the border back if it was removed
       if (hadBorder) {
@@ -2250,7 +2273,7 @@
         });
 
         // Get the canvas JSON with additional properties
-        const canvasJson = canvas.toJSON(['name', 'id']); // Include custom properties in serialization
+        const canvasJson = canvas.toJSON(['name', 'id', 'selectable', 'evented', 'lockMovementX', 'lockMovementY']); // Include custom properties in serialization
 
         // Ensure the objects array exists
         if (!canvasJson.objects) {
@@ -2260,7 +2283,7 @@
         canvasJson.objects = canvasJson.objects.filter((obj: any) => {
           // Filter out Canvas Border objects
           if (obj && obj.name === 'Canvas Border') {
-            console.log('Filtering out Canvas Border object from JSON');
+            console.log('[DEBUG] Filtering out Canvas Border object from JSON');
             return false;
           }
 
@@ -2270,15 +2293,19 @@
         });
 
         // Log the objects being saved to verify names are included
-        console.log('Getting current canvas JSON with objects:', canvasJson.objects);
+        console.log('[DEBUG] Getting current canvas JSON with objects:', canvasJson.objects);
 
-        return JSON.stringify(canvasJson);
+        // Stringify the JSON
+        const jsonString = JSON.stringify(canvasJson);
+        console.log('[DEBUG] Current canvas JSON length:', jsonString.length);
+
+        return jsonString;
       } catch (error) {
-        console.error('Error getting current canvas JSON:', error);
+        console.error('[DEBUG] Error getting current canvas JSON:', error);
         return '{}'; // Return empty JSON on error
       }
     }
-    console.warn('getCurrentCanvasJson called but canvas is not ready.');
+    console.warn('[DEBUG] getCurrentCanvasJson called but canvas is not ready.');
     return '{}'; // Return empty JSON if not ready
   }
   // --- End function ---

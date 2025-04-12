@@ -902,37 +902,29 @@
 
   // Effect to call loadCanvasData when selectedClip changes OR when canvas becomes ready.
    $effect(() => {
-     // When selectedClip changes, load its canvas data if it differs from the current editor state
-     // Removed isLoadingCanvas check here, effect should run based on clip/ready state
+     // When selectedClip changes, load its canvas data
      if (selectedClip && canvasEditorInstance && canvasIsReady) {
        const canvasToLoad = selectedClip.canvas || '{}'; // Default to empty JSON string if null/undefined
-       const currentEditorJson = canvasEditorInstance.getCurrentCanvasJson();
 
-       // Only load if the selected clip's canvas data is different from the current editor state
-       if (canvasToLoad !== currentEditorJson) {
-         console.log('Canvas data differs, loading canvas for clip:', selectedClip.id);
-         // No need to set isLoadingCanvas here anymore
+       console.log('Effect triggered - loading canvas for clip:', selectedClip.id);
+       console.log('Canvas data length to load:', canvasToLoad.length);
 
-         // Load canvas data
-         try {
-           canvasEditorInstance.loadCanvasData(canvasToLoad); // Pass the string directly
-         } catch (error) {
-            console.error('Error loading canvas data:', error);
-         }
-         // No finally block needed here for isLoadingCanvas
-       } else {
-         console.log('Skipping canvas load - selected clip data matches current editor state.');
+       // Always load the canvas data to ensure it's properly displayed
+       try {
+         // Load canvas data directly
+         canvasEditorInstance.loadCanvasData(canvasToLoad);
+         console.log('Canvas data load initiated for clip:', selectedClip.id);
+
+         // Force a refresh after loading
+         setTimeout(() => {
+           forceSceneRefresh++;
+           console.log('Forced scene refresh after canvas load');
+         }, 100);
+       } catch (error) {
+         console.error('Error loading canvas data:', error);
        }
      } else if (!selectedClip) {
        console.log('No clip selected, canvas load skipped.');
-       // Optionally clear canvas if no clip is selected
-       // if (canvasEditorInstance && canvasIsReady && !isLoadingCanvas) {
-       //   const currentEditorJson = canvasEditorInstance.getCurrentCanvasJson();
-       //   if (currentEditorJson !== '{}') {
-       //      console.log('Clearing canvas as no clip is selected.');
-       //      canvasEditorInstance.clearCanvas(); // Be careful with this, might trigger save
-       //   }
-       // }
      }
    });
 
@@ -1060,26 +1052,27 @@
     // IMPORTANT: First check if we're in AI fill processing mode
     // This is the most critical check to prevent infinite loops
     if (isProcessingAiFill) {
-      console.log('Debounced: Skipping save during AI fill processing.');
+      console.log('Skipping save during AI fill processing.');
       return;
     }
 
-    console.log('Debounced: Processing canvas change');
+    console.log('Processing canvas change');
 
     // Check again if clip is selected, as it might have changed during the debounce period
     if (!selectedClip) {
-      console.log('Debounced: No clip selected, skipping save.');
+      console.log('No clip selected, skipping save.');
       return;
     }
 
     // Check if data actually changed compared to the current selected clip state
     // This prevents saving if the user rapidly undid changes during the debounce period
     if (selectedClip.canvas === canvasJson) {
-        console.log('Debounced: Canvas data matches current clip state, skipping save.');
+        console.log('Canvas data matches current clip state, skipping save.');
         return;
     }
 
-    console.log('Debounced: Canvas changed, updating clip data');
+    console.log('Canvas changed, updating clip data');
+    console.log('Selected clip ID:', selectedClip.id);
 
     // --- Proceed with saving ---
     // Use a temporary variable for the selected clip ID in case it changes
@@ -1217,7 +1210,8 @@
 
                         // Force a refresh of the SceneList to show the updated preview
                         forceSceneRefresh++;
-                        console.log('Debounced: Clip canvas and preview updated successfully.');
+                        console.log('[DEBUG] Debounced: Clip canvas and preview updated successfully.');
+                        console.log('[DEBUG] Updated clip state:', finalClipState.id);
                       }
                     }
                   } catch (updateError) {
@@ -1253,6 +1247,10 @@
     }
 
     console.log('Canvas change detected, invoking debounced handler...');
+    console.log('Selected clip ID:', selectedClip?.id);
+    console.log('Canvas JSON length:', canvasJson?.length || 0);
+
+    // Call the debounced handler to process the change
     processCanvasChange(canvasJson);
   }
 
