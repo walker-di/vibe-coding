@@ -2207,44 +2207,8 @@
   // --- End Method ---
 
 
-  // Helper function to create a temporary canvas for export
-  // This is a simpler approach that doesn't rely on cloning
-  function prepareCanvasForExport(): void {
-    if (!canvas || !fabricLoaded) return;
-
-    try {
-      const wf = window as any;
-      if (!wf.fabric) return;
-
-      // First, constrain all objects to be within canvas boundaries
-      constrainObjectsToCanvas();
-
-      // Create a clipPath to constrain all objects to the canvas dimensions
-      const clipPath = new wf.fabric.Rect({
-        left: 0,
-        top: 0,
-        width: canvas.width,
-        height: canvas.height,
-        absolutePositioned: true
-      });
-
-      // Apply the clipPath to the canvas
-      canvas.clipPath = clipPath;
-
-      // Add a background rectangle that fills the entire canvas
-      // This ensures the exported image fills the entire area
-      const existingBgColor = canvas.backgroundColor;
-      if (!existingBgColor) {
-        // Use a light gray that matches the UI better
-        canvas.setBackgroundColor('#E5E7EB', () => {});
-      }
-
-      // Render the canvas with the clipPath applied
-      canvas.renderAll();
-    } catch (error) {
-      console.error('Error preparing canvas for export:', error);
-    }
-  }
+  // Note: We've simplified the export process to use Fabric's built-in toDataURL method
+  // with specific options, so we no longer need a separate preparation function.
 
 
 
@@ -2274,117 +2238,30 @@
         });
         console.log('Hidden border objects count:', hiddenBorderObjects.length);
 
-        // Prepare the canvas for export (apply clipPath and constrain objects)
-        prepareCanvasForExport();
-        console.log('Canvas prepared for export');
-
         // Reset the viewportTransform to default (no zoom)
-        canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
         console.log('Reset viewport transform to:', canvas.viewportTransform);
 
-        // Use the full canvas dimensions to ensure we capture everything
-        const bounds = { left: 0, top: 0, width: canvas.width, height: canvas.height };
-        console.log('Using bounds for export:', bounds);
+        // Make sure all objects are within the canvas boundaries
+        constrainObjectsToCanvas();
 
-        // IMPORTANT: Instead of using toDataURL with a multiplier, we'll create our own canvas
-        // with the exact dimensions we want and draw the fabric canvas onto it
+        // Force a render to ensure everything is up to date
+        canvas.renderAll();
 
-        // Create a hidden canvas with the exact dimensions of the configured canvas
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        console.log('Created temp canvas with dimensions:', tempCanvas.width, 'x', tempCanvas.height);
+        // Use Fabric's built-in toDataURL method with specific options
+        // This is the most direct way to get an accurate image of the canvas
+        const dataUrl = canvas.toDataURL({
+          format: 'png',
+          quality: 1,
+          multiplier: 1, // Use exact 1:1 pixel mapping
+          left: 0,
+          top: 0,
+          width: canvas.width,
+          height: canvas.height,
+          enableRetinaScaling: false // Disable retina scaling to prevent resolution issues
+        });
 
-        const tempCtx = tempCanvas.getContext('2d');
-        if (!tempCtx) {
-          throw new Error('Could not get 2D context from temporary canvas');
-        }
-
-        // CRITICAL FIX: Instead of using toCanvasElement which might still apply a multiplier,
-        // we'll render directly to our temp canvas using the fabric canvas's context
-        console.log('Rendering canvas directly to temp canvas');
-
-        // First, fill the background with the canvas background color
-        tempCtx.fillStyle = canvas.backgroundColor || '#ffffff';
-        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-        // Now render the fabric canvas content onto our temp canvas
-        // This is a more direct approach that avoids any potential scaling issues
-        const fabricCanvasElement = canvas.lowerCanvasEl;
-
-        // Get the bounding box of all objects on the canvas
-        let objectsBoundingBox = null;
-        const objects = canvas.getObjects().filter((obj: any) => obj.name !== 'Canvas Border');
-
-        if (objects.length > 0) {
-          // Calculate the bounding box of all objects manually
-          // This is a simplified version of fabric's internal _calcObjectsBoundingBox method
-          let minX = Infinity;
-          let minY = Infinity;
-          let maxX = -Infinity;
-          let maxY = -Infinity;
-
-          objects.forEach((obj: any) => {
-            const objBounds = obj.getBoundingRect();
-            minX = Math.min(minX, objBounds.left);
-            minY = Math.min(minY, objBounds.top);
-            maxX = Math.max(maxX, objBounds.left + objBounds.width);
-            maxY = Math.max(maxY, objBounds.top + objBounds.height);
-          });
-
-          objectsBoundingBox = {
-            left: minX,
-            top: minY,
-            width: maxX - minX,
-            height: maxY - minY
-          };
-
-          console.log('Objects bounding box:', objectsBoundingBox);
-
-          // If we have a valid bounding box, use it to determine the content area
-          if (objectsBoundingBox && objectsBoundingBox.width > 0 && objectsBoundingBox.height > 0) {
-            console.log('Using objects bounding box for export');
-
-            // Add some padding around the content
-            const padding = 0; // No padding to fill the entire canvas
-
-            // Calculate the scale to fit the content to the canvas
-            const scaleX = tempCanvas.width / (objectsBoundingBox.width + padding * 2);
-            const scaleY = tempCanvas.height / (objectsBoundingBox.height + padding * 2);
-            const scale = Math.min(scaleX, scaleY);
-
-            console.log('Content scale:', scale);
-
-            // Center the content in the canvas
-            const centerX = tempCanvas.width / 2;
-            const centerY = tempCanvas.height / 2;
-
-            // Draw the content centered and scaled to fit
-            tempCtx.save();
-            tempCtx.translate(centerX, centerY);
-            tempCtx.scale(scale, scale);
-            tempCtx.translate(-objectsBoundingBox.left - objectsBoundingBox.width / 2, -objectsBoundingBox.top - objectsBoundingBox.height / 2);
-
-            // Draw the canvas content
-            tempCtx.drawImage(fabricCanvasElement, 0, 0);
-
-            tempCtx.restore();
-          } else {
-            // Fallback to drawing the entire canvas
-            console.log('Falling back to drawing entire canvas');
-            tempCtx.drawImage(fabricCanvasElement, 0, 0, canvas.width, canvas.height);
-          }
-        } else {
-          // No objects, just draw the entire canvas
-          console.log('No objects found, drawing entire canvas');
-          tempCtx.drawImage(fabricCanvasElement, 0, 0, canvas.width, canvas.height);
-        }
-
-        console.log('Drew fabric canvas onto temp canvas');
-
-        // Get the data URL from our controlled temporary canvas
-        const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
-        console.log('Generated data URL from temp canvas');
+        console.log('Generated data URL directly from fabric canvas');
 
         // Extract image dimensions from data URL by loading it into an Image object
         const img = new Image();
@@ -2402,7 +2279,7 @@
         // Restore original state
         canvas.clipPath = originalClipPath;
         canvas.setBackgroundColor(originalBgColor, () => {});
-        canvas.viewportTransform = originalVT;
+        canvas.setViewportTransform(originalVT);
         console.log('Restored original canvas state');
 
         // Restore visibility of border objects
