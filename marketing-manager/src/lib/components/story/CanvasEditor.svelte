@@ -2223,12 +2223,16 @@
   export function getCanvasImageDataUrl(): string | null {
     if (canvas && fabricLoaded) {
       try {
+        console.log('=== CANVAS EXPORT DEBUG START ===');
+        console.log('Original canvas dimensions:', canvas.width, 'x', canvas.height);
+
         // Store original state
         const originalClipPath = canvas.clipPath;
         const originalBgColor = canvas.backgroundColor;
         const originalObjects = canvas.getObjects();
         const hiddenBorderObjects: any[] = [];
         const originalVT = canvas.viewportTransform ? [...canvas.viewportTransform] : [1, 0, 0, 1, 0, 0];
+        console.log('Original viewport transform:', originalVT);
 
         // Hide any border objects temporarily
         originalObjects.forEach((obj: any) => {
@@ -2239,34 +2243,71 @@
             }
           }
         });
+        console.log('Hidden border objects count:', hiddenBorderObjects.length);
 
         // Prepare the canvas for export (apply clipPath and constrain objects)
         prepareCanvasForExport();
+        console.log('Canvas prepared for export');
 
         // Reset the viewportTransform to default (no zoom)
         canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+        console.log('Reset viewport transform to:', canvas.viewportTransform);
 
-        // For now, let's use the full canvas dimensions to ensure we capture everything
-        // This is the safest approach to ensure all content is visible
-        let bounds = { left: 0, top: 0, width: canvas.width, height: canvas.height };
+        // Use the full canvas dimensions to ensure we capture everything
+        const bounds = { left: 0, top: 0, width: canvas.width, height: canvas.height };
+        console.log('Using bounds for export:', bounds);
 
-        console.log('Using full canvas dimensions for export:', bounds);
+        // IMPORTANT: Instead of using toDataURL with a multiplier, we'll create our own canvas
+        // with the exact dimensions we want and draw the fabric canvas onto it
 
-        // Export as PNG data URL with explicit dimensions and multiplier for higher resolution
-        const dataUrl = canvas.toDataURL({
-          format: 'png',
-          quality: 1.0, // Use highest quality
-          multiplier: 4, // Use a higher multiplier for increased resolution
-          width: bounds.width,
-          height: bounds.height,
-          left: bounds.left,
-          top: bounds.top
-        });
+        // Create a hidden canvas with the exact dimensions of the configured canvas
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        console.log('Created temp canvas with dimensions:', tempCanvas.width, 'x', tempCanvas.height);
+
+        const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) {
+          throw new Error('Could not get 2D context from temporary canvas');
+        }
+
+        // CRITICAL FIX: Instead of using toCanvasElement which might still apply a multiplier,
+        // we'll render directly to our temp canvas using the fabric canvas's context
+        console.log('Rendering canvas directly to temp canvas');
+
+        // First, fill the background with the canvas background color
+        tempCtx.fillStyle = canvas.backgroundColor || '#ffffff';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+        // Now render the fabric canvas content onto our temp canvas
+        // This is a more direct approach that avoids any potential scaling issues
+        const fabricCanvasElement = canvas.lowerCanvasEl;
+        tempCtx.drawImage(fabricCanvasElement, 0, 0, canvas.width, canvas.height);
+
+        console.log('Drew fabric canvas onto temp canvas');
+
+        // Get the data URL from our controlled temporary canvas
+        const dataUrl = tempCanvas.toDataURL('image/png', 1.0);
+        console.log('Generated data URL from temp canvas');
+
+        // Extract image dimensions from data URL by loading it into an Image object
+        const img = new Image();
+        img.src = dataUrl;
+
+        // We need to wait for the image to load to get its dimensions
+        setTimeout(() => {
+          console.log('Image natural dimensions from data URL:', img.naturalWidth, 'x', img.naturalHeight);
+        }, 100);
+
+        // Log the first part of the data URL
+        console.log('Data URL prefix:', dataUrl.substring(0, 100) + '...');
+        console.log('Data URL length:', dataUrl.length);
 
         // Restore original state
         canvas.clipPath = originalClipPath;
         canvas.setBackgroundColor(originalBgColor, () => {});
         canvas.viewportTransform = originalVT;
+        console.log('Restored original canvas state');
 
         // Restore visibility of border objects
         hiddenBorderObjects.forEach((obj: any) => {
@@ -2275,6 +2316,7 @@
 
         // Re-render the canvas
         canvas.renderAll();
+        console.log('=== CANVAS EXPORT DEBUG END ===');
 
         return dataUrl;
       } catch (error) {

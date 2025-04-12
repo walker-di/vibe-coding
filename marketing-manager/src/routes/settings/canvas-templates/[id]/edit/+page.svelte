@@ -214,11 +214,28 @@
 
 		try {
 			// --- Step 1: Check if canvas changed and generate/upload new preview ---
-			if (canvasHasChanged && canvasEditorRef) {
+			console.log('=== TEMPLATE SAVE DEBUG START ===');
+			console.log('Canvas has changed:', canvasHasChanged);
+			console.log('Canvas editor ref exists:', !!canvasEditorRef);
+
+			// Force canvasHasChanged to true to always generate a new preview
+			// This is a temporary fix to ensure we're testing the export resolution
+			canvasHasChanged = true;
+			console.log('Forcing canvas has changed to:', canvasHasChanged);
+
+			if (canvasEditorRef) { // Remove canvasHasChanged check to always generate preview
 				console.log(
 					"[Preview Update] Canvas changed, attempting to generate new preview...",
 				);
+				console.log('Canvas editor ref methods:', Object.keys(canvasEditorRef));
+				console.log('Canvas dimensions:', canvasEditorRef.getCanvasInstance()?.width, 'x', canvasEditorRef.getCanvasInstance()?.height);
+
+				// Call getCanvasImageDataUrl with explicit debug logging
+				console.log('About to call getCanvasImageDataUrl...');
 				const imageDataUrl = canvasEditorRef.getCanvasImageDataUrl();
+				console.log('getCanvasImageDataUrl returned data URL length:', imageDataUrl?.length || 0);
+				console.log('Data URL prefix:', imageDataUrl?.substring(0, 100) + '...' || 'null');
+
 				if (imageDataUrl) {
 					try {
 						console.log(
@@ -228,6 +245,8 @@
 							imageDataUrl,
 							data.template.id,
 						);
+						console.log('Upload response URL:', uploadedUrl);
+
 						if (uploadedUrl) {
 							console.log(
 								"[Preview Update] New preview uploaded successfully:",
@@ -271,6 +290,7 @@
 					"[Preview Update] Canvas changed but editor ref is missing.",
 				);
 			}
+			console.log('=== TEMPLATE SAVE DEBUG END ===');
 
 			// --- Step 2: Update the template record with potentially new preview URL ---
 			console.log(
@@ -404,7 +424,29 @@
 		dataUrl: string,
 		templateId: number,
 	): Promise<string | null> {
+		console.log('=== UPLOAD TEMPLATE PREVIEW DEBUG START ===');
+		console.log('Template ID:', templateId);
+		console.log('Data URL length:', dataUrl?.length || 0);
+		console.log('Data URL prefix:', dataUrl?.substring(0, 100) + '...' || 'null');
+
+		// Create an Image object to check the dimensions of the data URL
+		const img = new Image();
+		img.src = dataUrl;
+
+		// Wait for the image to load to get its dimensions
+		await new Promise<void>((resolve) => {
+			img.onload = () => {
+				console.log('Image dimensions from data URL:', img.naturalWidth, 'x', img.naturalHeight);
+				resolve();
+			};
+			img.onerror = () => {
+				console.error('Failed to load image from data URL');
+				resolve();
+			};
+		});
+
 		try {
+			console.log('Sending POST request to /api/upload/template-preview');
 			const response = await fetch("/api/upload/template-preview", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -413,17 +455,23 @@
 					templateId: templateId,
 				}),
 			});
+			console.log('Response status:', response.status);
+
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
+				console.error('Response error:', errorData);
 				throw new Error(
 					errorData.message ||
 						`Upload failed with status ${response.status}`,
 				);
 			}
 			const result = await response.json();
+			console.log('Response result:', result);
+			console.log('=== UPLOAD TEMPLATE PREVIEW DEBUG END ===');
 			return result.imageUrl;
 		} catch (error: any) {
 			console.error("Error uploading template preview:", error);
+			console.log('=== UPLOAD TEMPLATE PREVIEW DEBUG END (ERROR) ===');
 			// Re-throw to be caught in updateTemplate
 			throw new Error(`Preview Upload Error: ${error.message}`);
 		}
