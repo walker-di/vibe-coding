@@ -2065,6 +2065,8 @@
     }
   }
 
+
+
   // --- Function to get canvas image data ---
   export function getCanvasImageDataUrl(): string | null {
     if (canvas && fabricLoaded) {
@@ -2074,6 +2076,7 @@
         const originalBgColor = canvas.backgroundColor;
         const originalObjects = canvas.getObjects();
         const hiddenBorderObjects: any[] = [];
+        const originalVT = canvas.viewportTransform ? [...canvas.viewportTransform] : [1, 0, 0, 1, 0, 0];
 
         // Hide any border objects temporarily
         originalObjects.forEach((obj: any) => {
@@ -2088,20 +2091,30 @@
         // Prepare the canvas for export (apply clipPath and constrain objects)
         prepareCanvasForExport();
 
+        // Reset the viewportTransform to default (no zoom)
+        canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+
+        // For now, let's use the full canvas dimensions to ensure we capture everything
+        // This is the safest approach to ensure all content is visible
+        let bounds = { left: 0, top: 0, width: canvas.width, height: canvas.height };
+
+        console.log('Using full canvas dimensions for export:', bounds);
+
         // Export as PNG data URL with explicit dimensions and multiplier for higher resolution
         const dataUrl = canvas.toDataURL({
           format: 'png',
           quality: 1.0, // Use highest quality
-          multiplier: 4, // Use a higher multiplier to increase resolution
-          width: canvas.width,
-          height: canvas.height,
-          left: 0,
-          top: 0
+          multiplier: 4, // Use a higher multiplier for increased resolution
+          width: bounds.width,
+          height: bounds.height,
+          left: bounds.left,
+          top: bounds.top
         });
 
         // Restore original state
         canvas.clipPath = originalClipPath;
         canvas.setBackgroundColor(originalBgColor, () => {});
+        canvas.viewportTransform = originalVT;
 
         // Restore visibility of border objects
         hiddenBorderObjects.forEach((obj: any) => {
