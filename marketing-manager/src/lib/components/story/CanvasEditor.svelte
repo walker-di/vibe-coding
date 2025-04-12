@@ -477,6 +477,18 @@
         console.log('Fabric.js loaded successfully');
         initializeCanvas();
         fabricLoaded = true;
+
+        // Log canvas status after initialization
+        console.log('=== CANVAS STATUS AFTER INITIALIZATION ===');
+        console.log('Canvas initialized:', !!canvas);
+        if (canvas) {
+          console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
+          console.log('Canvas objects count:', canvas.getObjects().length);
+          console.log('Canvas background color:', canvas.backgroundColor);
+          console.log('Canvas viewport transform:', canvas.viewportTransform);
+        }
+        console.log('=== END CANVAS STATUS ===');
+
         onReady?.(); // Signal readiness to the parent
         // Initial load is now fully handled by the parent calling loadCanvasData
       };
@@ -535,6 +547,7 @@
 
   // Initialize canvas
   function initializeCanvas() {
+    console.log('=== INITIALIZING CANVAS ===');
     try {
       const windowWithFabric = window as any;
       if (!windowWithFabric.fabric) {
@@ -542,7 +555,11 @@
         return;
       }
 
+      console.log('Fabric.js found in window object');
+      console.log('Canvas element:', document.getElementById('canvas'));
+
       // Initialize with default dimensions, will be updated by parent if needed
+      console.log('Creating canvas with default dimensions: 800x600');
       canvas = new windowWithFabric.fabric.Canvas('canvas', {
         width: 800,
         height: 600,
@@ -551,7 +568,10 @@
         stateful: true,
         preserveObjectStacking: true // Add this to prevent layer shuffling
       });
-      console.log('Canvas initialized.');
+
+      console.log('Canvas initialized with dimensions:', canvas.width, 'x', canvas.height);
+      console.log('Canvas DOM element:', canvas.lowerCanvasEl);
+      console.log('Canvas DOM element dimensions:', canvas.lowerCanvasEl.width, 'x', canvas.lowerCanvasEl.height);
 
       // Add canvas border/outline that will be visible when zooming out
       addCanvasBorder();
@@ -2100,11 +2120,20 @@
 
   // --- Method to update canvas dimensions ---
   export function updateDimensions(newWidth: number, newHeight: number) {
+    console.log('=== UPDATING CANVAS DIMENSIONS ===');
+    console.log(`Requested dimensions: ${newWidth}x${newHeight}`);
+    console.log(`Current dimensions: ${canvasWidth}x${canvasHeight}`);
+    console.log(`Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
+
     if (canvas && fabricLoaded) {
       console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
 
       // Log current objects for debugging
-      console.log(`Current objects before dimension update: ${canvas.getObjects().length}`);
+      const objects = canvas.getObjects();
+      console.log(`Current objects before dimension update: ${objects.length}`);
+      objects.forEach((obj: any, index: number) => {
+        console.log(`Object ${index}: type=${obj.type}, name=${obj.name}, dimensions=${obj.width}x${obj.height}`);
+      });
 
       // Update dimensions
       canvasWidth = newWidth;
@@ -2282,7 +2311,74 @@
         // Now render the fabric canvas content onto our temp canvas
         // This is a more direct approach that avoids any potential scaling issues
         const fabricCanvasElement = canvas.lowerCanvasEl;
-        tempCtx.drawImage(fabricCanvasElement, 0, 0, canvas.width, canvas.height);
+
+        // Get the bounding box of all objects on the canvas
+        let objectsBoundingBox = null;
+        const objects = canvas.getObjects().filter((obj: any) => obj.name !== 'Canvas Border');
+
+        if (objects.length > 0) {
+          // Calculate the bounding box of all objects manually
+          // This is a simplified version of fabric's internal _calcObjectsBoundingBox method
+          let minX = Infinity;
+          let minY = Infinity;
+          let maxX = -Infinity;
+          let maxY = -Infinity;
+
+          objects.forEach((obj: any) => {
+            const objBounds = obj.getBoundingRect();
+            minX = Math.min(minX, objBounds.left);
+            minY = Math.min(minY, objBounds.top);
+            maxX = Math.max(maxX, objBounds.left + objBounds.width);
+            maxY = Math.max(maxY, objBounds.top + objBounds.height);
+          });
+
+          objectsBoundingBox = {
+            left: minX,
+            top: minY,
+            width: maxX - minX,
+            height: maxY - minY
+          };
+
+          console.log('Objects bounding box:', objectsBoundingBox);
+
+          // If we have a valid bounding box, use it to determine the content area
+          if (objectsBoundingBox && objectsBoundingBox.width > 0 && objectsBoundingBox.height > 0) {
+            console.log('Using objects bounding box for export');
+
+            // Add some padding around the content
+            const padding = 0; // No padding to fill the entire canvas
+
+            // Calculate the scale to fit the content to the canvas
+            const scaleX = tempCanvas.width / (objectsBoundingBox.width + padding * 2);
+            const scaleY = tempCanvas.height / (objectsBoundingBox.height + padding * 2);
+            const scale = Math.min(scaleX, scaleY);
+
+            console.log('Content scale:', scale);
+
+            // Center the content in the canvas
+            const centerX = tempCanvas.width / 2;
+            const centerY = tempCanvas.height / 2;
+
+            // Draw the content centered and scaled to fit
+            tempCtx.save();
+            tempCtx.translate(centerX, centerY);
+            tempCtx.scale(scale, scale);
+            tempCtx.translate(-objectsBoundingBox.left - objectsBoundingBox.width / 2, -objectsBoundingBox.top - objectsBoundingBox.height / 2);
+
+            // Draw the canvas content
+            tempCtx.drawImage(fabricCanvasElement, 0, 0);
+
+            tempCtx.restore();
+          } else {
+            // Fallback to drawing the entire canvas
+            console.log('Falling back to drawing entire canvas');
+            tempCtx.drawImage(fabricCanvasElement, 0, 0, canvas.width, canvas.height);
+          }
+        } else {
+          // No objects, just draw the entire canvas
+          console.log('No objects found, drawing entire canvas');
+          tempCtx.drawImage(fabricCanvasElement, 0, 0, canvas.width, canvas.height);
+        }
 
         console.log('Drew fabric canvas onto temp canvas');
 
