@@ -776,8 +776,8 @@
                     {:else if clip.canvas}
                       <CanvasPreview
                         canvasData={clip.canvas}
-                        width={50}
-                        height={33}
+                        width={100}
+                        height={65}
                       />
                     {:else}
                       <ImageIcon class="h-4 w-4 text-gray-400" />

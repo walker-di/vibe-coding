@@ -4,14 +4,12 @@
 	import { Button } from '$lib/components/ui/button';
 	import { AlertCircle, ArrowLeft } from 'lucide-svelte';
 	// Import types needed for dropdown data
-	import type { campaigns, themes, videoTemplates } from '$lib/server/db/schema';
+	import type { campaigns} from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
 	import CreativeForm from '$lib/components/creatives/CreativeForm.svelte'; // Import the shared form component
 
 	// --- Types ---
 	type Campaign = Pick<InferSelectModel<typeof campaigns>, 'id' | 'name'>;
-	type Theme = Pick<InferSelectModel<typeof themes>, 'id' | 'title'>;
-	type VideoTemplate = Pick<InferSelectModel<typeof videoTemplates>, 'id' | 'name' | 'templateCode' | 'previewUrl'>;
 
 	// --- State ---
 	// Route params
@@ -20,8 +18,7 @@
 
 	// Dropdown Data
 	let campaignsList = $state<Campaign[]>([]);
-	let themesList = $state<Theme[]>([]);
-	let videoTemplatesList = $state<VideoTemplate[]>([]);
+
 
 	// UI State
 	let isLoadingDropdowns = $state(true);
@@ -72,8 +69,6 @@
 			if (!videoTemplatesRes.ok) throw new Error(`Failed to load video templates (${videoTemplatesRes.status})`);
 
 			campaignsList = await campaignsRes.json();
-			themesList = await themesRes.json();
-			videoTemplatesList = await videoTemplatesRes.json();
 
 		} catch (e: any) {
 			console.error("Failed to load dropdown data:", e);
@@ -170,8 +165,6 @@
 		<!-- Use the CreativeForm component -->
 		<CreativeForm
 			{campaignsList}
-			{themesList}
-			{videoTemplatesList}
 			{isLoadingDropdowns}
 			{dropdownError}
 			onSubmit={handleSubmit}

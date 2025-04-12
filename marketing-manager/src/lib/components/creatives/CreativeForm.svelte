@@ -52,6 +52,7 @@
 	let description = $state(initialData?.description || '');
 	let selectedType = $state<CreativeType | ''>(initialData?.type || '');
 	let selectedCampaignId = $state<number | ''>(initialData?.campaignId || '');
+	let selectedThemeId = $state<any>(null);
 	
 
 	// Text Fields

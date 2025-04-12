@@ -2050,6 +2050,14 @@
       // Apply the clipPath to the canvas
       canvas.clipPath = clipPath;
 
+      // Add a background rectangle that fills the entire canvas
+      // This ensures the exported image fills the entire area
+      const existingBgColor = canvas.backgroundColor;
+      if (!existingBgColor) {
+        // Use a light gray that matches the UI better
+        canvas.setBackgroundColor('#E5E7EB', () => {});
+      }
+
       // Render the canvas with the clipPath applied
       canvas.renderAll();
     } catch (error) {
@@ -2061,8 +2069,9 @@
   export function getCanvasImageDataUrl(): string | null {
     if (canvas && fabricLoaded) {
       try {
-        // Store original clipPath and objects visibility state
+        // Store original state
         const originalClipPath = canvas.clipPath;
+        const originalBgColor = canvas.backgroundColor;
         const originalObjects = canvas.getObjects();
         const hiddenBorderObjects: any[] = [];
 
@@ -2090,8 +2099,9 @@
           top: 0
         });
 
-        // Restore original clipPath
+        // Restore original state
         canvas.clipPath = originalClipPath;
+        canvas.setBackgroundColor(originalBgColor, () => {});
 
         // Restore visibility of border objects
         hiddenBorderObjects.forEach((obj: any) => {

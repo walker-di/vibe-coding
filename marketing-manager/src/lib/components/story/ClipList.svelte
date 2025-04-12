@@ -64,7 +64,7 @@
                 loading="lazy"
               />
             {:else if clip.canvas}
-              <CanvasPreview canvasData={clip.canvas} width={100} height={67} />
+              <CanvasPreview canvasData={clip.canvas} width={150} height={100} />
             {:else}
               <ImageIcon class="h-6 w-6 text-gray-400" />
             {/if}
