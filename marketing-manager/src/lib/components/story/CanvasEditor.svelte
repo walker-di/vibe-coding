@@ -33,6 +33,7 @@
   let canvasLayers = $state<Array<{id: string, name: string, type: string, object: any}>>([]);
   let canvasContainer: HTMLDivElement | null = $state(null); // Reference to the container div
   let canvasBorder: any = null; // Reference to the canvas border object
+  let isZooming = $state(false); // Flag to track zoom operations
 
   // Zoom State
   const MIN_ZOOM = 0.1;
@@ -51,12 +52,32 @@
 
   // Track the last loaded canvas data to prevent redundant loads
   let lastLoadedCanvasData = $state<string | null>(null);
+  // Flag to temporarily disable canvas events during loading
+  let isLoadingCanvas = $state(false);
 
   // --- Method to load canvas data (no transition) ---
   export async function loadCanvasData(canvasJson: string | null) {
     // Skip if the canvas data is the same as what's already loaded
-    if (canvasJson === lastLoadedCanvasData) {
-      console.log('Skipping loadCanvasData - same data already loaded');
+    // Use a more robust comparison by normalizing the JSON
+    if (canvasJson && lastLoadedCanvasData) {
+      try {
+        // Parse and re-stringify both to normalize format
+        const normalizedNew = JSON.stringify(JSON.parse(canvasJson));
+        const normalizedLast = JSON.stringify(JSON.parse(lastLoadedCanvasData));
+
+        if (normalizedNew === normalizedLast) {
+          console.log('Skipping loadCanvasData - same data already loaded (normalized comparison)');
+          return;
+        }
+      } catch (e) {
+        // If parsing fails, fall back to direct comparison
+        if (canvasJson === lastLoadedCanvasData) {
+          console.log('Skipping loadCanvasData - same data already loaded (direct comparison)');
+          return;
+        }
+      }
+    } else if (canvasJson === lastLoadedCanvasData) {
+      console.log('Skipping loadCanvasData - same data already loaded (direct comparison)');
       return;
     }
 
@@ -97,6 +118,9 @@
 
     if (canvas && fabricLoaded) {
       console.log('Loading canvas data');
+
+      // Set loading flag to prevent event handling during load
+      isLoadingCanvas = true;
 
       try {
         if (canvasJson) {
@@ -266,22 +290,40 @@
 
                     // Check if any objects have extreme positions
                     let hasExtremePositions = false;
+                    let extremeObjectCount = 0;
+                    const maxExtremeObjects = 3; // Only fix if a reasonable number of objects have issues
+
                     objects.forEach((obj: any) => {
                       if (!obj) return;
 
+                      // Skip Canvas Border objects
+                      if (obj.name === 'Canvas Border') return;
+
                       // Check for extreme positions that would cause display issues
-                      if (obj.left < -canvas.width / 2 || obj.left > canvas.width * 1.5 ||
-                          obj.top < -canvas.height / 2 || obj.top > canvas.height * 1.5) {
+                      // Use more conservative thresholds to avoid false positives
+                      if (obj.left < -canvas.width || obj.left > canvas.width * 2 ||
+                          obj.top < -canvas.height || obj.top > canvas.height * 2) {
                         hasExtremePositions = true;
+                        extremeObjectCount++;
                         console.log(`Object ${obj.name || 'unnamed'} has extreme position: left=${obj.left}, top=${obj.top}`);
+
+                        // Fix this object's position directly instead of resetting everything
+                        obj.set({
+                          left: Math.max(0, Math.min(canvas.width, obj.left)),
+                          top: Math.max(0, Math.min(canvas.height, obj.top))
+                        });
+                        obj.setCoords();
                       }
                     });
 
-                    // If extreme positions are detected, use resetCanvasView to fix everything
-                    if (hasExtremePositions) {
-                      console.log('Extreme positions detected, using resetCanvasView to fix');
+                    // If extreme positions are detected and there are too many to fix individually,
+                    // use resetCanvasView as a last resort
+                    if (hasExtremePositions && extremeObjectCount > maxExtremeObjects) {
+                      console.log('Extreme positions detected, recreating objects with correct positions');
                       // Use setTimeout to ensure the canvas is fully loaded before resetting
                       setTimeout(() => {
+                        // Set loading flag to prevent saving during reset
+                        isLoadingCanvas = true;
                         resetCanvasView();
                       }, 100);
                     } else {
@@ -385,6 +427,8 @@
         }
       } finally {
         console.log('Canvas data loaded');
+        // Reset loading flag
+        isLoadingCanvas = false;
       }
     } else {
        console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
@@ -494,6 +538,12 @@
         // Skip if the object is the canvas border
         if (e.target && e.target.name === 'Canvas Border') return;
 
+        // Skip if we're currently loading canvas data
+        if (isLoadingCanvas) {
+          console.log('Skipping object:modified event during canvas loading');
+          return;
+        }
+
         // First constrain the object to the canvas boundaries
         constrainObjectsToCanvas();
         // Then save the canvas
@@ -503,12 +553,26 @@
       canvas.on('object:added', (e: any) => {
         // Skip if the object is the canvas border
         if (e.target && e.target.name === 'Canvas Border') return;
+
+        // Skip if we're currently loading canvas data
+        if (isLoadingCanvas) {
+          console.log('Skipping object:added event during canvas loading');
+          return;
+        }
+
         saveCanvas();
       });
 
       canvas.on('object:removed', (e: any) => {
         // Skip if the object is the canvas border
         if (e.target && e.target.name === 'Canvas Border') return;
+
+        // Skip if we're currently loading canvas data
+        if (isLoadingCanvas) {
+          console.log('Skipping object:removed event during canvas loading');
+          return;
+        }
+
         saveCanvas();
       });
 
@@ -560,6 +624,10 @@
   // --- Zoom Functions ---
   function setZoom(newZoom: number, point?: { x: number; y: number }) {
     if (!canvas || !fabricLoaded) return;
+
+    // Set the zooming flag to prevent saving during zoom operations
+    isZooming = true;
+
     const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
     zoomLevel = clampedZoom;
 
@@ -598,6 +666,11 @@
     }
 
     canvas.renderAll();
+
+    // Reset the zooming flag after a short delay to ensure all events have been processed
+    setTimeout(() => {
+      isZooming = false;
+    }, 100);
     // Note: We don't save canvas on zoom/pan
   }
 
@@ -618,6 +691,9 @@
 
   function fitToView() {
     if (!canvas || !canvasContainer || !fabricLoaded) return;
+
+    // Set the zooming flag to prevent saving during fit-to-view operation
+    isZooming = true;
 
     // First ensure all objects are normalized and centered
     normalizeObjects();
@@ -1148,8 +1224,12 @@
 
     console.log('Starting complete canvas view reset...');
 
+    // Set the loading flag to prevent saving during reset
+    isLoadingCanvas = true;
+
     // Step 1: Reset zoom to 1
-    setZoom(1);
+    zoomLevel = 1; // Set directly to avoid triggering setZoom which would cause events
+    canvas.setZoom(1);
     console.log('Reset zoom to 1');
 
     // Step 2: Reset pan
@@ -1324,6 +1404,12 @@
 
     // Log the final state
     logCanvasState();
+
+    // Reset the loading flag after a delay to ensure all operations are complete
+    setTimeout(() => {
+      isLoadingCanvas = false;
+      console.log('Canvas reset complete, loading flag cleared');
+    }, 500);
   }
 
   // Debug function to log canvas state
@@ -1355,6 +1441,18 @@
   // Save canvas state
   function saveCanvas() {
     if (!canvas) return;
+
+    // Skip saving if we're currently loading canvas data
+    if (isLoadingCanvas) {
+      console.log('Skipping saveCanvas during canvas loading');
+      return;
+    }
+
+    // Skip saving if we're currently zooming
+    if (isZooming) {
+      console.log('Skipping saveCanvas during zoom operation');
+      return;
+    }
 
     // Prevent recursive calls
     if (isSaving) {

@@ -1057,13 +1057,14 @@
 
   // --- Debounced Canvas Change Processing ---
   const processCanvasChange = debounce(async (canvasJson: string) => {
-    console.log('Debounced: Processing canvas change');
-
-    // Skip saving if we are currently processing an AI fill canvas load
+    // IMPORTANT: First check if we're in AI fill processing mode
+    // This is the most critical check to prevent infinite loops
     if (isProcessingAiFill) {
       console.log('Debounced: Skipping save during AI fill processing.');
       return;
     }
+
+    console.log('Debounced: Processing canvas change');
 
     // Check again if clip is selected, as it might have changed during the debounce period
     if (!selectedClip) {
@@ -1245,6 +1246,12 @@
 
   // Original handler now just calls the debounced version
   function handleCanvasChange(canvasJson: string) {
+    // Double-check the isProcessingAiFill flag here as well for extra safety
+    if (isProcessingAiFill) {
+      console.log('Canvas change detected during AI fill processing, ignoring...');
+      return;
+    }
+
     console.log('Canvas change detected, invoking debounced handler...');
     processCanvasChange(canvasJson);
   }
@@ -1253,9 +1260,13 @@
   async function handleAiFill() {
     if (!selectedClip) return;
 
+    // Set both loading flags before starting the process
     isAiFillLoading = true;
+    isProcessingAiFill = true; // Set this flag early to prevent any canvas changes during the entire process
 
     try {
+      console.log('AI Fill: Starting process, flags set - isAiFillLoading:', isAiFillLoading, 'isProcessingAiFill:', isProcessingAiFill);
+
       const response = await fetch(`/api/clips/${selectedClip.id}/ai-fill`, {
         method: 'POST',
         headers: {
@@ -1273,7 +1284,7 @@
 
       // Update the clip with the new data
       if (result.success && result.data) {
-        isProcessingAiFill = true; // Set flag before loading new canvas
+        console.log('AI Fill: Received successful response with data');
 
         // Update the local state
         // Ensure all required properties have default values if they're null
@@ -1290,20 +1301,34 @@
           voiceName: result.data.voiceName || selectedClip.voiceName || 'pt-BR-FranciscaNeural',
           narrationAudioUrl: result.data.narrationAudioUrl || selectedClip.narrationAudioUrl || null
         };
+
+        // Update the selectedClip state
         selectedClip = updatedClipData;
+        console.log('AI Fill: Updated selectedClip with new data');
 
         // Load the new canvas data into the editor instance
         if (canvasEditorInstance) {
-          console.log('AI Fill: Loading new canvas data...');
-          canvasEditorInstance.loadCanvasData(result.data.canvas);
-          // Wait a moment for the canvas to potentially render before clearing the flag
-          await tick(); // Wait for Svelte's next update cycle
-          setTimeout(() => {
-             isProcessingAiFill = false;
-             console.log('AI Fill: Processing flag cleared.');
-          }, 100); // Add a small delay just in case tick isn't enough
+          try {
+            console.log('AI Fill: Loading new canvas data...');
+            // Load the canvas data
+            await canvasEditorInstance.loadCanvasData(result.data.canvas);
+            console.log('AI Fill: Canvas data loaded successfully');
+
+            // Wait for the next update cycle to ensure the canvas is fully rendered
+            await tick();
+
+            // Add a longer delay to ensure everything is settled before allowing edits
+            setTimeout(() => {
+              console.log('AI Fill: Processing complete, clearing flags');
+              isProcessingAiFill = false;
+            }, 500); // Use a longer delay to be safe
+          } catch (error) {
+            console.error('AI Fill: Error loading canvas data:', error);
+            isProcessingAiFill = false; // Make sure to clear the flag on error
+          }
         } else {
-           isProcessingAiFill = false; // Clear flag if no instance
+          console.warn('AI Fill: No canvas editor instance available');
+          isProcessingAiFill = false; // Clear flag if no instance
         }
 
         // Update the scenes array to reflect the changes
@@ -1333,7 +1358,10 @@
       console.error('Error during AI fill:', error);
       alert(`Failed to AI fill clip: ${error.message}`);
     } finally {
+      // Always clear both flags to prevent UI from getting stuck
       isAiFillLoading = false;
+      isProcessingAiFill = false;
+      console.log('AI Fill: Flags cleared in finally block - isAiFillLoading:', isAiFillLoading, 'isProcessingAiFill:', isProcessingAiFill);
     }
   }
 
