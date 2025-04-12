@@ -347,7 +347,38 @@
                     if (objects && objects.length > 0) {
                       console.log(`Recovered ${objects.length} objects despite loading errors`);
 
-                      // Try to normalize any problematic objects
+                      // Remove any problematic objects that might be causing issues
+                      // Specifically look for objects with extreme positions or invalid properties
+                      const objectsToRemove: any[] = [];
+                      objects.forEach((obj: any) => {
+                        if (!obj) return;
+
+                        // Check for extreme positions
+                        const objBounds = obj.getBoundingRect();
+                        if (objBounds.left < -1000 || objBounds.top < -1000 ||
+                            objBounds.left + objBounds.width > canvas.width + 1000 ||
+                            objBounds.top + objBounds.height > canvas.height + 1000) {
+                          console.log(`Removing object with extreme position: ${obj.name || 'unnamed'}`);
+                          objectsToRemove.push(obj);
+                          return;
+                        }
+
+                        // Check for extreme scale values
+                        if ((obj.scaleX && (obj.scaleX > 10 || obj.scaleX < 0.01)) ||
+                            (obj.scaleY && (obj.scaleY > 10 || obj.scaleY < 0.01))) {
+                          console.log(`Removing object with extreme scale: ${obj.name || 'unnamed'}`);
+                          objectsToRemove.push(obj);
+                          return;
+                        }
+                      });
+
+                      // Remove problematic objects
+                      if (objectsToRemove.length > 0) {
+                        console.log(`Removing ${objectsToRemove.length} problematic objects`);
+                        objectsToRemove.forEach(obj => canvas.remove(obj));
+                      }
+
+                      // Try to normalize any remaining objects
                       const normalized = normalizeObjects();
                       if (normalized) {
                         console.log('Objects were normalized after loading error');

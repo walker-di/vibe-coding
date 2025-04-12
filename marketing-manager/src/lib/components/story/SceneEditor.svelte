@@ -81,6 +81,8 @@
   let isAiFillLoading = $state(false);
   // State to prevent saving during AI fill canvas load
   let isProcessingAiFill = $state(false);
+  // State to prevent reloading during user interactions
+  let isUserInteracting = $state(false);
   // State for modals
   let showAutoCreateModal = $state(false);
   let isImageUploadModalOpen = $state(false);
@@ -904,6 +906,12 @@
    $effect(() => {
      // When selectedClip changes, load its canvas data
      if (selectedClip && canvasEditorInstance && canvasIsReady) {
+       // Skip loading if user is currently interacting with the canvas
+       if (isUserInteracting) {
+         console.log('User is interacting with canvas, skipping automatic load');
+         return;
+       }
+
        const canvasToLoad = selectedClip.canvas || '{}'; // Default to empty JSON string if null/undefined
 
        console.log('Effect triggered - loading canvas for clip:', selectedClip.id);
@@ -1250,8 +1258,17 @@
     console.log('Selected clip ID:', selectedClip?.id);
     console.log('Canvas JSON length:', canvasJson?.length || 0);
 
+    // Set the user interaction flag to prevent reloading during user actions
+    isUserInteracting = true;
+
     // Call the debounced handler to process the change
     processCanvasChange(canvasJson);
+
+    // Clear the user interaction flag after a delay
+    setTimeout(() => {
+      isUserInteracting = false;
+      console.log('User interaction flag cleared');
+    }, 1000); // 1 second delay
   }
 
   // Add function to handle AI fill
