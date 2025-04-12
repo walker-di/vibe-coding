@@ -2026,12 +2026,82 @@
   // --- End Method ---
 
 
+  // Helper function to create a temporary canvas for export
+  // This is a simpler approach that doesn't rely on cloning
+  function prepareCanvasForExport(): void {
+    if (!canvas || !fabricLoaded) return;
+
+    try {
+      const wf = window as any;
+      if (!wf.fabric) return;
+
+      // First, constrain all objects to be within canvas boundaries
+      constrainObjectsToCanvas();
+
+      // Create a clipPath to constrain all objects to the canvas dimensions
+      const clipPath = new wf.fabric.Rect({
+        left: 0,
+        top: 0,
+        width: canvas.width,
+        height: canvas.height,
+        absolutePositioned: true
+      });
+
+      // Apply the clipPath to the canvas
+      canvas.clipPath = clipPath;
+
+      // Render the canvas with the clipPath applied
+      canvas.renderAll();
+    } catch (error) {
+      console.error('Error preparing canvas for export:', error);
+    }
+  }
+
   // --- Function to get canvas image data ---
   export function getCanvasImageDataUrl(): string | null {
     if (canvas && fabricLoaded) {
       try {
-        // Export as PNG data URL
-        return canvas.toDataURL({ format: 'png', quality: 0.8 }); // Adjust quality as needed
+        // Store original clipPath and objects visibility state
+        const originalClipPath = canvas.clipPath;
+        const originalObjects = canvas.getObjects();
+        const hiddenBorderObjects: any[] = [];
+
+        // Hide any border objects temporarily
+        originalObjects.forEach((obj: any) => {
+          if (obj && obj.name === 'Canvas Border') {
+            if (obj.visible !== false) {
+              obj.visible = false;
+              hiddenBorderObjects.push(obj);
+            }
+          }
+        });
+
+        // Prepare the canvas for export (apply clipPath and constrain objects)
+        prepareCanvasForExport();
+
+        // Export as PNG data URL with explicit dimensions and multiplier for higher resolution
+        const dataUrl = canvas.toDataURL({
+          format: 'png',
+          quality: 1.0, // Use highest quality
+          multiplier: 4, // Use a higher multiplier to increase resolution
+          width: canvas.width,
+          height: canvas.height,
+          left: 0,
+          top: 0
+        });
+
+        // Restore original clipPath
+        canvas.clipPath = originalClipPath;
+
+        // Restore visibility of border objects
+        hiddenBorderObjects.forEach((obj: any) => {
+          obj.visible = true;
+        });
+
+        // Re-render the canvas
+        canvas.renderAll();
+
+        return dataUrl;
       } catch (error) {
         console.error('Error generating canvas data URL:', error);
         return null;
