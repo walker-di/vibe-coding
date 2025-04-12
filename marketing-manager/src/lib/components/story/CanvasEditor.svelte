@@ -68,11 +68,22 @@
 
       // If canvas is ready, clear it and set default background
       if (canvas && fabricLoaded) {
+        // Remove existing border
+        if (canvasBorder) {
+          canvas.remove(canvasBorder);
+          canvasBorder = null;
+        }
+
+        // Reset viewport transform to ensure consistent loading
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+
         canvas.clear();
         canvas.backgroundColor = '#f0f0f0';
         canvas.renderAll();
+
         // Ensure canvas is properly sized in the view
         setTimeout(() => {
+          addCanvasBorder();
           fitToView();
           canvas.renderAll();
           console.log('Empty canvas loaded and fitted to view');
@@ -117,6 +128,9 @@
           try {
             // Clear the canvas first to prevent any issues with existing objects
             canvas.clear();
+
+            // Reset viewport transform to ensure consistent loading
+            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
             // Set a default background color
             canvas.backgroundColor = '#f0f0f0';
@@ -286,6 +300,22 @@
                     canvas.renderAll();
                     // Ensure canvas is properly sized in the view after loading
                     setTimeout(() => {
+                      // Temporarily disable event firing to prevent infinite loops
+                      const originalFire = canvas.fire;
+                      canvas.fire = function() {};
+
+                      // Add the border after loading
+                      addCanvasBorder();
+
+                      // Make sure border is on top
+                      if (canvasBorder) {
+                        canvas.bringToFront(canvasBorder);
+                      }
+
+                      // Restore event firing
+                      canvas.fire = originalFire;
+
+                      // Fit to view
                       fitToView();
                       canvas.renderAll();
                       console.log('Canvas data loaded and fitted to view');
@@ -460,12 +490,56 @@
       // Initial load is now fully handled by the parent calling loadCanvasData
 
       // Set up event listeners
-      canvas.on('object:modified', saveCanvas);
-      canvas.on('object:added', saveCanvas);
-      canvas.on('object:removed', saveCanvas);
+      canvas.on('object:modified', (e: any) => {
+        // Skip if the object is the canvas border
+        if (e.target && e.target.name === 'Canvas Border') return;
+
+        // First constrain the object to the canvas boundaries
+        constrainObjectsToCanvas();
+        // Then save the canvas
+        saveCanvas();
+      });
+
+      canvas.on('object:added', (e: any) => {
+        // Skip if the object is the canvas border
+        if (e.target && e.target.name === 'Canvas Border') return;
+        saveCanvas();
+      });
+
+      canvas.on('object:removed', (e: any) => {
+        // Skip if the object is the canvas border
+        if (e.target && e.target.name === 'Canvas Border') return;
+        saveCanvas();
+      });
+
       canvas.on('selection:created', updateSelection);
       canvas.on('selection:updated', updateSelection);
       canvas.on('selection:cleared', clearSelection);
+
+      // Add object moving event to constrain objects during movement
+      canvas.on('object:moving', (e: any) => {
+        if (!e.target) return;
+
+        // Skip if the object is the canvas border
+        if (e.target.name === 'Canvas Border') return;
+
+        const obj = e.target;
+        const objBounds = obj.getBoundingRect();
+
+        // Check boundaries and adjust position if needed
+        if (objBounds.left < 0) {
+          obj.left = obj.left - objBounds.left + 1;
+        }
+        if (objBounds.top < 0) {
+          obj.top = obj.top - objBounds.top + 1;
+        }
+        if (objBounds.left + objBounds.width > canvas.width) {
+          obj.left = canvas.width - objBounds.width + (obj.left - objBounds.left) - 1;
+        }
+        if (objBounds.top + objBounds.height > canvas.height) {
+          obj.top = canvas.height - objBounds.height + (obj.top - objBounds.top) - 1;
+        }
+      });
 
       // Add mouse wheel zoom listener
       canvas.on('mouse:wheel', handleMouseWheel);
@@ -489,6 +563,14 @@
     const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
     zoomLevel = clampedZoom;
 
+    // Store the border temporarily if it exists
+    let hadBorder = false;
+    if (canvasBorder) {
+      hadBorder = true;
+      canvas.remove(canvasBorder);
+      canvasBorder = null;
+    }
+
     if (point) {
       canvas.zoomToPoint(point, clampedZoom);
     } else {
@@ -498,7 +580,6 @@
     }
 
     // Toggle the zoomed-in class on the canvas wrapper based on zoom level
-    // This controls the visibility of the CSS-based outline
     if (canvasContainer) {
       if (clampedZoom > 0.5) {
         canvasContainer.classList.add('zoomed-in');
@@ -507,24 +588,13 @@
       }
     }
 
-    // Update the existing border or create a new one if it doesn't exist
-    if (canvasBorder) {
-      // Update the existing border
-      // Use exact canvas dimensions without scaling factor
-      const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-      canvasBorder.set({
-        width: canvas.width,  // Use exact canvas width
-        height: canvas.height, // Use exact canvas height
-        left: -vpt[4] / clampedZoom, // Adjust position based on current pan
-        top: -vpt[5] / clampedZoom,
-        strokeWidth: 8 / clampedZoom
-      });
-      canvasBorder.setCoords();
-      // Make sure it's at the back
-      canvasBorder.sendToBack();
-    } else {
-      // Create a new border if it doesn't exist
-      addCanvasBorder();
+    // Re-add the border after zoom is applied
+    if (hadBorder) {
+      // Use setTimeout to ensure the zoom is fully applied before adding the border
+      setTimeout(() => {
+        addCanvasBorder();
+        canvas.renderAll();
+      }, 10);
     }
 
     canvas.renderAll();
@@ -553,20 +623,43 @@
     normalizeObjects();
     centerAllObjects();
 
+    // Remove the border temporarily
+    if (canvasBorder) {
+      canvas.remove(canvasBorder);
+      canvasBorder = null;
+    }
+
     // Account for padding in the container
     const containerWidth = canvasContainer.clientWidth - 40; // 20px padding on each side
     const containerHeight = canvasContainer.clientHeight - 40; // 20px padding on each side
-    const scaleX = containerWidth / canvasWidth;
-    const scaleY = containerHeight / canvasHeight;
 
-    // Calculate zoom with a bit more padding for safety
-    const newZoom = Math.min(scaleX, scaleY) * 0.9; // Add more padding (90% of available space)
+    // Calculate the fit ratio similar to the design-editor example
+    let scaleX = containerWidth / canvasWidth;
+    let scaleY = containerHeight / canvasHeight;
 
-    // Apply the zoom
-    setZoom(newZoom);
+    // Use the approach from the FrameHandler.getFitRatio method
+    if (canvasHeight >= canvasWidth) {
+      scaleX = scaleY;
+      if (containerWidth < canvasWidth * scaleX) {
+        scaleX = scaleX * (containerWidth / (canvasWidth * scaleX));
+      }
+    } else {
+      scaleY = scaleX;
+      if (containerHeight < canvasHeight * scaleY) {
+        scaleX = scaleX * (containerHeight / (canvasHeight * scaleX));
+      }
+    }
 
-    // Reset pan to center the canvas
-    canvas.absolutePan({ x: 0, y: 0 });
+    // Apply a slight padding
+    const newZoom = scaleX * 0.95;
+
+    // Reset viewport transform first
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+
+    // Apply the zoom to center
+    const center = canvas.getCenter();
+    const wf = window as any;
+    canvas.zoomToPoint(new wf.fabric.Point(center.left, center.top), newZoom);
 
     // Force a render
     canvas.renderAll();
@@ -580,15 +673,33 @@
       if (obj) obj.dirty = true;
     });
 
-    // Render again after marking objects as dirty
-    canvas.renderAll();
+    // Re-add the border without triggering events
+    setTimeout(() => {
+      // Temporarily disable event firing
+      const originalFire = canvas.fire;
+      canvas.fire = function() {};
+
+      addCanvasBorder();
+      canvas.renderAll();
+
+      // Restore event firing
+      canvas.fire = originalFire;
+    }, 10);
   }
 
   function handleMouseWheel(opt: any) {
     if (!canvas || !fabricLoaded) return;
     const delta = opt.e.deltaY;
     let newZoom = canvas.getZoom();
-    newZoom *= 0.999 ** delta; // Adjust multiplier for sensitivity
+
+    // Use a more consistent zoom calculation
+    if (delta > 0) {
+      newZoom = newZoom * 0.9; // Zoom out
+    } else {
+      newZoom = newZoom * 1.1; // Zoom in
+    }
+
+    // Clamp zoom level
     if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
     if (newZoom < MIN_ZOOM) newZoom = MIN_ZOOM;
 
@@ -902,6 +1013,9 @@
     return false; // No centering was needed or possible
   }
 
+  // Flag to prevent recursive save calls
+  let isSaving = false;
+
   // Function to add a canvas border/outline
   function addCanvasBorder() {
     if (!canvas || !fabricLoaded) return;
@@ -915,47 +1029,47 @@
 
     if (existingBorders.length > 0) {
       console.log(`Found ${existingBorders.length} existing border objects, removing them...`);
+      // Use removeWithoutEvents to prevent triggering object:removed
       existingBorders.forEach((border: any) => {
-        canvas.remove(border);
+        if (border) {
+          // Temporarily disable event firing
+          const originalFire = canvas.fire;
+          canvas.fire = function() {};
+          canvas.remove(border);
+          // Restore event firing
+          canvas.fire = originalFire;
+        }
       });
     }
 
     // Also remove the reference if it exists
     if (canvasBorder) {
+      // Temporarily disable event firing
+      const originalFire = canvas.fire;
+      canvas.fire = function() {};
       canvas.remove(canvasBorder);
+      // Restore event firing
+      canvas.fire = originalFire;
       canvasBorder = null;
     }
 
-    // Get current zoom level and viewport transform
-    const currentZoom = canvas.getZoom() || 1;
-
-    // Calculate position based on current viewport transform
-    // We need to account for the current pan position
-    const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-    const left = -vpt[4] / currentZoom;
-    const top = -vpt[5] / currentZoom;
-
     try {
       // Create a rectangle that matches the canvas dimensions exactly
-      // No scaling factor applied to width/height to ensure it matches canvas dimensions
       canvasBorder = new wf.fabric.Rect({
-        left: left,
-        top: top,
-        width: canvas.width,  // Use exact canvas width
-        height: canvas.height, // Use exact canvas height
+        left: 0,
+        top: 0,
+        width: canvas.width,
+        height: canvas.height,
         fill: 'transparent',
         stroke: '#FF0000', // Bright red border
-        strokeWidth: 8 / currentZoom, // Adjust stroke width based on zoom
-        strokeDashArray: [15, 15], // Dashed line for better visibility
-        selectable: false, // Cannot be selected
-        evented: false, // Does not receive events
+        strokeWidth: 4, // Fixed stroke width
+        strokeDashArray: [10, 10], // Dashed line for better visibility
+        selectable: false,
+        evented: false,
         name: 'Canvas Border',
-        excludeFromExport: true, // Won't be included in exports
+        excludeFromExport: true,
         hoverCursor: 'default',
-        // Make sure it's always visible
         strokeUniform: true, // Stroke width is not affected by scaling
-        absolutePositioned: true, // Position is absolute in the canvas
-        perPixelTargetFind: false, // Improves performance
         hasBorders: false,
         hasControls: false,
         lockMovementX: true,
@@ -963,31 +1077,40 @@
         lockRotation: true,
         lockScalingX: true,
         lockScalingY: true,
-        // Additional properties to ensure it doesn't interfere with interactions
-        globalCompositeOperation: 'destination-over' // Draw behind everything
+        // This is the key property to make it appear on top
+        objectCaching: false
       });
 
-      // Add the border to the canvas
-      canvas.add(canvasBorder);
+      if (canvasBorder) {
+        // Add the border to the canvas without triggering events
+        const originalFire = canvas.fire;
+        canvas.fire = function() {};
+        canvas.add(canvasBorder);
+        canvas.fire = originalFire;
 
-      // Send to back so it doesn't interfere with other objects
-      canvasBorder.sendToBack();
+        // Instead of sending to back, bring it to front
+        canvas.bringToFront(canvasBorder);
 
-      // Explicitly set the border as non-selectable again after adding
-      canvasBorder.selectable = false;
-      canvasBorder.evented = false;
+        // Explicitly set the border as non-selectable again after adding
+        canvasBorder.selectable = false;
+        canvasBorder.evented = false;
 
-      // Add a special class to the border element in the DOM
-      if (canvasBorder._element) {
-        canvasBorder._element.classList.add('canvas-border-element');
+        // Create a clipPath to constrain all objects to the canvas dimensions
+        const clipPath = new wf.fabric.Rect({
+          left: 0,
+          top: 0,
+          width: canvas.width,
+          height: canvas.height,
+          absolutePositioned: true
+        });
+
+        // Apply the clipPath to the canvas
+        canvas.clipPath = clipPath;
+
+        // Render the canvas
+        canvas.renderAll();
+        console.log('Canvas border added with dimensions:', canvas.width, 'x', canvas.height);
       }
-
-      // Make sure it's at the very back
-      canvas.sendToBack(canvasBorder);
-
-      // Render the canvas
-      canvas.renderAll();
-      console.log('Canvas border added with dimensions:', canvas.width, 'x', canvas.height);
     } catch (error) {
       console.error('Error creating canvas border:', error);
     }
@@ -997,26 +1120,23 @@
   export function updateCanvasDimensions(width: number, height: number) {
     if (!canvas || !fabricLoaded) return;
 
+    // Remove existing border
+    if (canvasBorder) {
+      canvas.remove(canvasBorder);
+      canvasBorder = null;
+    }
+
     // Update canvas dimensions
     canvas.setDimensions({ width, height });
     canvasWidth = width;
     canvasHeight = height;
 
-    // Update the border to match new dimensions
-    if (canvasBorder) {
-      // Use exact dimensions without scaling
-      canvasBorder.set({
-        width: width,
-        height: height
-      });
-      canvasBorder.setCoords();
-    } else {
-      // If border doesn't exist, create it
+    // Create a new border with the updated dimensions
+    setTimeout(() => {
       addCanvasBorder();
-    }
+      canvas.renderAll();
+    }, 10);
 
-    // Render the canvas
-    canvas.renderAll();
     console.log(`Canvas dimensions updated to ${width}x${height}`);
   }
 
@@ -1234,54 +1354,97 @@
 
   // Save canvas state
   function saveCanvas() {
-    if (canvas) {
-      try {
-        // Ensure all objects have their names set before saving
-        const objects = canvas.getObjects();
-        objects.forEach((obj: any, index: number) => {
-          // If the object doesn't have a name, set a default one
-          if (!obj.name) {
-            const defaultName = `Layer ${index + 1}`;
-            obj.name = defaultName;
-            // Force the canvas to recognize the change
-            obj.set('name', defaultName);
-          }
-        });
+    if (!canvas) return;
 
-        // Get the canvas JSON with additional properties
-        const canvasJson = canvas.toJSON(['name', 'id']); // Include custom properties in serialization
+    // Prevent recursive calls
+    if (isSaving) {
+      console.log('Already saving, skipping recursive call');
+      return;
+    }
 
-        // Ensure the objects array exists
-        if (!canvasJson.objects) {
-          canvasJson.objects = [];
+    try {
+      isSaving = true;
+
+      // First, constrain all objects to be within canvas boundaries
+      constrainObjectsToCanvas();
+
+      // Store reference to border
+      let hadBorder = false;
+
+      // Remove the border before saving without triggering events
+      if (canvasBorder) {
+        hadBorder = true;
+
+        // Temporarily disable event firing
+        const originalFire = canvas.fire;
+        canvas.fire = function() {};
+        canvas.remove(canvasBorder);
+        canvas.fire = originalFire;
+
+        canvasBorder = null;
+      }
+
+      // Ensure all objects have their names set before saving
+      const objects = canvas.getObjects();
+      objects.forEach((obj: any, index: number) => {
+        // Skip null objects
+        if (!obj) return;
+
+        // If the object doesn't have a name, set a default one
+        if (!obj.name) {
+          const defaultName = `Layer ${index + 1}`;
+          obj.name = defaultName;
+          // Force the canvas to recognize the change
+          obj.set('name', defaultName);
         }
 
-        // Filter out any problematic objects and Canvas Border objects
-        canvasJson.objects = canvasJson.objects.filter((obj: any) => {
-          // Filter out Canvas Border objects
-          if (obj && obj.name === 'Canvas Border') {
-            console.log('Filtering out Canvas Border object from saved JSON');
-            return false;
-          }
+        // Ensure coordinates are up to date
+        obj.setCoords();
+      });
 
-          // Keep only objects with valid types
-          const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
-          return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
-        });
+      // Get the canvas JSON with additional properties
+      const canvasJson = canvas.toJSON(['name', 'id', 'selectable', 'evented', 'lockMovementX', 'lockMovementY']); // Include custom properties in serialization
 
-        // Log the objects being saved to verify names are included
-        console.log('Saving canvas with objects:', canvasJson.objects);
-
-        // Stringify the sanitized JSON
-        const json = JSON.stringify(canvasJson);
-        console.log('Canvas changed, saving state');
-        onCanvasChange(json);
-
-        // Log canvas state after saving
-        logCanvasState();
-      } catch (error) {
-        console.error('Error saving canvas state:', error);
+      // Ensure the objects array exists
+      if (!canvasJson.objects) {
+        canvasJson.objects = [];
       }
+
+      // Filter out any problematic objects and Canvas Border objects
+      canvasJson.objects = canvasJson.objects.filter((obj: any) => {
+        // Filter out Canvas Border objects
+        if (obj && obj.name === 'Canvas Border') {
+          console.log('Filtering out Canvas Border object from saved JSON');
+          return false;
+        }
+
+        // Keep only objects with valid types
+        const validTypes = ['rect', 'circle', 'text', 'textbox', 'image', 'path', 'polygon', 'polyline', 'line', 'triangle'];
+        return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
+      });
+
+      // Log the objects being saved to verify names are included
+      console.log('Saving canvas with objects:', canvasJson.objects);
+
+      // Stringify the sanitized JSON
+      const json = JSON.stringify(canvasJson);
+      console.log('Canvas changed, saving state');
+      onCanvasChange(json);
+
+      // Add the border back if it was removed
+      if (hadBorder) {
+        // Add border back immediately without setTimeout
+        addCanvasBorder();
+        canvas.renderAll();
+      }
+
+      // Log canvas state after saving
+      logCanvasState();
+    } catch (error) {
+      console.error('Error saving canvas state:', error);
+    } finally {
+      // Always reset the saving flag
+      isSaving = false;
     }
   }
 
@@ -1482,12 +1645,21 @@
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
     const objectName = `Rectangle ${objectCount + 1}`;
+
+    // Calculate a position that ensures the rectangle is fully within the canvas
+    const rectWidth = 100;
+    const rectHeight = 100;
+    const maxLeft = Math.max(0, canvas.width - rectWidth);
+    const maxTop = Math.max(0, canvas.height - rectHeight);
+    const left = Math.min(100, maxLeft);
+    const top = Math.min(100, maxTop);
+
     const r = new wf.fabric.Rect({
-      left: 100,
-      top: 100,
+      left: left,
+      top: top,
       fill: '#3498db',
-      width: 100,
-      height: 100,
+      width: rectWidth,
+      height: rectHeight,
       strokeWidth: 2,
       stroke: '#2980b9',
       name: objectName // Add a name
@@ -1506,11 +1678,19 @@
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
     const objectName = `Circle ${objectCount + 1}`;
+
+    // Calculate a position that ensures the circle is fully within the canvas
+    const radius = 50;
+    const maxLeft = Math.max(radius, canvas.width - radius);
+    const maxTop = Math.max(radius, canvas.height - radius);
+    const left = Math.min(100, maxLeft);
+    const top = Math.min(100, maxTop);
+
     const c = new wf.fabric.Circle({
-      left: 100,
-      top: 100,
+      left: left,
+      top: top,
       fill: '#e74c3c',
-      radius: 50,
+      radius: radius,
       strokeWidth: 2,
       stroke: '#c0392b',
       name: objectName // Add a name
@@ -1538,12 +1718,21 @@
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
     const objectName = `Text ${objectCount + 1}`;
+
+    // Calculate a position that ensures the text is fully within the canvas
+    const textWidth = 200;
+    const textHeight = 50; // Approximate height for a text element
+    const maxLeft = Math.max(0, canvas.width - textWidth);
+    const maxTop = Math.max(0, canvas.height - textHeight);
+    const left = Math.min(100, maxLeft);
+    const top = Math.min(100, maxTop);
+
     const t = new wf.fabric.Textbox('Text', {
-      left: 100,
-      top: 100,
+      left: left,
+      top: top,
       fill: '#2c3e50',
       fontSize: 24,
-      width: 200,
+      width: textWidth,
       name: objectName // Add a name
     });
     // Ensure the name is set using the set method
@@ -1552,6 +1741,72 @@
     canvas.setActiveObject(t);
     // Save canvas after adding object
     saveCanvas();
+  }
+
+  // Function to constrain objects within the canvas boundaries
+  function constrainObjectsToCanvas() {
+    if (!canvas || !fabricLoaded) return false;
+
+    const objects = canvas.getObjects();
+    if (!objects || objects.length === 0) return false;
+
+    let modified = false;
+
+    objects.forEach((obj: any) => {
+      if (!obj || obj.name === 'Canvas Border') return;
+
+      // Skip objects that don't have dimensions
+      if (obj.width === undefined || obj.height === undefined) return;
+
+      // Get object bounds considering its width, height, scale, and position
+      const objBounds = obj.getBoundingRect();
+
+      // Check if the object is outside the canvas boundaries
+      let needsAdjustment = false;
+      let newLeft = obj.left;
+      let newTop = obj.top;
+
+      // Check left boundary
+      if (objBounds.left < 0) {
+        newLeft = obj.left - objBounds.left + 1; // Add 1px buffer
+        needsAdjustment = true;
+      }
+
+      // Check right boundary
+      if (objBounds.left + objBounds.width > canvas.width) {
+        newLeft = canvas.width - objBounds.width + (obj.left - objBounds.left) - 1; // Subtract 1px buffer
+        needsAdjustment = true;
+      }
+
+      // Check top boundary
+      if (objBounds.top < 0) {
+        newTop = obj.top - objBounds.top + 1; // Add 1px buffer
+        needsAdjustment = true;
+      }
+
+      // Check bottom boundary
+      if (objBounds.top + objBounds.height > canvas.height) {
+        newTop = canvas.height - objBounds.height + (obj.top - objBounds.top) - 1; // Subtract 1px buffer
+        needsAdjustment = true;
+      }
+
+      // Apply adjustments if needed
+      if (needsAdjustment) {
+        obj.set({
+          left: newLeft,
+          top: newTop
+        });
+        obj.setCoords();
+        modified = true;
+        console.log(`Constrained object ${obj.name || 'unnamed'} to canvas boundaries`);
+      }
+    });
+
+    if (modified) {
+      canvas.renderAll();
+    }
+
+    return modified;
   }
 
   // Show file upload dialog for image
@@ -1572,12 +1827,25 @@
     // Get the current number of objects to create a unique name
     const objectCount = canvas.getObjects().length;
     wf.fabric.Image.fromURL(url, (img: any) => {
+      // Calculate maximum dimensions to fit within canvas
       const maxW = canvas.width * 0.8;
       const maxH = canvas.height * 0.8;
       if (img.width > maxW || img.height > maxH) {
         const scale = Math.min(maxW / img.width, maxH / img.height);
         img.scale(scale);
       }
+
+      // Calculate position to ensure the image is centered and within canvas
+      const imgWidth = img.width * img.scaleX;
+      const imgHeight = img.height * img.scaleY;
+      const left = (canvas.width - imgWidth) / 2;
+      const top = (canvas.height - imgHeight) / 2;
+
+      img.set({
+        left: left,
+        top: top
+      });
+
       // Set a name for the image
       const objectName = `Image ${objectCount + 1}`;
       img.name = objectName;
@@ -1682,23 +1950,49 @@
   export function updateDimensions(newWidth: number, newHeight: number) {
     if (canvas && fabricLoaded) {
       console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
+
+      // Log current objects for debugging
+      console.log(`Current objects before dimension update: ${canvas.getObjects().length}`);
+
+      // Update dimensions
       canvasWidth = newWidth;
       canvasHeight = newHeight;
+
       // Update the fabric canvas dimensions
       canvas.setWidth(newWidth);
       canvas.setHeight(newHeight);
 
-      // Remove existing border
+      // Remove existing border without triggering events
       if (canvasBorder) {
+        // Temporarily disable event firing
+        const originalFire = canvas.fire;
+        canvas.fire = function() {};
         canvas.remove(canvasBorder);
+        canvas.fire = originalFire;
+
         canvasBorder = null;
       }
+
+      // Reset viewport transform to ensure consistent positioning
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+
       // Wait a brief moment to ensure the canvas dimensions are updated
       setTimeout(() => {
-        // Only add a new border if it doesn't already exist
-        if (!canvasBorder) {
-          addCanvasBorder();
-        }
+        // Add a new border
+        addCanvasBorder();
+
+        // Ensure all objects have proper coordinates
+        canvas.getObjects().forEach((obj: any) => {
+          if (obj && obj.name !== 'Canvas Border') {
+            obj.setCoords();
+            obj.dirty = true;
+          }
+        });
+
+        // Constrain objects to the new canvas dimensions
+        constrainObjectsToCanvas();
+
+        canvas.renderAll();
       }, 50);
 
       // Wait a brief moment to ensure the DOM has updated
