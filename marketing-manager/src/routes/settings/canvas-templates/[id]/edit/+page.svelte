@@ -410,15 +410,6 @@
 		}
 	});
 
-	// Effect to load data when canvas is ready (alternative to onReady prop)
-	// $effect.pre(() => {
-	// 	if (isCanvasReady && canvasEditorRef && data.template.canvasData) {
-	// 		console.log('Effect: Loading initial canvas data...');
-	// 		canvasEditorRef.loadCanvasData(data.template.canvasData);
-	// 		// Potentially need to prevent this from running multiple times if isCanvasReady flicks
-	// 	}
-	// });
-
 	// Helper function to upload preview image (copied from new page)
 	async function uploadTemplatePreview(
 		dataUrl: string,
