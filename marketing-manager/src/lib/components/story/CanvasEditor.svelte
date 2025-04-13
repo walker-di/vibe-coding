@@ -23,6 +23,10 @@
   import LayerOrderModal from "./LayerOrderModal.svelte";
   import { Canvas, Rect, Point, FabricImage, Circle as FabricCircle, Textbox } from "fabric";
   import { CanvasService } from "./canvas-service.svelte";
+    import { addRectangle } from "./canvas-tools/canvas-rectangle.svelte";
+    import { addCircle } from "./canvas-tools/canvas-circle.svelte";
+    import { addText } from "./canvas-tools/canvas-text.svelte";
+    import { addImageFromUrl } from "./canvas-tools/canvas-image.svelte";
 
   // Props
   let {
@@ -422,10 +426,6 @@
                           console.log("Objects were normalized in the canvas");
                         }
 
-                        const centered = centerAllObjects();
-                        if (centered) {
-                          console.log("Objects were centered in the canvas");
-                        }
                       }
 
                       canvas.renderAll();
@@ -570,14 +570,6 @@
                         if (normalized) {
                           console.log(
                             "Objects were normalized after loading error",
-                          );
-                        }
-
-                        // Try to center objects
-                        const centered = centerAllObjects();
-                        if (centered) {
-                          console.log(
-                            "Objects were centered after loading error",
                           );
                         }
 
@@ -847,7 +839,6 @@
 
     // First ensure all objects are normalized and centered
     normalizeObjects();
-    centerAllObjects();
 
     // Account for padding in the container
     const containerWidth = canvasContainer.clientWidth - 40; // 20px padding on each side
@@ -1042,249 +1033,6 @@
     }
 
     return modified;
-  }
-
-  // Function to center all objects in the canvas view
-  function centerAllObjects() {
-    if (!canvas) return false;
-
-    // First normalize any objects with extreme scales or positions
-    normalizeObjects();
-
-    const objects = canvas.getObjects();
-    if (!objects || objects.length === 0) return false;
-
-    // Calculate the bounding box of all objects
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    // First pass: check if any objects have extreme positions that would skew the calculation
-    let hasExtremePositions = false;
-    objects.forEach((obj: any) => {
-      if (!obj) return;
-
-      // Check for extreme positions that would skew the calculation
-      if (
-        obj.left < -canvas.width * 2 ||
-        obj.left > canvas.width * 3 ||
-        obj.top < -canvas.height * 2 ||
-        obj.top > canvas.height * 3
-      ) {
-        hasExtremePositions = true;
-        console.log(
-          `Object ${obj.name || "unnamed"} has extreme position: left=${obj.left}, top=${obj.top}`,
-        );
-      }
-    });
-
-    // If we have extreme positions, recreate all objects with correct positions
-    if (hasExtremePositions) {
-      console.log(
-        "Extreme positions detected, recreating objects with correct positions",
-      );
-
-      // Store the original objects to recreate them
-      const objectsToRecreate: any[] = [];
-      objects.forEach((obj: any) => {
-        if (!obj) return;
-
-        // Store all the properties we need to recreate the object
-        const objData = {
-          type: obj.type,
-          name: obj.name,
-          width: obj.width || 100,
-          height: obj.height || 100,
-          scaleX: obj.scaleX || 1,
-          scaleY: obj.scaleY || 1,
-          fill: obj.fill,
-          stroke: obj.stroke,
-          strokeWidth: obj.strokeWidth,
-          src: obj.getSrc ? obj.getSrc() : null, // For images
-          text: obj.text, // For text objects
-          fontSize: obj.fontSize, // For text objects
-          fontFamily: obj.fontFamily, // For text objects
-        };
-        objectsToRecreate.push(objData);
-      });
-
-      // Clear the canvas
-      canvas.clear();
-
-      // Set background color
-      canvas.backgroundColor = "#f0f0f0";
-
-      // Recreate each object with proper positioning
-      let imageLoadCount = 0;
-      const totalImages = objectsToRecreate.filter(
-        (obj) => obj.type === "image",
-      ).length;
-
-      objectsToRecreate.forEach((objData: any, index: number) => {
-        let newObj;
-        const wf = window as any;
-
-        // Calculate centered position
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-
-        // Stagger objects vertically and horizontally for visibility
-        const offsetX = (index % 3) * 50 - 50;
-        const offsetY = Math.floor(index / 3) * 50 - 50;
-
-        // Create different types of objects
-        if (objData.type === "rect") {
-          newObj = new wf.fabric.Rect({
-            left: centerX - objData.width / 2 + offsetX,
-            top: centerY - objData.height / 2 + offsetY,
-            width: objData.width,
-            height: objData.height,
-            fill: objData.fill || "#3498db",
-            stroke: objData.stroke,
-            strokeWidth: objData.strokeWidth,
-            name: objData.name,
-          });
-        } else if (objData.type === "circle") {
-          newObj = new wf.fabric.Circle({
-            left: centerX - objData.width / 2 + offsetX,
-            top: centerY - objData.height / 2 + offsetY,
-            radius: Math.min(objData.width, objData.height) / 2,
-            fill: objData.fill || "#3498db",
-            stroke: objData.stroke,
-            strokeWidth: objData.strokeWidth,
-            name: objData.name,
-          });
-        } else if (objData.type === "text" || objData.type === "textbox") {
-          newObj = new wf.fabric.Textbox(objData.text || "Text", {
-            left: centerX - objData.width / 2 + offsetX,
-            top: centerY - objData.height / 2 + offsetY,
-            width: objData.width,
-            fontSize: objData.fontSize || 24,
-            fontFamily: objData.fontFamily || "Arial",
-            fill: objData.fill || "#2c3e50",
-            name: objData.name,
-          });
-        } else if (objData.type === "image") {
-          // For images, we need to load them asynchronously
-          // Use a placeholder URL if src is not available
-          const imageUrl =
-            objData.src ||
-            `https://via.placeholder.com/${objData.width}x${objData.height}?text=${encodeURIComponent(objData.name || "Image")}`;
-
-          wf.fabric.Image.fromURL(
-            imageUrl,
-            (img: any) => {
-              // Scale the image to match the original dimensions
-              const scale = Math.min(
-                objData.width / (img.width || 1),
-                objData.height / (img.height || 1),
-              );
-
-              img.set({
-                left: centerX - objData.width / 2 + offsetX,
-                top: centerY - objData.height / 2 + offsetY,
-                scaleX: scale,
-                scaleY: scale,
-                name: objData.name,
-              });
-
-              canvas.add(img);
-              imageLoadCount++;
-
-              // When all images are loaded, render the canvas
-              if (imageLoadCount >= totalImages) {
-                canvas.renderAll();
-                console.log("All images loaded and rendered");
-              }
-            },
-            { crossOrigin: "anonymous" },
-          );
-          return; // Skip the add below for images
-        } else {
-          // Default fallback - create a rectangle with the object's name
-          newObj = new wf.fabric.Rect({
-            left: centerX - 50 + offsetX,
-            top: centerY - 50 + offsetY,
-            width: 100,
-            height: 100,
-            fill: "#e74c3c",
-            name: objData.name || `Unknown object ${index}`,
-          });
-        }
-
-        if (newObj) {
-          canvas.add(newObj);
-        }
-      });
-
-      // If there were no images, render the canvas now
-      if (totalImages === 0) {
-        canvas.renderAll();
-      }
-
-      console.log("Objects recreated with proper positioning");
-      return true;
-    }
-
-    // If no extreme positions, proceed with normal centering
-    objects.forEach((obj: any) => {
-      if (!obj) return;
-
-      // Get object bounds considering its width, height, scale, and position
-      const objBounds = obj.getBoundingRect();
-      minX = Math.min(minX, objBounds.left);
-      minY = Math.min(minY, objBounds.top);
-      maxX = Math.max(maxX, objBounds.left + objBounds.width);
-      maxY = Math.max(maxY, objBounds.top + objBounds.height);
-    });
-
-    // If we have valid bounds
-    if (
-      minX !== Infinity &&
-      minY !== Infinity &&
-      maxX !== -Infinity &&
-      maxY !== -Infinity
-    ) {
-      // Calculate center of all objects
-      const objectsCenterX = (minX + maxX) / 2;
-      const objectsCenterY = (minY + maxY) / 2;
-
-      // Calculate canvas center
-      const canvasCenterX = canvas.width / 2;
-      const canvasCenterY = canvas.height / 2;
-
-      // Calculate offset to move objects to center
-      const offsetX = canvasCenterX - objectsCenterX;
-      const offsetY = canvasCenterY - objectsCenterY;
-
-      // Apply offset if it's significant or if objects are outside the visible area
-      if (
-        Math.abs(offsetX) > 5 ||
-        Math.abs(offsetY) > 5 ||
-        minX < 0 ||
-        minY < 0 ||
-        maxX > canvas.width ||
-        maxY > canvas.height
-      ) {
-        console.log(`Centering objects: offset (${offsetX}, ${offsetY})`);
-
-        // Move all objects by the offset
-        objects.forEach((obj: any) => {
-          if (!obj) return;
-          obj.set({
-            left: obj.left + offsetX,
-            top: obj.top + offsetY,
-          });
-          obj.setCoords(); // Update coordinates
-        });
-
-        canvas.renderAll();
-        return true; // Indicate that centering was applied
-      }
-    }
-
-    return false; // No centering was needed or possible
   }
 
   // Flag to prevent recursive save calls
@@ -1969,7 +1717,7 @@
   // Handle file upload completion
   function handleImageUpload(event: CustomEvent<{ url: string; file: File }>) {
     const { url } = event.detail;
-    canvasService.addImageFromUrl(url);
+    addImageFromUrl(canvas, url)();
     showFileUploadDialog = false;
   }
 
@@ -1984,7 +1732,7 @@
     if (!canvas) return;
     const url = prompt("Enter image URL:");
     if (!url) return;
-    canvasService.addImageFromUrl(url);
+    addImageFromUrl(canvas, url);
   }
 
   export function deleteSelected() {
@@ -2326,21 +2074,21 @@
     <div class="flex flex-wrap gap-2 mb-4">
       <Button
         variant="outline"
-        onclick={() => canvasService.addRectangle()}
+        onclick={() => addRectangle(canvas)}
         title="Add Rectangle"
       >
         <Square class="h-4 w-4 mr-2" /> Rectangle
       </Button>
       <Button
         variant="outline"
-        onclick={() => canvasService.addCircle()}
+        onclick={() => addCircle(canvas)}
         title="Add Circle"
       >
         <Circle class="h-4 w-4 mr-2" /> Circle
       </Button>
       <Button
         variant="outline"
-        onclick={() => canvasService.addText()}
+        onclick={() => addText(canvas)}
         title="Add Text"
       >
         <Type class="h-4 w-4 mr-2" /> Text
@@ -2440,14 +2188,6 @@
       disabled={!canvasContainer}
     >
       <Maximize class="h-4 w-4" />
-    </Button>
-    <Button
-      variant="outline"
-      size="icon"
-      onclick={centerAllObjects}
-      title="Center All Objects"
-    >
-      <Target class="h-4 w-4" />
     </Button>
     <Button
       variant="outline"
