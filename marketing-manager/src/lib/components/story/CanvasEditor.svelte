@@ -5,43 +5,48 @@
   import { FileUpload } from '$lib/components/ui/file-upload';
   import ClipNarrationModal from './ClipNarrationModal.svelte';
   import LayerOrderModal from './LayerOrderModal.svelte';
+  import { Canvas, Rect } from 'fabric';
+    import { CanvasService } from './canvas-service.svelte';
+
 
   // Props
   let {
-    onCanvasChange, // Only need the change handler
-    onReady, // Optional callback for when fabric is loaded and canvas initialized
-    hideControls = false, // Whether to hide the control buttons (when they're shown elsewhere)
-    narration = '', // Narration text for the clip
-    description = '', // Description for the clip
-    onNarrationChange // Callback for when narration/description is changed
+    value= $bindable(),
+    onCanvasChange,
+    onReady,
+    hideControls = false,
+    narration = '',
+    description = '',
+    onNarrationChange
   } = $props<{
     onCanvasChange: (canvasJson: string) => void;
     onReady?: () => void;
     hideControls?: boolean;
+    value: string;
     narration?: string;
     description?: string;
     onNarrationChange?: (data: { narration: string | null; description: string | null; duration: number | null }) => Promise<void>;
   }>();
 
   // State
-  let canvas: any = null;
-  let fabricLoaded = $state(false);
+  let canvasService = $state<CanvasService>(undefined as any);
+  let canvas = $state<Canvas>(undefined as any);
   let selectedObject = $state<any>(null);
-  // Removed transition state
-  let isNarrationModalOpen = $state(false); // State for narration modal
-  let isLayerOrderModalOpen = $state(false); // State for layer order modal
+  let isNarrationModalOpen = $state(false);
+  let isLayerOrderModalOpen = $state(false);
   let canvasLayers = $state<Array<{id: string, name: string, type: string, object: any}>>([]);
-  let canvasContainer: HTMLDivElement | null = $state(null); // Reference to the container div
-  let canvasBorder: any = null; // Reference to the canvas border object
-  let isZooming = $state(false); // Flag to track zoom operations
+  let canvasContainer: HTMLDivElement | null = $state(null); 
+  let canvasBorder: any = $state(null);
+  let isZooming = $state(false);
+  let resizeObserver: ResizeObserver | null = $state(null);
 
   // Zoom State
   const MIN_ZOOM = 0.1;
   const MAX_ZOOM = 5;
   const ZOOM_STEP = 0.1;
   let zoomLevel = $state(1);
-  let canvasWidth = $state(800); // Default, will be updated
-  let canvasHeight = $state(600); // Default, will be updated
+  let canvasWidth = $state(800);
+  let canvasHeight = $state(600);
 
   // Getter for selectedObject to be used from outside
   export function hasSelectedObject(): boolean {
@@ -65,7 +70,7 @@
       console.log('Canvas data is null or undefined, loading empty canvas');
 
       // If canvas is ready, clear it and set default background
-      if (canvas && fabricLoaded) {
+      if (canvas) {
         // Remove existing border
         if (canvasBorder) {
           canvas.remove(canvasBorder);
@@ -90,7 +95,7 @@
       return;
     }
 
-    if (canvas && fabricLoaded) {
+    if (canvas) {
       console.log('Loading canvas data');
 
       // Set loading flag to prevent event handling during load
@@ -512,118 +517,29 @@
         }
       }
     } else {
-       console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
+       console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}`);
     }
   }
   // --- End of explicit method ---
 
-
-  // Load fabric.js and initialize canvas
   onMount(async (): Promise<any> => {
     try {
-      // Log initial mount
       console.log('CanvasEditor component mounted');
+      initializeCanvas();
 
-      // Load fabric.js from CDN
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js';
-      script.async = true;
-
-      script.onload = () => {
-        console.log('Fabric.js loaded successfully');
-        initializeCanvas();
-        fabricLoaded = true;
-
-        // Log canvas status after initialization
-        console.log('=== CANVAS STATUS AFTER INITIALIZATION ===');
-        console.log('Canvas initialized:', !!canvas);
-        if (canvas) {
-          console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
-          console.log('Canvas objects count:', canvas.getObjects().length);
-          console.log('Canvas background color:', canvas.backgroundColor);
-          console.log('Canvas viewport transform:', canvas.viewportTransform);
-        }
-        console.log('=== END CANVAS STATUS ===');
-
-        onReady?.(); // Signal readiness to the parent
-        // Initial load is now fully handled by the parent calling loadCanvasData
-      };
-
-      document.body.appendChild(script);
-
-      // Add window resize handler to adjust canvas view
-      const handleResize = () => {
-        if (fabricLoaded && canvas) {
-          // Use setTimeout to ensure the container has been resized
-          setTimeout(fitToView, 100);
-        }
-      };
-
-      window.addEventListener('resize', handleResize);
-
-      // Add ResizeObserver to monitor container size changes
-      let resizeObserver: ResizeObserver | null = null;
-      if (typeof ResizeObserver !== 'undefined') {
-        resizeObserver = new ResizeObserver(() => {
-          if (fabricLoaded && canvas && canvasContainer) {
-            setTimeout(fitToView, 100);
-          }
-        });
-
-        // Start observing once the container is available
-        if (canvasContainer) {
-          resizeObserver.observe(canvasContainer);
-        }
-      }
-
-      return () => {
-        // Clean up
-        if (canvas) {
-          canvas.dispose();
-        }
-        const existingScript = document.querySelector(`script[src="${script.src}"]`);
-        if (existingScript && document.body.contains(existingScript)) {
-           document.body.removeChild(existingScript);
-        }
-        window.removeEventListener('resize', handleResize);
-
-        // Clean up ResizeObserver
-        if (resizeObserver && canvasContainer) {
-          resizeObserver.unobserve(canvasContainer);
-          resizeObserver.disconnect();
-        }
-      };
     } catch (error) {
       console.error('Error loading fabric.js:', error);
     }
   });
 
-  // $effect removed - loading is now imperative via loadCanvasData
-
-
   // Initialize canvas
-  function initializeCanvas() {
+  async function initializeCanvas() {
     console.log('=== INITIALIZING CANVAS ===');
     try {
-      const windowWithFabric = window as any;
-      if (!windowWithFabric.fabric) {
-        console.error('Fabric.js not loaded');
-        return;
-      }
-
-      console.log('Fabric.js found in window object');
-      console.log('Canvas element:', document.getElementById('canvas'));
-
       // Initialize with default dimensions, will be updated by parent if needed
-      console.log('Creating canvas with default dimensions: 800x600');
-      canvas = new windowWithFabric.fabric.Canvas('canvas', {
-        width: 800,
-        height: 600,
-        backgroundColor: '#f0f0f0',
-        renderOnAddRemove: true,
-        stateful: true,
-        preserveObjectStacking: true // Add this to prevent layer shuffling
-      });
+      const { Canvas: lib} = (await import('fabric'));
+      canvasService = new CanvasService(lib);
+      canvas = canvasService.canvas;
 
       console.log('Canvas initialized with dimensions:', canvas.width, 'x', canvas.height);
       console.log('Canvas DOM element:', canvas.lowerCanvasEl);
@@ -722,9 +638,26 @@
         if (canvas) {
           canvas.renderAll();
           console.log('Forced initial render');
+
         }
       }, 100);
 
+      const handleResize = () => {
+        setTimeout(fitToView, 100);
+      };
+      onReady?.();
+      window.addEventListener('resize', handleResize);
+
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          setTimeout(fitToView, 100);
+        });
+
+        // Start observing once the container is available
+        if (canvasContainer) {
+          resizeObserver.observe(canvasContainer);
+        }
+      }
     } catch (error) {
       console.error('Error initializing canvas:', error);
     }
@@ -732,7 +665,7 @@
 
   // --- Zoom Functions ---
   function setZoom(newZoom: number, point?: { x: number; y: number }) {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
 
     // Set the zooming flag to prevent saving during zoom operations
     isZooming = true;
@@ -795,7 +728,7 @@
   }
 
   function fitToView() {
-    if (!canvas || !canvasContainer || !fabricLoaded) return;
+    if (!canvas || !canvasContainer) return;
 
     // Set the zooming flag to prevent saving during fit-to-view operation
     isZooming = true;
@@ -869,7 +802,7 @@
   }
 
   function handleMouseWheel(opt: any) {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
     const delta = opt.e.deltaY;
     let newZoom = canvas.getZoom();
 
@@ -894,12 +827,25 @@
   // Cleanup mouse wheel listener
   onDestroy(() => {
     if (canvas) {
+      canvas.dispose();
       canvas.off('mouse:wheel', handleMouseWheel);
     }
+
+    const existingScript = document.querySelector(`script[src="${script.src}"]`);
+        if (existingScript && document.body.contains(existingScript)) {
+           document.body.removeChild(existingScript);
+        }
+        window.removeEventListener('resize', handleResize);
+
+        // Clean up ResizeObserver
+        if (resizeObserver && canvasContainer) {
+          resizeObserver.unobserve(canvasContainer);
+          resizeObserver.disconnect();
+        }
   });
   // Function to normalize object scales and positions
   function normalizeObjects() {
-    if (!canvas || !fabricLoaded) return false;
+    if (!canvas) return false;
 
     const objects = canvas.getObjects();
     if (!objects || objects.length === 0) return false;
@@ -980,7 +926,7 @@
 
   // Function to center all objects in the canvas view
   function centerAllObjects() {
-    if (!canvas || !fabricLoaded) return false;
+    if (!canvas) return false;
 
     // First normalize any objects with extreme scales or positions
     normalizeObjects();
@@ -1199,10 +1145,7 @@
 
   // Function to add a canvas border/outline - now just adds clipPath without border
   function addCanvasBorder() {
-    if (!canvas || !fabricLoaded) return;
-
-    const wf = window as any;
-    if (!wf.fabric) return;
+    if (!canvas) return;
 
     // First, remove any existing border objects by name
     const objects = canvas.getObjects();
@@ -1236,7 +1179,7 @@
 
     try {
       // Create a clipPath to constrain all objects to the canvas dimensions
-      const clipPath = new wf.fabric.Rect({
+      const clipPath = new Rect({
         left: 0,
         top: 0,
         width: canvas.width,
@@ -1257,7 +1200,7 @@
 
   // Update canvas dimensions and clipPath
   export function updateCanvasDimensions(width: number, height: number) {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
 
     // Remove existing border if any
     if (canvasBorder) {
@@ -1283,7 +1226,7 @@
 
   // Function to completely reset the canvas view
   function resetCanvasView() {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
 
     console.log('Starting complete canvas view reset...');
 
@@ -1477,7 +1420,7 @@
 
   // Debug function to log canvas state
   function logCanvasState() {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
 
     try {
       const objects = canvas.getObjects();
@@ -1561,8 +1504,7 @@
         obj.setCoords();
       });
 
-      // Get the canvas JSON with additional properties
-      const canvasJson = canvas.toJSON(['name', 'id', 'selectable', 'evented', 'lockMovementX', 'lockMovementY']); // Include custom properties in serialization
+      const canvasJson = canvas.toJSON();
 
       // Ensure the objects array exists
       if (!canvasJson.objects) {
@@ -1613,7 +1555,7 @@
 
   // Layer management functions
   function openLayerOrderModal() {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
 
     try {
       console.log('Opening layer order modal...');
@@ -1671,7 +1613,7 @@
 
   // Apply the new layer order to the canvas
   function applyLayerOrder(newLayers: any[]) {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
 
     try {
       console.log('Applying new layer order using direct stacking methods...');
@@ -1797,40 +1739,6 @@
     }
   }
 
-  // Export these methods so they can be called from SceneEditor
-  export function addRectangle() {
-    if (!canvas) return;
-    const wf = window as any;
-    // Get the current number of objects to create a unique name
-    const objectCount = canvas.getObjects().length;
-    const objectName = `Rectangle ${objectCount + 1}`;
-
-    // Calculate a position that ensures the rectangle is fully within the canvas
-    const rectWidth = 100;
-    const rectHeight = 100;
-    const maxLeft = Math.max(0, canvas.width - rectWidth);
-    const maxTop = Math.max(0, canvas.height - rectHeight);
-    const left = Math.min(100, maxLeft);
-    const top = Math.min(100, maxTop);
-
-    const r = new wf.fabric.Rect({
-      left: left,
-      top: top,
-      fill: '#3498db',
-      width: rectWidth,
-      height: rectHeight,
-      strokeWidth: 2,
-      stroke: '#2980b9',
-      name: objectName // Add a name
-    });
-    // Ensure the name is set using the set method
-    r.set('name', objectName);
-    canvas.add(r);
-    canvas.setActiveObject(r);
-    // Save canvas after adding object
-    saveCanvas();
-  }
-
   export function addCircle() {
     if (!canvas) return;
     const wf = window as any;
@@ -1852,7 +1760,7 @@
       radius: radius,
       strokeWidth: 2,
       stroke: '#c0392b',
-      name: objectName // Add a name
+      name: objectName
     });
     // Ensure the name is set using the set method
     c.set('name', objectName);
@@ -1863,7 +1771,7 @@
   }
 
   export function showLayerOrderModal() {
-    if (!canvas || !fabricLoaded) return;
+    if (!canvas) return;
     try {
       console.log('Opening layer order modal from external call');
       openLayerOrderModal();
@@ -1904,7 +1812,7 @@
 
   // Function to constrain objects within the canvas boundaries
   function constrainObjectsToCanvas() {
-    if (!canvas || !fabricLoaded) return false;
+    if (!canvas) return false;
 
     const objects = canvas.getObjects();
     if (!objects || objects.length === 0) return false;
@@ -2110,9 +2018,8 @@
     console.log('=== UPDATING CANVAS DIMENSIONS ===');
     console.log(`Requested dimensions: ${newWidth}x${newHeight}`);
     console.log(`Current dimensions: ${canvasWidth}x${canvasHeight}`);
-    console.log(`Canvas ready: ${!!canvas}, Fabric loaded: ${fabricLoaded}`);
 
-    if (canvas && fabricLoaded) {
+    if (canvas) {
       console.log(`CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`);
 
       // Log current objects for debugging
@@ -2201,7 +2108,7 @@
 
   // --- Function to get canvas image data ---
   export function getCanvasImageDataUrl(): string | null {
-    if (canvas && fabricLoaded) {
+    if (canvas) {
       try {
         console.log('=== CANVAS EXPORT DEBUG START ===');
         console.log('Original canvas dimensions:', canvas.width, 'x', canvas.height);
@@ -2284,7 +2191,7 @@
 
   // --- Function to get current canvas JSON ---
   export function getCurrentCanvasJson(): string {
-    if (canvas && fabricLoaded) {
+    if (canvas) {
       try {
         // Ensure all objects have their names set before saving
         const objects = canvas.getObjects();
@@ -2357,35 +2264,35 @@
 <div class="space-y-4">
   {#if !hideControls}
   <div class="flex flex-wrap gap-2 mb-4">
-    <Button variant="outline" onclick={addRectangle} title="Add Rectangle" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={canvasService.addRectangle} title="Add Rectangle">
       <Square class="h-4 w-4 mr-2" /> Rectangle
     </Button>
-    <Button variant="outline" onclick={addCircle} title="Add Circle" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={addCircle} title="Add Circle">
       <Circle class="h-4 w-4 mr-2" /> Circle
     </Button>
-    <Button variant="outline" onclick={addText} title="Add Text" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={addText} title="Add Text">
       <Type class="h-4 w-4 mr-2" /> Text
     </Button>
-    <Button variant="outline" onclick={addImage} title="Add Image" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={addImage} title="Add Image">
       <ImageIcon class="h-4 w-4 mr-2" /> Image
     </Button>
-    <Button variant="outline" onclick={setBackgroundColor} title="Set Background Color" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={setBackgroundColor} title="Set Background Color">
       <Palette class="h-4 w-4 mr-2" /> BG Color
     </Button>
-    <Button variant="outline" onclick={setBackgroundImageFromUrl} title="Set Background Image" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={setBackgroundImageFromUrl} title="Set Background Image">
       <ImageUp class="h-4 w-4 mr-2" /> BG Image
     </Button>
-    <Button variant="outline" onclick={deleteSelected} title="Delete Selected" disabled={!fabricLoaded || !selectedObject} class="ml-auto">
+    <Button variant="outline" onclick={deleteSelected} title="Delete Selected" disabled={!selectedObject} class="ml-auto">
       <Trash2 class="h-4 w-4 mr-2" /> Delete
     </Button>
-    <Button variant="outline" onclick={clearCanvas} title="Clear Canvas" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={clearCanvas} title="Clear Canvas">
       Clear All
     </Button>
-    <Button variant="outline" onclick={openLayerOrderModal} title="Manage Layers" disabled={!fabricLoaded}>
+    <Button variant="outline" onclick={openLayerOrderModal} title="Manage Layers">
       <Layers class="h-4 w-4 mr-2" /> Layers
     </Button>
     {#if onNarrationChange}
-      <Button variant="outline" onclick={() => isNarrationModalOpen = true} title="Edit Narration & Description" disabled={!fabricLoaded}>
+      <Button variant="outline" onclick={() => isNarrationModalOpen = true} title="Edit Narration & Description">
         <MessageSquare class="h-4 w-4 mr-2" /> Edit Content
       </Button>
     {/if}
@@ -2394,7 +2301,7 @@
 
   <!-- Zoom Controls -->
   <div class="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/50">
-    <Button variant="outline" size="icon" onclick={zoomOut} title="Zoom Out" disabled={!fabricLoaded || zoomLevel <= MIN_ZOOM}>
+    <Button variant="outline" size="icon" onclick={zoomOut} title="Zoom Out" disabled={zoomLevel <= MIN_ZOOM}>
       <ZoomOut class="h-4 w-4" />
     </Button>
     <div class="w-32">
@@ -2405,40 +2312,35 @@
         step={ZOOM_STEP / 10}
         value={zoomLevel}
         oninput={(e) => setZoom(parseFloat(e.currentTarget.value))}
-        disabled={!fabricLoaded}
+       
         class="w-full h-2 bg-secondary rounded-full"
       />
     </div>
-    <Button variant="outline" size="icon" onclick={zoomIn} title="Zoom In" disabled={!fabricLoaded || zoomLevel >= MAX_ZOOM}>
+    <Button variant="outline" size="icon" onclick={zoomIn} title="Zoom In" disabled={zoomLevel >= MAX_ZOOM}>
       <ZoomIn class="h-4 w-4" />
     </Button>
-    <Button variant="outline" size="icon" onclick={resetZoom} title="Reset Zoom (100%)" disabled={!fabricLoaded}>
+    <Button variant="outline" size="icon" onclick={resetZoom} title="Reset Zoom (100%)">
       <RefreshCw class="h-4 w-4" />
     </Button>
-    <Button variant="outline" size="icon" onclick={fitToView} title="Fit to View" disabled={!fabricLoaded || !canvasContainer}>
+    <Button variant="outline" size="icon" onclick={fitToView} title="Fit to View" disabled={!canvasContainer}>
       <Maximize class="h-4 w-4" />
     </Button>
-    <Button variant="outline" size="icon" onclick={centerAllObjects} title="Center All Objects" disabled={!fabricLoaded}>
+    <Button variant="outline" size="icon" onclick={centerAllObjects} title="Center All Objects">
       <Target class="h-4 w-4" />
     </Button>
     <Button
       variant="outline"
       size="icon"
-      onclick={() => {
-        if (canvas && fabricLoaded) {
-          // Complete canvas reset function
-          resetCanvasView();
-        }
-      }}
+      onclick={resetCanvasView}
       title="Reset Canvas View"
-      disabled={!fabricLoaded}
+     
     >
       <RotateCcw class="h-4 w-4" />
     </Button>
     <Button
       variant="outline"
       onclick={() => {
-        if (canvas && fabricLoaded) {
+        if (canvas) {
           // Force re-render all objects
           const objects = canvas.getObjects();
           objects.forEach((obj: any) => {
@@ -2451,27 +2353,27 @@
         }
       }}
       title="Force Refresh"
-      disabled={!fabricLoaded}
+     
     >
       Refresh
     </Button>
     <Button
       variant="outline"
       onclick={() => {
-        if (canvas && fabricLoaded) {
+        if (canvas) {
           // Complete canvas reset and fix
           resetCanvasView();
         }
       }}
       title="Fix Canvas Display"
-      disabled={!fabricLoaded}
+     
     >
       Fix Display
     </Button>
     <Button
       variant="outline"
       onclick={() => {
-        if (canvas && fabricLoaded) {
+        if (canvas) {
           if (confirm('This will recreate all objects with proper positioning. Continue?')) {
             // Force recreation of all objects
             resetCanvasView();
@@ -2483,7 +2385,7 @@
         }
       }}
       title="Recreate All Objects"
-      disabled={!fabricLoaded}
+     
     >
       Recreate Objects
     </Button>
@@ -2501,7 +2403,7 @@
         <canvas id="canvas"></canvas>
       </div>
     </div>
-    {#if !fabricLoaded}
+    {#if !canvas}
       <div class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50">
         <p>Loading canvas...</p>
       </div>

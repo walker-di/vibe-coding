@@ -51,7 +51,7 @@
 	}
 
 	// Filtered resolutions based on current aspect ratio
-	let compatibleResolutions = $derived(getCompatibleResolutions(aspectRatio));
+	const compatibleResolutions = $derived(getCompatibleResolutions(aspectRatio));
 
 	// Automatically update resolution when aspect ratio changes
 	$effect(() => {
@@ -71,7 +71,7 @@
 	});
 
 	// Derived state for the final resolution value to be saved
-	let finalResolution = $derived(
+	const finalResolution = $derived(
 		resolutionSelection === "Custom"
 			? customResolution.trim()
 			: resolutionSelection,
