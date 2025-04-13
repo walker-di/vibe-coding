@@ -1,4 +1,4 @@
-import { Rect, type Canvas } from "fabric";
+import { Circle, Rect, type Canvas } from "fabric";
 
 // Define the Constructor type
 type Constructor<T> = new (...args: any[]) => T;
@@ -46,4 +46,30 @@ export class CanvasService {
         // Save canvas after adding object
         // saveCanvas();
     }
+
+    addCircle() {
+        const objectCount = this.canvas.getObjects().length;
+        const objectName = `Circle ${objectCount + 1}`;
+    
+        // Calculate a position that ensures the circle is fully within the canvas
+        const radius = 50;
+        const maxLeft = Math.max(radius, this.canvas.width - radius);
+        const maxTop = Math.max(radius, this.canvas.height - radius);
+        const left = Math.min(100, maxLeft);
+        const top = Math.min(100, maxTop);
+    
+        const c = new Circle({
+          left: left,
+          top: top,
+          fill: '#e74c3c',
+          radius: radius,
+          strokeWidth: 2,
+          stroke: '#c0392b',
+          name: objectName
+        });
+        // Ensure the name is set using the set method
+        c.set('name', objectName);
+        this.canvas.add(c);
+        this.canvas.setActiveObject(c);
+      }
 }

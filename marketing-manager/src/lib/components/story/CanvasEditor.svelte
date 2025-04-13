@@ -1739,37 +1739,6 @@
     }
   }
 
-  export function addCircle() {
-    if (!canvas) return;
-    const wf = window as any;
-    // Get the current number of objects to create a unique name
-    const objectCount = canvas.getObjects().length;
-    const objectName = `Circle ${objectCount + 1}`;
-
-    // Calculate a position that ensures the circle is fully within the canvas
-    const radius = 50;
-    const maxLeft = Math.max(radius, canvas.width - radius);
-    const maxTop = Math.max(radius, canvas.height - radius);
-    const left = Math.min(100, maxLeft);
-    const top = Math.min(100, maxTop);
-
-    const c = new wf.fabric.Circle({
-      left: left,
-      top: top,
-      fill: '#e74c3c',
-      radius: radius,
-      strokeWidth: 2,
-      stroke: '#c0392b',
-      name: objectName
-    });
-    // Ensure the name is set using the set method
-    c.set('name', objectName);
-    canvas.add(c);
-    canvas.setActiveObject(c);
-    // Save canvas after adding object
-    saveCanvas();
-  }
-
   export function showLayerOrderModal() {
     if (!canvas) return;
     try {
@@ -2206,7 +2175,7 @@
         });
 
         // Get the canvas JSON with additional properties
-        const canvasJson = canvas.toJSON(['name', 'id', 'selectable', 'evented', 'lockMovementX', 'lockMovementY']); // Include custom properties in serialization
+        const canvasJson = canvas.toJSON(); // Include custom properties in serialization
 
         // Ensure the objects array exists
         if (!canvasJson.objects) {
@@ -2267,7 +2236,7 @@
     <Button variant="outline" onclick={canvasService.addRectangle} title="Add Rectangle">
       <Square class="h-4 w-4 mr-2" /> Rectangle
     </Button>
-    <Button variant="outline" onclick={addCircle} title="Add Circle">
+    <Button variant="outline" onclick={canvasService.addCircle} title="Add Circle">
       <Circle class="h-4 w-4 mr-2" /> Circle
     </Button>
     <Button variant="outline" onclick={addText} title="Add Text">
