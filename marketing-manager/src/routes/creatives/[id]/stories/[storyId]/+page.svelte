@@ -264,6 +264,7 @@
             storyId={story.id}
             creativeId={creativeId}
             aspectRatio={story.aspectRatio}
+            resolution={story.resolution}
             onEditScene={handleEditScene}
             onDeleteScene={handleDeleteScene}
             onSelectScene={handleSelectScene}

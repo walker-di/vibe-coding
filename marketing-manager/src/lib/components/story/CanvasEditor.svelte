@@ -81,7 +81,7 @@
 
         // Ensure canvas is properly sized in the view
         setTimeout(() => {
-          addCanvasBorder();
+          addCanvasBorder(); // This now only adds clipPath, not border
           fitToView();
           canvas.renderAll();
           console.log('Empty canvas loaded and fitted to view');
@@ -321,13 +321,8 @@
                       const originalFire = canvas.fire;
                       canvas.fire = function() {};
 
-                      // Add the border after loading
-                      addCanvasBorder();
-
-                      // Make sure border is on top
-                      if (canvasBorder) {
-                        canvas.bringToFront(canvasBorder);
-                      }
+                      // Add clipPath after loading
+                      addCanvasBorder(); // This now only adds clipPath, not border
 
                       // Restore event firing
                       canvas.fire = originalFire;
@@ -573,16 +568,13 @@
       console.log('Canvas DOM element:', canvas.lowerCanvasEl);
       console.log('Canvas DOM element dimensions:', canvas.lowerCanvasEl.width, 'x', canvas.lowerCanvasEl.height);
 
-      // Add canvas border/outline that will be visible when zooming out
-      addCanvasBorder();
+      // Add clipPath to constrain objects to canvas boundaries
+      addCanvasBorder(); // This now only adds clipPath, not border
 
       // Initial load is now fully handled by the parent calling loadCanvasData
 
       // Set up event listeners
-      canvas.on('object:modified', (e: any) => {
-        // Skip if the object is the canvas border
-        if (e.target && e.target.name === 'Canvas Border') return;
-
+      canvas.on('object:modified', (_: any) => {
         // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
           console.log('Skipping object:modified event during canvas loading');
@@ -595,10 +587,7 @@
         saveCanvas();
       });
 
-      canvas.on('object:added', (e: any) => {
-        // Skip if the object is the canvas border
-        if (e.target && e.target.name === 'Canvas Border') return;
-
+      canvas.on('object:added', (_: any) => {
         // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
           console.log('Skipping object:added event during canvas loading');
@@ -608,10 +597,7 @@
         saveCanvas();
       });
 
-      canvas.on('object:removed', (e: any) => {
-        // Skip if the object is the canvas border
-        if (e.target && e.target.name === 'Canvas Border') return;
-
+      canvas.on('object:removed', (_: any) => {
         // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
           console.log('Skipping object:removed event during canvas loading');
@@ -628,9 +614,6 @@
       // Add object moving event to constrain objects during movement
       canvas.on('object:moving', (e: any) => {
         if (!e.target) return;
-
-        // Skip if the object is the canvas border
-        if (e.target.name === 'Canvas Border') return;
 
         // Ensure isZooming is false during object movement
         isZooming = false;
@@ -656,9 +639,6 @@
       // Add object moved event to save canvas after movement is complete
       canvas.on('object:moved', (e: any) => {
         if (!e.target) return;
-
-        // Skip if the object is the canvas border
-        if (e.target.name === 'Canvas Border') return;
 
         // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
@@ -699,10 +679,8 @@
     const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
     zoomLevel = clampedZoom;
 
-    // Store the border temporarily if it exists
-    let hadBorder = false;
+    // Remove any existing border
     if (canvasBorder) {
-      hadBorder = true;
       canvas.remove(canvasBorder);
       canvasBorder = null;
     }
@@ -724,14 +702,12 @@
       }
     }
 
-    // Re-add the border after zoom is applied
-    if (hadBorder) {
-      // Use setTimeout to ensure the zoom is fully applied before adding the border
-      setTimeout(() => {
-        addCanvasBorder();
-        canvas.renderAll();
-      }, 10);
-    }
+    // Add clipPath after zoom is applied
+    // Use setTimeout to ensure the zoom is fully applied before adding the clipPath
+    setTimeout(() => {
+      addCanvasBorder(); // This now only adds clipPath, not border
+      canvas.renderAll();
+    }, 10);
 
     canvas.renderAll();
 
@@ -767,7 +743,7 @@
     normalizeObjects();
     centerAllObjects();
 
-    // Remove the border temporarily
+    // Remove any existing border
     if (canvasBorder) {
       canvas.remove(canvasBorder);
       canvasBorder = null;
@@ -817,13 +793,13 @@
       if (obj) obj.dirty = true;
     });
 
-    // Re-add the border without triggering events
+    // Add clipPath without triggering events
     setTimeout(() => {
       // Temporarily disable event firing
       const originalFire = canvas.fire;
       canvas.fire = function() {};
 
-      addCanvasBorder();
+      addCanvasBorder(); // This now only adds clipPath, not border
       canvas.renderAll();
 
       // Restore event firing
@@ -1160,7 +1136,7 @@
   // Flag to prevent recursive save calls
   let isSaving = false;
 
-  // Function to add a canvas border/outline
+  // Function to add a canvas border/outline - now just adds clipPath without border
   function addCanvasBorder() {
     if (!canvas || !fabricLoaded) return;
 
@@ -1198,73 +1174,31 @@
     }
 
     try {
-      // Create a rectangle that matches the canvas dimensions exactly
-      canvasBorder = new wf.fabric.Rect({
+      // Create a clipPath to constrain all objects to the canvas dimensions
+      const clipPath = new wf.fabric.Rect({
         left: 0,
         top: 0,
         width: canvas.width,
         height: canvas.height,
-        fill: 'transparent',
-        stroke: '#FF0000', // Bright red border
-        strokeWidth: 4, // Fixed stroke width
-        strokeDashArray: [10, 10], // Dashed line for better visibility
-        selectable: false,
-        evented: false,
-        name: 'Canvas Border',
-        excludeFromExport: true,
-        hoverCursor: 'default',
-        strokeUniform: true, // Stroke width is not affected by scaling
-        hasBorders: false,
-        hasControls: false,
-        lockMovementX: true,
-        lockMovementY: true,
-        lockRotation: true,
-        lockScalingX: true,
-        lockScalingY: true,
-        // This is the key property to make it appear on top
-        objectCaching: false
+        absolutePositioned: true
       });
 
-      if (canvasBorder) {
-        // Add the border to the canvas without triggering events
-        const originalFire = canvas.fire;
-        canvas.fire = function() {};
-        canvas.add(canvasBorder);
-        canvas.fire = originalFire;
+      // Apply the clipPath to the canvas
+      canvas.clipPath = clipPath;
 
-        // Instead of sending to back, bring it to front
-        canvas.bringToFront(canvasBorder);
-
-        // Explicitly set the border as non-selectable again after adding
-        canvasBorder.selectable = false;
-        canvasBorder.evented = false;
-
-        // Create a clipPath to constrain all objects to the canvas dimensions
-        const clipPath = new wf.fabric.Rect({
-          left: 0,
-          top: 0,
-          width: canvas.width,
-          height: canvas.height,
-          absolutePositioned: true
-        });
-
-        // Apply the clipPath to the canvas
-        canvas.clipPath = clipPath;
-
-        // Render the canvas
-        canvas.renderAll();
-        console.log('Canvas border added with dimensions:', canvas.width, 'x', canvas.height);
-      }
+      // Render the canvas
+      canvas.renderAll();
+      console.log('Canvas clipPath added with dimensions:', canvas.width, 'x', canvas.height);
     } catch (error) {
-      console.error('Error creating canvas border:', error);
+      console.error('Error creating canvas clipPath:', error);
     }
   }
 
-  // Update canvas dimensions and border
+  // Update canvas dimensions and clipPath
   export function updateCanvasDimensions(width: number, height: number) {
     if (!canvas || !fabricLoaded) return;
 
-    // Remove existing border
+    // Remove existing border if any
     if (canvasBorder) {
       canvas.remove(canvasBorder);
       canvasBorder = null;
@@ -1275,9 +1209,9 @@
     canvasWidth = width;
     canvasHeight = height;
 
-    // Create a new border with the updated dimensions
+    // Create a new clipPath with the updated dimensions
     setTimeout(() => {
-      addCanvasBorder();
+      addCanvasBorder(); // This now only adds clipPath, not border
       canvas.renderAll();
     }, 10);
 
@@ -1304,14 +1238,14 @@
     canvas.absolutePan({ x: 0, y: 0 });
     console.log('Reset pan to origin');
 
-    // Remove existing border
+    // Remove existing border if any
     if (canvasBorder) {
       canvas.remove(canvasBorder);
       canvasBorder = null;
     }
-    // Create a new border after a short delay to ensure the canvas is fully reset
+    // Create a new clipPath after a short delay to ensure the canvas is fully reset
     setTimeout(() => {
-      addCanvasBorder();
+      addCanvasBorder(); // This now only adds clipPath, not border
     }, 50);
 
     // Step 3: Force recreation of all objects with proper positioning
@@ -1537,13 +1471,8 @@
       // First, constrain all objects to be within canvas boundaries
       constrainObjectsToCanvas();
 
-      // Store reference to border
-      let hadBorder = false;
-
-      // Remove the border before saving without triggering events
+      // Remove any existing border before saving
       if (canvasBorder) {
-        hadBorder = true;
-
         // Temporarily disable event firing
         const originalFire = canvas.fire;
         canvas.fire = function() {};
@@ -1603,12 +1532,9 @@
       onCanvasChange(json);
       console.log('onCanvasChange called with canvas data');
 
-      // Add the border back if it was removed
-      if (hadBorder) {
-        // Add border back immediately without setTimeout
-        addCanvasBorder();
-        canvas.renderAll();
-      }
+      // Add clipPath back
+      addCanvasBorder(); // This now only adds clipPath, not border
+      canvas.renderAll();
 
       // Log canvas state after saving
       logCanvasState();
@@ -2223,20 +2149,15 @@
         const originalClipPath = canvas.clipPath;
         const originalBgColor = canvas.backgroundColor;
         const originalObjects = canvas.getObjects();
-        const hiddenBorderObjects: any[] = [];
         const originalVT = canvas.viewportTransform ? [...canvas.viewportTransform] : [1, 0, 0, 1, 0, 0];
         console.log('Original viewport transform:', originalVT);
 
-        // Hide any border objects temporarily
-        originalObjects.forEach((obj: any) => {
-          if (obj && obj.name === 'Canvas Border') {
-            if (obj.visible !== false) {
-              obj.visible = false;
-              hiddenBorderObjects.push(obj);
-            }
-          }
+        // Remove any border objects temporarily
+        const borderObjects = originalObjects.filter((obj: any) => obj && obj.name === 'Canvas Border');
+        borderObjects.forEach((obj: any) => {
+          canvas.remove(obj);
         });
-        console.log('Hidden border objects count:', hiddenBorderObjects.length);
+        console.log('Removed border objects count:', borderObjects.length);
 
         // Reset the viewportTransform to default (no zoom)
         canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
@@ -2282,10 +2203,8 @@
         canvas.setViewportTransform(originalVT);
         console.log('Restored original canvas state');
 
-        // Restore visibility of border objects
-        hiddenBorderObjects.forEach((obj: any) => {
-          obj.visible = true;
-        });
+        // Re-add clipPath
+        addCanvasBorder(); // This now only adds clipPath, not border
 
         // Re-render the canvas
         canvas.renderAll();

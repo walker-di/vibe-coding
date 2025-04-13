@@ -17,7 +17,7 @@
     storyId,
     creativeId, // We need this for creating new stories
     aspectRatio = '16:9', // Default to 16:9 if not provided
-    // resolution is not used but kept in the type for future use
+    resolution = null, // Now we'll use the resolution from the story
     onEditScene,
     onDeleteScene,
     onSelectScene,
@@ -41,8 +41,24 @@
     onDuplicateClip?: (clip: Clip) => Promise<void>; // Optional - for duplicating clips
   }>();
 
-  // Calculate canvas dimensions based on aspect ratio
+  // Calculate canvas dimensions based on aspect ratio and resolution
   function calculateDimensions(ratioString: string, fixedWidth: number = 800): { width: number; height: number } {
+    // First, check if we have a resolution string and try to use that
+    if (resolution) {
+      // Parse the resolution string (e.g., "1920x1080")
+      const match = resolution.match(/^(\d+)\s*x\s*(\d+)/i);
+      if (match && match[1] && match[2]) {
+        const width = parseInt(match[1], 10);
+        const height = parseInt(match[2], 10);
+        if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+          console.log(`Using resolution from story: ${width}x${height}`);
+          return { width, height };
+        }
+      }
+      console.warn(`Could not parse resolution string: ${resolution}. Falling back to aspect ratio.`);
+    }
+
+    // If no valid resolution, calculate based on aspect ratio
     // Handle special cases
     if (ratioString === 'Other') {
       return { width: fixedWidth, height: Math.round(fixedWidth * (9/16)) };

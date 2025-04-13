@@ -77,15 +77,60 @@ export const POST: RequestHandler = async ({ params, request }) => {
       throw error(500, 'Failed to select a template');
     }
 
+    // Log template information for debugging
+    console.log(`Selected template: ${template.name}, AspectRatio: ${template.aspectRatio}, Resolution: ${template.resolution}`);
+
+
     // Parse the template canvas data
     // Ensure template.canvasData is treated as a string before parsing
     const canvasData = JSON.parse(template.canvasData as string || '{}');
+
+    // Log initial canvas dimensions for debugging
+    console.log(`Initial canvas dimensions: width=${canvasData.width || 'not set'}, height=${canvasData.height || 'not set'}`);
 
     // Process each object in the canvas
     const updatedObjects = await processCanvasObjects(canvasData.objects || [], clip, creative, persona, product);
 
     // Update the canvas data with the processed objects
     canvasData.objects = updatedObjects;
+
+    // Set the canvas dimensions based on the template's resolution
+    if (template.resolution) {
+      const dimensions = calculateDimensions(template.resolution);
+      console.log(`Setting canvas dimensions from template resolution: ${dimensions.width}x${dimensions.height}`);
+      canvasData.width = dimensions.width;
+      canvasData.height = dimensions.height;
+    } else if (template.aspectRatio) {
+      // If no resolution but we have aspect ratio, calculate dimensions based on a default width
+      const defaultWidth = 1920; // Use a high-quality default width
+      let height;
+
+      // Calculate height based on aspect ratio
+      if (template.aspectRatio === '16:9') {
+        height = Math.round(defaultWidth * (9/16));
+      } else if (template.aspectRatio === '9:16') {
+        height = Math.round(defaultWidth * (16/9));
+      } else if (template.aspectRatio === '1:1') {
+        height = defaultWidth;
+      } else if (template.aspectRatio === '4:5') {
+        height = Math.round(defaultWidth * (5/4));
+      } else if (template.aspectRatio === '1.91:1') {
+        height = Math.round(defaultWidth / 1.91);
+      } else {
+        // Default to 16:9 if aspect ratio is not recognized
+        height = Math.round(defaultWidth * (9/16));
+      }
+
+      console.log(`No resolution in template, using calculated dimensions from aspect ratio: ${defaultWidth}x${height}`);
+      canvasData.width = defaultWidth;
+      canvasData.height = height;
+    } else {
+      console.log('Template has no resolution or aspect ratio set, using default dimensions');
+    }
+
+    // Log final canvas dimensions for debugging
+    console.log(`Final canvas dimensions: width=${canvasData.width || 'not set'}, height=${canvasData.height || 'not set'}`);
+
 
     // Update the clip with the new canvas data
     const [updatedClip] = await db
@@ -293,3 +338,27 @@ function createImageObject(placeholderObj: any, imageUrl: string) {
 // This ensures that generated images maintain the template's size constraints
 // Previously, width and height were omitted, causing images to be displayed at their intrinsic size
 // rather than respecting the template's dimensions
+
+// Helper function to parse resolution string (e.g., "1920x1080 (...)" or "800x600")
+function calculateDimensions(resolutionString: string | null): { width: number; height: number } {
+  const defaultDims = { width: 800, height: 600 }; // Default fallback
+  if (!resolutionString || typeof resolutionString !== 'string') {
+    console.warn(`Invalid resolution string: ${resolutionString}. Defaulting to ${defaultDims.width}x${defaultDims.height}.`);
+    return defaultDims;
+  }
+
+  // Regex to extract WxH from the start of the string
+  const match = resolutionString.match(/^(\d+)\s*x\s*(\d+)/i);
+
+  if (match && match[1] && match[2]) {
+    const width = parseInt(match[1], 10);
+    const height = parseInt(match[2], 10);
+
+    if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+      return { width, height };
+    }
+  }
+
+  console.warn(`Could not parse resolution: "${resolutionString}". Defaulting to ${defaultDims.width}x${defaultDims.height}.`);
+  return defaultDims;
+}
