@@ -224,6 +224,23 @@
                   // Ensure preserveObjectStacking is set before loading
                   canvas.preserveObjectStacking = true;
 
+                  // Preload images to ensure they are available when loading the canvas
+                  const imagesToPreload = [];
+                  for (const obj of jsonObj.objects) {
+                    if (obj.type === 'image' && obj.src) {
+                      // Add to preload list
+                      imagesToPreload.push(obj.src);
+
+                      // Ensure the image URL is properly formatted
+                      if (!obj.src.startsWith('http') && !obj.src.startsWith('/')) {
+                        obj.src = `/${obj.src}`;
+                      }
+
+                      // Log the image URL for debugging
+                      console.log(`Preloading image: ${obj.src}`);
+                    }
+                  }
+
                   // Load the sanitized JSON
                   canvas.loadFromJSON(jsonObj, () => {
                     // After loading, ensure all objects have their names properly set
@@ -335,6 +352,50 @@
                     resolve();
                   }, (err: any) => {
                     console.warn('Error in fabric.loadFromJSON:', err);
+
+                    // If the error is related to an image, try to fix it
+                    if (err && err.type === 'image') {
+                      console.log('Attempting to fix image loading error for:', err);
+
+                      // Try to create a new image object with the same properties but fixed URL
+                      try {
+                        const wf = window as any;
+                        if (wf.fabric && err.src) {
+                          // Fix the image URL if needed
+                          let fixedSrc = err.src;
+                          if (!fixedSrc.startsWith('http') && !fixedSrc.startsWith('/')) {
+                            fixedSrc = `/${fixedSrc}`;
+                          }
+
+                          // Create a new image object with the fixed URL
+                          wf.fabric.Image.fromURL(fixedSrc, (img: any) => {
+                            if (img) {
+                              // Copy properties from the original object
+                              img.set({
+                                left: err.left || 0,
+                                top: err.top || 0,
+                                width: err.width || 300,
+                                height: err.height || 300,
+                                scaleX: err.scaleX || 1,
+                                scaleY: err.scaleY || 1,
+                                name: err.name || `image_${Date.now()}`,
+                                angle: err.angle || 0,
+                                opacity: err.opacity || 1,
+                                flipX: err.flipX || false,
+                                flipY: err.flipY || false
+                              });
+
+                              // Add the fixed image to the canvas
+                              canvas.add(img);
+                              canvas.renderAll();
+                              console.log('Fixed image added to canvas:', img);
+                            }
+                          }, { crossOrigin: 'anonymous' });
+                        }
+                      } catch (fixError) {
+                        console.error('Failed to fix image loading error:', fixError);
+                      }
+                    }
 
                     // If we get an error, try to recover by checking if the object was added despite the error
                     // This can happen with objects that have extreme positions but are otherwise valid

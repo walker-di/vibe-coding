@@ -89,7 +89,9 @@ export const POST: RequestHandler = async ({ params, request }) => {
     console.log(`Initial canvas dimensions: width=${canvasData.width || 'not set'}, height=${canvasData.height || 'not set'}`);
 
     // Process each object in the canvas
+    console.log(`Processing ${canvasData.objects?.length || 0} objects in template`);
     const updatedObjects = await processCanvasObjects(canvasData.objects || [], clip, creative, persona, product);
+    console.log(`Processed ${updatedObjects.length} objects, including replacements`);
 
     // Update the canvas data with the processed objects
     canvasData.objects = updatedObjects;
@@ -133,14 +135,19 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 
     // Update the clip with the new canvas data
+    const canvasJson = JSON.stringify(canvasData);
+    console.log(`Canvas JSON length: ${canvasJson.length}`);
+
     const [updatedClip] = await db
       .update(clips)
       .set({
-        canvas: JSON.stringify(canvasData),
+        canvas: canvasJson,
         updatedAt: new Date()
       })
       .where(eq(clips.id, clipId))
       .returning();
+
+    console.log(`Clip ${clipId} updated successfully with new canvas data`);
 
     return json({
       success: true,
@@ -176,10 +183,13 @@ async function selectTemplateForClip(clip: any, story: any, creative: any, perso
 
 // Function to process canvas objects and generate images for placeholders
 async function processCanvasObjects(objects: any[], clip: any, creative: any, persona: any, product: any) {
+  console.log(`Starting to process ${objects.length} canvas objects`);
+
   // Ensure the uploads/gen directory exists
   const uploadDir = path.join('static', 'uploads', 'gen');
   try {
     await fs.mkdir(uploadDir, { recursive: true });
+    console.log(`Upload directory ${uploadDir} created or already exists`);
   } catch (err: any) {
     console.error('Error creating directory:', err);
     // Use sveltekit error helper
@@ -188,13 +198,21 @@ async function processCanvasObjects(objects: any[], clip: any, creative: any, pe
 
   // Process each object
   const updatedObjects = [];
+  let placeholderCount = 0;
+  let replacedCount = 0;
 
   for (const obj of objects) {
     // Check if this is a placeholder object and has a name property
     if (obj && obj.name && typeof obj.name === 'string' && obj.name.startsWith('placeholder?')) {
+      placeholderCount++;
+      console.log(`Found placeholder object: ${obj.name}`);
+      console.log(`Placeholder dimensions: ${obj.width}x${obj.height}, position: ${obj.left},${obj.top}`);
+
       const placeholderParams = parsePlaceholder(obj.name);
 
       if (placeholderParams) {
+        console.log(`Parsed placeholder parameters: ${JSON.stringify(placeholderParams)}`);
+
         // Generate a prompt based on the placeholder parameters and context
         const prompt = generatePromptForPlaceholder(
           placeholderParams,
@@ -203,14 +221,19 @@ async function processCanvasObjects(objects: any[], clip: any, creative: any, pe
           persona,
           product
         );
+        console.log(`Generated prompt: ${prompt}`);
 
         // Generate an image for the placeholder
         const aspectRatio = placeholderParams.ratio || '1:1';
+        console.log(`Using aspect ratio: ${aspectRatio}`);
+
         // Ensure generateImage exists and handles potential errors
         let imageUrl: string | null = null;
         try {
           // Assuming generateImage returns the URL or null/throws on error
+          console.log(`Calling generateImage with prompt: ${prompt.substring(0, 50)}...`);
           imageUrl = await generateImage(prompt, clip.id, aspectRatio as '1:1' | '16:9' | '9:16');
+          console.log(`Image generated successfully: ${imageUrl}`);
         } catch (genError: any) {
             console.error(`Image generation failed for placeholder ${obj.name}: ${genError.message}`);
             // Decide how to handle: skip, use default, or throw error
@@ -221,8 +244,11 @@ async function processCanvasObjects(objects: any[], clip: any, creative: any, pe
 
         if (imageUrl) {
           // Replace the placeholder with an image object
+          console.log(`Creating image object from placeholder: ${obj.name}`);
           const imageObj = createImageObject(obj, imageUrl);
           updatedObjects.push(imageObj);
+          replacedCount++;
+          console.log(`Placeholder ${obj.name} replaced with image object`);
         } else {
           // If image generation fails or returns null, keep the original object
           console.warn(`Image generation returned null for placeholder ${obj.name}. Keeping original object.`);
@@ -238,6 +264,9 @@ async function processCanvasObjects(objects: any[], clip: any, creative: any, pe
       updatedObjects.push(obj);
     }
   }
+
+  console.log(`Processing complete: Found ${placeholderCount} placeholders, replaced ${replacedCount} with images`);
+  console.log(`Returning ${updatedObjects.length} objects total`);
 
   return updatedObjects;
 }
@@ -279,18 +308,22 @@ function createImageObject(placeholderObj: any, imageUrl: string) {
 
   // Preserve the width and height from the placeholder
   // This ensures the generated image maintains the same dimensions as the placeholder
-  const width = placeholderObj.width || undefined;
-  const height = placeholderObj.height || undefined;
+  const width = placeholderObj.width || 300;
+  const height = placeholderObj.height || 300;
 
   // Calculate appropriate scale factors if width and height are defined
   // This will be used by fabric.js to properly size the image when loaded
   let scaleX = placeholderObj.scaleX || 1;
   let scaleY = placeholderObj.scaleY || 1;
 
+  console.log(`Creating image object from placeholder: ${placeholderObj.name}`);
+  console.log(`Placeholder dimensions: ${width}x${height}, position: ${placeholderObj.left},${placeholderObj.top}`);
+  console.log(`Using image URL: ${imageUrl}`);
+
   // If the placeholder has explicit width/height, we'll use those directly
   // The fabric.js Image object will handle scaling the loaded image to fit these dimensions
 
-  return {
+  const imageObj = {
     type: 'image',
     version: '5.3.0', // Consider using a constant or dynamic version
     originX: placeholderObj.originX || 'left',
@@ -328,10 +361,16 @@ function createImageObject(placeholderObj: any, imageUrl: string) {
     cropY: 0, // Reset crop for new image
     // Generate a more descriptive name if possible
     name: placeholderObj.name ? placeholderObj.name.replace('placeholder?', 'generated_') : `generated_image_${Date.now()}`,
-    src: imageUrl, // The generated image URL
+    // Ensure the image URL is properly formatted with absolute URL
+    src: imageUrl,
     crossOrigin: 'anonymous', // Important for canvas operations
     filters: [] // Apply filters later if needed
   };
+
+  console.log(`Created image object with dimensions: ${width}x${height}, position: ${imageObj.left},${imageObj.top}`);
+  console.log(`Image source: ${imageUrl}`);
+
+  return imageObj;
 }
 
 // Note: The createImageObject function now preserves the width and height from the placeholder

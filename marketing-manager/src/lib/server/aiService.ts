@@ -293,6 +293,7 @@ export async function generateImage(
 
       await fsPromises.writeFile(outputPath, imageBuffer);
       console.log(`Image file saved to: ${outputPath}`);
+      // Ensure the URL starts with a slash
       const relativeUrl = `/uploads/gen/${uniqueFilename}`; // Corrected relative URL
       console.log(`Returning local image URL for clip ${clipId}: ${relativeUrl}`);
       return relativeUrl;
