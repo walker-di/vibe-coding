@@ -1,5 +1,5 @@
 import { Canvas, type ImageFormat, Rect } from "fabric";
-import { initAligningGuidelines } from "fabric/extensions";
+import { initCanvasBorderSnap } from "./canvas-border-snap";
 
 export class CanvasService {
     canvas = $state<Canvas>(undefined as any);
@@ -28,7 +28,7 @@ export class CanvasService {
             height: this.canvas.height,
             absolutePositioned: true,
         });
-		initAligningGuidelines(this.canvas, {
+		initCanvasBorderSnap(this.canvas, {
 			margin: 4,
 			width: 1,
 			color: "rgb(255,0,0,0.9)",
