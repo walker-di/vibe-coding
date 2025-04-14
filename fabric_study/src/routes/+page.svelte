@@ -6,6 +6,7 @@
   import SidebarContent from "$lib/components/SidebarContent.svelte";
   import HeaderMenu from "$lib/components/HeaderMenu.svelte";
   import TextSelectionMenu from "$lib/components/TextSelectionMenu.svelte";
+  import ShapeStyleMenu from "$lib/components/ShapeStyleMenu.svelte";
   import { Canvas, FabricImage } from "fabric";
   import { onMount } from "svelte";
 
@@ -110,6 +111,11 @@
       <!-- Text Selection Menu -->
       {#if canvas}
         <TextSelectionMenu canvas={canvas} />
+      {/if}
+
+      <!-- Shape Style Menu -->
+      {#if canvas}
+        <ShapeStyleMenu canvas={canvas} />
       {/if}
     </div>
   </div>
