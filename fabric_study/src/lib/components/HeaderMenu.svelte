@@ -1,10 +1,53 @@
 <script lang="ts">
+  import { Canvas, type FabricObject } from "fabric";
+  import { onMount, onDestroy } from "svelte";
+  import PositionMenu from "./PositionMenu.svelte";
+  import TransparencyMenu from "./TransparencyMenu.svelte";
+
   // Props
-  let { duration = "5.0s" } = $props<{duration?: string}>();
+  let { duration = "5.0s", canvas } = $props<{duration?: string, canvas?: Canvas}>();
 
   // State variables
   let canUndo = $state(false);
   let canRedo = $state(false);
+  let positionMenuVisible = $state(false);
+  let transparencyMenuVisible = $state(false);
+
+  // References to buttons for positioning menus
+  let positionButtonRef = $state<HTMLElement | null>(null);
+  let transparencyButtonRef = $state<HTMLElement | null>(null);
+
+  // Add click outside handler to close menus
+  function handleClickOutside(event: MouseEvent) {
+    // Close menus when clicking outside of them
+    if (positionMenuVisible &&
+        positionButtonRef &&
+        !positionButtonRef.contains(event.target as Node) &&
+        !(event.target as HTMLElement).closest('.position-menu')) {
+      positionMenuVisible = false;
+    }
+
+    if (transparencyMenuVisible &&
+        transparencyButtonRef &&
+        !transparencyButtonRef.contains(event.target as Node) &&
+        !(event.target as HTMLElement).closest('.transparency-menu')) {
+      transparencyMenuVisible = false;
+    }
+  }
+
+  // Set up event listeners
+  onMount(() => {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+  });
+
+  // Clean up event listeners
+  onDestroy(() => {
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+  });
 
   // Functions for the header menu actions
   function handleUndo() {
@@ -18,8 +61,62 @@
   }
 
   function handlePosition() {
-    // Implement position functionality
-    console.log('Position clicked');
+    positionMenuVisible = !positionMenuVisible;
+  }
+
+  function handleTransparency() {
+    transparencyMenuVisible = !transparencyMenuVisible;
+  }
+
+  function handleLock() {
+    if (!canvas) return;
+
+    const activeObject = canvas.getActiveObject();
+    if (!activeObject) return;
+
+    // Toggle selectable property to lock/unlock
+    const isLocked = !activeObject.selectable;
+    activeObject.set('selectable', isLocked);
+
+    // If locking, deselect the object
+    if (!isLocked) {
+      canvas.discardActiveObject();
+    }
+
+    canvas.requestRenderAll();
+  }
+
+  function handleDuplicate() {
+    if (!canvas) return;
+
+    const activeObject = canvas.getActiveObject();
+    if (!activeObject) return;
+
+    // Clone the object
+    activeObject.clone().then((clonedObj: FabricObject) => {
+      // Offset the cloned object slightly to make it visible
+      clonedObj.set({
+        left: activeObject.left! + 10,
+        top: activeObject.top! + 10,
+        evented: true,
+      });
+
+      // Add the cloned object to the canvas
+      canvas.add(clonedObj);
+      canvas.setActiveObject(clonedObj);
+      canvas.requestRenderAll();
+    });
+  }
+
+  function handleDelete() {
+    if (!canvas) return;
+
+    const activeObject = canvas.getActiveObject();
+    if (!activeObject) return;
+
+    // Remove the object from the canvas
+    canvas.remove(activeObject);
+    canvas.requestRenderAll();
   }
 
   function handleRenderVideo() {
@@ -56,32 +153,62 @@
   </div>
 
   <div class="right-controls">
-    <button class="icon-button" title="Position" onclick={handlePosition} aria-label="Position">
+    <div class="position-container">
+      <button
+        class="icon-button"
+        title="Position"
+        onclick={handlePosition}
+        aria-label="Position"
+        bind:this={positionButtonRef}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 3H3v18h18V3z"></path>
+          <path d="M9 9h6v6H9V9z"></path>
+        </svg>
+      </button>
+      {#if canvas}
+        <PositionMenu {canvas} buttonRef={positionButtonRef} isVisible={positionMenuVisible} />
+      {/if}
+    </div>
+
+    <div class="transparency-container">
+      <button
+        class="icon-button"
+        title="Transparency"
+        onclick={handleTransparency}
+        aria-label="Transparency"
+        bind:this={transparencyButtonRef}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+        </svg>
+      </button>
+      {#if canvas}
+        <TransparencyMenu {canvas} buttonRef={transparencyButtonRef} isVisible={transparencyMenuVisible} />
+      {/if}
+    </div>
+
+    <button class="icon-button" title="Lock" onclick={handleLock} aria-label="Lock">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 3H3v18h18V3z"></path>
-        <path d="M9 9h6v6H9V9z"></path>
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
       </svg>
     </button>
-    <button class="icon-button" title="Align" aria-label="Align">
+
+    <button class="icon-button" title="Duplicate" onclick={handleDuplicate} aria-label="Duplicate">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="21" y1="6" x2="3" y2="6"></line>
-        <line x1="17" y1="12" x2="7" y2="12"></line>
-        <line x1="21" y1="18" x2="3" y2="18"></line>
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
       </svg>
     </button>
-    <button class="icon-button" title="Layer" aria-label="Layer">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-        <polyline points="2 17 12 22 22 17"></polyline>
-        <polyline points="2 12 12 17 22 12"></polyline>
-      </svg>
-    </button>
-    <button class="icon-button" title="Delete" aria-label="Delete">
+
+    <button class="icon-button" title="Delete" onclick={handleDelete} aria-label="Delete">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="3 6 5 6 21 6"></polyline>
         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
       </svg>
     </button>
+
     <button class="icon-button" title="Help" aria-label="Help">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"></circle>
@@ -89,6 +216,7 @@
         <line x1="12" y1="17" x2="12.01" y2="17"></line>
       </svg>
     </button>
+
     <button class="render-button" onclick={handleRenderVideo}>
       Render video
     </button>
@@ -112,6 +240,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .position-container, .transparency-container {
+    position: relative;
   }
 
   .center-controls {

@@ -83,7 +83,7 @@
   <!-- Main Content -->
   <div class="main-content">
     <!-- Header Menu -->
-    <HeaderMenu />
+    <HeaderMenu canvas={canvas} />
     <div class="toolbar mb-4 flex gap-2 flex-wrap">
       <button class="btn" onclick={() => canvasService.toggleDrawing()}>
         {canvasService?.isDrawing ? "Stop Drawing" : "Start Drawing"}
