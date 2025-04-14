@@ -1,4 +1,5 @@
 import { Canvas, type ImageFormat, Rect } from "fabric";
+import { initAligningGuidelines } from "fabric/extensions";
 
 export class CanvasService {
     canvas = $state<Canvas>(undefined as any);
@@ -27,7 +28,11 @@ export class CanvasService {
             height: this.canvas.height,
             absolutePositioned: true,
         });
-
+		initAligningGuidelines(this.canvas, {
+			margin: 4,
+			width: 1,
+			color: "rgb(255,0,0,0.9)",
+		});
         this.centerCanvas();
         this.canvas.renderAll();
     }
