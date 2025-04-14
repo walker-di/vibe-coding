@@ -2,10 +2,20 @@
   import { Canvas } from "fabric";
   import { addRectangle } from "$lib/tools/canvas-rectangle.svelte";
   import { addCircle } from "$lib/tools/canvas-circle.svelte";
+  import { addTriangle } from "$lib/tools/canvas-triangle.svelte";
+  import { addStar } from "$lib/tools/canvas-star.svelte";
+  import { addPentagon } from "$lib/tools/canvas-pentagon.svelte";
+  import { addHexagon } from "$lib/tools/canvas-hexagon.svelte";
+  import { addSpeechBubble } from "$lib/tools/canvas-speech.svelte";
+  import { addCross } from "$lib/tools/canvas-cross.svelte";
+  import { addArch } from "$lib/tools/canvas-arch.svelte";
+  import { addCloud } from "$lib/tools/canvas-cloud.svelte";
+  import { addSolidLine, addDashedLine, addDottedLine } from "$lib/tools/canvas-line.svelte";
+  import { addSimpleArrow, addDoubleArrow, addThickArrow } from "$lib/tools/canvas-arrow.svelte";
   import { addText } from "$lib/tools/canvas-text.svelte";
   import LayerManager from "$lib/components/LayerManager.svelte";
   import ResizeTab from "$lib/components/ResizeTab.svelte";
-    import type { CanvasService } from "$lib/canvas-service.svelte";
+  import type { CanvasService } from "$lib/canvas-service.svelte";
 
   let { activeTab = 'shapes', canvas, canvasService } = $props<{activeTab?: string, canvas: Canvas, canvasService: CanvasService}>();
 
@@ -13,24 +23,24 @@
   const shapes = [
     { id: 'rectangle', icon: '■', action: () => addRectangle(canvas) },
     { id: 'circle', icon: '●', action: () => addCircle(canvas) },
-    { id: 'triangle', icon: '▲', action: () => {} },
-    { id: 'star', icon: '★', action: () => {} },
-    { id: 'pentagon', icon: '⬠', action: () => {} },
-    { id: 'hexagon', icon: '⬡', action: () => {} },
-    { id: 'speech', icon: '💬', action: () => {} },
-    { id: 'cross', icon: '✚', action: () => {} },
-    { id: 'arch', icon: '◠', action: () => {} },
-    { id: 'cloud', icon: '☁️', action: () => {} }
+    { id: 'triangle', icon: '▲', action: () => addTriangle(canvas) },
+    { id: 'star', icon: '★', action: () => addStar(canvas) },
+    { id: 'pentagon', icon: '⬠', action: () => addPentagon(canvas) },
+    { id: 'hexagon', icon: '⬡', action: () => addHexagon(canvas) },
+    { id: 'speech', icon: '💬', action: () => addSpeechBubble(canvas) },
+    { id: 'cross', icon: '✚', action: () => addCross(canvas) },
+    { id: 'arch', icon: '◠', action: () => addArch(canvas) },
+    { id: 'cloud', icon: '☁️', action: () => addCloud(canvas) }
   ];
 
   // Define the lines for the lines tab
   const lines = [
-    { id: 'line1', icon: '—', action: () => {} },
-    { id: 'line2', icon: '- - -', action: () => {} },
-    { id: 'line3', icon: '······', action: () => {} },
-    { id: 'arrow1', icon: '→', action: () => {} },
-    { id: 'arrow2', icon: '⟶', action: () => {} },
-    { id: 'arrow3', icon: '⟹', action: () => {} }
+    { id: 'solid-line', icon: '—', action: () => addSolidLine(canvas) },
+    { id: 'dashed-line', icon: '- - -', action: () => addDashedLine(canvas) },
+    { id: 'dotted-line', icon: '······', action: () => addDottedLine(canvas) },
+    { id: 'simple-arrow', icon: '→', action: () => addSimpleArrow(canvas) },
+    { id: 'double-arrow', icon: '⟷', action: () => addDoubleArrow(canvas) },
+    { id: 'thick-arrow', icon: '➡', action: () => addThickArrow(canvas) }
   ];
 
   // Define the text options
@@ -52,6 +62,22 @@
   </div>
 
   {#if activeTab === 'elements'}
+    <div class="content-section">
+      <h3 class="section-title">Lines</h3>
+      <div class="items-grid">
+        {#each lines as line}
+          <button
+            type="button"
+            class="item"
+            onclick={() => handleItemClick(line.action)}
+            aria-label={`Add ${line.id}`}
+          >
+            <div class="item-icon">{line.icon}</div>
+          </button>
+        {/each}
+      </div>
+    </div>
+
     <div class="content-section">
       <h3 class="section-title">Shapes</h3>
       <div class="items-grid">
