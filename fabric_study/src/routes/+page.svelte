@@ -5,9 +5,9 @@
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SidebarContent from "$lib/components/SidebarContent.svelte";
   import HeaderMenu from "$lib/components/HeaderMenu.svelte";
+  import TextSelectionMenu from "$lib/components/TextSelectionMenu.svelte";
   import { Canvas, FabricImage } from "fabric";
   import { onMount } from "svelte";
-  import { addRectangle } from "$lib/tools/canvas-rectangle.svelte";
 
   let canvasEl = $state<HTMLCanvasElement>();
   let canvasService = $state<CanvasService>(undefined as any);
@@ -105,6 +105,11 @@
         <div class="zoom-menu-wrapper">
           <ZoomMenu canvasZoomPan={canvasZoomPan} />
         </div>
+      {/if}
+
+      <!-- Text Selection Menu -->
+      {#if canvas}
+        <TextSelectionMenu canvas={canvas} />
       {/if}
     </div>
   </div>
