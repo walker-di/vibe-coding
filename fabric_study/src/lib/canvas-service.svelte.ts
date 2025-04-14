@@ -51,11 +51,12 @@ export class CanvasService {
     async export(format: ImageFormat = "png") {
         const hiddenCanvas = document.createElement("canvas");
         const fabricBuffer = new Canvas(hiddenCanvas, {
-            width: 1920,
-            height: 1080,
+            width: this.canvas.getWidth(),
+            height: this.canvas.getHeight(),
             selection: false,
         });
         const elements = this.canvas.toJSON();
+
         await fabricBuffer.loadFromJSON(elements);
         const dataURL = fabricBuffer.toDataURL({
             format,
@@ -72,6 +73,36 @@ export class CanvasService {
         link.href = dataURL;
         link.click();
     }
+
+    resize(width: number, height: number, useMagicResize = false) {
+		if (!this.canvas) return;
+
+		if (useMagicResize) {
+            const currentWidth = this.canvas.getWidth();
+            const currentHeight = this.canvas.getHeight();
+			const scaleX = width / currentWidth;
+			const scaleY = height / currentHeight;
+
+			for (const obj of this.canvas.getObjects()) {
+				obj.scaleX = (obj.scaleX || 1) * scaleX;
+				obj.scaleY = (obj.scaleY || 1) * scaleY;
+				obj.left = (obj.left || 0) * scaleX;
+				obj.top = (obj.top || 0) * scaleY;
+				obj.setCoords();
+			}
+		}
+        this.canvas.clipPath = new Rect({
+            left: 0,
+            top: 0,
+            width,
+            height,
+            absolutePositioned: true,
+        });
+		this.canvas.setWidth(width);
+		this.canvas.setHeight(height);
+        this.centerCanvas();
+		this.canvas.renderAll();
+	}
 
     // Center the canvas in the viewport
     centerCanvas() {

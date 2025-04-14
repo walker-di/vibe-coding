@@ -4,8 +4,10 @@
   import { addCircle } from "$lib/tools/canvas-circle.svelte";
   import { addText } from "$lib/tools/canvas-text.svelte";
   import LayerManager from "$lib/components/LayerManager.svelte";
+  import ResizeTab from "$lib/components/ResizeTab.svelte";
+    import type { CanvasService } from "$lib/canvas-service.svelte";
 
-  let { activeTab = 'shapes', canvas } = $props<{activeTab?: string, canvas: Canvas}>();
+  let { activeTab = 'shapes', canvas, canvasService } = $props<{activeTab?: string, canvas: Canvas, canvasService: CanvasService}>();
 
   // Define the shapes for the shapes tab
   const shapes = [
@@ -102,6 +104,10 @@
   {:else if activeTab === 'layers'}
     <div class="content-section">
       <LayerManager canvas={canvas} />
+    </div>
+  {:else if activeTab === 'resize'}
+    <div class="content-section">
+      <ResizeTab canvas={canvas} {canvasService} />
     </div>
   {:else}
     <div class="content-section">

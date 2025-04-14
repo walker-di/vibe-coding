@@ -78,7 +78,7 @@
 
   <!-- Sidebar Content -->
   {#if showSidebarContent}
-    <SidebarContent activeTab={activeTab} canvas={canvas} />
+    <SidebarContent activeTab={activeTab} canvas={canvas} {canvasService} />
   {/if}
 
   <!-- Main Content -->
