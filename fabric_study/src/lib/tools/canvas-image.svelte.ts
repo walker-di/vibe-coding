@@ -1,5 +1,41 @@
 import { FabricImage, type Canvas } from "fabric";
 
+/**
+ * This file provides two functions for adding images to the canvas:
+ *
+ * 1. addImage (default export) - Adds an image with its original size
+ * 2. addImageFromUrl - Adds an image and scales it to fit within 80% of the canvas
+ *
+ * The default function is recommended for most cases as it preserves the original image dimensions.
+ */
+
+// Add image with original size (default function)
+export default function addImage(canvas: Canvas, url: string) {
+    return async () => {
+        if (!url) return;
+
+        const objectCount = canvas.getObjects().length;
+        const objectName = `Image ${objectCount + 1}`;
+
+        // Create image from URL
+        const img = await FabricImage.fromURL(url, { crossOrigin: 'anonymous' });
+
+        // Center the image on canvas without scaling
+        const left = (canvas.width - img.width) / 2;
+        const top = (canvas.height - img.height) / 2;
+
+        img.set({
+            left: left,
+            top: top,
+            name: objectName
+        });
+
+        canvas.add(img);
+        canvas.setActiveObject(img);
+    }
+}
+
+// Legacy function that scales images to fit within canvas
 export function addImageFromUrl(canvas: Canvas, url: string) {
     return async () => {
         if (!url) return;
@@ -7,11 +43,9 @@ export function addImageFromUrl(canvas: Canvas, url: string) {
         const objectCount = canvas.getObjects().length;
         const objectName = `Image ${objectCount + 1}`;
 
-        // We need to use the fabric.Image.fromURL method, but we can't directly import it
-        // So we'll use a workaround by accessing the fabric library through the canvas
-        // This is a temporary solution until we can properly import the fabric library
-
+        // Create image from URL
         const img = await FabricImage.fromURL(url, { crossOrigin: 'anonymous' });
+
         // Calculate maximum dimensions to fit within canvas
         const maxW = canvas.width * 0.8;
         const maxH = canvas.height * 0.8;
@@ -32,8 +66,6 @@ export function addImageFromUrl(canvas: Canvas, url: string) {
             name: objectName
         });
 
-        // Ensure the name is set using the set method
-        img.set('name', objectName);
         canvas.add(img);
         canvas.setActiveObject(img);
     }

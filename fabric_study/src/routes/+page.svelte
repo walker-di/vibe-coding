@@ -7,7 +7,8 @@
   import HeaderMenu from "$lib/components/HeaderMenu.svelte";
   import TextSelectionMenu from "$lib/components/TextSelectionMenu.svelte";
   import ShapeStyleMenu from "$lib/components/ShapeStyleMenu.svelte";
-  import { Canvas, FabricImage } from "fabric";
+  import { Canvas } from "fabric";
+  import addImage from "$lib/tools/canvas-image.svelte";
   import { onMount } from "svelte";
 
   let canvasEl = $state<HTMLCanvasElement>();
@@ -51,9 +52,9 @@
         const reader = new FileReader();
         reader.onload = async (f) => {
           const data = f.target?.result;
-          const img = await FabricImage.fromURL(data as string);
-          img.scale(0.5);
-          canvas.add(img);
+          // Use our new addImage function that respects original size
+          const addImageFn = addImage(canvas, data as string);
+          await addImageFn();
         };
         reader.readAsDataURL(file);
       }
