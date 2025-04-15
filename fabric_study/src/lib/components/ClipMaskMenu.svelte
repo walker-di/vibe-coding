@@ -348,7 +348,6 @@
 
   // Function to update the menu position
   function updateMenuPosition() {
-    console.log('ClipMaskMenu: updateMenuPosition called, isVisible =', isVisible);
     if (!isVisible) {
       console.log('ClipMaskMenu: Menu not visible, skipping position update');
       return;

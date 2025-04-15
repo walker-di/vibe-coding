@@ -11,6 +11,7 @@
   import ImageReplaceMenu from "$lib/components/ImageReplaceMenu.svelte";
   import { Canvas } from "fabric";
   import addImage from "$lib/tools/canvas-image.svelte";
+  import addSVG from "$lib/tools/canvas-svg.svelte";
   import { onMount } from "svelte";
 
   let canvasEl = $state<HTMLCanvasElement>();
@@ -64,6 +65,27 @@
     input.click();
   }
 
+  // Function to add an SVG from file upload
+  function handleSVGUpload() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".svg";
+    input.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (f) => {
+          const svgString = f.target?.result as string;
+          // Use our SVG import function
+          const addSVGFn = addSVG(canvas, svgString);
+          await addSVGFn();
+        };
+        reader.readAsText(file); // Read as text instead of DataURL for SVG files
+      }
+    };
+    input.click();
+  }
+
   async function exportCanvas() {
     await canvasService.download();
   }
@@ -96,6 +118,7 @@
         {canvasZoomPan?.isPanMode ? "Select/Move" : "Pan"}
       </button>
       <button class="btn" onclick={handleImageUpload}>Add Image</button>
+      <button class="btn" onclick={handleSVGUpload}>Add SVG</button>
       <button class="btn" onclick={exportCanvas}>Export</button>
       <button class="btn" onclick={() => canvasZoomPan.resetZoom()}>Reset Zoom</button>
       <button class="btn bg-green-500 hover:bg-green-600" onclick={() => canvasService.centerCanvas()}>Center Canvas</button>
