@@ -27,8 +27,6 @@
 	let isSaving = $state(false);
 	let canvasEditorRef: CanvasEditor | null = $state(null); // To call methods on the editor
 	let isCanvasReady = $state(false); // Track if canvas editor is initialized
-	let currentCanvasWidth = $state(800); // Default, will be updated
-	let currentCanvasHeight = $state(600); // Default, will be updated
 
 	// Filter resolutions based on selected aspect ratio
 	function getCompatibleResolutions(
@@ -108,59 +106,9 @@
 		return defaultDims;
 	}
 
-	// Effect to update canvas dimensions when finalResolution changes or canvas becomes ready
-	$effect(() => {
-		if (isCanvasReady && canvasEditorRef && finalResolution) {
-			console.log(
-				`Effect: finalResolution changed to ${finalResolution} or canvas ready. Updating dimensions.`,
-			);
-			const { width, height } = calculateDimensions(finalResolution);
-			// Only update if dimensions actually changed
-			if (
-				width !== currentCanvasWidth ||
-				height !== currentCanvasHeight
-			) {
-				console.log(`Updating canvas dimensions to ${width}x${height}`);
-				currentCanvasWidth = width;
-				currentCanvasHeight = height;
-				canvasEditorRef.updateDimensions(width, height);
-			} else {
-				console.log(
-					`Dimensions (${width}x${height}) haven't changed. Skipping update.`,
-				);
-			}
-		} else {
-			console.log(
-				`Effect: Canvas dimension update skipped. Ready: ${isCanvasReady}, Ref: ${!!canvasEditorRef}, Resolution: ${finalResolution}`,
-			);
-		}
-	});
-
 	function handleCanvasChange(json: string) {
 		canvasDataJson = json;
 		// console.log('New canvas data received in parent:', json.substring(0, 50) + '...');
-	}
-
-	function handleCanvasReady() {
-		console.log("CanvasEditor signaled ready.");
-		isCanvasReady = true;
-
-		// Set initial dimensions when canvas is ready
-		if (canvasEditorRef) {
-			const initialDims = calculateDimensions(finalResolution); // Use derived state
-			console.log(
-				`Setting initial canvas dimensions: ${initialDims.width}x${initialDims.height}`,
-			);
-			currentCanvasWidth = initialDims.width;
-			currentCanvasHeight = initialDims.height;
-			canvasEditorRef.updateDimensions(
-				initialDims.width,
-				initialDims.height,
-			);
-			// No initial data to load for new templates
-		} else {
-			console.warn("Canvas ready, but editor ref missing.");
-		}
 	}
 
 	async function saveTemplate() {
@@ -519,7 +467,6 @@
 				<CanvasEditor
 					bind:this={canvasEditorRef}
 					onCanvasChange={handleCanvasChange}
-					onReady={handleCanvasReady}
 					hideControls
 				/>
 			</div>

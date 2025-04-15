@@ -63,6 +63,7 @@
     "postcss": "^8.5.3",
     "replicate": "^1.0.1",
     "sqlite3": "^5.1.7",
+    "svelte-dnd-action": "^0.9.60",
     "svelte-local-storage-store": "^0.6.4",
     "svelte-sonner": "^0.3.28",
     "zod": "^3.24.2"

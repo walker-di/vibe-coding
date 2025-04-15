@@ -20,6 +20,7 @@
 		Trash2,
 		Layers,
 	} from "lucide-svelte";
+    import { FabricImage } from "fabric";
 
 	let { data }: { data: PageData } = $props(); // Get data from load function
 
@@ -37,10 +38,10 @@
 	let description = $state(data.template.description ?? "");
 	let aspectRatio = $state<CanvasAspectRatio>(
 		data.template.aspectRatio ?? "16:9",
-	); // Added
+	);
 	let resolutionSelection = $state<CommonResolution | "">(
 		getInitialResolutionSelection(data.template.resolution),
-	); // Added
+	);
 	// Initialize custom resolution value
 	let customResolution = $state(
 		data.template.resolution &&
@@ -48,7 +49,7 @@
 			? data.template.resolution
 			: "",
 	);
-	let canvasDataJson = $state<string | null>(data.template.canvasData); // Initial canvas data
+	let canvasDataJson = $state<string | null>(data.template.canvasData);
 	let isSaving = $state(false);
 	let canvasEditorRef: CanvasEditor | null = $state(null);
 	let isCanvasReady = $state(false); // Track if canvas editor is initialized
@@ -121,52 +122,45 @@
 	}
 
 	function onImageSelected(url: string) {
-		{
-			// Add extra null check for TS
-			if (!canvasEditorRef || !url) return;
-			// Set background image
-			const wf = window as any;
-			const canvas = canvasEditorRef.getCanvasInstance();
-			if (canvas && wf.fabric) {
-				wf.fabric.Image.fromURL(
-					url,
-					(img: any) => {
-						// Scale the image to fit the canvas dimensions
-						const canvasWidth = canvas.width;
-						const canvasHeight = canvas.height;
-						const scaleX = canvasWidth / img.width;
-						const scaleY = canvasHeight / img.height;
-						const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
+		if (!canvasEditorRef || !url) return;
+		const canvas = canvasEditorRef.getCanvasInstance();
+		if (canvas) {
+			FabricImage.fromURL(
+				url,
+				(img: any) => {
+					// Scale the image to fit the canvas dimensions
+					const canvasWidth = canvas.width;
+					const canvasHeight = canvas.height;
+					const scaleX = canvasWidth / img.width;
+					const scaleY = canvasHeight / img.height;
+					const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
 
-						img.set({
-							scaleX: scale,
-							scaleY: scale,
-							originX: "left",
-							originY: "top",
-						});
+					img.set({
+						scaleX: scale,
+						scaleY: scale,
+						originX: "left",
+						originY: "top",
+					});
 
-						canvas.setBackgroundImage(
-							img,
-							canvas.renderAll.bind(canvas),
-						);
-						// Mark canvas as changed
-						canvasHasChanged = true;
-						// Get the updated canvas JSON and update the state
-						canvasDataJson = canvasEditorRef!.getCurrentCanvasJson();
-						toast.success("Background image set");
-					},
-					{ crossOrigin: "anonymous" },
-				);
-			}
+					canvas.setBackgroundImage(
+						img,
+						canvas.renderAll.bind(canvas),
+					);
+					// Mark canvas as changed
+					canvasHasChanged = true;
+					// Get the updated canvas JSON and update the state
+					canvasDataJson = canvasEditorRef!.getCurrentCanvasJson();
+					toast.success("Background image set");
+				},
+				{ crossOrigin: "anonymous" },
+			);
 		}
 	}
 	function handleCanvasChange(json: string) {
 		if (isCanvasReady) {
-			// Only track changes after initial load
 			canvasHasChanged = true;
 		}
 		canvasDataJson = json;
-		// console.log('Updated canvas data received in parent:', json.substring(0, 50) + '...');
 	}
 
 	function handleCanvasReady() {
@@ -214,44 +208,26 @@
 
 		try {
 			// --- Step 1: Check if canvas changed and generate/upload new preview ---
-			console.log('=== TEMPLATE SAVE DEBUG START ===');
-			console.log('Canvas has changed:', canvasHasChanged);
-			console.log('Canvas editor ref exists:', !!canvasEditorRef);
+			console.log("=== TEMPLATE SAVE DEBUG START ===");
+			console.log("Canvas has changed:", canvasHasChanged);
+			console.log("Canvas editor ref exists:", !!canvasEditorRef);
 
 			// Force canvasHasChanged to true to always generate a new preview
 			// This is a temporary fix to ensure we're testing the export resolution
 			canvasHasChanged = true;
-			console.log('Forcing canvas has changed to:', canvasHasChanged);
 
-			if (canvasEditorRef) { // Remove canvasHasChanged check to always generate preview
-				console.log(
-					"[Preview Update] Canvas changed, attempting to generate new preview...",
-				);
-				console.log('Canvas editor ref methods:', Object.keys(canvasEditorRef));
-				console.log('Canvas dimensions:', canvasEditorRef.getCanvasInstance()?.width, 'x', canvasEditorRef.getCanvasInstance()?.height);
-
-				// Call getCanvasImageDataUrl with explicit debug logging
-				console.log('About to call getCanvasImageDataUrl...');
+			if (canvasEditorRef) {
 				const imageDataUrl = canvasEditorRef.getCanvasImageDataUrl();
-				console.log('getCanvasImageDataUrl returned data URL length:', imageDataUrl?.length || 0);
-				console.log('Data URL prefix:', imageDataUrl?.substring(0, 100) + '...' || 'null');
 
 				if (imageDataUrl) {
 					try {
-						console.log(
-							"[Preview Update] Attempting to upload new preview...",
-						);
 						const uploadedUrl = await uploadTemplatePreview(
 							imageDataUrl,
 							data.template.id,
 						);
-						console.log('Upload response URL:', uploadedUrl);
 
 						if (uploadedUrl) {
-							console.log(
-								"[Preview Update] New preview uploaded successfully:",
-								uploadedUrl,
-							);
+
 							finalPreviewUrl = uploadedUrl; // Use the new URL
 						} else {
 							previewUpdateFailed = true;
@@ -290,12 +266,7 @@
 					"[Preview Update] Canvas changed but editor ref is missing.",
 				);
 			}
-			console.log('=== TEMPLATE SAVE DEBUG END ===');
 
-			// --- Step 2: Update the template record with potentially new preview URL ---
-			console.log(
-				`[Template Update] Updating template ${data.template.id} with preview URL: ${finalPreviewUrl}`,
-			);
 			const response = await fetch(
 				`/api/canvas-templates/${data.template.id}`,
 				{
@@ -415,11 +386,6 @@
 		dataUrl: string,
 		templateId: number,
 	): Promise<string | null> {
-		console.log('=== UPLOAD TEMPLATE PREVIEW DEBUG START ===');
-		console.log('Template ID:', templateId);
-		console.log('Data URL length:', dataUrl?.length || 0);
-		console.log('Data URL prefix:', dataUrl?.substring(0, 100) + '...' || 'null');
-
 		// Create an Image object to check the dimensions of the data URL
 		const img = new Image();
 		img.src = dataUrl;
@@ -427,17 +393,22 @@
 		// Wait for the image to load to get its dimensions
 		await new Promise<void>((resolve) => {
 			img.onload = () => {
-				console.log('Image dimensions from data URL:', img.naturalWidth, 'x', img.naturalHeight);
+				console.log(
+					"Image dimensions from data URL:",
+					img.naturalWidth,
+					"x",
+					img.naturalHeight,
+				);
 				resolve();
 			};
 			img.onerror = () => {
-				console.error('Failed to load image from data URL');
+				console.error("Failed to load image from data URL");
 				resolve();
 			};
 		});
 
 		try {
-			console.log('Sending POST request to /api/upload/template-preview');
+			console.log("Sending POST request to /api/upload/template-preview");
 			const response = await fetch("/api/upload/template-preview", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -446,23 +417,23 @@
 					templateId: templateId,
 				}),
 			});
-			console.log('Response status:', response.status);
+			console.log("Response status:", response.status);
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
-				console.error('Response error:', errorData);
+				console.error("Response error:", errorData);
 				throw new Error(
 					errorData.message ||
 						`Upload failed with status ${response.status}`,
 				);
 			}
 			const result = await response.json();
-			console.log('Response result:', result);
-			console.log('=== UPLOAD TEMPLATE PREVIEW DEBUG END ===');
+			console.log("Response result:", result);
+			console.log("=== UPLOAD TEMPLATE PREVIEW DEBUG END ===");
 			return result.imageUrl;
 		} catch (error: any) {
 			console.error("Error uploading template preview:", error);
-			console.log('=== UPLOAD TEMPLATE PREVIEW DEBUG END (ERROR) ===');
+			console.log("=== UPLOAD TEMPLATE PREVIEW DEBUG END (ERROR) ===");
 			// Re-throw to be caught in updateTemplate
 			throw new Error(`Preview Upload Error: ${error.message}`);
 		}
@@ -511,9 +482,9 @@
 					</Select.Trigger>
 					<Select.Content>
 						{#each compatibleResolutions as res (res)}
-							<Select.Item value={res} label={res}
-								>{res}</Select.Item
-							>
+							<Select.Item value={res} label={res}>
+								{res}
+							</Select.Item>
 						{/each}
 					</Select.Content>
 				</Select.Root>

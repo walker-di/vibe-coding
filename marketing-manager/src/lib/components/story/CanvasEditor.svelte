@@ -21,12 +21,23 @@
   import { FileUpload } from "$lib/components/ui/file-upload";
   import ClipNarrationModal from "./ClipNarrationModal.svelte";
   import LayerOrderModal from "./LayerOrderModal.svelte";
-  import { Canvas, Rect, Point, FabricImage, Circle as FabricCircle, Textbox } from "fabric";
+  import {
+    Canvas,
+    Rect,
+    Point,
+    FabricImage,
+    Circle as FabricCircle,
+    Textbox,
+  } from "fabric";
   import { CanvasService } from "./canvas-service.svelte";
-    import { addRectangle } from "./canvas-tools/canvas-rectangle.svelte";
-    import { addCircle } from "./canvas-tools/canvas-circle.svelte";
-    import { addText } from "./canvas-tools/canvas-text.svelte";
-    import { addImageFromUrl } from "./canvas-tools/canvas-image.svelte";
+  import { addRectangle } from "./canvas-tools/canvas-rectangle.svelte";
+  import { addCircle } from "./canvas-tools/canvas-circle.svelte";
+  import { addText } from "./canvas-tools/canvas-text.svelte";
+  import { addImageFromUrl } from "./canvas-tools/canvas-image.svelte";
+  import CanvasHeader from "./CanvasHeader.svelte";
+  import CanvasFooter from "./CanvasFooter.svelte";
+  import { CanvasZoomPan } from "./canvas-zoom-pan.svelte";
+  import CanvasSidebar from "./CanvasSidebar.svelte";
 
   // Props
   let {
@@ -37,19 +48,21 @@
     narration = "",
     description = "",
     onNarrationChange,
-  } = $props<{
+    canvasDataJson,
+  }:{
     onCanvasChange: (canvasJson: string) => void;
     onReady?: () => void;
     hideControls?: boolean;
     value: string;
     narration?: string;
     description?: string;
+    canvasDataJson?: string;
     onNarrationChange?: (data: {
       narration: string | null;
       description: string | null;
       duration: number | null;
     }) => Promise<void>;
-  }>();
+  } = $props();
 
   // State
   let canvasService = $state<CanvasService>(undefined as any);
@@ -61,8 +74,10 @@
     Array<{ id: string; name: string; type: string; object: any }>
   >([]);
   let canvasContainer: HTMLDivElement | null = $state(null);
+  let canvasElement: HTMLElement | null = $state(null);
   let isZooming = $state(false);
   let resizeObserver: ResizeObserver | null = $state(null);
+  let canvasZoomPan = $state<CanvasZoomPan>(undefined as any);
 
   // Zoom State
   const MIN_ZOOM = 0.1;
@@ -83,567 +98,492 @@
 
   // --- Method to load canvas data (no transition) ---
   export async function loadCanvasData(canvasJson: string | null) {
-    console.log(
-      "loadCanvasData called with data length:",
-      canvasJson?.length || 0,
-    );
+    console.log("Loading canvas data");
 
-    // Always load the canvas data, even if it's the same as what's already loaded
-    // This ensures the canvas is properly updated when switching between clips
+    // Set loading flag to prevent event handling during load
+    isLoadingCanvas = true;
+    console.log("[DEBUG] isLoadingCanvas set to true");
 
-    // Handle undefined or null canvas data
-    if (!canvasJson) {
-      console.log("Canvas data is null or undefined, loading empty canvas");
+    try {
+      if (canvasJson) {
+        // Ensure we're working with a string
+        let jsonString = canvasJson;
 
-      // If canvas is ready, clear it and set default background
-      if (canvas) {
-        // Reset viewport transform to ensure consistent loading
-        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-
-        canvas.clear();
-        canvas.backgroundColor = "#f0f0f0";
-        canvas.renderAll();
-
-        // Ensure canvas is properly sized in the view
-        setTimeout(() => {
-          addCanvasBorder(); // This now only adds clipPath, not border
-          fitToView();
-          canvas.renderAll();
-          console.log("Empty canvas loaded and fitted to view");
-        }, 50);
-      }
-      return;
-    }
-
-    if (canvas) {
-      console.log("Loading canvas data");
-
-      // Set loading flag to prevent event handling during load
-      isLoadingCanvas = true;
-      console.log("[DEBUG] isLoadingCanvas set to true");
-
-      try {
-        if (canvasJson) {
-          // Ensure we're working with a string
-          let jsonString = canvasJson;
-
-          // If it's already an object (not a string), stringify it first
-          if (typeof canvasJson !== "string") {
-            try {
-              jsonString = JSON.stringify(canvasJson);
-              console.log("Converted object to JSON string");
-            } catch (stringifyError) {
-              console.error("Failed to stringify canvas data:", stringifyError);
-              throw stringifyError;
-            }
-          }
-
-          // Now parse it to validate and ensure it's a proper JSON string
+        // If it's already an object (not a string), stringify it first
+        if (typeof canvasJson !== "string") {
           try {
-            // Parse and re-stringify to ensure clean JSON
-            const parsedData = JSON.parse(jsonString);
-            jsonString = JSON.stringify(parsedData);
-          } catch (parseError) {
-            console.error("Invalid JSON format:", parseError);
-            throw parseError;
+            jsonString = JSON.stringify(canvasJson);
+            console.log("Converted object to JSON string");
+          } catch (stringifyError) {
+            console.error("Failed to stringify canvas data:", stringifyError);
+            throw stringifyError;
           }
+        }
 
-          // Load the validated JSON string into the canvas
-          try {
-            // Clear the canvas first to prevent any issues with existing objects
-            canvas.clear();
+        // Now parse it to validate and ensure it's a proper JSON string
+        try {
+          // Parse and re-stringify to ensure clean JSON
+          const parsedData = JSON.parse(jsonString);
+          jsonString = JSON.stringify(parsedData);
+        } catch (parseError) {
+          console.error("Invalid JSON format:", parseError);
+          throw parseError;
+        }
 
-            // Reset viewport transform to ensure consistent loading
-            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        // Load the validated JSON string into the canvas
+        try {
+          // Clear the canvas first to prevent any issues with existing objects
+          canvas.clear();
 
-            // Set a default background color
-            canvas.backgroundColor = "#f0f0f0";
+          // Reset viewport transform to ensure consistent loading
+          canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
-            // Only try to load JSON if it's not empty
-            if (jsonString && jsonString !== "{}" && jsonString !== "[]") {
-              await new Promise<void>((resolve) => {
-                try {
-                  // Parse the JSON string to an object first
-                  const jsonObj = JSON.parse(jsonString);
+          // Set a default background color
+          canvas.backgroundColor = "#f0f0f0";
 
-                  // Check if the JSON has the expected structure
-                  if (!jsonObj.objects || !Array.isArray(jsonObj.objects)) {
-                    console.warn("Invalid canvas JSON structure:", jsonObj);
-                    // Create a default empty canvas structure
-                    jsonObj.objects = [];
-                  }
+          // Only try to load JSON if it's not empty
+          if (jsonString && jsonString !== "{}" && jsonString !== "[]") {
+            await new Promise<void>((resolve) => {
+              try {
+                // Parse the JSON string to an object first
+                const jsonObj = JSON.parse(jsonString);
 
-                  // Filter out any problematic objects and Canvas Border objects
-                  jsonObj.objects = jsonObj.objects.filter((obj: any) => {
-                    // Filter out Canvas Border objects
-                    if (obj && obj.name === "Canvas Border") {
-                      console.log(
-                        "Filtering out Canvas Border object from loaded JSON",
-                      );
-                      return false;
-                    }
+                // Check if the JSON has the expected structure
+                if (!jsonObj.objects || !Array.isArray(jsonObj.objects)) {
+                  console.warn("Invalid canvas JSON structure:", jsonObj);
+                  // Create a default empty canvas structure
+                  jsonObj.objects = [];
+                }
 
-                    // Keep only objects with valid types
-                    const validTypes = [
-                      "rect",
-                      "circle",
-                      "text",
-                      "textbox",
-                      "image",
-                      "path",
-                      "polygon",
-                      "polyline",
-                      "line",
-                      "triangle",
-                    ];
-                    const isValid =
-                      obj &&
-                      obj.type &&
-                      validTypes.includes(obj.type.toLowerCase());
-                    if (!isValid) {
-                      console.warn("Filtering out invalid object:", obj);
-                    }
-                    return isValid;
-                  });
+                // Normalize object positions and scales in the JSON before loading
+                const canvasWidth = jsonObj.width || canvas.width;
+                const canvasHeight = jsonObj.height || canvas.height;
 
-                  // Normalize object positions and scales in the JSON before loading
-                  const canvasWidth = jsonObj.width || canvas.width;
-                  const canvasHeight = jsonObj.height || canvas.height;
+                // Check for and fix extreme values in the JSON data
+                let hasExtremeValues = false;
+                jsonObj.objects.forEach((obj: any) => {
+                  // Store original values for logging
+                  const originalLeft = obj.left;
+                  const originalTop = obj.top;
 
-                  // Check for and fix extreme values in the JSON data
-                  let hasExtremeValues = false;
-                  jsonObj.objects.forEach((obj: any) => {
-                    // Store original values for logging
-                    const originalLeft = obj.left;
-                    const originalTop = obj.top;
-
-                    // More aggressive check for extreme positions (very negative or very large values)
-                    if (
-                      obj.left !== undefined &&
-                      (obj.left < -canvasWidth / 2 ||
-                        obj.left > canvasWidth * 1.5)
-                    ) {
-                      console.warn(
-                        `Object has extreme X position: ${originalLeft}`,
-                        obj,
-                      );
-                      hasExtremeValues = true;
-                      // Center horizontally with better calculation
-                      obj.left =
-                        canvasWidth / 2 -
-                        ((obj.width || 100) * (obj.scaleX || 1)) / 2;
-                      console.log(
-                        `Fixed extreme X position: ${originalLeft} -> ${obj.left}`,
-                      );
-                    }
-
-                    if (
-                      obj.top !== undefined &&
-                      (obj.top < -canvasHeight / 2 ||
-                        obj.top > canvasHeight * 1.5)
-                    ) {
-                      console.warn(
-                        `Object has extreme Y position: ${originalTop}`,
-                        obj,
-                      );
-                      hasExtremeValues = true;
-                      // Center vertically with better calculation
-                      obj.top =
-                        canvasHeight / 2 -
-                        ((obj.height || 100) * (obj.scaleY || 1)) / 2;
-                      console.log(
-                        `Fixed extreme Y position: ${originalTop} -> ${obj.top}`,
-                      );
-                    }
-
-                    // Check for extreme scale values
-                    if (
-                      obj.scaleX !== undefined &&
-                      (obj.scaleX > 5 || obj.scaleX < 0.1)
-                    ) {
-                      console.warn(
-                        `Object has extreme scaleX: ${obj.scaleX}`,
-                        obj,
-                      );
-                      hasExtremeValues = true;
-
-                      // Calculate actual dimensions and reset scale
-                      if (obj.width) {
-                        obj.width = obj.width * obj.scaleX;
-                        obj.scaleX = 1;
-                      }
-                    }
-
-                    if (
-                      obj.scaleY !== undefined &&
-                      (obj.scaleY > 5 || obj.scaleY < 0.1)
-                    ) {
-                      console.warn(
-                        `Object has extreme scaleY: ${obj.scaleY}`,
-                        obj,
-                      );
-                      hasExtremeValues = true;
-
-                      // Calculate actual dimensions and reset scale
-                      if (obj.height) {
-                        obj.height = obj.height * obj.scaleY;
-                        obj.scaleY = 1;
-                      }
-                    }
-                  });
-
-                  if (hasExtremeValues) {
+                  // More aggressive check for extreme positions (very negative or very large values)
+                  if (
+                    obj.left !== undefined &&
+                    (obj.left < -canvasWidth / 2 ||
+                      obj.left > canvasWidth * 1.5)
+                  ) {
+                    console.warn(
+                      `Object has extreme X position: ${originalLeft}`,
+                      obj,
+                    );
+                    hasExtremeValues = true;
+                    // Center horizontally with better calculation
+                    obj.left =
+                      canvasWidth / 2 -
+                      ((obj.width || 100) * (obj.scaleX || 1)) / 2;
                     console.log(
-                      "Extreme values detected and fixed in JSON data before loading",
+                      `Fixed extreme X position: ${originalLeft} -> ${obj.left}`,
                     );
                   }
 
-                  // Ensure preserveObjectStacking is set before loading
-                  canvas.preserveObjectStacking = true;
+                  if (
+                    obj.top !== undefined &&
+                    (obj.top < -canvasHeight / 2 ||
+                      obj.top > canvasHeight * 1.5)
+                  ) {
+                    console.warn(
+                      `Object has extreme Y position: ${originalTop}`,
+                      obj,
+                    );
+                    hasExtremeValues = true;
+                    // Center vertically with better calculation
+                    obj.top =
+                      canvasHeight / 2 -
+                      ((obj.height || 100) * (obj.scaleY || 1)) / 2;
+                    console.log(
+                      `Fixed extreme Y position: ${originalTop} -> ${obj.top}`,
+                    );
+                  }
 
-                  // Preload images to ensure they are available when loading the canvas
-                  const imagesToPreload = [];
-                  for (const obj of jsonObj.objects) {
-                    if (obj.type === "image" && obj.src) {
-                      // Add to preload list
-                      imagesToPreload.push(obj.src);
+                  // Check for extreme scale values
+                  if (
+                    obj.scaleX !== undefined &&
+                    (obj.scaleX > 5 || obj.scaleX < 0.1)
+                  ) {
+                    console.warn(
+                      `Object has extreme scaleX: ${obj.scaleX}`,
+                      obj,
+                    );
+                    hasExtremeValues = true;
 
-                      // Ensure the image URL is properly formatted
-                      if (
-                        !obj.src.startsWith("http") &&
-                        !obj.src.startsWith("/")
-                      ) {
-                        obj.src = `/${obj.src}`;
-                      }
-
-                      // Log the image URL for debugging
-                      console.log(`Preloading image: ${obj.src}`);
+                    // Calculate actual dimensions and reset scale
+                    if (obj.width) {
+                      obj.width = obj.width * obj.scaleX;
+                      obj.scaleX = 1;
                     }
                   }
 
-                  // Load the sanitized JSON
-                  canvas.loadFromJSON(
-                    jsonObj,
-                    () => {
-                      // After loading, ensure all objects have their names properly set
-                      // Also check for any Canvas Border objects that might have been loaded
-                      const objects = canvas.getObjects();
-                      const borderObjects = objects.filter(
-                        (obj: any) => obj.name === "Canvas Border",
+                  if (
+                    obj.scaleY !== undefined &&
+                    (obj.scaleY > 5 || obj.scaleY < 0.1)
+                  ) {
+                    console.warn(
+                      `Object has extreme scaleY: ${obj.scaleY}`,
+                      obj,
+                    );
+                    hasExtremeValues = true;
+
+                    // Calculate actual dimensions and reset scale
+                    if (obj.height) {
+                      obj.height = obj.height * obj.scaleY;
+                      obj.scaleY = 1;
+                    }
+                  }
+                });
+
+                if (hasExtremeValues) {
+                  console.log(
+                    "Extreme values detected and fixed in JSON data before loading",
+                  );
+                }
+
+                // Ensure preserveObjectStacking is set before loading
+                canvas.preserveObjectStacking = true;
+
+                // Preload images to ensure they are available when loading the canvas
+                const imagesToPreload = [];
+                for (const obj of jsonObj.objects) {
+                  if (obj.type === "image" && obj.src) {
+                    // Add to preload list
+                    imagesToPreload.push(obj.src);
+
+                    // Ensure the image URL is properly formatted
+                    if (
+                      !obj.src.startsWith("http") &&
+                      !obj.src.startsWith("/")
+                    ) {
+                      obj.src = `/${obj.src}`;
+                    }
+
+                    // Log the image URL for debugging
+                    console.log(`Preloading image: ${obj.src}`);
+                  }
+                }
+
+                // Load the sanitized JSON
+                canvas.loadFromJSON(
+                  jsonObj,
+                  () => {
+                    // After loading, ensure all objects have their names properly set
+                    // Also check for any Canvas Border objects that might have been loaded
+                    const objects = canvas.getObjects();
+                    const borderObjects = objects.filter(
+                      (obj: any) => obj.name === "Canvas Border",
+                    );
+
+                    // Remove any Canvas Border objects that were loaded from JSON
+                    if (borderObjects.length > 0) {
+                      console.log(
+                        `Found ${borderObjects.length} Canvas Border objects in loaded JSON, removing them...`,
+                      );
+                      borderObjects.forEach((border: any) => {
+                        canvas.remove(border);
+                      });
+                    }
+
+                    // Process remaining objects
+                    const remainingObjects = canvas.getObjects();
+                    remainingObjects.forEach((obj: any, index: number) => {
+                      // If the object doesn't have a name from the JSON, set a default one
+                      if (!obj.name) {
+                        const defaultName = `Layer ${index + 1}`;
+                        obj.name = defaultName;
+                        // Force the canvas to recognize the change
+                        obj.set("name", defaultName);
+                        console.log(
+                          `Set default name for object ${index}: ${defaultName}`,
+                        );
+                      } else {
+                        // Ensure the name is properly set using the set method
+                        obj.set("name", obj.name);
+                        console.log(
+                          `Loaded object ${index} with name: ${obj.name}`,
+                        );
+                      }
+                    });
+
+                    // Force all objects to be marked as dirty to ensure they render
+                    objects.forEach((obj: any) => {
+                      if (obj) {
+                        obj.dirty = true;
+                      }
+                    });
+
+                    // Check if any objects have extreme positions
+                    let hasExtremePositions = false;
+                    let extremeObjectCount = 0;
+                    const maxExtremeObjects = 3; // Only fix if a reasonable number of objects have issues
+
+                    objects.forEach((obj: any) => {
+                      if (!obj) return;
+
+                      // Skip Canvas Border objects
+                      if (obj.name === "Canvas Border") return;
+
+                      // Check for extreme positions that would cause display issues
+                      // Use more conservative thresholds to avoid false positives
+                      if (
+                        obj.left < -canvas.width ||
+                        obj.left > canvas.width * 2 ||
+                        obj.top < -canvas.height ||
+                        obj.top > canvas.height * 2
+                      ) {
+                        hasExtremePositions = true;
+                        extremeObjectCount++;
+                        console.log(
+                          `Object ${obj.name || "unnamed"} has extreme position: left=${obj.left}, top=${obj.top}`,
+                        );
+
+                        // Fix this object's position directly instead of resetting everything
+                        obj.set({
+                          left: Math.max(0, Math.min(canvas.width, obj.left)),
+                          top: Math.max(0, Math.min(canvas.height, obj.top)),
+                        });
+                        obj.setCoords();
+                      }
+                    });
+
+                    // If extreme positions are detected and there are too many to fix individually,
+                    // use resetCanvasView as a last resort
+                    if (
+                      hasExtremePositions &&
+                      extremeObjectCount > maxExtremeObjects
+                    ) {
+                      console.log(
+                        "Extreme positions detected, recreating objects with correct positions",
+                      );
+                      // Use setTimeout to ensure the canvas is fully loaded before resetting
+                      setTimeout(() => {
+                        // Set loading flag to prevent saving during reset
+                        isLoadingCanvas = true;
+                        resetCanvasView();
+                      }, 100);
+                    } else {
+                      // Otherwise, use the normal approach
+                      const normalized = normalizeObjects();
+                      if (normalized) {
+                        console.log("Objects were normalized in the canvas");
+                      }
+                    }
+
+                    canvas.renderAll();
+                    // Ensure canvas is properly sized in the view after loading
+                    setTimeout(() => {
+                      // Temporarily disable event firing to prevent infinite loops
+                      const originalFire = canvas.fire;
+                      canvas.fire = function () {};
+
+                      // Restore event firing
+                      canvas.fire = originalFire;
+
+                      // Fit to view
+                      fitToView();
+                      canvas.renderAll();
+                      console.log("Canvas data loaded and fitted to view");
+                    }, 50);
+                    resolve();
+                  },
+                  (err: any) => {
+                    console.warn("Error in fabric.loadFromJSON:", err);
+
+                    // If the error is related to an image, try to fix it
+                    if (err && err.type === "image") {
+                      console.log(
+                        "Attempting to fix image loading error for:",
+                        err,
                       );
 
-                      // Remove any Canvas Border objects that were loaded from JSON
-                      if (borderObjects.length > 0) {
-                        console.log(
-                          `Found ${borderObjects.length} Canvas Border objects in loaded JSON, removing them...`,
+                      // Try to create a new image object with the same properties but fixed URL
+                      try {
+                        const wf = window as any;
+                        if (wf.fabric && err.src) {
+                          // Fix the image URL if needed
+                          let fixedSrc = err.src;
+                          if (
+                            !fixedSrc.startsWith("http") &&
+                            !fixedSrc.startsWith("/")
+                          ) {
+                            fixedSrc = `/${fixedSrc}`;
+                          }
+
+                          // Create a new image object with the fixed URL
+                          wf.fabric.Image.fromURL(
+                            fixedSrc,
+                            (img: any) => {
+                              if (img) {
+                                // Copy properties from the original object
+                                img.set({
+                                  left: err.left || 0,
+                                  top: err.top || 0,
+                                  width: err.width || 300,
+                                  height: err.height || 300,
+                                  scaleX: err.scaleX || 1,
+                                  scaleY: err.scaleY || 1,
+                                  name: err.name || `image_${Date.now()}`,
+                                  angle: err.angle || 0,
+                                  opacity: err.opacity || 1,
+                                  flipX: err.flipX || false,
+                                  flipY: err.flipY || false,
+                                });
+
+                                // Add the fixed image to the canvas
+                                canvas.add(img);
+                                canvas.renderAll();
+                                console.log(
+                                  "Fixed image added to canvas:",
+                                  img,
+                                );
+                              }
+                            },
+                            { crossOrigin: "anonymous" },
+                          );
+                        }
+                      } catch (fixError) {
+                        console.error(
+                          "Failed to fix image loading error:",
+                          fixError,
                         );
-                        borderObjects.forEach((border: any) => {
-                          canvas.remove(border);
-                        });
                       }
+                    }
 
-                      // Process remaining objects
-                      const remainingObjects = canvas.getObjects();
-                      remainingObjects.forEach((obj: any, index: number) => {
-                        // If the object doesn't have a name from the JSON, set a default one
-                        if (!obj.name) {
-                          const defaultName = `Layer ${index + 1}`;
-                          obj.name = defaultName;
-                          // Force the canvas to recognize the change
-                          obj.set("name", defaultName);
-                          console.log(
-                            `Set default name for object ${index}: ${defaultName}`,
-                          );
-                        } else {
-                          // Ensure the name is properly set using the set method
-                          obj.set("name", obj.name);
-                          console.log(
-                            `Loaded object ${index} with name: ${obj.name}`,
-                          );
-                        }
-                      });
+                    // If we get an error, try to recover by checking if the object was added despite the error
+                    // This can happen with objects that have extreme positions but are otherwise valid
+                    const objects = canvas.getObjects();
+                    if (objects && objects.length > 0) {
+                      console.log(
+                        `Recovered ${objects.length} objects despite loading errors`,
+                      );
 
-                      // Force all objects to be marked as dirty to ensure they render
-                      objects.forEach((obj: any) => {
-                        if (obj) {
-                          obj.dirty = true;
-                        }
-                      });
-
-                      // Check if any objects have extreme positions
-                      let hasExtremePositions = false;
-                      let extremeObjectCount = 0;
-                      const maxExtremeObjects = 3; // Only fix if a reasonable number of objects have issues
-
+                      // Remove any problematic objects that might be causing issues
+                      // Specifically look for objects with extreme positions or invalid properties
+                      const objectsToRemove: any[] = [];
                       objects.forEach((obj: any) => {
                         if (!obj) return;
 
-                        // Skip Canvas Border objects
-                        if (obj.name === "Canvas Border") return;
-
-                        // Check for extreme positions that would cause display issues
-                        // Use more conservative thresholds to avoid false positives
+                        // Check for extreme positions
+                        const objBounds = obj.getBoundingRect();
                         if (
-                          obj.left < -canvas.width ||
-                          obj.left > canvas.width * 2 ||
-                          obj.top < -canvas.height ||
-                          obj.top > canvas.height * 2
+                          objBounds.left < -1000 ||
+                          objBounds.top < -1000 ||
+                          objBounds.left + objBounds.width >
+                            canvas.width + 1000 ||
+                          objBounds.top + objBounds.height >
+                            canvas.height + 1000
                         ) {
-                          hasExtremePositions = true;
-                          extremeObjectCount++;
                           console.log(
-                            `Object ${obj.name || "unnamed"} has extreme position: left=${obj.left}, top=${obj.top}`,
+                            `Removing object with extreme position: ${obj.name || "unnamed"}`,
                           );
+                          objectsToRemove.push(obj);
+                          return;
+                        }
 
-                          // Fix this object's position directly instead of resetting everything
-                          obj.set({
-                            left: Math.max(0, Math.min(canvas.width, obj.left)),
-                            top: Math.max(0, Math.min(canvas.height, obj.top)),
-                          });
-                          obj.setCoords();
+                        // Check for extreme scale values
+                        if (
+                          (obj.scaleX &&
+                            (obj.scaleX > 10 || obj.scaleX < 0.01)) ||
+                          (obj.scaleY && (obj.scaleY > 10 || obj.scaleY < 0.01))
+                        ) {
+                          console.log(
+                            `Removing object with extreme scale: ${obj.name || "unnamed"}`,
+                          );
+                          objectsToRemove.push(obj);
+                          return;
                         }
                       });
 
-                      // If extreme positions are detected and there are too many to fix individually,
-                      // use resetCanvasView as a last resort
-                      if (
-                        hasExtremePositions &&
-                        extremeObjectCount > maxExtremeObjects
-                      ) {
+                      // Remove problematic objects
+                      if (objectsToRemove.length > 0) {
                         console.log(
-                          "Extreme positions detected, recreating objects with correct positions",
+                          `Removing ${objectsToRemove.length} problematic objects`,
                         );
-                        // Use setTimeout to ensure the canvas is fully loaded before resetting
-                        setTimeout(() => {
-                          // Set loading flag to prevent saving during reset
-                          isLoadingCanvas = true;
-                          resetCanvasView();
-                        }, 100);
-                      } else {
-                        // Otherwise, use the normal approach
-                        const normalized = normalizeObjects();
-                        if (normalized) {
-                          console.log("Objects were normalized in the canvas");
-                        }
-
+                        objectsToRemove.forEach((obj) => canvas.remove(obj));
                       }
 
+                      // Try to normalize any remaining objects
+                      const normalized = normalizeObjects();
+                      if (normalized) {
+                        console.log(
+                          "Objects were normalized after loading error",
+                        );
+                      }
+
+                      // Force a render
                       canvas.renderAll();
-                      // Ensure canvas is properly sized in the view after loading
-                      setTimeout(() => {
-                        // Temporarily disable event firing to prevent infinite loops
-                        const originalFire = canvas.fire;
-                        canvas.fire = function () {};
+                    }
 
-                        // Add clipPath after loading
-                        addCanvasBorder(); // This now only adds clipPath, not border
-
-                        // Restore event firing
-                        canvas.fire = originalFire;
-
-                        // Fit to view
-                        fitToView();
-                        canvas.renderAll();
-                        console.log("Canvas data loaded and fitted to view");
-                      }, 50);
-                      resolve();
-                    },
-                    (err: any) => {
-                      console.warn("Error in fabric.loadFromJSON:", err);
-
-                      // If the error is related to an image, try to fix it
-                      if (err && err.type === "image") {
-                        console.log(
-                          "Attempting to fix image loading error for:",
-                          err,
-                        );
-
-                        // Try to create a new image object with the same properties but fixed URL
-                        try {
-                          const wf = window as any;
-                          if (wf.fabric && err.src) {
-                            // Fix the image URL if needed
-                            let fixedSrc = err.src;
-                            if (
-                              !fixedSrc.startsWith("http") &&
-                              !fixedSrc.startsWith("/")
-                            ) {
-                              fixedSrc = `/${fixedSrc}`;
-                            }
-
-                            // Create a new image object with the fixed URL
-                            wf.fabric.Image.fromURL(
-                              fixedSrc,
-                              (img: any) => {
-                                if (img) {
-                                  // Copy properties from the original object
-                                  img.set({
-                                    left: err.left || 0,
-                                    top: err.top || 0,
-                                    width: err.width || 300,
-                                    height: err.height || 300,
-                                    scaleX: err.scaleX || 1,
-                                    scaleY: err.scaleY || 1,
-                                    name: err.name || `image_${Date.now()}`,
-                                    angle: err.angle || 0,
-                                    opacity: err.opacity || 1,
-                                    flipX: err.flipX || false,
-                                    flipY: err.flipY || false,
-                                  });
-
-                                  // Add the fixed image to the canvas
-                                  canvas.add(img);
-                                  canvas.renderAll();
-                                  console.log(
-                                    "Fixed image added to canvas:",
-                                    img,
-                                  );
-                                }
-                              },
-                              { crossOrigin: "anonymous" },
-                            );
-                          }
-                        } catch (fixError) {
-                          console.error(
-                            "Failed to fix image loading error:",
-                            fixError,
-                          );
-                        }
-                      }
-
-                      // If we get an error, try to recover by checking if the object was added despite the error
-                      // This can happen with objects that have extreme positions but are otherwise valid
-                      const objects = canvas.getObjects();
-                      if (objects && objects.length > 0) {
-                        console.log(
-                          `Recovered ${objects.length} objects despite loading errors`,
-                        );
-
-                        // Remove any problematic objects that might be causing issues
-                        // Specifically look for objects with extreme positions or invalid properties
-                        const objectsToRemove: any[] = [];
-                        objects.forEach((obj: any) => {
-                          if (!obj) return;
-
-                          // Check for extreme positions
-                          const objBounds = obj.getBoundingRect();
-                          if (
-                            objBounds.left < -1000 ||
-                            objBounds.top < -1000 ||
-                            objBounds.left + objBounds.width >
-                              canvas.width + 1000 ||
-                            objBounds.top + objBounds.height >
-                              canvas.height + 1000
-                          ) {
-                            console.log(
-                              `Removing object with extreme position: ${obj.name || "unnamed"}`,
-                            );
-                            objectsToRemove.push(obj);
-                            return;
-                          }
-
-                          // Check for extreme scale values
-                          if (
-                            (obj.scaleX &&
-                              (obj.scaleX > 10 || obj.scaleX < 0.01)) ||
-                            (obj.scaleY &&
-                              (obj.scaleY > 10 || obj.scaleY < 0.01))
-                          ) {
-                            console.log(
-                              `Removing object with extreme scale: ${obj.name || "unnamed"}`,
-                            );
-                            objectsToRemove.push(obj);
-                            return;
-                          }
-                        });
-
-                        // Remove problematic objects
-                        if (objectsToRemove.length > 0) {
-                          console.log(
-                            `Removing ${objectsToRemove.length} problematic objects`,
-                          );
-                          objectsToRemove.forEach((obj) => canvas.remove(obj));
-                        }
-
-                        // Try to normalize any remaining objects
-                        const normalized = normalizeObjects();
-                        if (normalized) {
-                          console.log(
-                            "Objects were normalized after loading error",
-                          );
-                        }
-
-                        // Force a render
-                        canvas.renderAll();
-                      }
-
-                      // Don't reject, just log the error and continue
-                      resolve();
-                    },
-                  );
-                } catch (err) {
-                  console.warn("Exception in loadFromJSON:", err);
-                  // Don't reject, just log the error and continue
-                  resolve();
-                }
-              });
-            } else {
-              // Just render the empty canvas
-              canvas.renderAll();
-            }
-          } catch (loadError) {
-            console.error("Failed to load canvas data:", loadError);
-            // Don't throw, just log the error
-            // Create a blank canvas instead
-            canvas.clear();
-            canvas.backgroundColor = "#f0f0f0";
+                    // Don't reject, just log the error and continue
+                    resolve();
+                  },
+                );
+              } catch (err) {
+                console.warn("Exception in loadFromJSON:", err);
+                // Don't reject, just log the error and continue
+                resolve();
+              }
+            });
+          } else {
+            // Just render the empty canvas
             canvas.renderAll();
           }
-        } else {
-          // Clear canvas if null is passed
+        } catch (loadError) {
+          console.error("Failed to load canvas data:", loadError);
+          // Don't throw, just log the error
+          // Create a blank canvas instead
           canvas.clear();
           canvas.backgroundColor = "#f0f0f0";
           canvas.renderAll();
         }
-      } catch (error) {
-        console.error("Error in loadCanvasData:", error);
-        // Create a blank canvas if loading fails
-        try {
-          canvas.clear();
-          canvas.backgroundColor = "#f0f0f0";
-          canvas.renderAll();
-        } catch (clearError) {
-          console.error("Failed to clear canvas:", clearError);
-        }
-      } finally {
-        console.log("Canvas data loaded");
-
-        // Force multiple renders to ensure everything is properly displayed
-        if (canvas) {
-          // Immediate render
-          canvas.renderAll();
-
-          // Delayed render after a short delay
-          setTimeout(() => {
-            if (canvas) {
-              canvas.renderAll();
-              console.log("Delayed canvas render completed");
-
-              // Reset loading flag after rendering is complete
-              isLoadingCanvas = false;
-              console.log("isLoadingCanvas set to false");
-            }
-          }, 50);
-        } else {
-          // Reset loading flag if canvas is not available
-          isLoadingCanvas = false;
-        }
+      } else {
+        // Clear canvas if null is passed
+        canvas.clear();
+        canvas.backgroundColor = "#f0f0f0";
+        canvas.renderAll();
       }
-    } else {
-      console.log(`loadCanvasData skipped. Canvas ready: ${!!canvas}`);
+    } catch (error) {
+      console.error("Error in loadCanvasData:", error);
+      // Create a blank canvas if loading fails
+      try {
+        canvas.clear();
+        canvas.backgroundColor = "#f0f0f0";
+        canvas.renderAll();
+      } catch (clearError) {
+        console.error("Failed to clear canvas:", clearError);
+      }
+    } finally {
+      console.log("Canvas data loaded");
+
+      // Force multiple renders to ensure everything is properly displayed
+      if (canvas) {
+        // Immediate render
+        canvas.renderAll();
+
+        // Delayed render after a short delay
+        setTimeout(() => {
+          if (canvas) {
+            canvas.renderAll();
+            console.log("Delayed canvas render completed");
+
+            // Reset loading flag after rendering is complete
+            isLoadingCanvas = false;
+            console.log("isLoadingCanvas set to false");
+          }
+        }, 50);
+      } else {
+        // Reset loading flag if canvas is not available
+        isLoadingCanvas = false;
+      }
     }
   }
-  // --- End of explicit method ---
 
   onMount(async (): Promise<any> => {
     try {
@@ -658,43 +598,22 @@
   async function initializeCanvas() {
     console.log("=== INITIALIZING CANVAS ===");
     try {
-      // Initialize with default dimensions, will be updated by parent if needed
-      const { Canvas: lib } = await import("fabric");
-      canvasService = new CanvasService(lib);
+      canvasService = new CanvasService(canvasElement);
       canvas = canvasService.canvas;
-
-      console.log(
-        "Canvas initialized with dimensions:",
-        canvas.width,
-        "x",
-        canvas.height,
-      );
-      console.log(
-        "Canvas DOM element dimensions:",
-        canvas.lowerCanvasEl.width,
-        "x",
-        canvas.lowerCanvasEl.height,
-      );
-
-      // Add clipPath to constrain objects to canvas boundaries
-      addCanvasBorder();
+      await canvas.loadFromJSON(canvasDataJson || "{}");
+      canvasZoomPan = new CanvasZoomPan(canvas);
 
       // Set up event listeners
       canvas.on("object:modified", (_: any) => {
-        // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
           console.log("Skipping object:modified event during canvas loading");
           return;
         }
 
-        // First constrain the object to the canvas boundaries
         constrainObjectsToCanvas();
-        // Then save the canvas
         saveCanvas();
       });
-
       canvas.on("object:added", (_: any) => {
-        // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
           console.log("Skipping object:added event during canvas loading");
           return;
@@ -702,9 +621,7 @@
 
         saveCanvas();
       });
-
       canvas.on("object:removed", (_: any) => {
-        // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
           console.log("Skipping object:removed event during canvas loading");
           return;
@@ -716,18 +633,14 @@
       canvas.on("selection:created", updateSelection);
       canvas.on("selection:updated", updateSelection);
       canvas.on("selection:cleared", clearSelection);
-
-      // Add object moving event to constrain objects during movement
       canvas.on("object:moving", (e: any) => {
         if (!e.target) return;
 
-        // Ensure isZooming is false during object movement
         isZooming = false;
 
         const obj = e.target;
         const objBounds = obj.getBoundingRect();
 
-        // Check boundaries and adjust position if needed
         if (objBounds.left < 0) {
           obj.left = obj.left - objBounds.left + 1;
         }
@@ -744,25 +657,15 @@
         }
       });
 
-      // Add object moved event to save canvas after movement is complete
       canvas.on("object:moved", (e: any) => {
         if (!e.target) return;
-
-        // Skip if we're currently loading canvas data
         if (isLoadingCanvas) {
-          console.log("Skipping object:moved event during canvas loading");
           return;
         }
 
-        // Ensure isZooming is false after object movement
         isZooming = false;
-
-        // Save the canvas after movement is complete
         saveCanvas();
       });
-
-      // Add mouse wheel zoom listener
-      canvas.on("mouse:wheel", handleMouseWheel);
 
       onReady?.();
       window.addEventListener("resize", handleResize);
@@ -772,7 +675,6 @@
           setTimeout(fitToView, 100);
         });
 
-        // Start observing once the container is available
         if (canvasContainer) {
           resizeObserver.observe(canvasContainer);
         }
@@ -834,21 +736,16 @@
   function fitToView() {
     if (!canvas || !canvasContainer) return;
 
-    // Set the zooming flag to prevent saving during fit-to-view operation
     isZooming = true;
 
-    // First ensure all objects are normalized and centered
     normalizeObjects();
 
-    // Account for padding in the container
     const containerWidth = canvasContainer.clientWidth - 40; // 20px padding on each side
     const containerHeight = canvasContainer.clientHeight - 40; // 20px padding on each side
 
-    // Calculate the fit ratio similar to the design-editor example
     let scaleX = containerWidth / canvasWidth;
     let scaleY = containerHeight / canvasHeight;
 
-    // Use the approach from the FrameHandler.getFitRatio method
     if (canvasHeight >= canvasWidth) {
       scaleX = scaleY;
       if (containerWidth < canvasWidth * scaleX) {
@@ -861,76 +758,35 @@
       }
     }
 
-    // Apply a slight padding
     const newZoom = scaleX * 0.95;
 
-    // Reset viewport transform first
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
-    // Apply the zoom to center
     const center = canvas.getCenter();
     const wf = window as any;
     canvas.zoomToPoint(new Point(center.left, center.top), newZoom);
 
-    // Force a render
     canvas.renderAll();
 
-    // Log the fit operation
-    console.log(
-      `Fit to view: container ${containerWidth}x${containerHeight}, canvas ${canvasWidth}x${canvasHeight}, zoom ${newZoom}`,
-    );
 
-    // Force all objects to be marked as dirty to ensure they render
     const objects = canvas.getObjects();
     objects.forEach((obj: any) => {
       if (obj) obj.dirty = true;
     });
 
-    // Add clipPath without triggering events
     setTimeout(() => {
-      // Temporarily disable event firing
       const originalFire = canvas.fire;
       canvas.fire = function () {};
-
-      addCanvasBorder(); // This now only adds clipPath, not border
       canvas.renderAll();
-
-      // Restore event firing
       canvas.fire = originalFire;
     }, 10);
-  }
-
-  function handleMouseWheel(opt: any) {
-    if (!canvas) return;
-    const delta = opt.e.deltaY;
-    let newZoom = canvas.getZoom();
-
-    // Use a more consistent zoom calculation
-    if (delta > 0) {
-      newZoom = newZoom * 0.9; // Zoom out
-    } else {
-      newZoom = newZoom * 1.1; // Zoom in
-    }
-
-    // Clamp zoom level
-    if (newZoom > MAX_ZOOM) newZoom = MAX_ZOOM;
-    if (newZoom < MIN_ZOOM) newZoom = MIN_ZOOM;
-
-    // Zoom towards the mouse pointer
-    setZoom(newZoom, { x: opt.e.offsetX, y: opt.e.offsetY });
-
-    opt.e.preventDefault();
-    opt.e.stopPropagation();
   }
 
   // Cleanup mouse wheel listener
   onDestroy(() => {
     if (canvas) {
       canvas.dispose();
-      canvas.off("mouse:wheel", handleMouseWheel);
     }
-
-    window.removeEventListener("resize", handleResize);
 
     // Clean up ResizeObserver
     if (resizeObserver && canvasContainer) {
@@ -1035,56 +891,12 @@
     return modified;
   }
 
-  // Flag to prevent recursive save calls
   let isSaving = false;
 
-  // Function to add a canvas border/outline - now just adds clipPath without border
-  function addCanvasBorder() {
-    if (!canvas) return;
-
-    // Create a clipPath to constrain all objects to the canvas dimensions
-    const clipPath = new Rect({
-      left: 0,
-      top: 0,
-      width: canvas.width,
-      height: canvas.height,
-      absolutePositioned: true,
-    });
-
-    // Apply the clipPath to the canvas
-    canvas.clipPath = clipPath;
-
-    // Render the canvas
-    canvas.renderAll();
-    console.log(
-      "Canvas clipPath added with dimensions:",
-      canvas.width,
-      "x",
-      canvas.height,
-    );
-  }
-
-  // Update canvas dimensions and clipPath
   export function updateCanvasDimensions(width: number, height: number) {
     if (!canvas) return;
-
-    // Update canvas dimensions
-    canvas.setDimensions({ width, height });
-    canvasWidth = width;
-    canvasHeight = height;
-
-    // Create a new clipPath with the updated dimensions
-    setTimeout(() => {
-      addCanvasBorder(); // This now only adds clipPath, not border
-      canvas.renderAll();
-    }, 10);
-
-    console.log(`Canvas dimensions updated to ${width}x${height}`);
   }
 
-  // --- End Zoom Functions ---
-
-  // Function to completely reset the canvas view
   function resetCanvasView() {
     if (!canvas) return;
 
@@ -1101,11 +913,6 @@
     // Step 2: Reset pan
     canvas.absolutePan({ x: 0, y: 0 });
     console.log("Reset pan to origin");
-
-    // Create a new clipPath after a short delay to ensure the canvas is fully reset
-    setTimeout(() => {
-      addCanvasBorder(); // This now only adds clipPath, not border
-    }, 50);
 
     // Step 3: Force recreation of all objects with proper positioning
     const objects = canvas.getObjects();
@@ -1205,7 +1012,7 @@
             objData.src ||
             `https://via.placeholder.com/${objData.width}x${objData.height}?text=${encodeURIComponent(objData.name || "Image")}`;
 
-          Image.fromURL(
+          FabricImage.fromURL(
             imageUrl,
             (img: any) => {
               // Scale the image to match the original dimensions
@@ -1271,9 +1078,6 @@
     canvas.renderAll();
     console.log("Canvas reset: normalized, centered, and fitted to view");
 
-    // Log the final state
-    logCanvasState();
-
     // Reset the loading flag after a delay to ensure all operations are complete
     setTimeout(() => {
       isLoadingCanvas = false;
@@ -1281,52 +1085,17 @@
     }, 500);
   }
 
-  // Debug function to log canvas state
-  function logCanvasState() {
-    if (!canvas) return;
-
-    try {
-      const objects = canvas.getObjects();
-      console.log("Canvas state:", {
-        width: canvas.width,
-        height: canvas.height,
-        zoom: canvas.getZoom(),
-        objectCount: objects.length,
-        objects: objects.map((obj: any, index: number) => ({
-          type: obj.type,
-          name: obj.name || `Unnamed ${obj.type} ${index}`,
-          visible: obj.visible !== false,
-          width: obj.width,
-          height: obj.height,
-          left: obj.left,
-          top: obj.top,
-        })),
-      });
-    } catch (error) {
-      console.error("Error logging canvas state:", error);
-    }
-  }
-
-  // Save canvas state
   function saveCanvas() {
     if (!canvas) return;
-
-    // Skip saving if we're currently loading canvas data
     if (isLoadingCanvas) {
-      console.log("Skipping saveCanvas during canvas loading");
       return;
     }
 
-    // Skip saving if we're currently zooming - but only if the save is triggered by a zoom event
-    // This check was causing issues with element movement not being saved
     if (isZooming && !canvas.getActiveObject()) {
-      console.log("Skipping saveCanvas during zoom operation");
       return;
     }
 
-    // Prevent recursive calls
     if (isSaving) {
-      console.log("Already saving, skipping recursive call");
       return;
     }
 
@@ -1335,56 +1104,33 @@
     try {
       isSaving = true;
 
-      // First, constrain all objects to be within canvas boundaries
       constrainObjectsToCanvas();
 
-      // Ensure all objects have their names set before saving
       const objects = canvas.getObjects();
       objects.forEach((obj: any, index: number) => {
-        // Skip null objects
         if (!obj) return;
 
-        // If the object doesn't have a name, set a default one
         if (!obj.name) {
           const defaultName = `Layer ${index + 1}`;
           obj.name = defaultName;
-          // Force the canvas to recognize the change
           obj.set("name", defaultName);
         }
 
-        // Ensure coordinates are up to date
         obj.setCoords();
       });
 
       const canvasJson = canvas.toJSON();
 
-      // Ensure the objects array exists
       if (!canvasJson.objects) {
         canvasJson.objects = [];
       }
 
-      // Filter out any problematic objects and Canvas Border objects
       canvasJson.objects = canvasJson.objects.filter((obj: any) => {
-        // Filter out Canvas Border objects
         if (obj && obj.name === "Canvas Border") {
-          console.log("Filtering out Canvas Border object from saved JSON");
           return false;
         }
 
-        // Keep only objects with valid types
-        const validTypes = [
-          "rect",
-          "circle",
-          "text",
-          "textbox",
-          "image",
-          "path",
-          "polygon",
-          "polyline",
-          "line",
-          "triangle",
-        ];
-        return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
+        return obj && obj.type;
       });
 
       // Log the objects being saved to verify names are included
@@ -1402,11 +1148,7 @@
       console.log("onCanvasChange called with canvas data");
 
       // Add clipPath back
-      addCanvasBorder(); // This now only adds clipPath, not border
       canvas.renderAll();
-
-      // Log canvas state after saving
-      logCanvasState();
     } catch (error) {
       console.error("Error saving canvas state:", error);
     } finally {
@@ -1767,56 +1509,46 @@
     }
   }
 
-  export function setBackgroundImageFromUrl() {
+  export async function setBackgroundImageFromUrl() {
     if (!canvas) return;
     const url = prompt("Enter background image URL:");
     if (!url) return;
-    const wf = window as any;
-    wf.fabric.Image.fromURL(
-      url,
-      (img: any) => {
-        // Scale the image to fit the canvas dimensions
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        const scaleX = canvasWidth / img.width;
-        const scaleY = canvasHeight / img.height;
-        const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
+    const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
 
-        img.set({
-          scaleX: scale,
-          scaleY: scale,
-          originX: "left",
-          originY: "top",
-        });
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const scaleX = canvasWidth / img.width;
+    const scaleY = canvasHeight / img.height;
+    const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
 
-        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
-          // Optional: Set background image options like repeat, etc.
-          // For scaling to fit, we set scaleX/scaleY on the image itself before setting it as background
-        });
-        saveCanvas();
-      },
-      { crossOrigin: "anonymous" },
-    );
+    img.set({
+      scaleX: scale,
+      scaleY: scale,
+      originX: "left",
+      originY: "top",
+    });
+
+    // canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+    //   // Optional: Set background image options like repeat, etc.
+    //   // For scaling to fit, we set scaleX/scaleY on the image itself before setting it as background
+    // });
+    saveCanvas();
   }
 
   export function unsetBackgroundImage() {
     if (!canvas) return;
-    canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
+    canvas.backgroundImage = undefined;
     saveCanvas();
   }
-  // --- End Background Functions ---
 
-  // Expose the canvas instance for parent components
   export function getCanvasInstance() {
     return canvas;
   }
 
-  // Expose the reset function for parent components
   export function resetView() {
     resetCanvasView();
   }
 
-  // --- Method to update canvas dimensions ---
   export function updateDimensions(newWidth: number, newHeight: number) {
     console.log("=== UPDATING CANVAS DIMENSIONS ===");
     console.log(`Requested dimensions: ${newWidth}x${newHeight}`);
@@ -1849,9 +1581,6 @@
 
       // Wait a brief moment to ensure the canvas dimensions are updated
       setTimeout(() => {
-        // Add a new border
-        addCanvasBorder();
-
         // Ensure all objects have proper coordinates
         canvas.getObjects().forEach((obj: any) => {
           if (obj && obj.name !== "Canvas Border") {
@@ -1896,10 +1625,6 @@
       canvasHeight = newHeight;
     }
   }
-  // --- End Method ---
-
-  // Note: We've simplified the export process to use Fabric's built-in toDataURL method
-  // with specific options, so we no longer need a separate preparation function.
 
   // --- Function to get canvas image data ---
   export function getCanvasImageDataUrl(): string | null {
@@ -1980,9 +1705,6 @@
         canvas.setViewportTransform(originalVT);
         console.log("Restored original canvas state");
 
-        // Re-add clipPath
-        addCanvasBorder(); // This now only adds clipPath, not border
-
         // Re-render the canvas
         canvas.renderAll();
         console.log("=== CANVAS EXPORT DEBUG END ===");
@@ -1996,7 +1718,6 @@
     console.warn("getCanvasImageDataUrl called but canvas is not ready.");
     return null;
   }
-  // --- End function ---
 
   // --- Function to get current canvas JSON ---
   export function getCurrentCanvasJson(): string {
@@ -2021,29 +1742,6 @@
         if (!canvasJson.objects) {
           canvasJson.objects = [];
         }
-        // Filter out any problematic objects and Canvas Border objects
-        canvasJson.objects = canvasJson.objects.filter((obj: any) => {
-          // Filter out Canvas Border objects
-          if (obj && obj.name === "Canvas Border") {
-            console.log("[DEBUG] Filtering out Canvas Border object from JSON");
-            return false;
-          }
-
-          // Keep only objects with valid types
-          const validTypes = [
-            "rect",
-            "circle",
-            "text",
-            "textbox",
-            "image",
-            "path",
-            "polygon",
-            "polyline",
-            "line",
-            "triangle",
-          ];
-          return obj && obj.type && validTypes.includes(obj.type.toLowerCase());
-        });
 
         // Log the objects being saved to verify names are included
         console.log(
@@ -2066,7 +1764,6 @@
     );
     return "{}"; // Return empty JSON if not ready
   }
-  // --- End function ---
 </script>
 
 <div class="space-y-4">
@@ -2140,149 +1837,103 @@
       {/if}
     </div>
   {/if}
-
-  <!-- Zoom Controls -->
-  <div class="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/50">
-    <Button
-      variant="outline"
-      size="icon"
-      onclick={zoomOut}
-      title="Zoom Out"
-      disabled={zoomLevel <= MIN_ZOOM}
-    >
-      <ZoomOut class="h-4 w-4" />
-    </Button>
-    <div class="w-32">
-      <input
-        type="range"
-        min={MIN_ZOOM}
-        max={MAX_ZOOM}
-        step={ZOOM_STEP / 10}
-        value={zoomLevel}
-        oninput={(e) => setZoom(parseFloat(e.currentTarget.value))}
-        class="w-full h-2 bg-secondary rounded-full"
-      />
+  <div>
+    <div class="sidebar">
+      <CanvasSidebar {canvas} {canvasService} />
     </div>
-    <Button
-      variant="outline"
-      size="icon"
-      onclick={zoomIn}
-      title="Zoom In"
-      disabled={zoomLevel >= MAX_ZOOM}
-    >
-      <ZoomIn class="h-4 w-4" />
-    </Button>
-    <Button
-      variant="outline"
-      size="icon"
-      onclick={resetZoom}
-      title="Reset Zoom (100%)"
-    >
-      <RefreshCw class="h-4 w-4" />
-    </Button>
-    <Button
-      variant="outline"
-      size="icon"
-      onclick={fitToView}
-      title="Fit to View"
-      disabled={!canvasContainer}
-    >
-      <Maximize class="h-4 w-4" />
-    </Button>
-    <Button
-      variant="outline"
-      size="icon"
-      onclick={resetCanvasView}
-      title="Reset Canvas View"
-    >
-      <RotateCcw class="h-4 w-4" />
-    </Button>
-    <Button
-      variant="outline"
-      onclick={() => {
-        if (canvas) {
-          // Force re-render all objects
-          const objects = canvas.getObjects();
-          objects.forEach((obj: any) => {
-            if (obj) obj.dirty = true;
-          });
-          canvas.renderAll();
-          console.log("Forced re-render of all canvas objects");
-          // Log detailed canvas state
-          logCanvasState();
-        }
-      }}
-      title="Force Refresh"
-    >
-      Refresh
-    </Button>
-    <Button
-      variant="outline"
-      onclick={() => {
-        if (canvas) {
-          // Complete canvas reset and fix
-          resetCanvasView();
-        }
-      }}
-      title="Fix Canvas Display"
-    >
-      Fix Display
-    </Button>
-    <Button
-      variant="outline"
-      onclick={() => {
-        if (canvas) {
-          if (
-            confirm(
-              "This will recreate all objects with proper positioning. Continue?",
-            )
-          ) {
-            // Force recreation of all objects
-            resetCanvasView();
-            // Save the canvas after reset
-            setTimeout(() => {
-              saveCanvas();
-            }, 500);
-          }
-        }
-      }}
-      title="Recreate All Objects"
-    >
-      Recreate Objects
-    </Button>
-    <span class="text-sm ml-2">Zoom: {Math.round(zoomLevel * 100)}%</span>
-    <span class="text-sm ml-auto"
-      >Canvas: {canvasWidth} x {canvasHeight} px</span
-    >
-  </div>
-  <!-- End Zoom Controls -->
-
-  <!-- Canvas Container Wrapper -->
-  <div
-    class="canvas-wrapper border rounded-md relative bg-gray-200 dark:bg-gray-700"
-    style="height: 75vh; min-height: 650px;"
-  >
-    <!-- Fixed Inner Container (no scrolling) -->
-    <div
-      bind:this={canvasContainer}
-      class="relative flex items-center justify-center"
-      style="width: 100%; height: 100%; padding: 20px;"
-    >
-      <!-- Canvas Element -->
-      <div class="canvas-element-wrapper">
-        <canvas id="canvas"></canvas>
-      </div>
-    </div>
-    {#if !canvas}
+    <div class="editor">
+      <CanvasHeader {canvas} {canvasService} />
       <div
-        class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50"
+        class="canvas-wrapper border rounded-md relative bg-gray-200 dark:bg-gray-700"
+        style="height: 75vh; min-height: 650px;"
       >
-        <p>Loading canvas...</p>
-      </div>
-    {/if}
-  </div>
-  <!-- End Canvas Container -->
+        <!-- Fixed Inner Container (no scrolling) -->
+        <div
+          bind:this={canvasContainer}
+          class="relative flex items-center justify-center"
+          style="width: 100%; height: 100%; padding: 20px;"
+        >
+          <!-- Canvas Element -->
+          <div class="canvas-element-wrapper">
+            <canvas id="canvas" bind:this={canvasElement}></canvas>
+          </div>
+        </div>
 
+        {#if !canvas}
+          <div
+            class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50"
+          >
+            <p>Loading canvas...</p>
+          </div>
+        {/if}
+      </div>
+      <CanvasFooter {canvas} {canvasService} {canvasZoomPan} />
+      <div
+        class="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/50"
+      >
+        <Button
+          variant="outline"
+          size="icon"
+          onclick={zoomOut}
+          title="Zoom Out"
+          disabled={zoomLevel <= MIN_ZOOM}
+        >
+          <ZoomOut class="h-4 w-4" />
+        </Button>
+        <div class="w-32">
+          <input
+            type="range"
+            min={MIN_ZOOM}
+            max={MAX_ZOOM}
+            step={ZOOM_STEP / 10}
+            value={zoomLevel}
+            oninput={(e) => setZoom(parseFloat(e.currentTarget.value))}
+            class="w-full h-2 bg-secondary rounded-full"
+          />
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onclick={zoomIn}
+          title="Zoom In"
+          disabled={zoomLevel >= MAX_ZOOM}
+        >
+          <ZoomIn class="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onclick={resetZoom}
+          title="Reset Zoom (100%)"
+        >
+          <RefreshCw class="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onclick={fitToView}
+          title="Fit to View"
+          disabled={!canvasContainer}
+        >
+          <Maximize class="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onclick={resetCanvasView}
+          title="Reset Canvas View"
+        >
+          <RotateCcw class="h-4 w-4" />
+        </Button>
+        <span class="text-sm ml-2">Zoom: {Math.round(zoomLevel * 100)}%</span>
+        <span class="text-sm ml-auto"
+          >Canvas: {canvasWidth} x {canvasHeight} px</span
+        >
+      </div>
+    </div>
+  </div>
+
+  <!-- End Canvas Container -->
   {#if showFileUploadDialog}
     <div
       class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
