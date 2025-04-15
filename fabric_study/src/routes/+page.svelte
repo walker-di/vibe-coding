@@ -9,6 +9,7 @@
   import ShapeStyleMenu from "$lib/components/ShapeStyleMenu.svelte";
   import ClipMaskMenu from "$lib/components/ClipMaskMenu.svelte";
   import ImageReplaceMenu from "$lib/components/ImageReplaceMenu.svelte";
+  import UngroupMenu from "$lib/components/UngroupMenu.svelte";
   import { Canvas } from "fabric";
   import addImage from "$lib/tools/canvas-image.svelte";
   import addSVG from "$lib/tools/canvas-svg.svelte";
@@ -152,6 +153,11 @@
       <!-- Image Replace Menu -->
       {#if canvas}
         <ImageReplaceMenu canvas={canvas} />
+      {/if}
+
+      <!-- Ungroup Menu -->
+      {#if canvas}
+        <UngroupMenu canvas={canvas} />
       {/if}
     </div>
   </div>
