@@ -292,40 +292,7 @@ export class CanvasZoomPan {
     this.canvas.requestRenderAll();
   }
 
-  /**
-   * Zoom to fit the entire canvas in the viewport
-   */
-  public zoomToFit(): void {
-    if (!this.canvas.wrapperEl) return;
 
-    // Get container dimensions
-    const containerRect = this.canvas.wrapperEl.parentElement?.getBoundingClientRect();
-    if (!containerRect) return;
-
-    // Get canvas dimensions
-    const canvasWidth = this.canvas.width || 1920;
-    const canvasHeight = this.canvas.height || 1080;
-
-    // Calculate the scale to fit the canvas in the container
-    const scaleX = (containerRect.width - 40) / canvasWidth; // Add some padding
-    const scaleY = (containerRect.height - 40) / canvasHeight; // Add some padding
-    const scale = Math.min(scaleX, scaleY);
-
-    // Limit zoom to reasonable values
-    const limitedZoom = Math.min(Math.max(scale, this.minZoom), this.maxZoom);
-
-    // Get canvas center
-    const center = {
-      x: canvasWidth / 2,
-      y: canvasHeight / 2
-    };
-
-    // Apply zoom
-    this.zoomToLevel(limitedZoom, center);
-
-    // Center the canvas
-    this.centerCanvas();
-  }
   private getFittingContainer(): HTMLElement | null {
     // Option 1: Parent element (Your original - MIGHT BE WRONG if parent has fixed size)
     // return this.canvas.wrapperEl?.parentElement ?? null;
@@ -350,7 +317,6 @@ export class CanvasZoomPan {
     }
 
     const containerWidth = fittingContainer.clientWidth;
-    console.log('ZoomToFitWidth: Container clientWidth:', containerWidth);
     if (containerWidth <= 0) return;
 
     const canvasWidth = this.canvas.width ?? 1; // Use 1 to avoid division by zero
@@ -381,9 +347,9 @@ export class CanvasZoomPan {
   }
 
   public zoomToFit(): void {
+    console.log('fit')
     const fittingContainer = this.getFittingContainer();
     if (!fittingContainer) return;
-
     const containerWidth = fittingContainer.clientWidth;
     const containerHeight = fittingContainer.clientHeight;
     if (containerWidth <= 0 || containerHeight <= 0) return;

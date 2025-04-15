@@ -2,6 +2,8 @@
   import { onMount } from "svelte";
   import type { CanvasZoomPan } from "./canvas-zoom-pan.svelte";
   import type { Canvas } from "fabric";
+    import { Button } from "../ui/button";
+    import { Maximize, ZoomIn, ZoomOut } from "lucide-svelte";
 
   const {
     canvas,
@@ -21,6 +23,7 @@
   // Min and max zoom values for the slider
   const minZoom = 10; // 10%
   const maxZoom = 300; // 300%
+  const ZOOM_STEP = 3;
 
   // Zoom level options
   const zoomLevels = [
@@ -73,29 +76,7 @@
   function handleSliderChange(event: Event) {
     const value = parseInt((event.target as HTMLInputElement).value);
     sliderValue = value;
-
-    // Update the slider fill
-    updateSliderFill();
-
-    // Debounce the actual zoom change to improve performance
-    // Only apply zoom when slider stops moving
-    if (event.type === "change") {
-      setZoomLevel(value);
-    } else {
-      // Just update the display value during sliding
-      currentZoom = value;
-    }
-  }
-
-  // Update the slider fill based on current value
-  function updateSliderFill() {
-    const percent = ((sliderValue - minZoom) / (maxZoom - minZoom)) * 100;
-    const sliderContainer = document.querySelector(
-      ".slider-container",
-    ) as HTMLElement;
-    if (sliderContainer) {
-      sliderContainer.style.setProperty("--percent", `${percent}%`);
-    }
+    setZoomLevel(value);
   }
 
   // Handle special options
@@ -127,22 +108,16 @@
         const zoom = canvas.getZoom();
         currentZoom = Math.round(zoom * 100);
         sliderValue = currentZoom;
-        updateSliderFill();
         zoomChange({ zoom: currentZoom });
       }
     }
   }
-
   // Initialize
   onMount(() => {
     // Add click outside listener
     document.addEventListener("click", handleClickOutside);
 
-    // Update zoom display initially
-    setTimeout(() => {
-      updateZoomDisplay();
-      updateSliderFill();
-    }, 100);
+    updateZoomDisplay();
 
     // Listen for zoom changes
     const canvas = canvasZoomPan.getCanvas();
@@ -159,24 +134,57 @@
       document.removeEventListener("click", handleClickOutside);
     };
   });
+
+  function zoomIn() {
+    setZoomLevel(currentZoom + ZOOM_STEP);
+  }
+  function zoomOut() {
+    setZoomLevel(currentZoom - ZOOM_STEP);
+  }
 </script>
 
 <div class="zoom-menu-container" bind:this={menuRef}>
   <div class="zoom-controls">
+    <Button
+    variant="outline"
+    size="icon"
+    onclick={zoomOut}
+    title="Zoom Out"
+    disabled={currentZoom <= minZoom}
+  >
+    <ZoomOut class="h-4 w-4" />
+  </Button>
     <div class="slider-container">
       <input
         type="range"
         min={minZoom}
         max={maxZoom}
         value={sliderValue}
-        class="zoom-slider"
+        class="w-full h-2 bg-secondary rounded-full"
         onchange={handleSliderChange}
         oninput={handleSliderChange}
       />
     </div>
+    <Button
+    variant="outline"
+    size="icon"
+    onclick={zoomIn}
+    title="Zoom In"
+    disabled={currentZoom >= maxZoom}
+  >
+    <ZoomIn class="h-4 w-4" />
+  </Button>
     <button class="zoom-display" onclick={toggleMenu}>
       {currentZoom}%
     </button>
+    <Button
+    variant="outline"
+    size="icon"
+    onclick={() => canvasZoomPan.zoomToFit()}
+    title="Fit to View"
+  >
+    <Maximize class="h-4 w-4" />
+  </Button>
   </div>
 
   {#if isOpen}

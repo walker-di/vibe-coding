@@ -381,9 +381,6 @@
 
                       // Restore event firing
                       canvas.fire = originalFire;
-
-                      // Fit to view
-                      fitToView();
                       canvas.renderAll();
                       console.log("Canvas data loaded and fitted to view");
                     }, 50);
@@ -598,7 +595,7 @@
       canvas = canvasService.canvas;
       await canvas.loadFromJSON(canvasDataJson || "{}");
       canvasZoomPan = new CanvasZoomPan(canvas);
-
+      canvasZoomPan.zoomToFit();
       // Set up event listeners
       canvas.on("object:modified", (_: any) => {
         if (isLoadingCanvas) {
@@ -729,39 +726,7 @@
   }
 
   function fitToView() {
-    if (!canvas || !canvasContainer) return;
-
-    isZooming = true;
-
-    normalizeObjects();
-
-    const containerWidth = canvasElement!.getBoundingClientRect().width - 40; // 20px padding on each side
-    const containerHeight = canvasElement!.getBoundingClientRect().height - 40; // 20px padding on each side
-
-    let scaleX = containerWidth / canvas.width;
-    let scaleY = containerHeight / canvas.height;
-
-    if (canvasHeight >= canvasWidth) {
-      scaleX = scaleY;
-      if (containerWidth < canvasWidth * scaleX) {
-        scaleX = scaleX * (containerWidth / (canvasWidth * scaleX));
-      }
-    } else {
-      scaleY = scaleX;
-      if (containerHeight < canvasHeight * scaleY) {
-        scaleX = scaleX * (containerHeight / (canvasHeight * scaleX));
-      }
-    }
-
-    const newZoom = scaleX * 0.95;
-
-    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-
-    const center = canvas.getCenter();
-    canvas.zoomToPoint(new Point(center.left, center.top), newZoom);
-
-    canvas.renderAll();
-
+    canvasZoomPan.zoomToFit();
   }
 
   // Cleanup mouse wheel listener
@@ -1746,68 +1711,6 @@
         {/if}
       </div>
       <CanvasFooter {canvas} {canvasService} {canvasZoomPan} />
-      <div
-        class="flex items-center gap-2 mb-2 p-2 border rounded-md bg-muted/50"
-      >
-        <Button
-          variant="outline"
-          size="icon"
-          onclick={zoomOut}
-          title="Zoom Out"
-          disabled={zoomLevel <= MIN_ZOOM}
-        >
-          <ZoomOut class="h-4 w-4" />
-        </Button>
-        <div class="w-32">
-          <input
-            type="range"
-            min={MIN_ZOOM}
-            max={MAX_ZOOM}
-            step={ZOOM_STEP / 10}
-            value={zoomLevel}
-            oninput={(e) => setZoom(parseFloat(e.currentTarget.value))}
-            class="w-full h-2 bg-secondary rounded-full"
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onclick={zoomIn}
-          title="Zoom In"
-          disabled={zoomLevel >= MAX_ZOOM}
-        >
-          <ZoomIn class="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onclick={resetZoom}
-          title="Reset Zoom (100%)"
-        >
-          <RefreshCw class="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onclick={fitToView}
-          title="Fit to View"
-          disabled={!canvasContainer}
-        >
-          <Maximize class="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onclick={resetCanvasView}
-          title="Reset Canvas View"
-        >
-          <RotateCcw class="h-4 w-4" />
-        </Button>
-        <span class="text-sm ml-2">Zoom: {Math.round(zoomLevel * 100)}%</span>
-        <span class="text-sm ml-auto">
-          Canvas: {canvas?.width} x {canvas?.height} px
-        </span>
-      </div>
     </div>
   </div>
 
