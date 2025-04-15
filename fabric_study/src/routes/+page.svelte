@@ -94,6 +94,15 @@
   function togglePanMode() {
     canvasZoomPan.togglePanMode();
   }
+
+  function debugHistory() {
+    if (canvasService?.history) {
+      console.log('History debug:', {
+        canUndo: canvasService.history.canUndo(),
+        canRedo: canvasService.history.canRedo()
+      });
+    }
+  }
 </script>
 
 <svelte:window onresize={handleResize} />
@@ -110,7 +119,7 @@
   <!-- Main Content -->
   <div class="main-content">
     <!-- Header Menu -->
-    <HeaderMenu canvas={canvas} />
+    <HeaderMenu canvas={canvas} {canvasService} />
     <div class="toolbar mb-4 flex gap-2 flex-wrap">
       <button class="btn" onclick={() => canvasService.toggleDrawing()}>
         {canvasService?.isDrawing ? "Stop Drawing" : "Start Drawing"}
@@ -123,6 +132,7 @@
       <button class="btn" onclick={exportCanvas}>Export</button>
       <button class="btn" onclick={() => canvasZoomPan.resetZoom()}>Reset Zoom</button>
       <button class="btn bg-green-500 hover:bg-green-600" onclick={() => canvasService.centerCanvas()}>Center Canvas</button>
+      <button class="btn bg-purple-500 hover:bg-purple-600" onclick={debugHistory}>Debug History</button>
     </div>
 
     <div class="canvas-container border border-gray-300 relative">

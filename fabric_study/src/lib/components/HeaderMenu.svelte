@@ -3,9 +3,10 @@
   import { onMount, onDestroy } from "svelte";
   import PositionMenu from "./PositionMenu.svelte";
   import TransparencyMenu from "./TransparencyMenu.svelte";
+  import type { CanvasService } from "../canvas-service.svelte";
 
   // Props
-  let { duration = "5.0s", canvas } = $props<{duration?: string, canvas?: Canvas}>();
+  let { duration = "5.0s", canvas, canvasService } = $props<{duration?: string, canvas?: Canvas, canvasService?: CanvasService}>();
 
   // State variables
   let canUndo = $state(false);
@@ -39,25 +40,111 @@
   onMount(() => {
     if (typeof document !== 'undefined') {
       document.addEventListener('mousedown', handleClickOutside);
+
+      // Add keyboard shortcuts for undo/redo
+      document.addEventListener('keydown', handleKeyDown);
     }
+
+    // Set up history state change listeners
+    if (canvasService?.history) {
+      console.log('HeaderMenu: History service found');
+      updateHistoryState();
+
+      // Listen for history events
+      canvas?.on('history:append' as any, updateHistoryState);
+      canvas?.on('history:undo' as any, updateHistoryState);
+      canvas?.on('history:redo' as any, updateHistoryState);
+      canvas?.on('history:clear' as any, updateHistoryState);
+    } else {
+      console.log('HeaderMenu: History service not found');
+    }
+
+    // Force update after a short delay to ensure history state is initialized
+    setTimeout(() => {
+      if (canvasService?.history) {
+        console.log('HeaderMenu: Delayed history state update');
+        updateHistoryState();
+      }
+    }, 500);
   });
 
   // Clean up event listeners
   onDestroy(() => {
     if (typeof document !== 'undefined') {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+
+    // Remove history event listeners
+    if (canvas) {
+      canvas.off('history:append' as any, updateHistoryState);
+      canvas.off('history:undo' as any, updateHistoryState);
+      canvas.off('history:redo' as any, updateHistoryState);
+      canvas.off('history:clear' as any, updateHistoryState);
     }
   });
 
+  // Update history state (canUndo/canRedo)
+  function updateHistoryState() {
+    if (canvasService?.history) {
+      canUndo = canvasService.history.canUndo();
+      canRedo = canvasService.history.canRedo();
+      console.log('HeaderMenu: History state updated', { canUndo, canRedo });
+    }
+  }
+
+  // Handle keyboard shortcuts
+  function handleKeyDown(event: KeyboardEvent) {
+    // Check if Ctrl key is pressed
+    if (event.ctrlKey) {
+      // Undo: Ctrl+Z
+      if (event.key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        handleUndo();
+      }
+      // Redo: Ctrl+Y or Ctrl+Shift+Z
+      else if ((event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
+        event.preventDefault();
+        handleRedo();
+      }
+    }
+  }
+
   // Functions for the header menu actions
   function handleUndo() {
-    // Implement undo functionality
-    console.log('Undo clicked');
+    console.log('Undo clicked, canUndo:', canUndo);
+    if (canvasService?.history) {
+      console.log('History service exists');
+      if (canUndo) {
+        console.log('Executing undo');
+        canvasService.history.undo(() => {
+          console.log('Undo callback executed');
+          updateHistoryState();
+        });
+      } else {
+        console.log('Cannot undo - no history');
+      }
+    } else {
+      console.log('No history service available');
+    }
   }
 
   function handleRedo() {
-    // Implement redo functionality
-    console.log('Redo clicked');
+    console.log('Redo clicked, canRedo:', canRedo);
+    if (canvasService?.history) {
+      console.log('History service exists');
+      if (canRedo) {
+        console.log('Executing redo');
+        canvasService.history.redo(() => {
+          console.log('Redo callback executed');
+          updateHistoryState();
+        });
+      } else {
+        console.log('Cannot redo - no history');
+      }
+    } else {
+      console.log('No history service available');
+    }
   }
 
   function handlePosition() {

@@ -1,9 +1,11 @@
 import { Canvas, type ImageFormat, Rect } from "fabric";
 import { initCanvasBorderSnap } from "./canvas-border-snap";
+import { CanvasHistory } from "./canvas-history.svelte";
 
 export class CanvasService {
     canvas = $state<Canvas>(undefined as any);
     isDrawing = $state(false);
+    history = $state<CanvasHistory>(undefined as any);
 
     constructor(target: any) {
         this.canvas = new Canvas(target, {
@@ -33,6 +35,9 @@ export class CanvasService {
 			width: 1,
 			color: "rgb(255,0,0,0.9)",
 		});
+        // Initialize history service
+        this.history = new CanvasHistory(this.canvas);
+
         this.centerCanvas();
         this.canvas.renderAll();
     }
