@@ -49,7 +49,7 @@
 			? data.template.resolution
 			: "",
 	);
-	let canvasDataJson = $state<string | null>(data.template.canvasData);
+	let canvasDataJson = $state(data.template.canvasData);
 	let isSaving = $state(false);
 	let canvasEditorRef: CanvasEditor | null = $state(null);
 	let isCanvasReady = $state(false); // Track if canvas editor is initialized
@@ -163,35 +163,6 @@
 		canvasDataJson = json;
 	}
 
-	function handleCanvasReady() {
-		console.log("CanvasEditor signaled ready.");
-		isCanvasReady = true;
-
-		// Set initial dimensions *before* loading data
-		if (canvasEditorRef) {
-			const initialDims = calculateDimensions(finalResolution); // Use derived state
-			console.log(
-				`Setting initial canvas dimensions: ${initialDims.width}x${initialDims.height}`,
-			);
-			currentCanvasWidth = initialDims.width;
-			currentCanvasHeight = initialDims.height;
-			canvasEditorRef.updateDimensions(
-				initialDims.width,
-				initialDims.height,
-			);
-
-			// Now load initial data
-			if (data.template.canvasData) {
-				console.log("Loading initial canvas data into editor...");
-				canvasEditorRef.loadCanvasData(data.template.canvasData);
-			} else {
-				console.log("No initial canvas data to load.");
-			}
-		} else {
-			console.warn("Canvas ready, but editor ref missing.");
-		}
-	}
-
 	async function updateTemplate() {
 		if (!name.trim()) {
 			toast.error("Template name is required.");
@@ -217,7 +188,7 @@
 			canvasHasChanged = true;
 
 			if (canvasEditorRef) {
-				const imageDataUrl = canvasEditorRef.getCanvasImageDataUrl();
+				const imageDataUrl = await canvasEditorRef.getCanvasImageDataUrl();
 
 				if (imageDataUrl) {
 					try {
@@ -499,165 +470,6 @@
 			</div>
 		</div>
 
-		<div class="mt-8">
-			<Label class="text-lg font-semibold">Canvas Content</Label>
-			<div class="border rounded-md p-4 mt-2">
-				<!-- Canvas Controls -->
-				{#if isCanvasReady && canvasEditorRef}
-					<div class="flex flex-wrap gap-2 mb-4">
-						<Button
-							variant="outline"
-							onclick={() => canvasEditorRef?.addRectangle()}
-							title="Add Rectangle"
-						>
-							<Square class="h-4 w-4 mr-2" /> Rectangle
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => canvasEditorRef?.addCircle()}
-							title="Add Circle"
-						>
-							<Circle class="h-4 w-4 mr-2" /> Circle
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => canvasEditorRef?.addText()}
-							title="Add Text"
-						>
-							<Type class="h-4 w-4 mr-2" /> Text
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => (isImageUploadModalOpen = true)}
-							title="Add Image"
-						>
-							<ImageIcon class="h-4 w-4 mr-2" /> Image
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => canvasEditorRef?.deleteSelected()}
-							title="Delete Selected"
-						>
-							<Trash2 class="h-4 w-4 mr-2" /> Delete
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => canvasEditorRef?.clearCanvas()}
-							title="Clear Canvas"
-						>
-							Clear All
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => (isBackgroundImageModalOpen = true)}
-							title="Set Background Image"
-						>
-							<ImageIcon class="h-4 w-4 mr-2" /> BG Image
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() =>
-								canvasEditorRef?.showLayerOrderModal()}
-							title="Manage Layers"
-						>
-							<Layers class="h-4 w-4 mr-2" /> Layers
-						</Button>
-					</div>
-				{/if}
-
-				<!-- Direct file upload button -->
-				<div class="mb-4">
-					<div class="flex flex-col space-y-2">
-						<h3 class="text-sm font-medium">
-							Upload Image to Library
-						</h3>
-						<FileUpload
-							buttonText="Choose Image"
-							accept="image/*"
-							on:upload={(event) => {
-								const { url } = event.detail;
-								toast.success("Image uploaded successfully");
-								console.log("Uploaded image URL:", url);
-
-								// Add the image to the canvas
-								if (canvasEditorRef && url) {
-									// Use the existing addImage method with the URL
-									const wf = window as any;
-									// Outer check 'if (canvasEditorRef && url)' is sufficient
-									const canvas =
-										canvasEditorRef.getCanvasInstance();
-									if (canvas && wf.fabric) {
-										const objectCount =
-											canvas.getObjects().length;
-										wf.fabric.Image.fromURL(
-											url,
-											(img: any) => {
-												const maxW = canvas.width * 0.8;
-												const maxH =
-													canvas.height * 0.8;
-												if (
-													img.width > maxW ||
-													img.height > maxH
-												) {
-													const scale = Math.min(
-														maxW / img.width,
-														maxH / img.height,
-													);
-													img.scale(scale);
-												}
-												// Set a name for the image
-												const objectName = `Image ${objectCount + 1}`;
-												img.name = objectName;
-												// Ensure the name is set using the set method
-												img.set("name", objectName);
-												canvas.add(img);
-												canvas.setActiveObject(img);
-												canvas.renderAll();
-												// Mark canvas as changed
-												canvasHasChanged = true;
-											},
-											{ crossOrigin: "anonymous" },
-										);
-									}
-								}
-							}}
-							on:error={(event) => {
-								const { message } = event.detail;
-								toast.error(`Upload failed: ${message}`);
-								console.error("Upload error:", message);
-							}}
-						/>
-						<p class="text-xs text-gray-500 mt-1">
-							Upload images to use in your templates
-						</p>
-					</div>
-				</div>
-
-				<!-- Canvas Editor -->
-				{#if data.template}
-					<!-- Ensure template data is loaded before rendering editor -->
-					<!-- Hide built-in controls since we're providing our own -->
-					<CanvasEditor
-						bind:this={canvasEditorRef}
-						onCanvasChange={handleCanvasChange}
-						onReady={handleCanvasReady}
-						hideControls
-					/>
-				{:else}
-					<p>Loading editor...</p>
-					<!-- Placeholder -->
-				{/if}
-			</div>
-			{#if !isCanvasReady}
-				<p class="text-sm text-yellow-600 mt-1">
-					Waiting for canvas editor to initialize...
-				</p>
-			{/if}
-			<p class="text-sm text-gray-500 mt-1">
-				Modify the template content above.
-			</p>
-		</div>
-
 		<div class="flex justify-end gap-4">
 			<Button
 				type="button"
@@ -669,7 +481,7 @@
 			</Button>
 			<Button
 				type="submit"
-				disabled={isSaving || !name || !isCanvasReady}
+				disabled={isSaving || !name}
 			>
 				{#if isSaving}
 					Saving...
@@ -679,7 +491,150 @@
 			</Button>
 		</div>
 	</form>
+	<div class="border rounded-md p-4 mt-2">
+		<!-- Canvas Controls -->
+		{#if isCanvasReady && canvasEditorRef}
+			<div class="flex flex-wrap gap-2 mb-4">
+				<Button
+					variant="outline"
+					onclick={() => canvasEditorRef?.addRectangle()}
+					title="Add Rectangle"
+				>
+					<Square class="h-4 w-4 mr-2" /> Rectangle
+				</Button>
+				<Button
+					variant="outline"
+					onclick={() => canvasEditorRef?.addCircle()}
+					title="Add Circle"
+				>
+					<Circle class="h-4 w-4 mr-2" /> Circle
+				</Button>
+				<Button
+					variant="outline"
+					onclick={() => canvasEditorRef?.addText()}
+					title="Add Text"
+				>
+					<Type class="h-4 w-4 mr-2" /> Text
+				</Button>
+				<Button
+					variant="outline"
+					onclick={() => (isImageUploadModalOpen = true)}
+					title="Add Image"
+				>
+					<ImageIcon class="h-4 w-4 mr-2" /> Image
+				</Button>
+				<Button
+					variant="outline"
+					onclick={() => canvasEditorRef?.deleteSelected()}
+					title="Delete Selected"
+				>
+					<Trash2 class="h-4 w-4 mr-2" /> Delete
+				</Button>
+				<Button
+					variant="outline"
+					onclick={() => canvasEditorRef?.clearCanvas()}
+					title="Clear Canvas"
+				>
+					Clear All
+				</Button>
+				<Button
+					variant="outline"
+					onclick={() => (isBackgroundImageModalOpen = true)}
+					title="Set Background Image"
+				>
+					<ImageIcon class="h-4 w-4 mr-2" /> BG Image
+				</Button>
+				<Button
+					variant="outline"
+					onclick={() =>
+						canvasEditorRef?.showLayerOrderModal()}
+					title="Manage Layers"
+				>
+					<Layers class="h-4 w-4 mr-2" /> Layers
+				</Button>
+			</div>
+		{/if}
 
+		<!-- Direct file upload button -->
+		<div class="mb-4">
+			<div class="flex flex-col space-y-2">
+				<h3 class="text-sm font-medium">
+					Upload Image to Library
+				</h3>
+				<FileUpload
+					buttonText="Choose Image"
+					accept="image/*"
+					on:upload={(event) => {
+						const { url } = event.detail;
+						toast.success("Image uploaded successfully");
+						console.log("Uploaded image URL:", url);
+
+						// Add the image to the canvas
+						if (canvasEditorRef && url) {
+							// Use the existing addImage method with the URL
+							const wf = window as any;
+							// Outer check 'if (canvasEditorRef && url)' is sufficient
+							const canvas =
+								canvasEditorRef.getCanvasInstance();
+							if (canvas && wf.fabric) {
+								const objectCount =
+									canvas.getObjects().length;
+								wf.fabric.Image.fromURL(
+									url,
+									(img: any) => {
+										const maxW = canvas.width * 0.8;
+										const maxH =
+											canvas.height * 0.8;
+										if (
+											img.width > maxW ||
+											img.height > maxH
+										) {
+											const scale = Math.min(
+												maxW / img.width,
+												maxH / img.height,
+											);
+											img.scale(scale);
+										}
+										// Set a name for the image
+										const objectName = `Image ${objectCount + 1}`;
+										img.name = objectName;
+										// Ensure the name is set using the set method
+										img.set("name", objectName);
+										canvas.add(img);
+										canvas.setActiveObject(img);
+										canvas.renderAll();
+										// Mark canvas as changed
+										canvasHasChanged = true;
+									},
+									{ crossOrigin: "anonymous" },
+								);
+							}
+						}
+					}}
+					on:error={(event) => {
+						const { message } = event.detail;
+						toast.error(`Upload failed: ${message}`);
+						console.error("Upload error:", message);
+					}}
+				/>
+				<p class="text-xs text-gray-500 mt-1">
+					Upload images to use in your templates
+				</p>
+			</div>
+		</div>
+
+		<!-- Canvas Editor -->
+		{#if data.template}
+			<CanvasEditor
+				bind:this={canvasEditorRef}
+				onCanvasChange={handleCanvasChange}
+				bind:canvasDataJson={canvasDataJson}
+				hideControls
+			/>
+		{:else}
+			<p>Loading editor...</p>
+		{/if}
+	</div>
 	<!-- Image Upload Modal -->
 	<ImageUploadModal
 		open={isImageUploadModalOpen}

@@ -39,19 +39,15 @@
   import { CanvasZoomPan } from "./canvas-zoom-pan.svelte";
   import CanvasSidebar from "./CanvasSidebar.svelte";
 
-  // Props
   let {
-    value = $bindable(),
     onCanvasChange,
-    onReady,
     hideControls = false,
     narration = "",
     description = "",
     onNarrationChange,
-    canvasDataJson,
+    canvasDataJson = $bindable(),
   }:{
     onCanvasChange: (canvasJson: string) => void;
-    onReady?: () => void;
     hideControls?: boolean;
     value: string;
     narration?: string;
@@ -667,7 +663,6 @@
         saveCanvas();
       });
 
-      onReady?.();
       window.addEventListener("resize", handleResize);
 
       if (typeof ResizeObserver !== "undefined") {
@@ -740,11 +735,11 @@
 
     normalizeObjects();
 
-    const containerWidth = canvasContainer.clientWidth - 40; // 20px padding on each side
-    const containerHeight = canvasContainer.clientHeight - 40; // 20px padding on each side
+    const containerWidth = canvasElement!.getBoundingClientRect().width - 40; // 20px padding on each side
+    const containerHeight = canvasElement!.getBoundingClientRect().height - 40; // 20px padding on each side
 
-    let scaleX = containerWidth / canvasWidth;
-    let scaleY = containerHeight / canvasHeight;
+    let scaleX = containerWidth / canvas.width;
+    let scaleY = containerHeight / canvas.height;
 
     if (canvasHeight >= canvasWidth) {
       scaleX = scaleY;
@@ -763,23 +758,10 @@
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
     const center = canvas.getCenter();
-    const wf = window as any;
     canvas.zoomToPoint(new Point(center.left, center.top), newZoom);
 
     canvas.renderAll();
 
-
-    const objects = canvas.getObjects();
-    objects.forEach((obj: any) => {
-      if (obj) obj.dirty = true;
-    });
-
-    setTimeout(() => {
-      const originalFire = canvas.fire;
-      canvas.fire = function () {};
-      canvas.renderAll();
-      canvas.fire = originalFire;
-    }, 10);
   }
 
   // Cleanup mouse wheel listener
@@ -1133,21 +1115,11 @@
         return obj && obj.type;
       });
 
-      // Log the objects being saved to verify names are included
-      console.log("Saving canvas with objects:", canvasJson.objects.length);
-
       // Stringify the sanitized JSON
       const json = JSON.stringify(canvasJson);
-      console.log(
-        "Canvas changed, saving state with JSON length:",
-        json.length,
-      );
 
       // Call onCanvasChange directly without setTimeout to ensure immediate update
       onCanvasChange(json);
-      console.log("onCanvasChange called with canvas data");
-
-      // Add clipPath back
       canvas.renderAll();
     } catch (error) {
       console.error("Error saving canvas state:", error);
@@ -1627,96 +1599,9 @@
   }
 
   // --- Function to get canvas image data ---
-  export function getCanvasImageDataUrl(): string | null {
-    if (canvas) {
-      try {
-        console.log("=== CANVAS EXPORT DEBUG START ===");
-        console.log(
-          "Original canvas dimensions:",
-          canvas.width,
-          "x",
-          canvas.height,
-        );
-
-        // Store original state
-        const originalClipPath = canvas.clipPath;
-        const originalBgColor = canvas.backgroundColor;
-        const originalObjects = canvas.getObjects();
-        const originalVT = canvas.viewportTransform
-          ? [...canvas.viewportTransform]
-          : [1, 0, 0, 1, 0, 0];
-        console.log("Original viewport transform:", originalVT);
-
-        // Remove any border objects temporarily
-        const borderObjects = originalObjects.filter(
-          (obj: any) => obj && obj.name === "Canvas Border",
-        );
-        borderObjects.forEach((obj: any) => {
-          canvas.remove(obj);
-        });
-        console.log("Removed border objects count:", borderObjects.length);
-
-        // Reset the viewportTransform to default (no zoom)
-        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-        console.log("Reset viewport transform to:", canvas.viewportTransform);
-
-        // Make sure all objects are within the canvas boundaries
-        constrainObjectsToCanvas();
-
-        // Force a render to ensure everything is up to date
-        canvas.renderAll();
-
-        // Use Fabric's built-in toDataURL method with specific options
-        // This is the most direct way to get an accurate image of the canvas
-        const dataUrl = canvas.toDataURL({
-          format: "png",
-          quality: 1,
-          multiplier: 1, // Use exact 1:1 pixel mapping
-          left: 0,
-          top: 0,
-          width: canvas.width,
-          height: canvas.height,
-          enableRetinaScaling: false, // Disable retina scaling to prevent resolution issues
-        });
-
-        console.log("Generated data URL directly from fabric canvas");
-
-        // Extract image dimensions from data URL by loading it into an Image object
-        const img = new Image();
-        img.src = dataUrl;
-
-        // We need to wait for the image to load to get its dimensions
-        setTimeout(() => {
-          console.log(
-            "Image natural dimensions from data URL:",
-            img.naturalWidth,
-            "x",
-            img.naturalHeight,
-          );
-        }, 100);
-
-        // Log the first part of the data URL
-        console.log("Data URL prefix:", dataUrl.substring(0, 100) + "...");
-        console.log("Data URL length:", dataUrl.length);
-
-        // Restore original state
-        canvas.clipPath = originalClipPath;
-        canvas.setBackgroundColor(originalBgColor, () => {});
-        canvas.setViewportTransform(originalVT);
-        console.log("Restored original canvas state");
-
-        // Re-render the canvas
-        canvas.renderAll();
-        console.log("=== CANVAS EXPORT DEBUG END ===");
-
-        return dataUrl;
-      } catch (error) {
-        console.error("Error generating canvas data URL:", error);
-        return null;
-      }
-    }
-    console.warn("getCanvasImageDataUrl called but canvas is not ready.");
-    return null;
+  export async function getCanvasImageDataUrl() {
+    const dataUrl = await canvasService.export();
+    return dataUrl;
   }
 
   // --- Function to get current canvas JSON ---
@@ -1743,15 +1628,8 @@
           canvasJson.objects = [];
         }
 
-        // Log the objects being saved to verify names are included
-        console.log(
-          "[DEBUG] Getting current canvas JSON with objects:",
-          canvasJson.objects,
-        );
-
         // Stringify the JSON
         const jsonString = JSON.stringify(canvasJson);
-        console.log("[DEBUG] Current canvas JSON length:", jsonString.length);
 
         return jsonString;
       } catch (error) {
@@ -1926,9 +1804,9 @@
           <RotateCcw class="h-4 w-4" />
         </Button>
         <span class="text-sm ml-2">Zoom: {Math.round(zoomLevel * 100)}%</span>
-        <span class="text-sm ml-auto"
-          >Canvas: {canvasWidth} x {canvasHeight} px</span
-        >
+        <span class="text-sm ml-auto">
+          Canvas: {canvas?.width} x {canvas?.height} px
+        </span>
       </div>
     </div>
   </div>

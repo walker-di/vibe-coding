@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import type { CanvasZoomPan } from "./canvas-zoom-pan.svelte";
+  import type { Canvas } from "fabric";
 
   const {
+    canvas,
     canvasZoomPan,
-    zoomChange = () => {}
+    zoomChange = () => {},
   }: {
+    canvas: Canvas;
     canvasZoomPan: CanvasZoomPan;
     zoomChange?: (event: { zoom: number }) => void;
   } = $props();
@@ -34,7 +37,7 @@
   // Special options
   const specialOptions = [
     { id: "fit-editor", label: "Ajustar ao editor" },
-    { id: "fit-all", label: "Ver inteiro" }
+    { id: "fit-all", label: "Ver inteiro" },
   ];
 
   // Toggle menu open/close
@@ -53,11 +56,9 @@
   function setZoomLevel(zoomPercent: number) {
     const zoomFactor = zoomPercent / 100;
 
-    // Get canvas center for zooming
-    const canvas = canvasZoomPan.getCanvas();
     const center = {
       x: canvas.width! / 2,
-      y: canvas.height! / 2
+      y: canvas.height! / 2,
     };
 
     canvasZoomPan.zoomToLevel(zoomFactor, center);
@@ -78,7 +79,7 @@
 
     // Debounce the actual zoom change to improve performance
     // Only apply zoom when slider stops moving
-    if (event.type === 'change') {
+    if (event.type === "change") {
       setZoomLevel(value);
     } else {
       // Just update the display value during sliding
@@ -89,9 +90,11 @@
   // Update the slider fill based on current value
   function updateSliderFill() {
     const percent = ((sliderValue - minZoom) / (maxZoom - minZoom)) * 100;
-    const sliderContainer = document.querySelector('.slider-container') as HTMLElement;
+    const sliderContainer = document.querySelector(
+      ".slider-container",
+    ) as HTMLElement;
     if (sliderContainer) {
-      sliderContainer.style.setProperty('--percent', `${percent}%`);
+      sliderContainer.style.setProperty("--percent", `${percent}%`);
     }
   }
 
@@ -133,7 +136,7 @@
   // Initialize
   onMount(() => {
     // Add click outside listener
-    document.addEventListener('click', handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
 
     // Update zoom display initially
     setTimeout(() => {
@@ -144,16 +147,16 @@
     // Listen for zoom changes
     const canvas = canvasZoomPan.getCanvas();
     if (canvas) {
-      canvas.on('mouse:wheel', updateZoomDisplay);
+      canvas.on("mouse:wheel", updateZoomDisplay);
 
       return () => {
-        document.removeEventListener('click', handleClickOutside);
-        canvas.off('mouse:wheel', updateZoomDisplay);
+        document.removeEventListener("click", handleClickOutside);
+        canvas.off("mouse:wheel", updateZoomDisplay);
       };
     }
 
     return () => {
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener("click", handleClickOutside);
     };
   });
 </script>
@@ -195,6 +198,7 @@
       <div class="zoom-options">
         {#each zoomLevels as level}
           <button
+            type='button'
             class="zoom-option"
             class:active={currentZoom === level.value}
             onclick={() => setZoomLevel(level.value)}
@@ -276,7 +280,7 @@
   }
 
   .slider-container::before {
-    content: '';
+    content: "";
     position: absolute;
     left: 0;
     top: 50%;
@@ -318,7 +322,8 @@
     flex-direction: column;
   }
 
-  .zoom-option, .special-option {
+  .zoom-option,
+  .special-option {
     padding: 10px 16px;
     text-align: left;
     border: none;
@@ -328,7 +333,8 @@
     transition: background-color 0.2s;
   }
 
-  .zoom-option:hover, .special-option:hover {
+  .zoom-option:hover,
+  .special-option:hover {
     background-color: #f5f5f5;
   }
 

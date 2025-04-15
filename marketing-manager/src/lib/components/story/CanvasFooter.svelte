@@ -6,7 +6,7 @@
   import type { CanvasZoomPan } from "./canvas-zoom-pan.svelte";
 
   // Props
-  let { canvas, canvasService, canvasZoomPan }: {
+  let { canvas, canvasZoomPan }: {
     canvas?: Canvas;
     canvasService?: CanvasService;
     canvasZoomPan: CanvasZoomPan;
@@ -14,7 +14,7 @@
 </script>
 
 <div class="canvas-footer">
-  {#if canvas}
-  <ZoomMenu {canvasZoomPan} />
+  {#if canvas && canvasZoomPan}
+  <ZoomMenu {canvasZoomPan} {canvas} />
   {/if }
 </div>

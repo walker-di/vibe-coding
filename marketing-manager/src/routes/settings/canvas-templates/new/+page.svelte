@@ -49,7 +49,9 @@
 	}
 
 	// Filtered resolutions based on current aspect ratio
-	const compatibleResolutions = $derived(getCompatibleResolutions(aspectRatio));
+	const compatibleResolutions = $derived(
+		getCompatibleResolutions(aspectRatio),
+	);
 
 	// Automatically update resolution when aspect ratio changes
 	$effect(() => {
@@ -117,36 +119,7 @@
 			return;
 		}
 
-		let currentCanvasJson = canvasDataJson; // Use state if available
-
-		// If canvas hasn't changed (canvasDataJson is null), get current state from editor
-		if (!currentCanvasJson && canvasEditorRef) {
-			const canvasInstance = canvasEditorRef.getCanvasInstance();
-			if (canvasInstance) {
-				try {
-					// Get the current state, even if empty (should return default structure)
-					currentCanvasJson = JSON.stringify(canvasInstance.toJSON());
-					console.log(
-						"Canvas data was null, fetched current state:",
-						currentCanvasJson.substring(0, 50) + "...",
-					);
-					// Update the state variable as well, though not strictly necessary for this save
-					canvasDataJson = currentCanvasJson;
-				} catch (e) {
-					console.error("Error getting canvas JSON:", e);
-					toast.error("Failed to retrieve canvas data.");
-					return;
-				}
-			}
-		}
-
-		// Final check if we still couldn't get canvas data
-		if (!currentCanvasJson) {
-			toast.error(
-				"Could not get canvas data. Ensure the editor is loaded.",
-			);
-			return;
-		}
+		let currentCanvasJson = canvasDataJson;
 
 		isSaving = true;
 		let createdTemplateId: number | null = null; // To store the ID for preview upload
@@ -187,65 +160,68 @@
 				console.log(
 					`[Preview Step 2a] Attempting preview generation for template ID: ${createdTemplateId}`,
 				); // Log start
-				const imageDataUrl = canvasEditorRef.getCanvasImageDataUrl();
-				if (imageDataUrl) {
-					console.log(
-						"[Preview Step 2b] Successfully generated image data URL.",
-					); // Log success
-					try {
-						// Step 2: Upload
-						console.log(
-							"[Preview Step 2c] Attempting to upload preview...",
-						); // Log upload start
-						const uploadedUrl = await uploadTemplatePreview(
-							imageDataUrl,
-							createdTemplateId,
-						);
-						console.log(
-							"[Preview Step 2d] Upload function returned:",
-							uploadedUrl,
-						); // Log upload result
+				canvasEditorRef
+					.getCanvasImageDataUrl()
+					.then(async (imageDataUrl) => {
+						if (imageDataUrl) {
+							console.log(
+								"[Preview Step 2b] Successfully generated image data URL.",
+							); // Log success
+							try {
+								// Step 2: Upload
+								console.log(
+									"[Preview Step 2c] Attempting to upload preview...",
+								); // Log upload start
+								const uploadedUrl = await uploadTemplatePreview(
+									imageDataUrl,
+									createdTemplateId as number,
+								);
+								console.log(
+									"[Preview Step 2d] Upload function returned:",
+									uploadedUrl,
+								); // Log upload result
 
-						// Step 3: Update Record
-						if (uploadedUrl) {
-							console.log(
-								`[Preview Step 3a] Attempting to update template ${createdTemplateId} with URL: ${uploadedUrl}`,
-							); // Log update start
-							await updateTemplateRecordWithPreview(
-								createdTemplateId,
-								uploadedUrl,
-							);
-							console.log(
-								"[Preview Step 3b] Successfully updated template record with preview URL.",
-							); // Log update success
-							// Preview succeeded!
+								// Step 3: Update Record
+								if (uploadedUrl) {
+									console.log(
+										`[Preview Step 3a] Attempting to update template ${createdTemplateId} with URL: ${uploadedUrl}`,
+									); // Log update start
+									await updateTemplateRecordWithPreview(
+										createdTemplateId as number,
+										uploadedUrl,
+									);
+									console.log(
+										"[Preview Step 3b] Successfully updated template record with preview URL.",
+									); // Log update success
+									// Preview succeeded!
+								} else {
+									// Upload might have succeeded but returned null/empty URL (shouldn't happen with current backend)
+									previewFailed = true;
+									toast.warning(
+										"Preview upload succeeded but returned an invalid URL.",
+									);
+								}
+							} catch (uploadOrUpdateError: any) {
+								previewFailed = true; // Mark preview as failed if any step errors
+								console.error(
+									"Error during preview upload/update:",
+									uploadOrUpdateError,
+								);
+								// Use error toast for clearer indication of failure
+								toast.error(
+									`Preview Error: ${uploadOrUpdateError.message}`,
+								);
+							}
 						} else {
-							// Upload might have succeeded but returned null/empty URL (shouldn't happen with current backend)
-							previewFailed = true;
+							previewFailed = true; // Mark preview as failed
+							console.warn(
+								"Could not generate image data URL for preview.",
+							);
 							toast.warning(
-								"Preview upload succeeded but returned an invalid URL.",
+								"Could not generate preview image data from canvas.",
 							);
 						}
-					} catch (uploadOrUpdateError: any) {
-						previewFailed = true; // Mark preview as failed if any step errors
-						console.error(
-							"Error during preview upload/update:",
-							uploadOrUpdateError,
-						);
-						// Use error toast for clearer indication of failure
-						toast.error(
-							`Preview Error: ${uploadOrUpdateError.message}`,
-						);
-					}
-				} else {
-					previewFailed = true; // Mark preview as failed
-					console.warn(
-						"Could not generate image data URL for preview.",
-					);
-					toast.warning(
-						"Could not generate preview image data from canvas.",
-					);
-				}
+					});
 			} else {
 				previewFailed = true; // Mark preview as failed
 				console.warn(

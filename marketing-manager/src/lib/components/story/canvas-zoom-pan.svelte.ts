@@ -326,36 +326,89 @@ export class CanvasZoomPan {
     // Center the canvas
     this.centerCanvas();
   }
+  private getFittingContainer(): HTMLElement | null {
+    // Option 1: Parent element (Your original - MIGHT BE WRONG if parent has fixed size)
+    // return this.canvas.wrapperEl?.parentElement ?? null;
 
+    // Option 2: Grandparent element (Often more likely to be the layout container)
+     return this.canvas.wrapperEl?.parentElement?.parentElement ?? null;
+
+    // Option 3: A specific element by ID
+    // return document.getElementById('my-canvas-container-id');
+
+    // Option 4: The wrapper itself (If the wrapper is the one that resizes)
+    // return this.canvas.wrapperEl;
+}
   /**
    * Zoom to fit the canvas width in the viewport
    */
   public zoomToFitWidth(): void {
-    if (!this.canvas.wrapperEl) return;
+    const fittingContainer = this.getFittingContainer(); // Use the helper
+    if (!fittingContainer) {
+        console.error("ZoomToFitWidth: Fitting container not found.");
+        return;
+    }
 
-    // Get container dimensions
-    const containerRect = this.canvas.wrapperEl.parentElement?.getBoundingClientRect();
-    if (!containerRect) return;
+    const containerWidth = fittingContainer.clientWidth;
+    console.log('ZoomToFitWidth: Container clientWidth:', containerWidth);
+    if (containerWidth <= 0) return;
 
-    // Get canvas dimensions
-    const canvasWidth = this.canvas.width || 1920;
+    const canvasWidth = this.canvas.width ?? 1; // Use 1 to avoid division by zero
+    console.log('ZoomToFitWidth: Canvas Logical Width:', canvasWidth);
+    if (canvasWidth <= 0) return;
 
-    // Calculate the scale to fit the canvas width in the container
-    const scale = (containerRect.width - 40) / canvasWidth; // Add some padding
+    // Calculate scale based on width ONLY
+    // Subtract desired padding *from the container width* here if needed
+    const padding = 20; // Example: 10px padding on each side
+    const targetWidth = containerWidth - padding;
+    console.log('ZoomToFitWidth: Target Width for Canvas:', targetWidth);
+    if (targetWidth <= 0) return;
 
-    // Limit zoom to reasonable values
+
+    const scale = targetWidth / canvasWidth;
+    console.log('ZoomToFitWidth: Calculated Scale:', scale);
+
+    const limitedZoom = Math.min(Math.max(scale, this.minZoom), this.maxZoom);
+    console.log('ZoomToFitWidth: Limited Zoom:', limitedZoom);
+
+    // Zoom relative to the canvas center
+    const center = this.canvas.getCenterPoint();
+    console.log('ZoomToFitWidth: Zoom Center Point (Canvas Coords):', center);
+    this.zoomToLevel(limitedZoom, center); // Use zoomToLevel which uses zoomToPoint
+
+    // Center the canvas after zooming
+    this.centerCanvas();
+  }
+
+  public zoomToFit(): void {
+    const fittingContainer = this.getFittingContainer();
+    if (!fittingContainer) return;
+
+    const containerWidth = fittingContainer.clientWidth;
+    const containerHeight = fittingContainer.clientHeight;
+    if (containerWidth <= 0 || containerHeight <= 0) return;
+
+    const canvasWidth = this.canvas.width ?? 1; // Use 1 to avoid division by zero
+    const canvasHeight = this.canvas.height ?? 1;
+    if (canvasWidth <= 0 || canvasHeight <= 0) return;
+
+    // Calculate scale to fit both width and height
+    // Subtract desired padding *from the container size* here if needed
+    const padding = 20; // Example: 10px padding on each side/top/bottom
+    const availableWidth = containerWidth - padding;
+    const availableHeight = containerHeight - padding;
+
+    const scaleX = availableWidth / canvasWidth;
+    const scaleY = availableHeight / canvasHeight;
+    const scale = Math.min(scaleX, scaleY); // Use the smaller scale to fit entirely
+
     const limitedZoom = Math.min(Math.max(scale, this.minZoom), this.maxZoom);
 
-    // Get canvas center
-    const center = {
-      x: canvasWidth / 2,
-      y: (this.canvas.height || 1080) / 2
-    };
+    // Zoom relative to the canvas center
+    const center = this.canvas.getCenterPoint();
+    this.zoomToLevel(limitedZoom, center); // Use zoomToLevel
 
-    // Apply zoom
-    this.zoomToLevel(limitedZoom, center);
-
-    // Center the canvas
+    // Center the canvas after zooming
     this.centerCanvas();
   }
 
