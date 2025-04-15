@@ -8,6 +8,7 @@
   import TextSelectionMenu from "$lib/components/TextSelectionMenu.svelte";
   import ShapeStyleMenu from "$lib/components/ShapeStyleMenu.svelte";
   import ClipMaskMenu from "$lib/components/ClipMaskMenu.svelte";
+  import ImageReplaceMenu from "$lib/components/ImageReplaceMenu.svelte";
   import { Canvas } from "fabric";
   import addImage from "$lib/tools/canvas-image.svelte";
   import { onMount } from "svelte";
@@ -123,6 +124,11 @@
       <!-- Clip Mask Menu -->
       {#if canvas}
         <ClipMaskMenu canvas={canvas} />
+      {/if}
+
+      <!-- Image Replace Menu -->
+      {#if canvas}
+        <ImageReplaceMenu canvas={canvas} />
       {/if}
     </div>
   </div>
