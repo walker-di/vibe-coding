@@ -157,70 +157,19 @@
 			// --- Step 2 & 3: Generate, Upload, and Update Preview Image ---
 			let previewFailed = false; // Flag to track preview failure status
 			if (canvasEditorRef && createdTemplateId) {
-				console.log(
-					`[Preview Step 2a] Attempting preview generation for template ID: ${createdTemplateId}`,
-				); // Log start
 				canvasEditorRef
 					.getCanvasImageDataUrl()
 					.then(async (imageDataUrl) => {
-						if (imageDataUrl) {
-							console.log(
-								"[Preview Step 2b] Successfully generated image data URL.",
-							); // Log success
-							try {
-								// Step 2: Upload
-								console.log(
-									"[Preview Step 2c] Attempting to upload preview...",
-								); // Log upload start
-								const uploadedUrl = await uploadTemplatePreview(
-									imageDataUrl,
-									createdTemplateId as number,
-								);
-								console.log(
-									"[Preview Step 2d] Upload function returned:",
-									uploadedUrl,
-								); // Log upload result
+						const uploadedUrl = await uploadTemplatePreview(
+							imageDataUrl,
+							createdTemplateId as number,
+						);
+						if (!uploadedUrl) return;
 
-								// Step 3: Update Record
-								if (uploadedUrl) {
-									console.log(
-										`[Preview Step 3a] Attempting to update template ${createdTemplateId} with URL: ${uploadedUrl}`,
-									); // Log update start
-									await updateTemplateRecordWithPreview(
-										createdTemplateId as number,
-										uploadedUrl,
-									);
-									console.log(
-										"[Preview Step 3b] Successfully updated template record with preview URL.",
-									); // Log update success
-									// Preview succeeded!
-								} else {
-									// Upload might have succeeded but returned null/empty URL (shouldn't happen with current backend)
-									previewFailed = true;
-									toast.warning(
-										"Preview upload succeeded but returned an invalid URL.",
-									);
-								}
-							} catch (uploadOrUpdateError: any) {
-								previewFailed = true; // Mark preview as failed if any step errors
-								console.error(
-									"Error during preview upload/update:",
-									uploadOrUpdateError,
-								);
-								// Use error toast for clearer indication of failure
-								toast.error(
-									`Preview Error: ${uploadOrUpdateError.message}`,
-								);
-							}
-						} else {
-							previewFailed = true; // Mark preview as failed
-							console.warn(
-								"Could not generate image data URL for preview.",
-							);
-							toast.warning(
-								"Could not generate preview image data from canvas.",
-							);
-						}
+						await updateTemplateRecordWithPreview(
+							createdTemplateId as number,
+							uploadedUrl,
+						);
 					});
 			} else {
 				previewFailed = true; // Mark preview as failed
@@ -255,29 +204,23 @@
 		dataUrl: string,
 		templateId: number,
 	): Promise<string | null> {
-		try {
-			const response = await fetch("/api/upload/template-preview", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					imageData: dataUrl,
-					templateId: templateId,
-				}),
-			});
-			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				throw new Error(
-					errorData.message ||
-						`Upload failed with status ${response.status}`,
-				);
-			}
-			const result = await response.json();
-			return result.imageUrl;
-		} catch (error: any) {
-			console.error("Error uploading template preview:", error);
-			// toast.error(`Preview Upload Error: ${error.message}`); // Maybe too noisy? Logged already.
-			throw error; // Re-throw to be caught in saveTemplate
+		const response = await fetch("/api/upload/template-preview", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				imageData: dataUrl,
+				templateId: templateId,
+			}),
+		});
+		if (!response.ok) {
+			const errorData = await response.json().catch(() => ({}));
+			throw new Error(
+				errorData.message ||
+					`Upload failed with status ${response.status}`,
+			);
 		}
+		const result = await response.json();
+		return result.imageUrl;
 	}
 
 	// Helper function to update template record with preview URL
@@ -388,27 +331,6 @@
 					<div class="flex flex-wrap gap-2 mb-4">
 						<Button
 							variant="outline"
-							onclick={() => canvasEditorRef?.addRectangle()}
-							title="Add Rectangle"
-						>
-							<Square class="h-4 w-4 mr-2" /> Rectangle
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => canvasEditorRef?.addCircle()}
-							title="Add Circle"
-						>
-							<Circle class="h-4 w-4 mr-2" /> Circle
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() => canvasEditorRef?.addText()}
-							title="Add Text"
-						>
-							<Type class="h-4 w-4 mr-2" /> Text
-						</Button>
-						<Button
-							variant="outline"
 							onclick={() => canvasEditorRef?.addImage()}
 							title="Add Image"
 						>
@@ -427,14 +349,6 @@
 							title="Clear Canvas"
 						>
 							Clear All
-						</Button>
-						<Button
-							variant="outline"
-							onclick={() =>
-								canvasEditorRef?.showLayerOrderModal()}
-							title="Manage Layers"
-						>
-							<Layers class="h-4 w-4 mr-2" /> Layers
 						</Button>
 					</div>
 				{/if}

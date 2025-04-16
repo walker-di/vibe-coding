@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Canvas } from "fabric";
+  import { Canvas, FabricImage } from "fabric";
   import { addRectangle } from "./tools/canvas-rectangle.svelte";
   import { addCircle } from "./tools/canvas-circle.svelte";
   import { addTriangle } from "./tools/canvas-triangle.svelte";
@@ -25,6 +25,7 @@
   import ResizeTab from "./ResizeTab.svelte";
   import type { CanvasService } from "./canvas-service.svelte";
   import CanvasSideNav from "./CanvasSideNav.svelte";
+  import ImageGallery from "./ImageGallery.svelte";
 
   let {
     canvas,
@@ -66,6 +67,23 @@
   // Function to handle item click
   function handleItemClick(action: () => void) {
     action();
+  }
+
+  async function addImageFromURl(url: string) {
+    const objectCount = canvas.getObjects().length;
+    const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
+    const maxW = canvas.width * 0.8;
+    const maxH = canvas.height * 0.8;
+    if (img.width > maxW || img.height > maxH) {
+      const scale = Math.min(maxW / img.width, maxH / img.height);
+      img.scale(scale);
+    }
+    // Set a name for the image
+    const objectName = `Image ${objectCount + 1}`;
+    img.set("name", objectName);
+    canvas.add(img);
+    canvas.setActiveObject(img);
+    // canvas.renderAll();
   }
 </script>
 
@@ -132,11 +150,9 @@
     {:else if activeTab === "photos"}
       <div class="content-section">
         <h3 class="section-title">Photos</h3>
-        <div class="items-grid">
-          <div class="photo-placeholder">Photo 1</div>
-          <div class="photo-placeholder">Photo 2</div>
-          <div class="photo-placeholder">Photo 3</div>
-        </div>
+        <ImageGallery
+          onImageSelected={addImageFromURl}
+        />
       </div>
     {:else if activeTab === "layers"}
       <div class="content-section">

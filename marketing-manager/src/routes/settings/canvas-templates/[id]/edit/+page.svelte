@@ -643,11 +643,10 @@
 			// Explicitly type url
 			if (canvasEditorRef && url) {
 				// Use the existing addImage method with the URL
-				const wf = window as any;
 				const canvas = canvasEditorRef.getCanvasInstance();
-				if (canvas && wf.fabric) {
+				if (canvas) {
 					const objectCount = canvas.getObjects().length;
-					wf.fabric.Image.fromURL(
+					FabricImage.fromURL(
 						url,
 						(img: any) => {
 							const maxW = canvas.width * 0.8;

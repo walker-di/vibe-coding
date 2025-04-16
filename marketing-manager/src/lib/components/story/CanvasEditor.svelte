@@ -72,7 +72,6 @@
   let isLoadingCanvas = $state(false);
 
   export async function loadCanvasData(canvasJson: string = "{}") {
-    console.log("Loading canvas data", canvasJson);
     isLoadingCanvas = true;
     await canvas.loadFromJSON(canvasJson);
     canvasZoomPan.zoomToFit();
@@ -458,27 +457,6 @@
 <div class="space-y-4">
   {#if !hideControls}
     <div class="flex flex-wrap gap-2 mb-4">
-      <Button
-        variant="outline"
-        onclick={() => addRectangle(canvas)}
-        title="Add Rectangle"
-      >
-        <Square class="h-4 w-4 mr-2" /> Rectangle
-      </Button>
-      <Button
-        variant="outline"
-        onclick={() => addCircle(canvas)}
-        title="Add Circle"
-      >
-        <Circle class="h-4 w-4 mr-2" /> Circle
-      </Button>
-      <Button
-        variant="outline"
-        onclick={() => addText(canvas)}
-        title="Add Text"
-      >
-        <Type class="h-4 w-4 mr-2" /> Text
-      </Button>
       <Button variant="outline" onclick={addImage} title="Add Image">
         <ImageIcon class="h-4 w-4 mr-2" /> Image
       </Button>
@@ -496,24 +474,8 @@
       >
         <ImageUp class="h-4 w-4 mr-2" /> BG Image
       </Button>
-      <Button
-        variant="outline"
-        onclick={deleteSelected}
-        title="Delete Selected"
-        disabled={!selectedObject}
-        class="ml-auto"
-      >
-        <Trash2 class="h-4 w-4 mr-2" /> Delete
-      </Button>
       <Button variant="outline" onclick={clearCanvas} title="Clear Canvas">
         Clear All
-      </Button>
-      <Button
-        variant="outline"
-        onclick={openLayerOrderModal}
-        title="Manage Layers"
-      >
-        <Layers class="h-4 w-4 mr-2" /> Layers
       </Button>
       {#if onNarrationChange}
         <Button

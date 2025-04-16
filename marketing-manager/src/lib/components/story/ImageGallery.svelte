@@ -70,7 +70,7 @@
   }
 </script>
 
-<div class="image-gallery">
+<div class="image-gallery w-full">
   <div class="flex justify-between items-center mb-4">
     <h3 class="text-sm font-medium">Image Gallery</h3>
     <Button variant="ghost" size="sm" onclick={loadImages} title="Refresh Gallery">
@@ -93,7 +93,7 @@
       <p class="text-sm mt-2">Upload some images to see them here</p>
     </div>
   {:else}
-    <div class="grid grid-cols-3 gap-2">
+    <div class="grid grid-cols-3 gap-2 w-full">
       {#each images as image (image.url)}
         <div 
           class="relative aspect-square border rounded-md overflow-hidden cursor-pointer hover:border-primary transition-colors"
