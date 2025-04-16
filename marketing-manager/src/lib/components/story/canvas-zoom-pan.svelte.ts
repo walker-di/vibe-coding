@@ -298,7 +298,7 @@ export class CanvasZoomPan {
     // return this.canvas.wrapperEl?.parentElement ?? null;
 
     // Option 2: Grandparent element (Often more likely to be the layout container)
-     return this.canvas.wrapperEl?.parentElement?.parentElement ?? null;
+     return this.canvas.wrapperEl?.parentElement ?? null;
 
     // Option 3: A specific element by ID
     // return document.getElementById('my-canvas-container-id');

@@ -355,14 +355,9 @@
                       hasExtremePositions &&
                       extremeObjectCount > maxExtremeObjects
                     ) {
-                      console.log(
-                        "Extreme positions detected, recreating objects with correct positions",
-                      );
-                      // Use setTimeout to ensure the canvas is fully loaded before resetting
                       setTimeout(() => {
                         // Set loading flag to prevent saving during reset
                         isLoadingCanvas = true;
-                        resetCanvasView();
                       }, 100);
                     } else {
                       // Otherwise, use the normal approach
@@ -603,7 +598,7 @@
           return;
         }
 
-        constrainObjectsToCanvas();
+        // constrainObjectsToCanvas();
         saveCanvas();
       });
       canvas.on("object:added", (_: any) => {
@@ -844,194 +839,6 @@
     if (!canvas) return;
   }
 
-  function resetCanvasView() {
-    if (!canvas) return;
-
-    console.log("Starting complete canvas view reset...");
-
-    // Set the loading flag to prevent saving during reset
-    isLoadingCanvas = true;
-
-    // Step 1: Reset zoom to 1
-    zoomLevel = 1; // Set directly to avoid triggering setZoom which would cause events
-    canvas.setZoom(1);
-    console.log("Reset zoom to 1");
-
-    // Step 2: Reset pan
-    canvas.absolutePan({ x: 0, y: 0 });
-    console.log("Reset pan to origin");
-
-    // Step 3: Force recreation of all objects with proper positioning
-    const objects = canvas.getObjects();
-    if (objects && objects.length > 0) {
-      // Force recreation of objects with proper positioning
-
-      // Store the original objects to recreate them
-      const objectsToRecreate: any[] = [];
-      objects.forEach((obj: any) => {
-        if (!obj) return;
-
-        // Store all the properties we need to recreate the object
-        const objData = {
-          type: obj.type,
-          name: obj.name,
-          width: obj.width || 100,
-          height: obj.height || 100,
-          scaleX: obj.scaleX || 1,
-          scaleY: obj.scaleY || 1,
-          fill: obj.fill,
-          stroke: obj.stroke,
-          strokeWidth: obj.strokeWidth,
-          src: obj.getSrc ? obj.getSrc() : null, // For images
-          text: obj.text, // For text objects
-          fontSize: obj.fontSize, // For text objects
-          fontFamily: obj.fontFamily, // For text objects
-          left: obj.left, // Store original position
-          top: obj.top, // Store original position
-          angle: obj.angle || 0, // Store original rotation
-        };
-        objectsToRecreate.push(objData);
-      });
-
-      // Clear the canvas
-      canvas.clear();
-
-      // Set background color
-      canvas.backgroundColor = "#f0f0f0";
-
-      // Recreate each object with proper positioning
-      let imageLoadCount = 0;
-      const totalImages = objectsToRecreate.filter(
-        (obj) => obj.type === "image",
-      ).length;
-
-      objectsToRecreate.forEach((objData: any, index: number) => {
-        let newObj;
-        const wf = window as any;
-
-        // Calculate default position if original is not available
-        const defaultLeft = canvas.width / 2 - objData.width / 2;
-        const defaultTop = canvas.height / 2 - objData.height / 2;
-
-        // Use original position if available, otherwise use default centered position
-        const left = objData.left !== undefined ? objData.left : defaultLeft;
-        const top = objData.top !== undefined ? objData.top : defaultTop;
-
-        // Create different types of objects
-        if (objData.type === "rect") {
-          newObj = new Rect({
-            left: left,
-            top: top,
-            width: objData.width,
-            height: objData.height,
-            fill: objData.fill || "#3498db",
-            stroke: objData.stroke,
-            strokeWidth: objData.strokeWidth,
-            name: objData.name,
-            angle: objData.angle || 0,
-          });
-        } else if (objData.type === "circle") {
-          newObj = new Circle({
-            left: left,
-            top: top,
-            radius: Math.min(objData.width, objData.height) / 2,
-            fill: objData.fill || "#3498db",
-            stroke: objData.stroke,
-            strokeWidth: objData.strokeWidth,
-            name: objData.name,
-            angle: objData.angle || 0,
-          });
-        } else if (objData.type === "text" || objData.type === "textbox") {
-          newObj = new Textbox(objData.text || "Text", {
-            left: left,
-            top: top,
-            width: objData.width,
-            fontSize: objData.fontSize || 24,
-            fontFamily: objData.fontFamily || "Arial",
-            fill: objData.fill || "#2c3e50",
-            name: objData.name,
-            angle: objData.angle || 0,
-          });
-        } else if (objData.type === "image") {
-          // For images, we need to load them asynchronously
-          // Use a placeholder URL if src is not available
-          const imageUrl =
-            objData.src ||
-            `https://via.placeholder.com/${objData.width}x${objData.height}?text=${encodeURIComponent(objData.name || "Image")}`;
-
-          FabricImage.fromURL(
-            imageUrl,
-            (img: any) => {
-              // Scale the image to match the original dimensions
-              const scale = Math.min(
-                objData.width / (img.width || 1),
-                objData.height / (img.height || 1),
-              );
-
-              img.set({
-                left: left,
-                top: top,
-                scaleX: scale,
-                scaleY: scale,
-                name: objData.name,
-                angle: objData.angle || 0,
-              });
-
-              canvas.add(img);
-              imageLoadCount++;
-
-              // When all images are loaded, render the canvas
-              if (imageLoadCount >= totalImages) {
-                canvas.renderAll();
-                console.log("All images loaded and rendered");
-                // Fit to view after all images are loaded
-                fitToView();
-              }
-            },
-            { crossOrigin: "anonymous" },
-          );
-          return; // Skip the add below for images
-        } else {
-          // Default fallback - create a rectangle with the object's name
-          newObj = new wf.fabric.Rect({
-            left: left,
-            top: top,
-            width: 100,
-            height: 100,
-            fill: "#e74c3c",
-            name: objData.name || `Unknown object ${index}`,
-            angle: objData.angle || 0,
-          });
-        }
-
-        if (newObj) {
-          canvas.add(newObj);
-        }
-      });
-
-      // If there were no images, render the canvas now and fit to view
-      if (totalImages === 0) {
-        canvas.renderAll();
-        fitToView();
-      }
-
-      console.log("Objects recreated with proper positioning");
-    } else {
-      // If no objects, just fit to view
-      fitToView();
-    }
-
-    // Final render
-    canvas.renderAll();
-    console.log("Canvas reset: normalized, centered, and fitted to view");
-
-    // Reset the loading flag after a delay to ensure all operations are complete
-    setTimeout(() => {
-      isLoadingCanvas = false;
-      console.log("Canvas reset complete, loading flag cleared");
-    }, 500);
-  }
-
   function saveCanvas() {
     if (!canvas) return;
     if (isLoadingCanvas) {
@@ -1051,7 +858,7 @@
     try {
       isSaving = true;
 
-      constrainObjectsToCanvas();
+      // constrainObjectsToCanvas();
 
       const objects = canvas.getObjects();
       objects.forEach((obj: any, index: number) => {
@@ -1318,78 +1125,6 @@
       console.error("Error opening layer order modal:", error);
     }
   }
-  // addText function has been migrated to canvas-service.ts
-
-  // Function to constrain objects within the canvas boundaries
-  function constrainObjectsToCanvas() {
-    if (!canvas) return false;
-
-    const objects = canvas.getObjects();
-    if (!objects || objects.length === 0) return false;
-
-    let modified = false;
-
-    objects.forEach((obj: any) => {
-      if (!obj || obj.name === "Canvas Border") return;
-
-      // Skip objects that don't have dimensions
-      if (obj.width === undefined || obj.height === undefined) return;
-
-      // Get object bounds considering its width, height, scale, and position
-      const objBounds = obj.getBoundingRect();
-
-      // Check if the object is outside the canvas boundaries
-      let needsAdjustment = false;
-      let newLeft = obj.left;
-      let newTop = obj.top;
-
-      // Check left boundary
-      if (objBounds.left < 0) {
-        newLeft = obj.left - objBounds.left + 1; // Add 1px buffer
-        needsAdjustment = true;
-      }
-
-      // Check right boundary
-      if (objBounds.left + objBounds.width > canvas.width) {
-        newLeft =
-          canvas.width - objBounds.width + (obj.left - objBounds.left) - 1; // Subtract 1px buffer
-        needsAdjustment = true;
-      }
-
-      // Check top boundary
-      if (objBounds.top < 0) {
-        newTop = obj.top - objBounds.top + 1; // Add 1px buffer
-        needsAdjustment = true;
-      }
-
-      // Check bottom boundary
-      if (objBounds.top + objBounds.height > canvas.height) {
-        newTop =
-          canvas.height - objBounds.height + (obj.top - objBounds.top) - 1; // Subtract 1px buffer
-        needsAdjustment = true;
-      }
-
-      // Apply adjustments if needed
-      if (needsAdjustment) {
-        obj.set({
-          left: newLeft,
-          top: newTop,
-        });
-        obj.setCoords();
-        modified = true;
-        console.log(
-          `Constrained object ${obj.name || "unnamed"} to canvas boundaries`,
-        );
-      }
-    });
-
-    if (modified) {
-      canvas.renderAll();
-    }
-
-    return modified;
-  }
-
   // Show file upload dialog for image
   let showFileUploadDialog = $state(false);
 
@@ -1480,87 +1215,6 @@
 
   export function getCanvasInstance() {
     return canvas;
-  }
-
-  export function resetView() {
-    resetCanvasView();
-  }
-
-  export function updateDimensions(newWidth: number, newHeight: number) {
-    console.log("=== UPDATING CANVAS DIMENSIONS ===");
-    console.log(`Requested dimensions: ${newWidth}x${newHeight}`);
-    console.log(`Current dimensions: ${canvasWidth}x${canvasHeight}`);
-
-    if (canvas) {
-      console.log(
-        `CanvasEditor: Updating dimensions to ${newWidth}x${newHeight}`,
-      );
-
-      // Log current objects for debugging
-      const objects = canvas.getObjects();
-      console.log(`Current objects before dimension update: ${objects.length}`);
-      objects.forEach((obj: any, index: number) => {
-        console.log(
-          `Object ${index}: type=${obj.type}, name=${obj.name}, dimensions=${obj.width}x${obj.height}`,
-        );
-      });
-
-      // Update dimensions
-      canvasWidth = newWidth;
-      canvasHeight = newHeight;
-
-      // Update the fabric canvas dimensions
-      canvas.setWidth(newWidth);
-      canvas.setHeight(newHeight);
-
-      // Reset viewport transform to ensure consistent positioning
-      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-
-      // Wait a brief moment to ensure the canvas dimensions are updated
-      setTimeout(() => {
-        // Ensure all objects have proper coordinates
-        canvas.getObjects().forEach((obj: any) => {
-          if (obj && obj.name !== "Canvas Border") {
-            obj.setCoords();
-            obj.dirty = true;
-          }
-        });
-
-        // Constrain objects to the new canvas dimensions
-        constrainObjectsToCanvas();
-
-        canvas.renderAll();
-      }, 50);
-
-      // Wait a brief moment to ensure the DOM has updated
-      setTimeout(() => {
-        // Re-center viewport if needed, or fit to view
-        fitToView(); // Fit to view after dimension change
-        canvas.renderAll();
-
-        // Apply another fit after a longer delay to ensure everything is settled
-        setTimeout(() => {
-          fitToView();
-          // Force a re-render of all objects
-          if (canvas) {
-            const objects = canvas.getObjects();
-            objects.forEach((obj: any) => {
-              if (obj) obj.dirty = true;
-            });
-            canvas.renderAll();
-          }
-        }, 300);
-      }, 50);
-
-      // Don't save canvas on dimension change itself, only on content change
-    } else {
-      console.warn(
-        `updateDimensions called but canvas not ready. W: ${newWidth}, H: ${newHeight}`,
-      );
-      // Store dimensions even if canvas isn't ready yet, for initialization
-      canvasWidth = newWidth;
-      canvasHeight = newHeight;
-    }
   }
 
   // --- Function to get canvas image data ---
@@ -1680,27 +1334,14 @@
       {/if}
     </div>
   {/if}
-  <div>
-    <div class="sidebar">
+  <div class='flex'>
+    <div class="sidebar grow-0 shrink-0">
       <CanvasSidebar {canvas} {canvasService} />
     </div>
-    <div class="editor">
+    <div class="editor grow min-w-0 flex flex-col">
       <CanvasHeader {canvas} {canvasService} />
-      <div
-        class="canvas-wrapper border rounded-md relative bg-gray-200 dark:bg-gray-700"
-        style="height: 75vh; min-height: 650px;"
-      >
-        <!-- Fixed Inner Container (no scrolling) -->
-        <div
-          bind:this={canvasContainer}
-          class="relative flex items-center justify-center"
-          style="width: 100%; height: 100%; padding: 20px;"
-        >
-          <!-- Canvas Element -->
-          <div class="canvas-element-wrapper">
-            <canvas id="canvas" bind:this={canvasElement}></canvas>
-          </div>
-        </div>
+      <div class="grow relative overflow-hidden max-h-[calc(50vh)]">
+        <canvas id="canvas" class=' ' bind:this={canvasElement}></canvas>
 
         {#if !canvas}
           <div
@@ -1710,6 +1351,7 @@
           </div>
         {/if}
       </div>
+
       <CanvasFooter {canvas} {canvasService} {canvasZoomPan} />
     </div>
   </div>
@@ -1780,16 +1422,4 @@
 </div>
 
 <style>
-  .canvas-wrapper {
-    position: relative;
-    overflow: hidden;
-    transition: height 0.2s ease;
-  }
-
-  .canvas-element-wrapper {
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
 </style>
