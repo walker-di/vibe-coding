@@ -77,6 +77,7 @@
     isLoadingCanvas = true;
     await canvas.loadFromJSON(canvasJson);
     canvasZoomPan.zoomToFit();
+    canvas.renderAll();
     isLoadingCanvas = false;
   }
 
