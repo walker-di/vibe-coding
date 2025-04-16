@@ -97,7 +97,7 @@
       voiceName: clip.voiceName || "pt-BR-FranciscaNeural",
     };
     console.log("Clip selected in SceneEditor:", clip.id, clip.orderIndex);
-    canvasEditorInstance?.loadCanvasData(JSON.stringify(clip.canvas));
+    canvasEditorInstance?.loadCanvasData(clip.canvas);
   }
 
   // State for the auto-create modal
@@ -1044,8 +1044,6 @@
     // IMPORTANT: First check if we're in AI fill processing mode
     // This is the most critical check to prevent infinite loops
     if (isProcessingAiFill) return;
-
-    // Check again if clip is selected, as it might have changed during the debounce period
     if (!selectedClip) return;
 
     // Check if data actually changed compared to the current selected clip state
@@ -1112,7 +1110,7 @@
             "Debounced: Generating preview image for clip",
             clipToUpdate.id,
           );
-          const imageDataUrl = canvasEditorInstance.getCanvasImageDataUrl();
+          const imageDataUrl = await canvasEditorInstance.getCanvasImageDataUrl();
           if (imageDataUrl) {
             console.log("Debounced: Preview image generated, uploading...");
             try {

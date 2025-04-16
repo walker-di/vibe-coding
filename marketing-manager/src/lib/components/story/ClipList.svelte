@@ -109,12 +109,8 @@
           <div class="mt-2 text-sm text-muted-foreground">
             Order: {clip.orderIndex !== undefined && clip.orderIndex !== null ? clip.orderIndex : 0} | ID: {clip.id}
           </div>
-          <!-- Removed redundant View Clip button -->
-          <!-- <Button variant="outline" class="h-8 py-1 px-3 text-xs" onclick={() => onViewClip(clip.id)}>
-            View Clip
-          </Button> -->
-        </div> <!-- This closes the "Details Column" div -->
-        <!-- Removed extra closing div here -->
+
+        </div> 
       {/each}
     </div>
   {/if}

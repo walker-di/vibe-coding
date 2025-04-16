@@ -347,7 +347,6 @@ export class CanvasZoomPan {
   }
 
   public zoomToFit(): void {
-    console.log('fit')
     const fittingContainer = this.getFittingContainer();
     if (!fittingContainer) return;
     const containerWidth = fittingContainer.clientWidth;

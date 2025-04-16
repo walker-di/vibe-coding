@@ -71,7 +71,6 @@
 
   let isLoadingCanvas = $state(false);
 
-  // --- Method to load canvas data (no transition) ---
   export async function loadCanvasData(canvasJson: string = "{}") {
     console.log("Loading canvas data", canvasJson);
     isLoadingCanvas = true;
@@ -81,7 +80,7 @@
     isLoadingCanvas = false;
   }
 
-  onMount(async (): Promise<any> => {
+  onMount(async () => {
     initializeCanvas();
   });
 
