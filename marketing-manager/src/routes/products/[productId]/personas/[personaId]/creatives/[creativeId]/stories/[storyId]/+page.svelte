@@ -1,41 +1,26 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui/button';
   import { ArrowLeft, Edit, Trash2, Plus, BookOpen } from 'lucide-svelte';
   import SceneEditor from '$lib/components/story/SceneEditor.svelte';
   import type { StoryWithRelations } from '$lib/types/story.types';
+  import { onMount } from 'svelte';
 
-  // State
-  let productId = $state<number | null>(null);
-  let personaId = $state<number | null>(null);
-  let creativeId = $state<number | null>(null);
-  let storyId = $state<number | null>(null);
+  const productId = $derived(parseInt(page.params.productId));
+  const personaId = $derived(parseInt(page.params.personaId));
+  const creativeId = $derived(parseInt(page.params.creativeId));
+  const storyId = $derived(parseInt(page.params.storyId));
+  const backLink = $derived(productId && personaId && creativeId
+    ? `/products/${productId}/personas/${personaId}/creatives/${creativeId}`
+    : '/');
   let story = $state<StoryWithRelations | null>(null);
   let isLoading = $state(true);
   let error = $state<string | null>(null);
   let isDeleting = $state(false);
 
   // Fetch story data
-  $effect(() => {
-    const pId = $page.params.productId;
-    const persId = $page.params.personaId;
-    const cId = $page.params.creativeId;
-    const sId = $page.params.storyId;
-
-    if (!pId || isNaN(parseInt(pId)) ||
-        !persId || isNaN(parseInt(persId)) ||
-        !cId || isNaN(parseInt(cId)) ||
-        !sId || isNaN(parseInt(sId))) {
-      error = 'Invalid ID parameters';
-      isLoading = false;
-      return;
-    }
-
-    productId = parseInt(pId);
-    personaId = parseInt(persId);
-    creativeId = parseInt(cId);
-    storyId = parseInt(sId);
+  onMount(() => {
     fetchStory(storyId);
   });
 
@@ -160,10 +145,6 @@
     }
   }
 
-  // Computed values
-  $: backLink = productId && personaId && creativeId
-    ? `/products/${productId}/personas/${personaId}/creatives/${creativeId}`
-    : '/';
 </script>
 
 <div class="container mx-auto max-w-4xl py-8">
