@@ -1357,6 +1357,78 @@
               narration: aiFillResult.data.narration || clip.narration,
               voiceName: aiFillResult.data.voiceName || clip.voiceName || "pt-BR-FranciscaNeural"
             };
+
+            // Generate and upload a preview image for this clip
+            try {
+              console.log(`Generating preview image for clip ${clip.id}...`);
+
+              // Load the canvas data into the editor instance
+              if (canvasEditorInstance) {
+                // First, save the current canvas state if a clip is selected
+                const currentSelectedClipId = selectedClip?.id;
+
+                // Load the new canvas data
+                await canvasEditorInstance.loadCanvasData(aiFillResult.data.canvas);
+
+                // Wait for the canvas to render
+                await tick();
+
+                // Generate the preview image
+                const imageDataUrl = await canvasEditorInstance.getCanvasImageDataUrl();
+
+                if (imageDataUrl) {
+                  // Upload the preview image
+                  const uploadResponse = await fetch("/api/upload/clip-preview", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      clipId: clip.id,
+                      imageData: imageDataUrl,
+                    }),
+                  });
+
+                  if (uploadResponse.ok) {
+                    const uploadData = await uploadResponse.json();
+                    console.log(`Preview image uploaded for clip ${clip.id}:`, uploadData.data?.imageUrl);
+
+                    // Update the clip with the new image URL
+                    if (uploadData.data?.imageUrl) {
+                      const imageUrl = uploadData.data.imageUrl;
+                      const cleanImageUrl = imageUrl ? imageUrl.split("?")[0] : imageUrl;
+
+                      // Update the database with the new image URL
+                      const updateResponse = await fetch(`/api/clips/${clip.id}`, {
+                        method: "PUT",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ imageUrl: cleanImageUrl }),
+                      });
+
+                      if (updateResponse.ok) {
+                        console.log(`Image URL updated in database for clip ${clip.id}`);
+                      } else {
+                        console.error(`Failed to update image URL in database for clip ${clip.id}`);
+                      }
+                    }
+                  } else {
+                    console.error(`Failed to upload preview image for clip ${clip.id}`);
+                  }
+                } else {
+                  console.error(`Failed to generate preview image for clip ${clip.id}`);
+                }
+
+                // If a clip was selected before, restore its canvas data
+                if (currentSelectedClipId && selectedClip) {
+                  await canvasEditorInstance.loadCanvasData(selectedClip.canvas);
+                }
+              }
+            } catch (previewError) {
+              console.error(`Error generating/uploading preview for clip ${clip.id}:`, previewError);
+              // Continue with the next step even if preview generation fails
+            }
           }
 
           // Wait a moment before proceeding to the next step
