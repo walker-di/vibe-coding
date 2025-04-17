@@ -4,13 +4,15 @@ import { CanvasHistory } from "./canvas-history.svelte";
 
 export class CanvasService {
     canvas = $state<Canvas>(undefined as any);
+    width = $state(1920);
+    height = $state(1080);
     isDrawing = $state(false);
     history = $state<CanvasHistory>(undefined as any);
 
     constructor(target: any) {
         this.canvas = new Canvas(target, {
-            width: 1920,
-            height: 1080,
+            width: this.width,
+            height: this.height,
             allowTouchScrolling: false,
             defaultCursor: 'grab',
             selection: true,
@@ -107,6 +109,8 @@ export class CanvasService {
 		this.canvas.setHeight(height);
         this.centerCanvas();
 		this.canvas.renderAll();
+        this.width = width;
+        this.height = height;
 	}
 
     // Center the canvas in the viewport

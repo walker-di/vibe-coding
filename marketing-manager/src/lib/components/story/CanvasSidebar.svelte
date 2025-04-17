@@ -26,6 +26,8 @@
   import type { CanvasService } from "./canvas-service.svelte";
   import CanvasSideNav from "./CanvasSideNav.svelte";
   import ImageGallery from "./ImageGallery.svelte";
+  import { addImageFromUrl } from "./canvas-tools/canvas-image.svelte";
+  import ImageUploadModal from "./ImageUploadModal.svelte";
 
   let {
     canvas,
@@ -33,6 +35,7 @@
   }: { activeTab?: string; canvas: Canvas; canvasService: CanvasService } =
     $props();
   let activeTab = $state("elements");
+  let isBackgroundImageModalOpen = $state(false);
   // Define the shapes for the shapes tab
   const shapes = [
     { id: "rectangle", icon: "■", action: () => addRectangle(canvas) },
@@ -70,20 +73,7 @@
   }
 
   async function addImageFromURl(url: string) {
-    const objectCount = canvas.getObjects().length;
-    const img = await FabricImage.fromURL(url, { crossOrigin: "anonymous" });
-    const maxW = canvas.width * 0.8;
-    const maxH = canvas.height * 0.8;
-    if (img.width > maxW || img.height > maxH) {
-      const scale = Math.min(maxW / img.width, maxH / img.height);
-      img.scale(scale);
-    }
-    // Set a name for the image
-    const objectName = `Image ${objectCount + 1}`;
-    img.set("name", objectName);
-    canvas.add(img);
-    canvas.setActiveObject(img);
-    // canvas.renderAll();
+    addImageFromUrl(canvas, url)();
   }
 </script>
 
@@ -150,9 +140,11 @@
     {:else if activeTab === "photos"}
       <div class="content-section">
         <h3 class="section-title">Photos</h3>
-        <ImageGallery
-          onImageSelected={addImageFromURl}
-        />
+        <button class="bg-primary text-white px-4 py-2 rounded-md" onclick={() => (isBackgroundImageModalOpen = true)}>
+          Upload Image
+        </button>
+        <ImageUploadModal open={isBackgroundImageModalOpen} onClose={() => (isBackgroundImageModalOpen = false)} />
+        <ImageGallery onImageSelected={addImageFromURl} />
       </div>
     {:else if activeTab === "layers"}
       <div class="content-section">
@@ -182,19 +174,6 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-  }
-
-  .search-container {
-    padding: 12px;
-    border-bottom: 1px solid hsl(var(--sidebar-border));
-  }
-
-  .search-input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid hsl(var(--sidebar-border));
-    border-radius: 20px;
-    font-size: 0.9rem;
   }
 
   .content-section {

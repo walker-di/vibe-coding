@@ -2,23 +2,12 @@
   import { onMount, onDestroy } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import {
-    Square,
-    Circle,
-    Type,
-    Image as ImageIcon,
-    Trash2,
-    Palette,
     ImageUp,
-    MessageSquare,
-    Layers,
   } from "lucide-svelte";
   import { FileUpload } from "$lib/components/ui/file-upload";
   import ClipNarrationModal from "./ClipNarrationModal.svelte";
   import { Canvas, FabricImage } from "fabric";
   import { CanvasService } from "./canvas-service.svelte";
-  import { addRectangle } from "./canvas-tools/canvas-rectangle.svelte";
-  import { addCircle } from "./canvas-tools/canvas-circle.svelte";
-  import { addText } from "./canvas-tools/canvas-text.svelte";
   import { addImageFromUrl } from "./canvas-tools/canvas-image.svelte";
   import CanvasHeader from "./CanvasHeader.svelte";
   import CanvasFooter from "./CanvasFooter.svelte";
@@ -93,27 +82,16 @@
       await loadCanvasData(canvasDataJson);
       // Set up event listeners
       canvas.on("object:modified", (_: any) => {
-        if (isLoadingCanvas) {
-          console.log("Skipping object:modified event during canvas loading");
-          return;
-        }
-
-        // constrainObjectsToCanvas();
+        if (isLoadingCanvas) return;
         saveCanvas();
       });
       canvas.on("object:added", (_: any) => {
-        if (isLoadingCanvas) {
-          console.log("Skipping object:added event during canvas loading");
-          return;
-        }
+        if (isLoadingCanvas) return;
 
         saveCanvas();
       });
       canvas.on("object:removed", (_: any) => {
-        if (isLoadingCanvas) {
-          console.log("Skipping object:removed event during canvas loading");
-          return;
-        }
+        if (isLoadingCanvas) return;
 
         saveCanvas();
       });
@@ -147,9 +125,7 @@
 
       canvas.on("object:moved", (e: any) => {
         if (!e.target) return;
-        if (isLoadingCanvas) {
-          return;
-        }
+        if (isLoadingCanvas) return;
 
         isZooming = false;
         saveCanvas();
@@ -250,71 +226,61 @@
   function openLayerOrderModal() {
     if (!canvas) return;
 
-    try {
-      console.log("Opening layer order modal...");
+    console.log("Opening layer order modal...");
 
-      // Get all objects from the canvas
-      const objects = canvas.getObjects();
-      console.log("Canvas objects:", objects);
+    // Get all objects from the canvas
+    const objects = canvas.getObjects();
+    console.log("Canvas objects:", objects);
 
-      if (objects.length === 0) {
-        console.log("No objects found in canvas");
-        alert("No layers to reorder. Add some objects to the canvas first.");
-        return;
+    if (objects.length === 0) {
+      console.log("No objects found in canvas");
+      alert("No layers to reorder. Add some objects to the canvas first.");
+      return;
+    }
+
+    // Create a layer object for each canvas object
+    // Reverse the objects array to show top layers first in the modal
+    // In fabric.js, the last object in the array is on top (highest z-index)
+    const reversedObjects = [...objects].reverse();
+
+    canvasLayers = reversedObjects.map((obj: any, index: number) => {
+      // Ensure each object has an ID for tracking
+      if (!obj.id) {
+        obj.id = `layer-${index}-${Date.now()}`;
       }
 
-      // Create a layer object for each canvas object
-      // Reverse the objects array to show top layers first in the modal
-      // In fabric.js, the last object in the array is on top (highest z-index)
-      const reversedObjects = [...objects].reverse();
+      // Use the existing name if available, otherwise generate a default name
+      const layerName =
+        obj.name || `Layer ${objects.length - index} of ${objects.length}`;
+      const layerType = obj.type || "unknown";
 
-      canvasLayers = reversedObjects.map((obj: any, index: number) => {
-        // Ensure each object has an ID for tracking
-        if (!obj.id) {
-          obj.id = `layer-${index}-${Date.now()}`;
-        }
+      // Store the name on the object for persistence
+      if (!obj.name) {
+        obj.set("name", layerName);
+      }
 
-        // Use the existing name if available, otherwise generate a default name
-        const layerName =
-          obj.name || `Layer ${objects.length - index} of ${objects.length}`;
-        const layerType = obj.type || "unknown";
+      console.log(
+        `Layer ${index} (top to bottom): ${layerName} (${layerType})`,
+      );
 
-        // Store the name on the object for persistence
-        if (!obj.name) {
-          obj.name = layerName;
-          // Force the canvas to recognize the change
-          obj.set("name", layerName);
-        }
+      return {
+        id: obj.id,
+        name: layerName,
+        type: layerType,
+        object: obj,
+      };
+    });
 
-        console.log(
-          `Layer ${index} (top to bottom): ${layerName} (${layerType})`,
-        );
+    console.log("Prepared layers for modal:", canvasLayers);
 
-        return {
-          id: obj.id,
-          name: layerName,
-          type: layerType,
-          object: obj,
-        };
-      });
-
-      console.log("Prepared layers for modal:", canvasLayers);
-
-      // Open the modal
-      isLayerOrderModalOpen = true;
-    } catch (error) {
-      console.error("Error opening layer order modal:", error);
-    }
+    // Open the modal
+    isLayerOrderModalOpen = true;
   }
 
   export function showLayerOrderModal() {
     if (!canvas) return;
-    try {
-      console.log("Opening layer order modal from external call");
-      openLayerOrderModal();
-    } catch (error) {
-      console.error("Error opening layer order modal:", error);
-    }
+    console.log("Opening layer order modal from external call");
+    openLayerOrderModal();
   }
   // Show file upload dialog for image
   let showFileUploadDialog = $state(false);
@@ -416,78 +382,26 @@
 
   // --- Function to get current canvas JSON ---
   export function getCurrentCanvasJson(): string {
-    if (canvas) {
-      try {
-        // Ensure all objects have their names set before saving
-        const objects = canvas.getObjects();
-        objects.forEach((obj: any, index: number) => {
-          // If the object doesn't have a name, set a default one
-          if (!obj.name) {
-            const defaultName = `Layer ${index + 1}`;
-            obj.name = defaultName;
-            // Force the canvas to recognize the change
-            obj.set("name", defaultName);
-          }
-        });
-
-        // Get the canvas JSON with additional properties
-        const canvasJson = canvas.toJSON(); // Include custom properties in serialization
-
-        // Ensure the objects array exists
-        if (!canvasJson.objects) {
-          canvasJson.objects = [];
-        }
-
-        // Stringify the JSON
-        const jsonString = JSON.stringify(canvasJson);
-
-        return jsonString;
-      } catch (error) {
-        console.error("[DEBUG] Error getting current canvas JSON:", error);
-        return "{}"; // Return empty JSON on error
+    // Ensure all objects have their names set before saving
+    const objects = canvas.getObjects();
+    objects.forEach((obj: any, index: number) => {
+      // If the object doesn't have a name, set a default one
+      if (!obj.name) {
+        const defaultName = `Layer ${index + 1}`;
+        obj.name = defaultName;
+        // Force the canvas to recognize the change
+        obj.set("name", defaultName);
       }
-    }
-    console.warn(
-      "[DEBUG] getCurrentCanvasJson called but canvas is not ready.",
-    );
-    return "{}"; // Return empty JSON if not ready
+    });
+
+    const canvasJson = canvas.toJSON();
+    const jsonString = JSON.stringify(canvasJson);
+
+    return jsonString;
   }
 </script>
 
 <div class="space-y-4">
-  {#if !hideControls}
-    <div class="flex flex-wrap gap-2 mb-4">
-      <Button variant="outline" onclick={addImage} title="Add Image">
-        <ImageIcon class="h-4 w-4 mr-2" /> Image
-      </Button>
-      <Button
-        variant="outline"
-        onclick={setBackgroundColor}
-        title="Set Background Color"
-      >
-        <Palette class="h-4 w-4 mr-2" /> BG Color
-      </Button>
-      <Button
-        variant="outline"
-        onclick={setBackgroundImageFromUrl}
-        title="Set Background Image"
-      >
-        <ImageUp class="h-4 w-4 mr-2" /> BG Image
-      </Button>
-      <Button variant="outline" onclick={clearCanvas} title="Clear Canvas">
-        Clear All
-      </Button>
-      {#if onNarrationChange}
-        <Button
-          variant="outline"
-          onclick={() => (isNarrationModalOpen = true)}
-          title="Edit Narration & Description"
-        >
-          <MessageSquare class="h-4 w-4 mr-2" /> Edit Content
-        </Button>
-      {/if}
-    </div>
-  {/if}
   <div class="flex">
     <div class="sidebar grow-0 shrink-0">
       <CanvasSidebar {canvas} {canvasService} />

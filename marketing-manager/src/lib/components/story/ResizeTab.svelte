@@ -20,9 +20,6 @@
   let height = $state(canvas?.height || 1080);
   let useMagicResize = $state(false);
 
-  // Variable to store the border snap deactivation function
-  let deactivateBorderSnap: (() => void) | null = null;
-
   // Preset sizes
   const presets: Preset[] = [
     { id: 'instagram-post', label: 'Instagram Post', width: 1080, height: 1080, icon: '📷' },
@@ -38,8 +35,6 @@
     { id: 'a4', label: 'A4', width: 2480, height: 3508, icon: '📄' }, // 21x29.7cm at 300dpi
     { id: 'business-card', label: 'Business card', width: 1050, height: 600, icon: '💼' } // 3.5x2in at 300dpi
   ];
-
-
 
   // Function to apply resize
   function applyResize() {
