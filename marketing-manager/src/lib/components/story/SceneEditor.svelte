@@ -1364,6 +1364,89 @@
             // Wait for the next update cycle to ensure the canvas is fully rendered
             await tick();
 
+            // Generate and upload a new preview image
+            try {
+              console.log("AI Fill: Generating new preview image...");
+              const imageDataUrl = await canvasEditorInstance.getCanvasImageDataUrl();
+
+              if (imageDataUrl) {
+                console.log("AI Fill: Preview image generated, uploading...");
+                const uploadResponse = await fetch("/api/upload/clip-preview", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    clipId: selectedClip.id,
+                    imageData: imageDataUrl,
+                  }),
+                });
+
+                if (!uploadResponse.ok) {
+                  console.error("AI Fill: Failed to upload preview image:", uploadResponse.status);
+                } else {
+                  const uploadData = await uploadResponse.json();
+                  console.log("AI Fill: Upload response data:", uploadData);
+
+                  // Extract the imageUrl from the response data
+                  const imageUrl = uploadData.data?.imageUrl || uploadData.imageUrl;
+
+                  if (imageUrl) {
+                    console.log("AI Fill: Got image URL from response:", imageUrl);
+                    // Add a timestamp to the image URL to prevent caching
+                    const timestamp = Date.now();
+                    const imageUrlWithTimestamp = `${imageUrl}?t=${timestamp}`;
+
+                    // Store the base URL (without timestamp) in the database
+                    try {
+                      const cleanImageUrl = imageUrl ? imageUrl.split("?")[0] : imageUrl;
+                      console.log("AI Fill: Updating clip with new image URL:", cleanImageUrl);
+
+                      const updateResponse = await fetch(`/api/clips/${selectedClip.id}`, {
+                        method: "PUT",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ imageUrl: cleanImageUrl }),
+                      });
+
+                      if (!updateResponse.ok) {
+                        console.error("AI Fill: Failed to update clip with new imageUrl in database.");
+                      } else {
+                        console.log("AI Fill: Successfully updated clip with new image URL");
+
+                        // Update the local state with the new image URL
+                        updatedClipData.imageUrl = imageUrlWithTimestamp;
+                        selectedClip = { ...selectedClip, imageUrl: imageUrlWithTimestamp };
+
+                        // Update the clip in the scenes array
+                        scenes = scenes.map((s: SceneWithRelations) => {
+                          if (s.id === selectedClip?.sceneId) {
+                            return {
+                              ...s,
+                              clips: (s.clips || []).map((c: Clip) => {
+                                if (c.id === selectedClip?.id) {
+                                  return { ...c, imageUrl: imageUrlWithTimestamp };
+                                }
+                                return c;
+                              }),
+                            };
+                          }
+                          return s;
+                        });
+                      }
+                    } catch (updateError) {
+                      console.error("AI Fill: Error updating clip with new imageUrl:", updateError);
+                    }
+                  }
+                }
+              } else {
+                console.error("AI Fill: Failed to generate image data URL from canvas.");
+              }
+            } catch (previewError) {
+              console.error("AI Fill: Error generating/uploading preview:", previewError);
+            }
+
             // Add a longer delay to ensure everything is settled before allowing edits
             setTimeout(() => {
               console.log("AI Fill: Processing complete, clearing flags");
