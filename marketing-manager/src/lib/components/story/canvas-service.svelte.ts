@@ -1,3 +1,4 @@
+import '$lib/components/fabricjs/types.d.ts'
 import { Canvas, type ImageFormat, Rect } from "fabric";
 import { initCanvasBorderSnap } from "./canvas-border-snap";
 import { CanvasHistory } from "./canvas-history.svelte";

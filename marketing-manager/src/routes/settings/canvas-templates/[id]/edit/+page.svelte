@@ -6,21 +6,12 @@
 	import * as Select from "$lib/components/ui/select/index.js"; // Import Select
 	import CanvasEditor from "$lib/components/story/CanvasEditor.svelte";
 	import ImageUploadModal from "$lib/components/story/ImageUploadModal.svelte";
-	import { FileUpload } from "$lib/components/ui/file-upload";
 	import { goto } from "$app/navigation";
 	import { toast } from "svelte-sonner";
 	import type { PageData } from "./$types"; // Import PageData type
 	import { canvasAspectRatios, commonResolutions } from "$lib/constants"; // Import constants
 	import type { CanvasAspectRatio, CommonResolution } from "$lib/constants"; // Import types
-	import {
-		Square,
-		Circle,
-		Type,
-		Image as ImageIcon,
-		Trash2,
-		Layers,
-	} from "lucide-svelte";
-    import { FabricImage } from "fabric";
+	import { FabricImage } from "fabric";
 
 	let { data }: { data: PageData } = $props(); // Get data from load function
 
@@ -121,40 +112,33 @@
 		}
 	}
 
-	function onImageSelected(url: string) {
+	async function onImageSelected(url: string) {
 		if (!canvasEditorRef || !url) return;
 		const canvas = canvasEditorRef.getCanvasInstance();
-		if (canvas) {
-			FabricImage.fromURL(
-				url,
-				(img: any) => {
-					// Scale the image to fit the canvas dimensions
-					const canvasWidth = canvas.width;
-					const canvasHeight = canvas.height;
-					const scaleX = canvasWidth / img.width;
-					const scaleY = canvasHeight / img.height;
-					const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
+		if (!canvas) return;
+		const img = await FabricImage.fromURL(url, {
+			crossOrigin: "anonymous",
+		});
+		// Scale the image to fit the canvas dimensions
+		const canvasWidth = canvas.width;
+		const canvasHeight = canvas.height;
+		const scaleX = canvasWidth / img.width;
+		const scaleY = canvasHeight / img.height;
+		const scale = Math.min(scaleX, scaleY); // Use min to fit while maintaining aspect ratio
 
-					img.set({
-						scaleX: scale,
-						scaleY: scale,
-						originX: "left",
-						originY: "top",
-					});
+		img.set({
+			scaleX: scale,
+			scaleY: scale,
+			originX: "left",
+			originY: "top",
+		});
 
-					canvas.setBackgroundImage(
-						img,
-						canvas.renderAll.bind(canvas),
-					);
-					// Mark canvas as changed
-					canvasHasChanged = true;
-					// Get the updated canvas JSON and update the state
-					canvasDataJson = canvasEditorRef!.getCurrentCanvasJson();
-					toast.success("Background image set");
-				},
-				{ crossOrigin: "anonymous" },
-			);
-		}
+		canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+		// Mark canvas as changed
+		canvasHasChanged = true;
+		// Get the updated canvas JSON and update the state
+		canvasDataJson = canvasEditorRef!.getCurrentCanvasJson();
+		toast.success("Background image set");
 	}
 	function handleCanvasChange(json: string) {
 		if (isCanvasReady) {
@@ -164,6 +148,7 @@
 	}
 
 	async function updateTemplate() {
+		if (!canvasEditorRef) return;
 		if (!name.trim()) {
 			toast.error("Template name is required.");
 			return;
@@ -175,7 +160,8 @@
 
 		isSaving = true;
 		let finalPreviewUrl: string | null = data.template.previewImageUrl; // Start with existing URL
-		let previewUpdateFailed = false;
+		canvasDataJson = canvasEditorRef!.getCurrentCanvasJson();
+		console.log("Current canvas JSON:", canvasDataJson);
 
 		try {
 			// --- Step 1: Check if canvas changed and generate/upload new preview ---
@@ -186,57 +172,12 @@
 			// Force canvasHasChanged to true to always generate a new preview
 			// This is a temporary fix to ensure we're testing the export resolution
 			canvasHasChanged = true;
+			const imageDataUrl = await canvasEditorRef.getCanvasImageDataUrl();
 
-			if (canvasEditorRef) {
-				const imageDataUrl = await canvasEditorRef.getCanvasImageDataUrl();
-
-				if (imageDataUrl) {
-					try {
-						const uploadedUrl = await uploadTemplatePreview(
-							imageDataUrl,
-							data.template.id,
-						);
-
-						if (uploadedUrl) {
-
-							finalPreviewUrl = uploadedUrl; // Use the new URL
-						} else {
-							previewUpdateFailed = true;
-							console.warn(
-								"[Preview Update] Upload returned invalid URL.",
-							);
-							toast.warning(
-								"Failed to save updated preview image (invalid URL returned).",
-							);
-						}
-					} catch (uploadError: any) {
-						previewUpdateFailed = true;
-						console.error(
-							"[Preview Update] Error during preview upload:",
-							uploadError,
-						);
-						toast.error(
-							`Failed to save updated preview image: ${uploadError.message}`,
-						);
-						// Continue with main update, but using the old preview URL
-					}
-				} else {
-					previewUpdateFailed = true;
-					console.warn(
-						"[Preview Update] Could not generate image data URL for new preview.",
-					);
-					toast.warning(
-						"Could not generate preview image data from updated canvas.",
-					);
-					// Continue with main update, but using the old preview URL
-				}
-			} else if (canvasHasChanged) {
-				// Canvas changed but editor ref is missing? Should not happen if canvas is ready.
-				previewUpdateFailed = true;
-				console.warn(
-					"[Preview Update] Canvas changed but editor ref is missing.",
-				);
-			}
+			finalPreviewUrl = await uploadTemplatePreview(
+				imageDataUrl,
+				data.template.id,
+			);
 
 			const response = await fetch(
 				`/api/canvas-templates/${data.template.id}`,
@@ -263,23 +204,6 @@
 				throw new Error(
 					errorData.message ||
 						`Failed to update template: ${response.statusText}`,
-				);
-			}
-
-			const updatedTemplate = await response.json();
-
-			// Show appropriate success message
-			if (!previewUpdateFailed && canvasHasChanged) {
-				toast.success(
-					`Template "${updatedTemplate.name}" updated successfully with new preview!`,
-				);
-			} else if (previewUpdateFailed) {
-				toast.warning(
-					`Template "${updatedTemplate.name}" updated, but preview image update failed.`,
-				);
-			} else {
-				toast.success(
-					`Template "${updatedTemplate.name}" updated successfully!`,
 				);
 			}
 
@@ -479,10 +403,7 @@
 			>
 				Cancel
 			</Button>
-			<Button
-				type="submit"
-				disabled={isSaving || !name}
-			>
+			<Button type="submit" disabled={isSaving || !name}>
 				{#if isSaving}
 					Saving...
 				{:else}
@@ -497,7 +418,7 @@
 			<CanvasEditor
 				bind:this={canvasEditorRef}
 				onCanvasChange={handleCanvasChange}
-				bind:canvasDataJson={canvasDataJson}
+				bind:canvasDataJson
 				hideControls
 			/>
 		{:else}

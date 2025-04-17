@@ -15,7 +15,7 @@
     type: string;
   }
 
-  let { canvas } = $props<{canvas: Canvas}>();
+  let { canvas }: {canvas: Canvas} = $props();
 
   // State for layers
   let layers = $state<LayerObject[]>([]);
@@ -45,15 +45,15 @@
         defaultName = `${typeName} ${index + 1}`;
       }
 
-      const name = (obj as any).name || defaultName;
-
+      obj.name = obj.name || defaultName;
+      obj.set('name', (obj as any).name || defaultName);
       // Use a stable ID based on the object itself if possible
       // This helps maintain identity during drag operations
       const objId = (obj as any).id || `obj-${index}`;
 
       return {
         id: objId,
-        name: name,
+        name: (obj as any).name,
         object: obj,
         visible: obj.visible !== false,
         locked: obj.selectable === false,
@@ -190,6 +190,7 @@
     const layer = layers.find(l => l.id === editingLayerId);
     if (layer) {
       layer.name = editingName;
+      (layer.object as any).name = editingName;
       layer.object.set('name', editingName);
       canvas.requestRenderAll();
     }
