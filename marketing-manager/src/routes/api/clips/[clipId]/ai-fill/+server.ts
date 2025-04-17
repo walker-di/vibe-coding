@@ -7,6 +7,8 @@ import { parsePlaceholder } from '$lib/utils/placeholder-parser';
 import { generateImage } from '$lib/server/aiService'; // Assuming this service exists and is correctly implemented
 import path from 'path';
 import fs from 'fs/promises';
+import ky from 'ky';
+import sizeOf from 'image-size';
 
 export const POST: RequestHandler = async ({ params, request }) => {
   const clipId = parseInt(params.clipId, 10);
@@ -245,7 +247,7 @@ async function processCanvasObjects(objects: any[], clip: any, creative: any, pe
         if (imageUrl) {
           // Replace the placeholder with an image object
           console.log(`Creating image object from placeholder: ${obj.name}`);
-          const imageObj = createImageObject(obj, imageUrl);
+          const imageObj = await createImageObject(obj, imageUrl);
           updatedObjects.push(imageObj);
           replacedCount++;
           console.log(`Placeholder ${obj.name} replaced with image object`);
@@ -302,75 +304,26 @@ function generatePromptForPlaceholder(placeholderParams: ReturnType<typeof parse
 }
 
 // Function to create an image object from a placeholder
-function createImageObject(placeholderObj: any, imageUrl: string) {
-  // Create a new image object based on the placeholder's properties
-  // Ensure placeholderObj has expected properties or provide defaults
+async function createImageObject(placeholderObj: any, imageUrl: string) {
+  const img = // implement here
+  placeholderObj.src = imageUrl;
+  console.log(`Creating image object from placeholder: ${JSON.stringify(placeholderObj)}`);
+  const response = await ky.get(`http://localhost:5173` + imageUrl);
+  const imageArrayBuffer = await response.arrayBuffer();
+  const imageBuffer = Buffer.from(imageArrayBuffer);
+  const dimensions = sizeOf(imageBuffer);
 
-  // Preserve the width and height from the placeholder
-  // This ensures the generated image maintains the same dimensions as the placeholder
-  const width = placeholderObj.width || 300;
-  const height = placeholderObj.height || 300;
+  const newScaleX = placeholderObj.width / dimensions.width;
+  const newScaleY = placeholderObj.height / dimensions.height;
+  placeholderObj = {
+    ...placeholderObj,
+    width: dimensions.width,
+    height: dimensions.height,
+    scaleX: newScaleX,
+    scaleY: newScaleY,
+  }
 
-  // Calculate appropriate scale factors if width and height are defined
-  // This will be used by fabric.js to properly size the image when loaded
-  let scaleX = placeholderObj.scaleX || 1;
-  let scaleY = placeholderObj.scaleY || 1;
-
-  console.log(`Creating image object from placeholder: ${placeholderObj.name}`);
-  console.log(`Placeholder dimensions: ${width}x${height}, position: ${placeholderObj.left},${placeholderObj.top}`);
-  console.log(`Using image URL: ${imageUrl}`);
-
-  // If the placeholder has explicit width/height, we'll use those directly
-  // The fabric.js Image object will handle scaling the loaded image to fit these dimensions
-
-  const imageObj = {
-    type: 'image',
-    version: '5.3.0', // Consider using a constant or dynamic version
-    originX: placeholderObj.originX || 'left',
-    originY: placeholderObj.originY || 'top',
-    left: placeholderObj.left || 0, // Keep position
-    top: placeholderObj.top || 0,   // Keep position
-    // Include width and height from the placeholder to maintain template sizing
-    width: width,
-    height: height,
-    fill: placeholderObj.fill || 'rgb(0,0,0)', // Keep placeholder fill? Or default?
-    stroke: placeholderObj.stroke || null,
-    strokeWidth: placeholderObj.strokeWidth || 0,
-    strokeDashArray: placeholderObj.strokeDashArray || null,
-    strokeLineCap: placeholderObj.strokeLineCap || 'butt',
-    strokeDashOffset: placeholderObj.strokeDashOffset || 0,
-    strokeLineJoin: placeholderObj.strokeLineJoin || 'miter',
-    strokeUniform: placeholderObj.strokeUniform || false,
-    strokeMiterLimit: placeholderObj.strokeMiterLimit || 4,
-    // Use the calculated scale values to ensure the image fits the placeholder dimensions
-    scaleX: scaleX,
-    scaleY: scaleY,
-    angle: placeholderObj.angle || 0, // Keep angle
-    flipX: placeholderObj.flipX || false,
-    flipY: placeholderObj.flipY || false,
-    opacity: placeholderObj.opacity || 1,
-    shadow: placeholderObj.shadow || null,
-    visible: placeholderObj.visible !== undefined ? placeholderObj.visible : true,
-    backgroundColor: placeholderObj.backgroundColor || '',
-    fillRule: placeholderObj.fillRule || 'nonzero',
-    paintFirst: placeholderObj.paintFirst || 'fill',
-    globalCompositeOperation: placeholderObj.globalCompositeOperation || 'source-over',
-    skewX: placeholderObj.skewX || 0,
-    skewY: placeholderObj.skewY || 0,
-    cropX: 0, // Reset crop for new image
-    cropY: 0, // Reset crop for new image
-    // Generate a more descriptive name if possible
-    name: placeholderObj.name ? placeholderObj.name.replace('placeholder?', 'generated_') : `generated_image_${Date.now()}`,
-    // Ensure the image URL is properly formatted with absolute URL
-    src: imageUrl,
-    crossOrigin: 'anonymous', // Important for canvas operations
-    filters: [] // Apply filters later if needed
-  };
-
-  console.log(`Created image object with dimensions: ${width}x${height}, position: ${imageObj.left},${imageObj.top}`);
-  console.log(`Image source: ${imageUrl}`);
-
-  return imageObj;
+  return placeholderObj;
 }
 
 // Note: The createImageObject function now preserves the width and height from the placeholder
