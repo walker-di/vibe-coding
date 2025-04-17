@@ -1110,7 +1110,8 @@
             "Debounced: Generating preview image for clip",
             clipToUpdate.id,
           );
-          const imageDataUrl = await canvasEditorInstance.getCanvasImageDataUrl();
+          const imageDataUrl =
+            await canvasEditorInstance.getCanvasImageDataUrl();
           if (imageDataUrl) {
             console.log("Debounced: Preview image generated, uploading...");
             try {
