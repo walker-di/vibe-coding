@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { type Canvas, type FabricObject, FabricImage } from "fabric";
-  import addImage from "./tools/canvas-image.svelte";
 
   // Props
   const props: {
@@ -14,7 +13,6 @@
   let isVisible = $state(false);
   let selectedImage = $state<FabricObject>();
   let menuRef: HTMLDivElement | null = $state(null);
-  let menuPosition = $state({ top: 0, left: 0 });
 
   // Function to check if an object is an image
   function isImageObject(obj: any): boolean {
@@ -38,36 +36,6 @@
   function hideMenu() {
     isVisible = false;
     selectedImage = undefined;
-  }
-
-  // Function to update the menu position based on the selected image
-  function updateMenuPosition() {
-    if (!selectedImage || !canvas || !menuRef) return;
-
-    const zoom = canvas.getZoom();
-    const objRect = selectedImage.getBoundingRect();
-    const canvasRect = canvas.getElement().getBoundingClientRect();
-
-    // Position the menu above the image
-    const top = canvasRect.top + objRect.top * zoom - 40; // 40px above the image
-    const left =
-      canvasRect.left +
-      (objRect.left + objRect.width / 2) * zoom -
-      menuRef.offsetWidth / 2;
-
-    menuPosition = { top, left };
-  }
-
-  // Function to handle clicks outside the menu
-  function handleClickOutside(event: MouseEvent) {
-    if (menuRef && !menuRef.contains(event.target as Node)) {
-      // Don't hide the menu if the click is on the canvas - the canvas will handle selection changes
-      const canvasEl = canvas.getElement();
-      if (canvasEl.contains(event.target as Node)) {
-        return;
-      }
-      hideMenu();
-    }
   }
 
   // Function to replace the selected image
