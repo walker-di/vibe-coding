@@ -43,12 +43,17 @@ export const POST: RequestHandler = async ({ request, params }) => {
       }
     });
 
-    // Create a context-aware prompt for generating frames
-    let prompt = `Create a professional storyboard with 3 frames for a marketing campaign.
+    // Create a context-aware prompt for generating scenes and clips
+    let prompt = `Create a professional storyboard with 2-3 scenes for a marketing campaign, where each scene contains 1-3 clips.
 
-Your output MUST be valid JSON conforming to the provided schema. The storyboard should tell a cohesive story across all frames, with a clear beginning, middle, and end.
+Your output MUST be valid JSON conforming to the provided schema. The storyboard should tell a cohesive story across all scenes, with a clear beginning, middle, and end. Each scene should have a specific purpose in the narrative flow.
 
-Story prompt: ${storyPrompt}`;
+Story prompt: ${storyPrompt}
+
+Structure your storyboard as follows:
+1. Introduction Scene: Establish context, identify problem or need (1-2 clips)
+2. Solution Scene: Present the product/service as the solution (1-3 clips)
+3. Benefit/CTA Scene: Show benefits and include a call to action (1-2 clips)`;
 
     // Add context information if available
     if (contextData && Object.keys(contextData).length > 0) {
@@ -232,7 +237,7 @@ Story prompt: ${storyPrompt}`;
       }
     }
 
-    prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard that specifically references the product and target audience\n- Create exactly 3 frames with professional narration and visual descriptions\n- Each frame should have high-quality, detailed content that is directly relevant to the context provided\n- The narration should be concise but impactful, using language that would resonate with the target audience\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Ensure the frames tell a cohesive story with a clear beginning (problem/need), middle (solution/product), and end (benefit/call to action)\n- Use a tone and style that matches the creative type and emotional context\n- Include specific product features and benefits mentioned in the context\n- Address the specific pain points and goals of the target persona`;
+    prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard that specifically references the product and target audience\n- Create 2-3 scenes, each with 1-3 clips that form a coherent narrative\n- Each scene should have a clear purpose (introduction, solution, benefits/CTA)\n- Each clip should have high-quality, detailed content that is directly relevant to the context provided\n- The narration should be concise but impactful, using language that would resonate with the target audience\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Include a suggested duration for each clip (in seconds, typically between 2-5 seconds)\n- Ensure the scenes and clips tell a cohesive story with a clear beginning (problem/need), middle (solution/product), and end (benefit/call to action)\n- Use a tone and style that matches the creative type and emotional context\n- Include specific product features and benefits mentioned in the context\n- Address the specific pain points and goals of the target persona\n- Make each scene distinct but connected to the overall narrative flow`;
 
     // Log the full prompt for debugging
     console.log('FULL PROMPT TO GEMINI:\n' + prompt);
@@ -250,21 +255,64 @@ Story prompt: ${storyPrompt}`;
       storyboardData = JSON.parse(text);
       console.log('Parsed storyboard data:', storyboardData);
 
-      // Validate the response structure
-      if (!storyboardData.frames || !Array.isArray(storyboardData.frames) || storyboardData.frames.length === 0) {
-        throw new Error('Invalid response structure: missing or empty frames array');
+      // Validate the response structure - check for scenes first (new schema)
+      if (storyboardData.scenes && Array.isArray(storyboardData.scenes) && storyboardData.scenes.length > 0) {
+        console.log('Using new scene-based schema');
+
+        // Flatten scenes and clips into frames for backward compatibility
+        const frames = [];
+
+        storyboardData.scenes.forEach((scene: any, sceneIndex: number) => {
+          // Store scene information in the first clip of each scene
+          if (scene.clips && Array.isArray(scene.clips) && scene.clips.length > 0) {
+            scene.clips.forEach((clip: any, clipIndex: number) => {
+              frames.push({
+                id: `${sceneIndex + 1}-${clipIndex + 1}`,
+                sceneId: sceneIndex + 1,
+                sceneDescription: scene.description || `Scene ${sceneIndex + 1}`,
+                narration: clip.narration || 'Professional narration for this clip.',
+                mainImagePrompt: clip.visualDescription || 'Professional visual for this marketing clip.',
+                duration: clip.duration ? Math.round(clip.duration * 1000) : 3000, // Convert to milliseconds
+                imageUrl: null
+              });
+            });
+          } else {
+            // If no clips in scene, create a placeholder
+            frames.push({
+              id: `${sceneIndex + 1}-1`,
+              sceneId: sceneIndex + 1,
+              sceneDescription: scene.description || `Scene ${sceneIndex + 1}`,
+              narration: 'Professional narration for this scene.',
+              mainImagePrompt: 'Professional visual for this marketing scene.',
+              duration: 3000,
+              imageUrl: null
+            });
+          }
+        });
+
+        // Store the frames in our storyboard store
+        setFrames(storyboardId, frames);
       }
+      // Fallback to old schema for backward compatibility
+      else if (storyboardData.frames && Array.isArray(storyboardData.frames) && storyboardData.frames.length > 0) {
+        console.log('Using legacy frame-based schema');
 
-      // Convert the structured data to our frame format
-      const frames = storyboardData.frames.map((frame: any, index: number) => ({
-        id: String(index + 1),
-        narration: frame.narration || 'Professional narration for this frame.',
-        mainImagePrompt: frame.visualDescription || 'Professional visual for this marketing frame.',
-        imageUrl: null
-      }));
+        // Convert the structured data to our frame format
+        const frames = storyboardData.frames.map((frame: any, index: number) => ({
+          id: String(index + 1),
+          sceneId: 1, // All frames belong to the same scene in old schema
+          sceneDescription: 'Main Scene',
+          narration: frame.narration || 'Professional narration for this frame.',
+          mainImagePrompt: frame.visualDescription || 'Professional visual for this marketing frame.',
+          duration: 3000, // Default duration
+          imageUrl: null
+        }));
 
-      // Store the frames in our storyboard store
-      setFrames(storyboardId, frames);
+        // Store the frames in our storyboard store
+        setFrames(storyboardId, frames);
+      } else {
+        throw new Error('Invalid response structure: missing or empty scenes/frames array');
+      }
 
       // Store the metadata
       const title = storyboardData.title || 'Professional Marketing Storyboard';

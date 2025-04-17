@@ -278,18 +278,18 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     // This step is resource-intensive and can be skipped for now
     // We'll just use the prompts directly
 
-    // Step 6: Create clips in the marketing-manager for each frame
+    // Step 6: Create scenes and clips in the marketing-manager based on the storyboard data
+    const createdScenes = [];
     const createdClips = [];
-    let orderIndex = 0;
 
-    // Get the current max orderIndex for the scene
-    const existingClips = await db.query.clips.findMany({
-      where: eq(clips.sceneId, sceneId),
-      columns: { orderIndex: true }
-    });
-
-    if (existingClips.length > 0) {
-      orderIndex = Math.max(...existingClips.map(clip => clip.orderIndex)) + 1;
+    // Group frames by scene
+    const framesByScene: Record<string | number, any[]> = {};
+    for (const frame of frames) {
+      const sceneId = frame.sceneId || 1; // Default to scene 1 if not specified
+      if (!framesByScene[sceneId]) {
+        framesByScene[sceneId] = [];
+      }
+      framesByScene[sceneId].push(frame);
     }
 
     // Generate context-aware clip descriptions
@@ -395,28 +395,63 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
       return narration;
     };
 
-    for (const frame of frames) {
-      try {
-        // Create a new clip for the frame with context-aware content
-        const contextAwareDescription = generateContextAwareDescription(frame, contextData);
-        const contextAwareNarration = generateContextAwareNarration(frame, contextData);
+    // Process each scene and its frames
+    let sceneOrderIndex = 0;
 
-        const [newClip] = await db.insert(clips).values({
-          sceneId: sceneId,
-          canvas: '{}', // Empty canvas initially
-          narration: contextAwareNarration,
-          description: contextAwareDescription,
-          duration: 3000, // Default 3 seconds
-          orderIndex: orderIndex++,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          imageUrl: frame.mainImageUrl || null // Add the image URL if available
-        }).returning();
+    // Get the current max orderIndex for scenes in this story
+    const existingScenes = await db.query.scenes.findMany({
+      where: eq(scenes.storyId, storyRecord.id),
+      columns: { orderIndex: true }
+    });
 
-        createdClips.push(newClip);
-        console.log(`Created clip ${newClip.id} for frame ${frame.id}`);
-      } catch (clipError) {
-        console.error(`Error creating clip for frame ${frame.id}:`, clipError);
+    if (existingScenes.length > 0) {
+      sceneOrderIndex = Math.max(...existingScenes.map(scene => scene.orderIndex)) + 1;
+    }
+
+    // Create scenes and clips
+    for (const [sceneIdStr, sceneFrames] of Object.entries(framesByScene)) {
+      if (!Array.isArray(sceneFrames) || sceneFrames.length === 0) continue;
+
+      // Get scene description from the first frame in this scene
+      const sceneDescription = sceneFrames[0]?.sceneDescription || `Scene ${sceneIdStr}`;
+
+      // Create a new scene
+      const [newScene] = await db.insert(scenes).values({
+        storyId: storyRecord.id,
+        description: sceneDescription,
+        orderIndex: sceneOrderIndex++,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
+
+      createdScenes.push(newScene);
+      console.log(`Created scene ${newScene.id} with description: ${sceneDescription}`);
+
+      // Create clips for this scene
+      let clipOrderIndex = 0;
+      for (const frame of sceneFrames) {
+        try {
+          // Create a new clip with context-aware content
+          const contextAwareDescription = generateContextAwareDescription(frame, contextData);
+          const contextAwareNarration = generateContextAwareNarration(frame, contextData);
+
+          const [newClip] = await db.insert(clips).values({
+            sceneId: newScene.id,
+            canvas: '{}', // Empty canvas initially
+            narration: contextAwareNarration,
+            description: contextAwareDescription,
+            duration: frame.duration || 3000, // Use frame duration or default to 3 seconds
+            orderIndex: clipOrderIndex++,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            imageUrl: frame.imageUrl || null // Add the image URL if available
+          }).returning();
+
+          createdClips.push(newClip);
+          console.log(`Created clip ${newClip.id} for scene ${newScene.id}`);
+        } catch (clipError) {
+          console.error(`Error creating clip for frame ${frame.id}:`, clipError);
+        }
       }
     }
 
@@ -488,10 +523,12 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 
     return json({
       success: true,
-      message: `Successfully created ${createdClips.length} clips from AI storyboard${contextUsed ? ' with context-aware content' : ''}`,
+      message: `Successfully created ${createdScenes.length} scenes with ${createdClips.length} clips from AI storyboard${contextUsed ? ' with context-aware content' : ''}`,
       storyboardId,
       frameCount: frames.length,
+      sceneCount: createdScenes.length,
       clipCount: createdClips.length,
+      scenes: createdScenes,
       clips: createdClips,
       contextUsed,
       contextSummary
