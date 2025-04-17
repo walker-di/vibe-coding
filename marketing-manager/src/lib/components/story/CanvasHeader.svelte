@@ -15,6 +15,7 @@
   } from "lucide-svelte";
     import TextSelectionMenu from "./TextSelectionMenu.svelte";
     import ShapeStyleMenu from "./ShapeStyleMenu.svelte";
+    import ImageReplaceMenu from "./ImageReplaceMenu.svelte";
 
   // Props
   let {
@@ -256,6 +257,7 @@
     {#if canvas}
     <TextSelectionMenu {canvas} />
     <ShapeStyleMenu {canvas} />
+    <ImageReplaceMenu {canvas} />
     {/if}
   </div>
 

@@ -214,6 +214,10 @@
     }
   }
 
+  export function resizeCanvas(width: number, height: number) {
+    canvasService.resize(width, height);
+  }
+
   // Update selection / Clear selection / Add/Delete/Clear functions remain the same...
   function updateSelection(e: any) {
     selectedObject = e.selected[0];

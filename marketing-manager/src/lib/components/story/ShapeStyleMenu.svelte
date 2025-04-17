@@ -42,7 +42,6 @@
       "polygon",
       "path",
       "line",
-      'image',
     ];
 
     return shapeTypes.includes(obj.type);
