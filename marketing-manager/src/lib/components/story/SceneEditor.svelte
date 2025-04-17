@@ -53,6 +53,8 @@
   let forceSceneRefresh = $state(0);
   let isAiFillLoading = $state(false);
   let isProcessingAiFill = $state(false);
+  let isAiFillAllLoading = $state(false);
+  let currentProcessingClip = $state<{id: number, index: number, total: number} | null>(null);
   let showAutoCreateModal = $state(false);
   let isImageUploadModalOpen = $state(false);
   let isBackgroundImageModalOpen = $state(false);
@@ -1288,6 +1290,137 @@
     processCanvasChange(canvasJson);
   }
 
+  // Function to handle AI fill and narration generation for all clips
+  async function handleAiFillAllClips() {
+    if (isAiFillAllLoading) return;
+
+    // Confirm with the user before proceeding
+    if (!confirm("This will run AI Fill and generate narration for ALL clips in ALL scenes. This may take a while. Continue?")) {
+      return;
+    }
+
+    isAiFillAllLoading = true;
+    currentProcessingClip = null;
+
+    try {
+      // Get all clips from all scenes
+      const allClips: Clip[] = [];
+
+      // Flatten the clips array from all scenes
+      scenes.forEach(scene => {
+        if (scene.clips && scene.clips.length > 0) {
+          allClips.push(...scene.clips);
+        }
+      });
+
+      if (allClips.length === 0) {
+        alert("No clips found to process.");
+        return;
+      }
+
+      // Process each clip one by one
+      for (let i = 0; i < allClips.length; i++) {
+        const clip = allClips[i];
+
+        // Update the current processing clip info
+        currentProcessingClip = {
+          id: clip.id,
+          index: i,
+          total: allClips.length
+        };
+
+        // Step 1: Run AI Fill for this clip
+        try {
+          console.log(`Processing clip ${i+1}/${allClips.length} (ID: ${clip.id}): Running AI Fill...`);
+
+          const aiFillResponse = await fetch(`/api/clips/${clip.id}/ai-fill`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!aiFillResponse.ok) {
+            console.error(`Failed to AI fill clip ${clip.id}. Status: ${aiFillResponse.status}`);
+            continue; // Continue with the next clip
+          }
+
+          const aiFillResult = await aiFillResponse.json();
+          console.log(`AI Fill completed for clip ${clip.id}:`, aiFillResult.success);
+
+          // Update the clip data with the latest from AI Fill
+          if (aiFillResult.success && aiFillResult.data) {
+            // Update the clip in our local array to get the latest narration text
+            allClips[i] = {
+              ...clip,
+              ...aiFillResult.data,
+              narration: aiFillResult.data.narration || clip.narration,
+              voiceName: aiFillResult.data.voiceName || clip.voiceName || "pt-BR-FranciscaNeural"
+            };
+          }
+
+          // Wait a moment before proceeding to the next step
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Step 2: Generate narration audio if the clip has narration text
+          // Use the updated clip data from allClips[i]
+          if (allClips[i].narration) {
+            console.log(`Generating narration audio for clip ${allClips[i].id}...`);
+
+            const narrationResponse = await fetch("/api/ai-storyboard/generate-narration", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clipId: allClips[i].id,
+                voiceName: allClips[i].voiceName || "pt-BR-FranciscaNeural",
+              }),
+            });
+
+            if (!narrationResponse.ok) {
+              console.error(`Failed to generate narration for clip ${allClips[i].id}. Status: ${narrationResponse.status}`);
+              // Continue with the next clip even if narration fails
+            } else {
+              const narrationResult = await narrationResponse.json();
+              console.log(`Narration generated for clip ${allClips[i].id}:`, narrationResult.success);
+            }
+          } else {
+            console.log(`Clip ${allClips[i].id} has no narration text, skipping audio generation.`);
+          }
+
+          // Wait a moment before proceeding to the next clip
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+        } catch (clipError) {
+          console.error(`Error processing clip ${clip.id}:`, clipError);
+          // Continue with the next clip even if this one fails
+        }
+      }
+
+      // Refresh the scene list to show updated previews
+      forceSceneRefresh++;
+
+      // If a clip is currently selected, refresh its data
+      if (selectedClip) {
+        const updatedClip = scenes
+          .flatMap((scene: SceneWithRelations) => scene.clips || [])
+          .find((clip: Clip) => clip.id === selectedClip?.id);
+
+        if (updatedClip) {
+          handleSelectClip(updatedClip);
+        }
+      }
+
+      alert(`Processing complete! Processed ${allClips.length} clips.`);
+
+    } catch (error: any) {
+      console.error("Error in AI Fill All process:", error);
+      alert(`An error occurred during processing: ${error.message || "Unknown error"}`);
+    } finally {
+      isAiFillAllLoading = false;
+      currentProcessingClip = null;
+    }
+  }
+
   // Add function to handle AI fill
   async function handleAiFill() {
     if (!selectedClip) return;
@@ -1529,6 +1662,28 @@
           <Wand class="h-4 w-4 mr-2" />
           {isAiFillLoading ? "Filling..." : "AI Fill"}
         </Button>
+        <Button
+          variant="outline"
+          class="w-full justify-start bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600"
+          onclick={handleAiFillAllClips}
+          disabled={isAiFillAllLoading}
+          title="AI Fill All Clips and Generate Narration"
+        >
+          <Wand class="h-4 w-4 mr-2" />
+          {isAiFillAllLoading ?
+            currentProcessingClip ?
+              `Processing ${currentProcessingClip.index + 1}/${currentProcessingClip.total}...` :
+              "Processing..." :
+            "AI Fill All"}
+        </Button>
+        {#if isAiFillAllLoading && currentProcessingClip}
+          <div class="mt-2 text-xs text-center text-gray-600">
+            <div class="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+              <div class="bg-blue-600 h-1.5 rounded-full" style="width: {Math.round((currentProcessingClip.index / currentProcessingClip.total) * 100)}%"></div>
+            </div>
+            <span>Clip {currentProcessingClip.index + 1} of {currentProcessingClip.total}</span>
+          </div>
+        {/if}
       </div>
     </div>
 
