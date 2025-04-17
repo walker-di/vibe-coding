@@ -58,15 +58,9 @@
 		dropdownError = null;
 		try {
 			// Fetch only necessary lists for the form
-			const [campaignsRes, themesRes, videoTemplatesRes] = await Promise.all([
-				fetch('/api/campaigns'),
-				fetch('/api/themes'),
-				fetch('/api/video-templates')
-			]);
+			const campaignsRes = await fetch('/api/campaigns');
 
 			if (!campaignsRes.ok) throw new Error(`Failed to load campaigns (${campaignsRes.status})`);
-			if (!themesRes.ok) throw new Error(`Failed to load themes (${themesRes.status})`);
-			if (!videoTemplatesRes.ok) throw new Error(`Failed to load video templates (${videoTemplatesRes.status})`);
 
 			campaignsList = await campaignsRes.json();
 

@@ -15,8 +15,7 @@
 	// --- Types for Props ---
 	// Restore complex types
 	type Campaign = Pick<InferSelectModel<typeof campaigns>, 'id' | 'name'>;
-	type Theme = Pick<InferSelectModel<typeof themes>, 'id' | 'title'>;
-	type VideoTemplate = Pick<InferSelectModel<typeof videoTemplates>, 'id' | 'name' | 'templateCode' | 'previewUrl'>;
+	
 
 
 	// --- Props ---
@@ -52,8 +51,9 @@
 	let description = $state(initialData?.description || '');
 	let selectedType = $state<CreativeType | ''>(initialData?.type || '');
 	let selectedCampaignId = $state<number | ''>(initialData?.campaignId || '');
-	let selectedThemeId = $state<any>(null);
-	
+
+
+
 
 	// Text Fields
 	let textHeadline = $state(initialData?.textData?.headline || '');
@@ -77,7 +77,7 @@
 	let videoDuration = $state<number | ''>(initialData?.videoData?.duration || '');
 	let videoAppealFeature = $state<AppealFeature | ''>(initialData?.videoData?.appealFeature || '');
 	let videoEmotion = $state<VideoEmotion | ''>(initialData?.videoData?.emotion || '');
-	
+
 
 	// LP Fields
 	let lpPageUrl = $state(initialData?.lpData?.pageUrl || '');
@@ -148,7 +148,7 @@
 			description = initialData.description || '';
 			selectedType = initialData.type || '';
 			selectedCampaignId = initialData.campaignId || '';
-			
+
 			textHeadline = initialData.textData?.headline || '';
 			textBody = initialData.textData?.body || '';
 			textCta = initialData.textData?.callToAction || '';
@@ -166,7 +166,7 @@
 			videoDuration = initialData.videoData?.duration || '';
 			videoAppealFeature = initialData.videoData?.appealFeature || '';
 			videoEmotion = initialData.videoData?.emotion || '';
-			
+
 			lpPageUrl = initialData.lpData?.pageUrl || '';
 			lpHeadline = initialData.lpData?.headline || '';
 			lpKeySections = initialData.lpData?.keySections ? JSON.stringify(initialData.lpData.keySections, null, 2) : '';
@@ -190,7 +190,7 @@
 			type: selectedType,
 			campaignId: selectedCampaignId || null,
 			personaId: personaId, // Include personaId if provided by parent
-			themeId: selectedThemeId || null,
+
 		};
 
 		if (!name) localFormErrors.name = 'Name is required.';
@@ -227,7 +227,7 @@
 				typeSpecificPayload = {
 					videoUrl: videoUrl || null, platform: videoPlatform || null, format: videoFormat || null,
 					duration: videoDuration || null, appealFeature: videoAppealFeature || null,
-					emotion: videoEmotion || null, templateId: videoTemplateId || null,
+					emotion: videoEmotion || null,
 				};
 				finalPayload.videoData = typeSpecificPayload;
 				break;
@@ -276,12 +276,12 @@
 			description,
 			type: selectedType,
 			campaignId: selectedCampaignId || null,
-			themeId: selectedThemeId || null,
+
 			personaId: personaId,
 			// Include type-specific data only if the type matches
 			textData: selectedType === 'text' ? { headline: textHeadline, body: textBody, callToAction: textCta, appealFeature: textAppealFeature, emotion: textEmotion, platformNotes: textPlatformNotes } : null,
 			imageData: selectedType === 'image' ? { imageUrl, altText: imageAltText, appealFeature: imageAppealFeature, emotion: imageEmotion, platformNotes: imagePlatformNotes } : null,
-			videoData: selectedType === 'video' ? { videoUrl, platform: videoPlatform, format: videoFormat, duration: videoDuration, appealFeature: videoAppealFeature, emotion: videoEmotion, templateId: videoTemplateId || null } : null,
+			videoData: selectedType === 'video' ? { videoUrl, platform: videoPlatform, format: videoFormat, duration: videoDuration, appealFeature: videoAppealFeature, emotion: videoEmotion } : null,
 			lpData: selectedType === 'lp' ? { pageUrl: lpPageUrl, headline: lpHeadline, keySections: lpKeySections, appealFeature: lpAppealFeature, emotion: lpEmotion, platformNotes: lpPlatformNotes } : null,
 		};
 		// Clean up null type-specific data
@@ -355,28 +355,15 @@
 	{:else if dropdownError}
 		<p class="text-red-600">Error loading options: {dropdownError}</p>
 	{:else}
-		<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-			<div>
-				<Label for="campaignId" class={formErrors.campaignId ? 'text-red-600' : ''}>Link to Campaign (Optional)</Label>
-				<select id="campaignId" name="campaignId" bind:value={selectedCampaignId} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.campaignId ? 'border-red-500' : ''}`}>
-					<option value="">-- None --</option>
-					{#each campaignsList as campaign (campaign.id)}
-						<option value={campaign.id}>{campaign.name}</option>
-					{/each}
-				</select>
-				{#if formErrors.campaignId}<p class="mt-1 text-sm text-red-600">{formErrors.campaignId}</p>{/if}
-			</div>
-			<div>
-				<Label for="themeId" class={formErrors.themeId ? 'text-red-600' : ''}>Link to Theme (Optional)</Label>
-				<select id="themeId" name="themeId" bind:value={selectedThemeId} disabled={isSubmitting || themesList.length === 0} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.themeId ? 'border-red-500' : ''}`}>
-					<option value="">-- None --</option>
-					{#each themesList as theme (theme.id)}
-						<option value={theme.id}>{theme.title}</option>
-					{/each}
-				</select>
-				{#if themesList.length === 0 && !isLoadingDropdowns}<p class="mt-1 text-sm text-gray-500">No themes available.</p>{/if}
-				{#if formErrors.themeId}<p class="mt-1 text-sm text-red-600">{formErrors.themeId}</p>{/if}
-			</div>
+		<div>
+			<Label for="campaignId" class={formErrors.campaignId ? 'text-red-600' : ''}>Link to Campaign (Optional)</Label>
+			<select id="campaignId" name="campaignId" bind:value={selectedCampaignId} disabled={isSubmitting} class={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.campaignId ? 'border-red-500' : ''}`}>
+				<option value="">-- None --</option>
+				{#each campaignsList as campaign (campaign.id)}
+					<option value={campaign.id}>{campaign.name}</option>
+				{/each}
+			</select>
+			{#if formErrors.campaignId}<p class="mt-1 text-sm text-red-600">{formErrors.campaignId}</p>{/if}
 		</div>
 	{/if}
 

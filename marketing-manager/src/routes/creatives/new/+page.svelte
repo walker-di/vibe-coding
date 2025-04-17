@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { AlertCircle } from 'lucide-svelte'; // Keep AlertCircle
 	// Import types needed for dropdown data
-	import type { campaigns, personas, themes, videoTemplates } from '$lib/server/db/schema';
+	import type { campaigns, personas } from '$lib/server/db/schema';
 	import type { InferSelectModel } from 'drizzle-orm';
 	import CreativeForm from '$lib/components/creatives/CreativeForm.svelte'; // Import the new form component
 
@@ -12,9 +12,9 @@
 	// --- Types ---
 	type Campaign = Pick<InferSelectModel<typeof campaigns>, 'id' | 'name'>;
 	type Persona = Pick<InferSelectModel<typeof personas>, 'id' | 'name'>;
-	type Theme = Pick<InferSelectModel<typeof themes>, 'id' | 'title'>;
+
 	// Need more fields for CardSelector options (used by CreativeForm)
-	type VideoTemplate = Pick<InferSelectModel<typeof videoTemplates>, 'id' | 'name' | 'templateCode' | 'previewUrl'>;
+
 
 
 	// --- State ---
@@ -25,8 +25,8 @@
 	let campaignsList = $state<Campaign[]>([]);
 	// Personas list is fetched but not passed to the form component in this route
 	let personasList = $state<Persona[]>([]); // Keep fetching for now, might remove later if truly unused
-	let themesList = $state<Theme[]>([]);
-	let videoTemplatesList = $state<VideoTemplate[]>([]);
+
+
 
 	// UI State
 	let isLoadingDropdowns = $state(true);
@@ -40,22 +40,16 @@
 			isLoadingDropdowns = true;
 			dropdownError = null;
 			try {
-				const [campaignsRes, personasRes, themesRes, videoTemplatesRes] = await Promise.all([
+				const [campaignsRes, personasRes] = await Promise.all([
 					fetch('/api/campaigns'),
-					fetch('/api/personas'),
-					fetch('/api/themes'),
-					fetch('/api/video-templates')
+					fetch('/api/personas')
 				]);
 
 				if (!campaignsRes.ok) throw new Error(`Failed to load campaigns (${campaignsRes.status})`);
 				if (!personasRes.ok) throw new Error(`Failed to load personas (${personasRes.status})`);
-				if (!themesRes.ok) throw new Error(`Failed to load themes (${themesRes.status})`);
-				if (!videoTemplatesRes.ok) throw new Error(`Failed to load video templates (${videoTemplatesRes.status})`);
 
 				campaignsList = await campaignsRes.json();
 				personasList = await personasRes.json();
-				themesList = await themesRes.json();
-				videoTemplatesList = await videoTemplatesRes.json();
 
 			} catch (e: any) {
 				console.error("Failed to load dropdown data:", e);
@@ -119,8 +113,6 @@
 	<!-- Use the CreativeForm component -->
 	<CreativeForm
 		{campaignsList}
-		{themesList}
-		{videoTemplatesList}
 		{isLoadingDropdowns}
 		{dropdownError}
 		onSubmit={handleSubmit}
