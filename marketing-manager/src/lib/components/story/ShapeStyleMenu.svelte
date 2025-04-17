@@ -42,10 +42,10 @@
       "polygon",
       "path",
       "line",
+      'image',
     ];
-    const textTypes = ["i-text", "textbox", "text"];
 
-    return shapeTypes.includes(obj.type) && !textTypes.includes(obj.type);
+    return shapeTypes.includes(obj.type);
   }
 
   // Function to show the menu when a shape is selected
