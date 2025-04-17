@@ -12,27 +12,38 @@ if (!GEMINI_API_KEY) {
   console.error('GEMINI_API_KEY or GOOGLE_API_KEY environment variable is not set.');
 }
 
-// Schema for the storyboard frames
+// Schema for the storyboard with scenes and clips
 const storyboardSchema = {
   type: 'OBJECT',
   properties: {
     title: { type: 'STRING', description: 'Title for the storyboard' },
     description: { type: 'STRING', description: 'Brief description of the storyboard' },
-    frames: {
+    scenes: {
       type: 'ARRAY',
-      description: 'Array of frames in the storyboard',
+      description: 'Array of scenes in the storyboard, each with a specific purpose in the narrative',
       items: {
         type: 'OBJECT',
         properties: {
-          id: { type: 'STRING', description: 'Unique identifier for the frame' },
-          narration: { type: 'STRING', description: 'Narration text for this frame' },
-          visualDescription: { type: 'STRING', description: 'Detailed description of the visual elements in this frame' }
+          description: { type: 'STRING', description: 'A descriptive title for this scene that captures its purpose in the overall narrative' },
+          clips: {
+            type: 'ARRAY',
+            description: 'Array of clips that form a coherent scene with a specific purpose in the story',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                narration: { type: 'STRING', description: 'Professional voice-over script for this clip in Brazilian Portuguese' },
+                visualDescription: { type: 'STRING', description: 'Detailed visual description of what appears in this clip' },
+                duration: { type: 'NUMBER', description: 'Suggested duration for this clip in seconds (typically between 2-5 seconds)' }
+              },
+              required: ['narration', 'visualDescription', 'duration']
+            }
+          }
         },
-        required: ['id', 'narration', 'visualDescription']
+        required: ['description', 'clips']
       }
     }
   },
-  required: ['title', 'description', 'frames']
+  required: ['title', 'description', 'scenes']
 };
 
 export const POST: RequestHandler = async ({ request, params }: RequestEvent) => {
@@ -171,12 +182,17 @@ export const POST: RequestHandler = async ({ request, params }: RequestEvent) =>
       }
     });
 
-    // Create a context-aware prompt for generating frames
-    let prompt = `Create a professional storyboard with 3 frames for a marketing campaign.
+    // Create a context-aware prompt for generating scenes and clips
+    let prompt = `Create a professional storyboard with 2-3 scenes for a marketing campaign, where each scene contains 1-3 clips.
 
-Your output MUST be valid JSON conforming to the provided schema. The storyboard should tell a cohesive story across all frames, with a clear beginning, middle, and end.
+Your output MUST be valid JSON conforming to the provided schema. The storyboard should tell a cohesive story across all scenes, with a clear beginning, middle, and end. Each scene should have a specific purpose in the narrative flow.
 
-Story prompt: ${storyPrompt}`;
+Story prompt: ${storyPrompt}
+
+Structure your storyboard as follows:
+1. Introduction Scene: Establish context, identify problem or need (1-2 clips)
+2. Solution Scene: Present the product/service as the solution (1-3 clips)
+3. Benefit/CTA Scene: Show benefits and include a call to action (1-2 clips)`;
 
     // Add context information
     prompt += '\n\nDETAILED CONTEXT INFORMATION:\n';
@@ -310,7 +326,7 @@ Story prompt: ${storyPrompt}`;
       if (creative.lpData.platformNotes) prompt += `Platform Notes: ${creative.lpData.platformNotes}\n`;
     }
 
-    prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard that specifically references the product and target audience\n- Create exactly 3 frames with professional narration and visual descriptions\n- Each frame should have high-quality, detailed content that is directly relevant to the context provided\n- The narration should be concise but impactful, using language that would resonate with the target audience\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Ensure the frames tell a cohesive story with a clear beginning (problem/need), middle (solution/product), and end (benefit/call to action)\n- Use a tone and style that matches the creative type and emotional context\n- Include specific product features and benefits mentioned in the context\n- Address the specific pain points and goals of the target persona`;
+    prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard that specifically references the product and target audience\n- Create 2-3 scenes, each with 1-3 clips that form a coherent narrative\n- Each scene should have a clear purpose (introduction, solution, benefits/CTA)\n- Each clip should have high-quality, detailed content that is directly relevant to the context provided\n- The narration should be concise but impactful, using language that would resonate with the target audience\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Include a suggested duration for each clip (in seconds, typically between 2-5 seconds)\n- Ensure the scenes and clips tell a cohesive story with a clear beginning (problem/need), middle (solution/product), and end (benefit/call to action)\n- Use a tone and style that matches the creative type and emotional context\n- Include specific product features and benefits mentioned in the context\n- Address the specific pain points and goals of the target persona\n- Make each scene distinct but connected to the overall narrative flow`;
 
     // Log the full prompt for debugging
     console.log('FULL PROMPT TO GEMINI:\n' + prompt);
@@ -335,40 +351,97 @@ Story prompt: ${storyPrompt}`;
       const storyboardData = JSON.parse(text);
       console.log('Generated storyboard data:', storyboardData);
 
-      // Create a new scene for this story with context-aware description
-      const [newScene] = await db.insert(scenes).values({
-        storyId: storyRecord.id,
-        description: storyboardData.description || 'Generated from AI storyboard',
-        orderIndex: 0, // First scene
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }).returning();
-
-      console.log(`Created new scene with ID: ${newScene.id}`);
-
-      // Create clips for each frame
+      // Check if we have scenes in the response (new schema) or frames (old schema)
+      const createdScenes = [];
       const createdClips = [];
-      for (let i = 0; i < storyboardData.frames.length; i++) {
-        const frame = storyboardData.frames[i];
-        try {
-          // Create a clip for this frame
-          const [newClip] = await db.insert(clips).values({
-            sceneId: newScene.id,
-            orderIndex: i,
-            narration: frame.narration || '',
-            description: frame.visualDescription || '',
-            canvas: JSON.stringify({ objects: [] }), // Empty canvas initially
-            imageUrl: null, // Will be generated by the clip-preview endpoint
-            duration: 5, // Default duration in seconds
+
+      if (storyboardData.scenes && Array.isArray(storyboardData.scenes) && storyboardData.scenes.length > 0) {
+        console.log('Processing scene-based storyboard structure');
+
+        // Create scenes and clips based on the new structure
+        for (let sceneIndex = 0; sceneIndex < storyboardData.scenes.length; sceneIndex++) {
+          const sceneData = storyboardData.scenes[sceneIndex];
+
+          // Create a new scene
+          const [newScene] = await db.insert(scenes).values({
+            storyId: storyRecord.id,
+            description: sceneData.description || `Scene ${sceneIndex + 1}`,
+            orderIndex: sceneIndex, // Order based on index
             createdAt: new Date(),
             updatedAt: new Date()
           }).returning();
 
-          createdClips.push(newClip);
-          console.log(`Created clip ${i + 1}/${storyboardData.frames.length} with ID: ${newClip.id}`);
-        } catch (clipError) {
-          console.error(`Error creating clip for frame ${frame.id}:`, clipError);
+          createdScenes.push(newScene);
+          console.log(`Created scene ${sceneIndex + 1}/${storyboardData.scenes.length} with ID: ${newScene.id}`);
+
+          // Create clips for this scene
+          if (sceneData.clips && Array.isArray(sceneData.clips)) {
+            for (let clipIndex = 0; clipIndex < sceneData.clips.length; clipIndex++) {
+              const clipData = sceneData.clips[clipIndex];
+              try {
+                // Create a clip for this scene
+                const [newClip] = await db.insert(clips).values({
+                  sceneId: newScene.id,
+                  orderIndex: clipIndex,
+                  narration: clipData.narration || '',
+                  description: clipData.visualDescription || '',
+                  canvas: JSON.stringify({ objects: [] }), // Empty canvas initially
+                  imageUrl: null, // Will be generated by the clip-preview endpoint
+                  duration: clipData.duration ? Math.round(clipData.duration * 1000) : 5000, // Convert to milliseconds
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                }).returning();
+
+                createdClips.push(newClip);
+                console.log(`Created clip ${clipIndex + 1}/${sceneData.clips.length} for scene ${sceneIndex + 1} with ID: ${newClip.id}`);
+              } catch (clipError) {
+                console.error(`Error creating clip for scene ${newScene.id}:`, clipError);
+              }
+            }
+          }
         }
+      }
+      // Fallback to old frame-based structure for backward compatibility
+      else if (storyboardData.frames && Array.isArray(storyboardData.frames) && storyboardData.frames.length > 0) {
+        console.log('Processing legacy frame-based storyboard structure');
+
+        // Create a single scene for all frames
+        const [newScene] = await db.insert(scenes).values({
+          storyId: storyRecord.id,
+          description: storyboardData.description || 'Generated from AI storyboard',
+          orderIndex: 0, // First scene
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }).returning();
+
+        createdScenes.push(newScene);
+        console.log(`Created single scene with ID: ${newScene.id} for ${storyboardData.frames.length} frames`);
+
+        // Create clips for each frame
+        for (let i = 0; i < storyboardData.frames.length; i++) {
+          const frame = storyboardData.frames[i];
+          try {
+            // Create a clip for this frame
+            const [newClip] = await db.insert(clips).values({
+              sceneId: newScene.id,
+              orderIndex: i,
+              narration: frame.narration || '',
+              description: frame.visualDescription || '',
+              canvas: JSON.stringify({ objects: [] }), // Empty canvas initially
+              imageUrl: null, // Will be generated by the clip-preview endpoint
+              duration: 5000, // Default duration in milliseconds
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }).returning();
+
+            createdClips.push(newClip);
+            console.log(`Created clip ${i + 1}/${storyboardData.frames.length} with ID: ${newClip.id}`);
+          } catch (clipError) {
+            console.error(`Error creating clip for frame ${frame.id}:`, clipError);
+          }
+        }
+      } else {
+        throw new Error('Invalid storyboard data: missing scenes or frames');
       }
 
       // Create a context summary for the response
@@ -407,11 +480,11 @@ Story prompt: ${storyPrompt}`;
 
       return json({
         success: true,
-        message: `Successfully created ${createdClips.length} clips from AI storyboard with context-aware content`,
+        message: `Successfully created ${createdScenes.length} scenes with ${createdClips.length} clips from AI storyboard with context-aware content`,
         storyId: storyRecord.id,
-        sceneId: newScene.id,
-        frameCount: storyboardData.frames.length,
+        sceneCount: createdScenes.length,
         clipCount: createdClips.length,
+        scenes: createdScenes,
         clips: createdClips,
         contextUsed: true,
         contextSummary

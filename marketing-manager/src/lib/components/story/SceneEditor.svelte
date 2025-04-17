@@ -574,6 +574,9 @@
     isGeneratingNarration = true;
 
     try {
+      // Add a small delay to ensure any previous operations are complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Call our proxy API to generate narration audio
       const response = await fetch("/api/ai-storyboard/generate-narration", {
         method: "POST",
@@ -596,10 +599,15 @@
       console.log("Narration audio generation result:", result);
 
       if (result.narrationAudioUrl) {
+        // Add a timestamp to prevent browser caching
+        const timestamp = Date.now();
+        const audioUrlWithTimestamp = `${result.narrationAudioUrl}?t=${timestamp}`;
+
         // Update the local state
         selectedClip = {
           ...selectedClip,
-          narrationAudioUrl: result.narrationAudioUrl,
+          narrationAudioUrl: audioUrlWithTimestamp,
+          voiceName: currentVoice || "pt-BR-FranciscaNeural",
         };
 
         // Update the clip in the scenes array
@@ -609,7 +617,8 @@
               if (c.id === selectedClip!.id) {
                 return {
                   ...c,
-                  narrationAudioUrl: result.narrationAudioUrl,
+                  narrationAudioUrl: audioUrlWithTimestamp,
+                  voiceName: currentVoice || "pt-BR-FranciscaNeural",
                 };
               }
               return c;
@@ -618,8 +627,28 @@
           return scene;
         });
 
+        // Force a refresh of the scene list
+        forceSceneRefresh++;
+
         // Show success message
         alert("Narration audio generated and applied successfully!");
+
+        // Update the clip in the database with the new voice name if needed
+        if (currentVoice && currentVoice !== selectedClip.voiceName) {
+          try {
+            await fetch(`/api/clips/${selectedClip.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                voiceName: currentVoice
+              }),
+            });
+            console.log(`Updated voice name for clip ${selectedClip.id} to ${currentVoice}`);
+          } catch (updateError) {
+            console.error("Error updating voice name in database:", updateError);
+            // Continue even if this fails
+          }
+        }
       } else {
         throw new Error(
           "No narration audio URL returned from the generation service.",
@@ -1439,28 +1468,58 @@
           if (allClips[i].narration) {
             console.log(`Generating narration audio for clip ${allClips[i].id}...`);
 
-            const narrationResponse = await fetch("/api/ai-storyboard/generate-narration", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                clipId: allClips[i].id,
-                voiceName: allClips[i].voiceName || "pt-BR-FranciscaNeural",
-              }),
-            });
+            // Add a longer delay before generating narration to ensure previous operations are complete
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-            if (!narrationResponse.ok) {
-              console.error(`Failed to generate narration for clip ${allClips[i].id}. Status: ${narrationResponse.status}`);
-              // Continue with the next clip even if narration fails
-            } else {
-              const narrationResult = await narrationResponse.json();
-              console.log(`Narration generated for clip ${allClips[i].id}:`, narrationResult.success);
+            try {
+              const narrationResponse = await fetch("/api/ai-storyboard/generate-narration", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  clipId: allClips[i].id,
+                  voiceName: allClips[i].voiceName || "pt-BR-FranciscaNeural",
+                }),
+              });
+
+              if (!narrationResponse.ok) {
+                console.error(`Failed to generate narration for clip ${allClips[i].id}. Status: ${narrationResponse.status}`);
+                // Continue with the next clip even if narration fails
+              } else {
+                const narrationResult = await narrationResponse.json();
+                console.log(`Narration generated for clip ${allClips[i].id}:`, narrationResult.success);
+
+                if (narrationResult.narrationAudioUrl) {
+                  console.log(`Narration audio URL for clip ${allClips[i].id}: ${narrationResult.narrationAudioUrl}`);
+
+                  // Update the clip in our scenes array with the new narration audio URL
+                  scenes = scenes.map((scene: SceneWithRelations) => {
+                    if (scene.clips) {
+                      scene.clips = scene.clips.map((c: Clip) => {
+                        if (c.id === allClips[i].id) {
+                          return {
+                            ...c,
+                            narrationAudioUrl: narrationResult.narrationAudioUrl,
+                            voiceName: allClips[i].voiceName || "pt-BR-FranciscaNeural"
+                          };
+                        }
+                        return c;
+                      });
+                    }
+                    return scene;
+                  });
+                }
+              }
+            } catch (narrationError) {
+              console.error(`Error generating narration for clip ${allClips[i].id}:`, narrationError);
+              // Continue with the next clip even if this one fails
             }
           } else {
             console.log(`Clip ${allClips[i].id} has no narration text, skipping audio generation.`);
           }
 
-          // Wait a moment before proceeding to the next clip
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait a longer moment before proceeding to the next clip
+          // This helps prevent race conditions and file conflicts
+          await new Promise(resolve => setTimeout(resolve, 3000));
 
         } catch (clipError) {
           console.error(`Error processing clip ${clip.id}:`, clipError);

@@ -146,7 +146,10 @@ export async function generateNarrationAudio(
 
     // Save the audio buffer to a file
     const audioDir = path.join('static', 'narration');
-    const filename = `clip-${clipId}-${Date.now()}.mp3`;
+    // Create a more unique filename with clipId, timestamp, and a random string
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 10); // Add random suffix
+    const filename = `clip-${clipId}-${timestamp}-${randomSuffix}.mp3`;
     const outputPath = path.join(audioDir, filename);
 
     try {
