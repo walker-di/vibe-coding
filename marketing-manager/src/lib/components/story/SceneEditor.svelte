@@ -630,9 +630,6 @@
         // Force a refresh of the scene list
         forceSceneRefresh++;
 
-        // Show success message
-        alert("Narration audio generated and applied successfully!");
-
         // Update the clip in the database with the new voice name if needed
         if (currentVoice && currentVoice !== selectedClip.voiceName) {
           try {

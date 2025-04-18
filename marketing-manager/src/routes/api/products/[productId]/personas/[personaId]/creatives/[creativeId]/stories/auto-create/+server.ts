@@ -172,33 +172,149 @@ export const POST: RequestHandler = async ({ request, params }: RequestEvent) =>
     // Initialize Gemini API
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash-preview-04-17',
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,
-        maxOutputTokens: 2048,
+        // maxOutputTokens: 2048,
         responseMimeType: 'application/json',
         responseSchema: storyboardSchema as any // Type casting needed due to schema type mismatch
       }
     });
 
+    let targetPrompt = `\n## Channel info ##\n`;
+    // Creative context
+    targetPrompt += `Name${creative.name}\n`;
+
+    if (creative.description) {
+      targetPrompt += `Description: ${creative.description}\n`;
+    }
+
+    // Type-specific creative details
+    if (creative.type === 'text' && creative.textData) {
+      targetPrompt += `\nText Creative Details:\n`;
+      if (creative.textData.headline) targetPrompt += `Headline: ${creative.textData.headline}\n`;
+      if (creative.textData.body) targetPrompt += `Body: ${creative.textData.body}\n`;
+      if (creative.textData.callToAction) targetPrompt += `Call to Action: ${creative.textData.callToAction}\n`;
+      if (creative.textData.appealFeature) targetPrompt += `Appeal Feature: ${creative.textData.appealFeature}\n`;
+      if (creative.textData.emotion) targetPrompt += `Emotion: ${creative.textData.emotion}\n`;
+      if (creative.textData.platformNotes) targetPrompt += `Platform Notes: ${creative.textData.platformNotes}\n`;
+    } else if (creative.type === 'image' && creative.imageData) {
+      targetPrompt += `\nImage Creative Details:\n`;
+      if (creative.imageData.appealFeature) targetPrompt += `Appeal Feature: ${creative.imageData.appealFeature}\n`;
+      if (creative.imageData.emotion) targetPrompt += `Emotion: ${creative.imageData.emotion}\n`;
+      if (creative.imageData.platformNotes) targetPrompt += `Platform Notes: ${creative.imageData.platformNotes}\n`;
+    } else if (creative.type === 'video' && creative.videoData) {
+      targetPrompt += `\nVideo Creative Details:\n`;
+      if (creative.videoData.duration) targetPrompt += `Duration: ${creative.videoData.duration}\n`;
+      if (creative.videoData.appealFeature) targetPrompt += `Appeal Feature: ${creative.videoData.appealFeature}\n`;
+      if (creative.videoData.emotion) targetPrompt += `Emotion: ${creative.videoData.emotion}\n`;
+      if (creative.videoData.platform) targetPrompt += `Platform: ${creative.videoData.platform}\n`;
+    } else if (creative.type === 'lp' && creative.lpData) {
+      targetPrompt += `\nLanding Page Creative Details:\n`;
+      if (creative.lpData.headline) targetPrompt += `Headline: ${creative.lpData.headline}\n`;
+      if (creative.lpData.appealFeature) targetPrompt += `Appeal Feature: ${creative.lpData.appealFeature}\n`;
+      if (creative.lpData.emotion) targetPrompt += `Emotion: ${creative.lpData.emotion}\n`;
+      if (creative.lpData.platformNotes) targetPrompt += `Platform Notes: ${creative.lpData.platformNotes}\n`;
+    }
     // Create a context-aware prompt for generating scenes and clips
-    let prompt = `Create a professional storyboard with 2-3 scenes for a marketing campaign, where each scene contains 1-3 clips.
+    let prompt = `You are a professional content creator for social media. please create a attractive content based on the use input.
+${targetPrompt}
 
 Your output MUST be valid JSON conforming to the provided schema. The storyboard should tell a cohesive story across all scenes, with a clear beginning, middle, and end. Each scene should have a specific purpose in the narrative flow.
 
-Story prompt: ${storyPrompt}
+Here’s the high-impact narrative flow adapted for these platforms:
 
-Structure your storyboard as follows:
-1. Introduction Scene: Establish context, identify problem or need (1-2 clips)
-2. Solution Scene: Present the product/service as the solution (1-3 clips)
-3. Benefit/CTA Scene: Show benefits and include a call to action (1-2 clips)`;
+**Core Narrative Flow (Applies to All):**
+
+1.  **Hook & Problem:** Grab attention immediately + Show the relatable struggle.
+2.  **Introduce Solution:** Present the product/service as the answer.
+3.  **Showcase Value:** Demonstrate *how* it works and its key benefit/differentiator.
+4.  **Transformation/Payoff:** Show the positive outcome/feeling.
+5.  **Call to Action (CTA):** Tell the viewer what to do next.
+
+**Adaptation for Instagram (Reels/Stories) & YouTube Shorts (Short-Form Vertical Video):**
+
+*   **Key Principles:** Speed, Visual Clarity, Instant Hook, Mobile-First, Sound-Optional Design (use text overlays).
+*   **Goal:** Quick engagement, stop the scroll, immediate understanding, drive profile visits/link clicks.
+
+**Short-Form Narrative Breakdown (Aim for < 60 seconds, often 15-30s):**
+
+1.  **The INSTANT Hook & Identify/Problem ID (Seconds 0-3):**
+    *   **Execution:** Start *immediately* with the most visually arresting or relatable aspect of the pain point. Use dynamic visuals, maybe a text overlay stating the core problem concisely (e.g., "Tired of X?", "Wish you could Y?"). No slow intros.
+    *   Capture attention with a visually striking moment that showcases your persona's pain point
+    *   Use dynamic motion or an emotionally resonant facial expression to stop the scroll
+    *   Create immediate viewer self-identification with a relatable struggle or desire
+    *   **Example:** Quick cuts showing frustration (messy desk, failed attempt, stressed expression).
+
+2.  **Swift Solution Intro/SHOWCASE & Core Action (Seconds 3-10):**
+    *   **Execution:** Seamlessly introduce the product visually. Show it *directly interacting* with the problem shown in the hook. Focus on the *single most important action* it performs. Keep cuts fast.
+    Introduce your product within the persona's environment through smooth visual transition
+Demonstrate the key functionality with clear, focused shots that highlight ease of use
+Show immediate transformation through before/after visual contrast
+    *   **Example:** Product appears, instantly organizes the desk; app interface shown achieving the desired task in one tap.
+
+3.  **The "Aha!" Moment/EMOTIONAL PAYOFF/ Key Benefit Flash (Seconds 10-20):**
+    *   **Execution:** Show the *immediate positive result* or the *key differentiator* in action. Use clear visuals, maybe a quick satisfying shot, a positive reaction from the persona, or a simple "Before -> After" flash cut. Text overlay reinforcing the main benefit (e.g., "Instant Clarity!", "Effortless Results!").
+Deliver a satisfying emotional resolution that feels genuine
+End with your product and persona in harmony, showing the new reality
+Include your call-to-action and brand elements optimized for mobile viewing
+    *   **Example:** Clean desk + smile; successful outcome shown clearly; unique feature highlighted with a graphic element.
+
+4.  **Quick Transformation Glimpse & CTA (Seconds 20-End):**
+    *   **Execution:** Brief shot showing the sustained positive state (the "after"). Immediately follow with a clear, concise CTA – visually dominant (text on screen, pointing) and verbally (if using voiceover). Use platform features (e.g., Polls/Stickers in Stories, clear "Link in Bio" text).
+    *   **Example:** Persona relaxed/productive + Text: "Get Yours Now!" + "Link in Bio" graphic.
+
+**Adaptation for YouTube Standard Videos (Longer-Form Horizontal/Vertical Video):**
+
+*   **Key Principles:** Strong Hook (but more time to build), Deeper Value Proposition, Storytelling Depth, Clear Audio, Encourage Engagement (Likes, Subs), Drive Off-Platform Actions.
+*   **Goal:** Build connection, educate/entertain, establish credibility, drive subscriptions or website visits/conversions.
+
+**Longer-Form Narrative Breakdown (Can vary greatly, e.g., 2-7 minutes):**
+
+1.  **The AUTHENTIC CONNECTION/Engaging Hook & Contextualized Problem (First 30-60 seconds):**
+    *   **Execution:** Start with a strong hook (question, surprising visual, relatable scenario) related to the pain point. Take a *bit* more time to establish the persona's environment and the *stakes* – why does this problem genuinely matter? Build empathy.
+    Open with a relatable scenario that immediately establishes emotional investment
+Use environmental details and character moments to create depth and authenticity
+Plant a specific question or tension that creates genuine viewer curiosity
+    *   **Example:** A mini-scene showing the persona struggling, perhaps with a brief voiceover explaining the frustration's impact.
+
+2.  **Introducing the Solution/PROBLEM EXPLORATION & Detailed Walkthrough (Can span 1-3 minutes):**
+    *   **Execution:** Introduce the product/service as the natural answer. Dedicate time to clearly demonstrate *how* it works, focusing on key features that solve the established problem. Use screen recordings, B-roll, clear narration. Address *why* it's effective.
+    Deepen understanding of the persona's challenge through meaningful context
+Build emotional investment by showing real consequences of the problem
+Create anticipation through subtle visual cues that hint at upcoming relief
+    *   **Example:** Unboxing/setup (if relevant), step-by-step demo of core features, explaining the thinking behind the design.
+
+3.  **Showcasing Unique Value/SOLUTION JOURNEY & Building Credibility (Can span 1-2 minutes):**
+    *   **Execution:** Dive deeper into what makes the product unique. Show specific use cases, highlight advanced features, compare it implicitly/explicitly to alternatives (showing its superiority). Include testimonials, results, or data if applicable. Build trust.
+Introduce your product as a natural discovery within the persona's world
+Show detailed interaction sequence highlighting key features and benefits
+Demonstrate progressive mastery and satisfaction as persona explores product
+Include micro-moments of delight that showcase product uniqueness
+    *   **Example:** Showing the product tackling a more complex version of the problem, featuring a user quote, demonstrating unexpected benefits.
+
+4.  **The Full Transformation/TRANSFORMATION IMPACT & Emotional Payoff (Can span 30-60 seconds):**
+    *   **Execution:** Show the lasting positive impact on the persona's life/work. Contrast clearly with the initial problem state. Emphasize both the practical *and* emotional benefits (less stress, more time, creativity, success). Use compelling visuals and summarizing narration.
+    Reveal meaningful changes in the persona's life or emotional state
+Show broader applications or secondary benefits of your solution
+Create visual contrast between before/after states for maximum impact
+    *   **Example:** Persona enjoying the benefits over time, achieving a larger goal previously blocked by the problem, expressing satisfaction.
+
+5.  **Clear Call to Action/COMPELLING CONCLUSION & Outro (Final 30 seconds):**
+    *   **Execution:** Summarize the core value proposition one last time. Deliver a clear, direct CTA (e.g., "Click the link in the description," "Subscribe for more tips," "Visit our website to learn more"). Use YouTube End Screens and Cards effectively. Encourage likes/comments/shares. End with clear branding.
+    Deliver a memorable final image that encapsulates your core value proposition
+Structure your call-to-action as the natural next step in the viewer's own journey
+Reinforce brand identity with consistent visual elements and messaging
+    *   **Example:** Direct address to camera, clear graphics showing the URL, animated end screen with subscribe button and related video.
+
+**Key Takeaway:** Adapt the *pacing, depth, and visual execution* based on the platform's constraints and audience expectations, while maintaining the core logical and emotional flow of Problem -> Solution -> Benefit -> Action.`;
 
     // Add context information
-    prompt += '\n\nDETAILED CONTEXT INFORMATION:\n';
+    prompt += '\n\nDETAILED CONTEXT INFORMATION (Use it to make the content more interesting):\n';
 
     // Product context (most important)
-    prompt += `\n## PRODUCT DETAILS ##\n`;
+    prompt += `\n## PRODUCT DETAILS (only promotion posts) ##\n`;
     prompt += `Product Name: ${product.name}\n`;
 
     if (product.overview) {
@@ -219,7 +335,7 @@ Structure your storyboard as follows:
 
     // Persona context
     prompt += `\n## TARGET AUDIENCE ##\n`;
-    prompt += `Persona: ${persona.name}${persona.personaTitle ? ` (${persona.personaTitle})` : ''}\n`;
+    prompt += `Persona: ${persona.personaTitle ? ` (${persona.personaTitle})` : ''}\n`;
 
     // Demographics
     prompt += `\nDemographics\n`;
@@ -289,45 +405,6 @@ Structure your storyboard as follows:
       prompt += `Purchase Process\n${persona.purchaseProcess}\n`;
     }
 
-    // Creative context
-    prompt += `\n## CREATIVE DETAILS ##\n`;
-    prompt += `Creative Name: ${creative.name}\n`;
-    prompt += `Creative Type: ${creative.type.toUpperCase()}\n`;
-
-    if (creative.description) {
-      prompt += `Description: ${creative.description}\n`;
-    }
-
-    // Type-specific creative details
-    if (creative.type === 'text' && creative.textData) {
-      prompt += `\nText Creative Details:\n`;
-      if (creative.textData.headline) prompt += `Headline: ${creative.textData.headline}\n`;
-      if (creative.textData.body) prompt += `Body: ${creative.textData.body}\n`;
-      if (creative.textData.callToAction) prompt += `Call to Action: ${creative.textData.callToAction}\n`;
-      if (creative.textData.appealFeature) prompt += `Appeal Feature: ${creative.textData.appealFeature}\n`;
-      if (creative.textData.emotion) prompt += `Emotion: ${creative.textData.emotion}\n`;
-      if (creative.textData.platformNotes) prompt += `Platform Notes: ${creative.textData.platformNotes}\n`;
-    } else if (creative.type === 'image' && creative.imageData) {
-      prompt += `\nImage Creative Details:\n`;
-      if (creative.imageData.appealFeature) prompt += `Appeal Feature: ${creative.imageData.appealFeature}\n`;
-      if (creative.imageData.emotion) prompt += `Emotion: ${creative.imageData.emotion}\n`;
-      if (creative.imageData.platformNotes) prompt += `Platform Notes: ${creative.imageData.platformNotes}\n`;
-    } else if (creative.type === 'video' && creative.videoData) {
-      prompt += `\nVideo Creative Details:\n`;
-      if (creative.videoData.duration) prompt += `Duration: ${creative.videoData.duration}\n`;
-      if (creative.videoData.appealFeature) prompt += `Appeal Feature: ${creative.videoData.appealFeature}\n`;
-      if (creative.videoData.emotion) prompt += `Emotion: ${creative.videoData.emotion}\n`;
-      if (creative.videoData.platform) prompt += `Platform: ${creative.videoData.platform}\n`;
-    } else if (creative.type === 'lp' && creative.lpData) {
-      prompt += `\nLanding Page Creative Details:\n`;
-      if (creative.lpData.headline) prompt += `Headline: ${creative.lpData.headline}\n`;
-      if (creative.lpData.appealFeature) prompt += `Appeal Feature: ${creative.lpData.appealFeature}\n`;
-      if (creative.lpData.emotion) prompt += `Emotion: ${creative.lpData.emotion}\n`;
-      if (creative.lpData.platformNotes) prompt += `Platform Notes: ${creative.lpData.platformNotes}\n`;
-    }
-
-    prompt += `\n\nIMPORTANT INSTRUCTIONS:\n- Generate a title and description for the storyboard that specifically references the product and target audience\n- Create 2-3 scenes, each with 1-3 clips that form a coherent narrative\n- Each scene should have a clear purpose (introduction, solution, benefits/CTA)\n- Each clip should have high-quality, detailed content that is directly relevant to the context provided\n- The narration should be concise but impactful, using language that would resonate with the target audience\n- The visual descriptions should be detailed enough for a designer to create the visuals\n- Include a suggested duration for each clip (in seconds, typically between 2-5 seconds)\n- Ensure the scenes and clips tell a cohesive story with a clear beginning (problem/need), middle (solution/product), and end (benefit/call to action)\n- Use a tone and style that matches the creative type and emotional context\n- Include specific product features and benefits mentioned in the context\n- Address the specific pain points and goals of the target persona\n- Make each scene distinct but connected to the overall narrative flow`;
-
     // Log the full prompt for debugging
     console.log('FULL PROMPT TO GEMINI:\n' + prompt);
 
@@ -335,7 +412,10 @@ Structure your storyboard as follows:
     console.log('Sending prompt to Gemini...');
     let text;
     try {
-      const result = await model.generateContent(prompt);
+      const result = await model.generateContent({
+        systemInstruction: prompt,
+        contents: [{ role: "user", parts: [{ text: storyPrompt }] }]
+      });
       const response = result.response;
       text = response.text();
       console.log('Received response from Gemini');
