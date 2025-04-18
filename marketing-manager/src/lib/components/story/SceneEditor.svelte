@@ -4,6 +4,7 @@
   import ImageUploadModal from "$lib/components/story/ImageUploadModal.svelte";
   import VoiceSelector from "$lib/components/story/VoiceSelector.svelte";
   import AutoCreateModal from "$lib/components/story/AutoCreateModal.svelte";
+  import AiFillAllModal from "$lib/components/story/AiFillAllModal.svelte";
   import type { SceneWithRelations, Clip } from "$lib/types/story.types";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -17,6 +18,7 @@
     Sparkles,
     Wand,
     Mic,
+    RefreshCw
   } from "lucide-svelte";
   import { tick } from "svelte";
   import { FabricImage } from "fabric";
@@ -59,6 +61,7 @@
   let showAutoCreateModal = $state(false);
   let isImageUploadModalOpen = $state(false);
   let isBackgroundImageModalOpen = $state(false);
+  let showAiFillAllModal = $state(false);
   let initialCheckDone = $state(false); // Track if initial check/action is done
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
 
@@ -105,12 +108,13 @@
 
   // State for the auto-create modal
   let isAutoCreating = $state(false);
-  let storyPrompt = $state("");
-  let creativeContext = $state<any>(null);
-  let isLoadingContext = $state(false);
   let isGeneratingImage = $state(false);
   let isGeneratingNarration = $state(false);
   let currentVoice = $state("");
+  let narrationAudioElement = $state<HTMLAudioElement | null>(null);
+  let storyPrompt = $state("");
+  let creativeContext = $state<any>(null);
+  let isLoadingContext = $state(false);
 
   // Handler for opening the auto-create modal
   async function openAutoCreateModal() {
@@ -1338,13 +1342,11 @@
   }
 
   // Function to handle AI fill and narration generation for all clips
-  async function handleAiFillAllClips() {
+  async function handleAiFillAllClips(options: { fillCanvas: boolean; generateNarration: boolean; generateAudio: boolean }) {
     if (isAiFillAllLoading) return;
 
-    // Confirm with the user before proceeding
-    if (!confirm("This will run AI Fill and generate narration for ALL clips in ALL scenes. This may take a while. Continue?")) {
-      return;
-    }
+    // Close the modal
+    showAiFillAllModal = false;
 
     isAiFillAllLoading = true;
     currentProcessingClip = null;
@@ -1354,7 +1356,7 @@
       const allClips: Clip[] = [];
 
       // Flatten the clips array from all scenes
-      scenes.forEach(scene => {
+      scenes.forEach((scene: SceneWithRelations) => {
         if (scene.clips && scene.clips.length > 0) {
           allClips.push(...scene.clips);
         }
@@ -1376,115 +1378,154 @@
           total: allClips.length
         };
 
-        // Step 1: Run AI Fill for this clip
+        // Process based on selected options
         try {
-          console.log(`Processing clip ${i+1}/${allClips.length} (ID: ${clip.id}): Running AI Fill...`);
+          // Step 1: Run AI Fill for this clip if fillCanvas is selected
+          if (options.fillCanvas) {
+            console.log(`Processing clip ${i+1}/${allClips.length} (ID: ${clip.id}): Running AI Fill...`);
 
-          const aiFillResponse = await fetch(`/api/clips/${clip.id}/ai-fill`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          });
+            const aiFillResponse = await fetch(`/api/clips/${clip.id}/ai-fill`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
 
-          if (!aiFillResponse.ok) {
-            console.error(`Failed to AI fill clip ${clip.id}. Status: ${aiFillResponse.status}`);
-            continue; // Continue with the next clip
-          }
+            if (!aiFillResponse.ok) {
+              console.error(`Failed to AI fill clip ${clip.id}. Status: ${aiFillResponse.status}`);
+              continue; // Continue with the next clip
+            }
 
-          const aiFillResult = await aiFillResponse.json();
-          console.log(`AI Fill completed for clip ${clip.id}:`, aiFillResult.success);
+            const aiFillResult = await aiFillResponse.json();
+            console.log(`AI Fill completed for clip ${clip.id}:`, aiFillResult.success);
 
-          // Update the clip data with the latest from AI Fill
-          if (aiFillResult.success && aiFillResult.data) {
-            // Update the clip in our local array to get the latest narration text
-            allClips[i] = {
-              ...clip,
-              ...aiFillResult.data,
-              narration: aiFillResult.data.narration || clip.narration,
-              voiceName: aiFillResult.data.voiceName || clip.voiceName || "pt-BR-FranciscaNeural"
-            };
+            // Update the clip data with the latest from AI Fill
+            if (aiFillResult.success && aiFillResult.data) {
+              // Update the clip in our local array to get the latest narration text
+              // Make sure to use the narration from the AI Fill result if it exists
+              const updatedNarration = aiFillResult.data.narration !== undefined ? aiFillResult.data.narration : clip.narration;
+              console.log(`Clip ${clip.id} narration after AI Fill: ${updatedNarration}`);
 
-            // Generate and upload a preview image for this clip
-            try {
-              console.log(`Generating preview image for clip ${clip.id}...`);
+              allClips[i] = {
+                ...clip,
+                ...aiFillResult.data,
+                narration: updatedNarration,
+                voiceName: aiFillResult.data.voiceName || clip.voiceName || "pt-BR-FranciscaNeural"
+              };
 
-              // Load the canvas data into the editor instance
-              if (canvasEditorInstance) {
-                // First, save the current canvas state if a clip is selected
-                const currentSelectedClipId = selectedClip?.id;
+              // Generate and upload a preview image for this clip
+              try {
+                console.log(`Generating preview image for clip ${clip.id}...`);
 
-                // Load the new canvas data
-                await canvasEditorInstance.loadCanvasData(aiFillResult.data.canvas);
+                // Load the canvas data into the editor instance
+                if (canvasEditorInstance) {
+                  // First, save the current canvas state if a clip is selected
+                  const currentSelectedClipId = selectedClip?.id;
 
-                // Wait for the canvas to render
-                await tick();
+                  // Load the new canvas data
+                  await canvasEditorInstance.loadCanvasData(aiFillResult.data.canvas);
 
-                // Generate the preview image
-                const imageDataUrl = await canvasEditorInstance.getCanvasImageDataUrl();
+                  // Wait for the canvas to render
+                  await tick();
 
-                if (imageDataUrl) {
-                  // Upload the preview image
-                  const uploadResponse = await fetch("/api/upload/clip-preview", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                      clipId: clip.id,
-                      imageData: imageDataUrl,
-                    }),
-                  });
+                  // Generate the preview image
+                  const imageDataUrl = await canvasEditorInstance.getCanvasImageDataUrl();
 
-                  if (uploadResponse.ok) {
-                    const uploadData = await uploadResponse.json();
-                    console.log(`Preview image uploaded for clip ${clip.id}:`, uploadData.data?.imageUrl);
+                  if (imageDataUrl) {
+                    // Upload the preview image
+                    const uploadResponse = await fetch("/api/upload/clip-preview", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        clipId: clip.id,
+                        imageData: imageDataUrl,
+                      }),
+                    });
 
-                    // Update the clip with the new image URL
-                    if (uploadData.data?.imageUrl) {
-                      const imageUrl = uploadData.data.imageUrl;
-                      const cleanImageUrl = imageUrl ? imageUrl.split("?")[0] : imageUrl;
+                    if (uploadResponse.ok) {
+                      const uploadData = await uploadResponse.json();
+                      console.log(`Preview image uploaded for clip ${clip.id}:`, uploadData.data?.imageUrl);
 
-                      // Update the database with the new image URL
-                      const updateResponse = await fetch(`/api/clips/${clip.id}`, {
-                        method: "PUT",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ imageUrl: cleanImageUrl }),
-                      });
+                      // Update the clip with the new image URL
+                      if (uploadData.data?.imageUrl) {
+                        const imageUrl = uploadData.data.imageUrl;
+                        const cleanImageUrl = imageUrl ? imageUrl.split("?")[0] : imageUrl;
 
-                      if (updateResponse.ok) {
-                        console.log(`Image URL updated in database for clip ${clip.id}`);
-                      } else {
-                        console.error(`Failed to update image URL in database for clip ${clip.id}`);
+                        // Update the database with the new image URL
+                        const updateResponse = await fetch(`/api/clips/${clip.id}`, {
+                          method: "PUT",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({ imageUrl: cleanImageUrl }),
+                        });
+
+                        if (updateResponse.ok) {
+                          console.log(`Image URL updated in database for clip ${clip.id}`);
+                        } else {
+                          console.error(`Failed to update image URL in database for clip ${clip.id}`);
+                        }
                       }
+                    } else {
+                      console.error(`Failed to upload preview image for clip ${clip.id}`);
                     }
                   } else {
-                    console.error(`Failed to upload preview image for clip ${clip.id}`);
+                    console.error(`Failed to generate preview image for clip ${clip.id}`);
                   }
-                } else {
-                  console.error(`Failed to generate preview image for clip ${clip.id}`);
-                }
 
-                // If a clip was selected before, restore its canvas data
-                if (currentSelectedClipId && selectedClip) {
-                  await canvasEditorInstance.loadCanvasData(selectedClip.canvas);
+                  // If a clip was selected before, restore its canvas data
+                  if (currentSelectedClipId && selectedClip) {
+                    await canvasEditorInstance.loadCanvasData(selectedClip.canvas);
+                  }
                 }
+              } catch (previewError) {
+                console.error(`Error generating/uploading preview for clip ${clip.id}:`, previewError);
+                // Continue with the next step even if preview generation fails
               }
-            } catch (previewError) {
-              console.error(`Error generating/uploading preview for clip ${clip.id}:`, previewError);
-              // Continue with the next step even if preview generation fails
             }
+          } else if (options.generateNarration) {
+            // If we're not filling canvas but need narration, make sure we have the clip data
+            allClips[i] = clip;
           }
 
           // Wait a moment before proceeding to the next step
           await new Promise(resolve => setTimeout(resolve, 1000));
 
-          // Step 2: Generate narration audio if the clip has narration text
-          // Use the updated clip data from allClips[i]
-          if (allClips[i].narration) {
-            console.log(`Generating narration audio for clip ${allClips[i].id}...`);
+          // Step 2: Generate narration text if selected and clip doesn't have it
+          if (options.generateNarration && !allClips[i].narration) {
+            console.log(`Clip ${allClips[i].id} has no narration, generating one...`);
+
+            // Use the clip description or a generic description to generate narration
+            // const narrationSource = allClips[i].description || `Marketing clip ${i+1}`;
+
+            try {
+              // Call the API to generate narration text
+              const narrationTextResponse = await fetch(`/api/clips/${allClips[i].id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  narration: `[Auto-generated narration for clip ${i+1}]` // This will be replaced by the AI Fill endpoint
+                }),
+              });
+
+              if (narrationTextResponse.ok) {
+                const result = await narrationTextResponse.json();
+                // Update our local copy
+                if (result.data?.narration) {
+                  allClips[i].narration = result.data.narration;
+                  console.log(`Generated narration text for clip ${allClips[i].id}: ${allClips[i].narration}`);
+                }
+              }
+            } catch (narrationTextError) {
+              console.error(`Error generating narration text for clip ${allClips[i].id}:`, narrationTextError);
+            }
+          }
+
+          // Step 3: Generate narration audio if the clip has narration text and audio generation is selected
+          if (options.generateAudio && allClips[i].narration) {
+            console.log(`Generating narration audio for clip ${allClips[i].id} with narration text: "${allClips[i].narration}"`);
 
             // Add a longer delay before generating narration to ensure previous operations are complete
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -1531,7 +1572,7 @@
               console.error(`Error generating narration for clip ${allClips[i].id}:`, narrationError);
               // Continue with the next clip even if this one fails
             }
-          } else {
+          } else if (options.generateAudio) {
             console.log(`Clip ${allClips[i].id} has no narration text, skipping audio generation.`);
           }
 
@@ -1610,13 +1651,17 @@
 
         // Update the local state
         // Ensure all required properties have default values if they're null
+        // Make sure to use the narration from the AI Fill result if it exists
+        const updatedNarration = result.data.narration !== undefined ? result.data.narration : selectedClip.narration || "";
+        console.log(`Clip ${selectedClip.id} narration after AI Fill: ${updatedNarration}`);
+
         const updatedClipData = {
           ...selectedClip, // Keep existing properties
           canvas: result.data.canvas, // Update canvas
           updatedAt: result.data.updatedAt, // Update timestamp
           // Ensure other potentially missing fields have defaults
           duration: result.data.duration || selectedClip.duration || 3000,
-          narration: result.data.narration || selectedClip.narration || "",
+          narration: updatedNarration,
           description:
             result.data.description || selectedClip.description || "",
           orderIndex: result.data.orderIndex ?? selectedClip.orderIndex ?? 0,
@@ -1814,7 +1859,7 @@
         <Button
           variant="outline"
           class="w-full justify-start bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600"
-          onclick={handleAiFillAllClips}
+          onclick={() => showAiFillAllModal = true}
           disabled={isAiFillAllLoading}
           title="AI Fill All Clips and Generate Narration"
         >
@@ -1843,6 +1888,7 @@
           bind:this={canvasEditorInstance}
           onCanvasChange={handleCanvasChange}
           hideControls={true}
+          value=""
         />
         {#if selectedClip === null && scenes.length > 0}
           <div
@@ -1927,13 +1973,41 @@
                 <Label class="text-xs text-muted-foreground mb-1 block"
                   >Narration Audio</Label
                 >
-                <audio controls class="w-full h-8">
-                  <source
-                    src={selectedClip.narrationAudioUrl}
-                    type="audio/mpeg"
-                  />
+                <audio
+                  controls
+                  class="w-full h-8"
+                  src={selectedClip.narrationAudioUrl}
+                  bind:this={narrationAudioElement}
+                >
                   Your browser does not support the audio element.
                 </audio>
+                <div class="flex justify-end mt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="text-xs px-2 py-0 h-6"
+                    onclick={() => {
+                      if (narrationAudioElement && selectedClip) {
+                        // Reset the audio element
+                        narrationAudioElement.pause();
+                        narrationAudioElement.currentTime = 0;
+
+                        // Add a timestamp to prevent browser caching
+                        const timestamp = Date.now();
+                        const audioUrlWithTimestamp = `${selectedClip.narrationAudioUrl}?t=${timestamp}`;
+
+                        // Set the source and load it
+                        narrationAudioElement.src = audioUrlWithTimestamp;
+                        narrationAudioElement.load();
+                        narrationAudioElement.play().catch((err: Error) => {
+                          console.error('Error playing narration audio:', err);
+                        });
+                      }
+                    }}
+                  >
+                    <RefreshCw class="h-3 w-3 mr-1" /> Reload
+                  </Button>
+                </div>
               </div>
             {/if}
 
@@ -1996,6 +2070,14 @@
       />
     </div>
   </div>
+
+  <!-- AI Fill All Modal -->
+  <AiFillAllModal
+    bind:open={showAiFillAllModal}
+    isLoading={isAiFillAllLoading}
+    on:close={() => showAiFillAllModal = false}
+    on:confirm={event => handleAiFillAllClips(event.detail)}
+  />
 </div>
 
 <!-- Image Upload Modal -->
@@ -2035,6 +2117,7 @@
     if (!canvasEditorInstance) return;
     const canvas = canvasEditorInstance.getCanvasInstance();
     if (!canvas) return;
+    // @ts-ignore - fabric.js Canvas has setBackgroundImage method
     canvas.setBackgroundImage(null, canvas.renderAll.bind(canvas));
     const json = canvas.toJSON();
     handleCanvasChange(JSON.stringify(json));
@@ -2061,6 +2144,7 @@
       originY: "top",
     });
 
+    // @ts-ignore - fabric.js Canvas has setBackgroundImage method
     canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
     // Trigger canvas change
     const json = canvas.toJSON();

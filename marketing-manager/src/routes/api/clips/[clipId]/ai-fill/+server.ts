@@ -4,7 +4,7 @@ import { db } from '$lib/server/db';
 import { clips, scenes, stories, creatives, personas, products, canvasTemplates } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { parsePlaceholder } from '$lib/utils/placeholder-parser';
-import { generateImage } from '$lib/server/aiService'; // Assuming this service exists and is correctly implemented
+import { generateImage, generateNarrationText } from '$lib/server/aiService';
 import path from 'path';
 import fs from 'fs/promises';
 import ky from 'ky';
@@ -136,7 +136,22 @@ export const POST: RequestHandler = async ({ params, request }) => {
     console.log(`Final canvas dimensions: width=${canvasData.width || 'not set'}, height=${canvasData.height || 'not set'}`);
 
 
-    // Update the clip with the new canvas data
+    // Generate narration text if the clip doesn't have one
+    let narration = clip.narration;
+    if (!narration) {
+      try {
+        // Generate narration based on clip description or template context
+        const narrationSource = clip.description || `A marketing clip for ${product.name} targeting ${persona.personaTitle || 'customers'}`;
+        console.log(`Generating narration text from source: ${narrationSource}`);
+        narration = await generateNarrationText(narrationSource);
+        console.log(`Generated narration text: ${narration}`);
+      } catch (narrationErr) {
+        console.error('Error generating narration text:', narrationErr);
+        // Continue without narration if generation fails
+      }
+    }
+
+    // Update the clip with the new canvas data and narration
     const canvasJson = JSON.stringify(canvasData);
     console.log(`Canvas JSON length: ${canvasJson.length}`);
 
@@ -144,6 +159,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
       .update(clips)
       .set({
         canvas: canvasJson,
+        narration: narration, // Include the narration in the update
         updatedAt: new Date()
       })
       .where(eq(clips.id, clipId))

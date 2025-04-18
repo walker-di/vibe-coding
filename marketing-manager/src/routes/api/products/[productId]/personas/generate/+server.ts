@@ -103,7 +103,7 @@ export const POST: RequestHandler = async (event: RequestEvent) => {
 	try {
 		const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 		const model = genAI.getGenerativeModel({
-			model: 'gemini-2.0-flash', // Use a capable model
+			model: 'gemini-2.5-flash-preview-04-17', // Use a capable model
 			generationConfig: {
 				temperature: 0.8, // Slightly creative but grounded
 				responseMimeType: 'application/json',
