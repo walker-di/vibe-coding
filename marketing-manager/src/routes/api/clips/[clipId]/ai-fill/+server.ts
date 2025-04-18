@@ -329,8 +329,12 @@ async function createImageObject(placeholderObj: any, imageUrl: string) {
   const imageBuffer = Buffer.from(imageArrayBuffer);
   const dimensions = sizeOf(imageBuffer);
 
-  const newScaleX = placeholderObj.width / dimensions.width;
-  const newScaleY = placeholderObj.height / dimensions.height;
+  const currentWidth =
+  placeholderObj.width * (placeholderObj.scaleX || 1);
+  const currentHeight =
+  placeholderObj.height * (placeholderObj.scaleY || 1);
+  const newScaleX = currentWidth / dimensions.width;
+  const newScaleY = currentHeight / dimensions.height;
   placeholderObj = {
     ...placeholderObj,
     width: dimensions.width,
