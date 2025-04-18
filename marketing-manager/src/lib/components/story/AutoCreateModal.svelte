@@ -166,7 +166,7 @@
                 type="checkbox"
                 id="includeProductInfo"
                 checked={includeProductInfo}
-                onchange={() => includeProductInfo = !includeProductInfo}
+                onclick={() => includeProductInfo = !includeProductInfo}
                 disabled={isLoading}
                 class="h-4 w-4 text-purple-600 rounded"
               />
@@ -180,7 +180,7 @@
                 type="checkbox"
                 id="includePersonaInfo"
                 checked={includePersonaInfo}
-                onchange={() => includePersonaInfo = !includePersonaInfo}
+                onclick={() => includePersonaInfo = !includePersonaInfo}
                 disabled={isLoading}
                 class="h-4 w-4 text-purple-600 rounded"
               />
@@ -194,7 +194,7 @@
                 type="checkbox"
                 id="includeCreativeInfo"
                 checked={includeCreativeInfo}
-                onchange={() => includeCreativeInfo = !includeCreativeInfo}
+                onclick={() => includeCreativeInfo = !includeCreativeInfo}
                 disabled={isLoading}
                 class="h-4 w-4 text-purple-600 rounded"
               />

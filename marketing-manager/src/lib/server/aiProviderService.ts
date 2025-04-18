@@ -3,17 +3,9 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '$env/dynamic/private';
 
-/**
- * Converts a Gemini schema format to OpenAI schema format
- * Gemini uses uppercase strings for types, OpenAI uses lowercase
- */
 function convertGeminiSchemaToOpenAI(geminiSchema: any): any {
   if (!geminiSchema) return {};
 
-  // For OpenAI, we'll create a simplified schema that follows JSON Schema format
-  // This is a more reliable approach than trying to convert Gemini's schema format
-
-  // Create a standard JSON Schema for the storyboard
   return {
     "type": "object",
     "properties": {
@@ -51,7 +43,7 @@ function convertGeminiSchemaToOpenAI(geminiSchema: any): any {
                   },
                   "duration": {
                     "type": "number",
-                    "description": "Suggested duration for this clip in seconds (typically between 2-5 seconds)"
+                    "description": "Suggested duration for this clip in seconds (typically between 5-10 seconds)"
                   }
                 },
                 "required": ["narration", "visualDescription", "duration"],
@@ -102,14 +94,6 @@ export interface AIResponse {
   text: string;
 }
 
-/**
- * Generate content using the specified AI provider
- * @param provider The AI provider to use ('gemini' or 'openai')
- * @param systemPrompt The system prompt/instruction
- * @param userPrompt The user prompt/query
- * @param schema The JSON schema for structured output
- * @returns The AI response
- */
 export async function generateContent(
   provider: AIProvider,
   systemPrompt: string,
@@ -130,9 +114,6 @@ export async function generateContent(
   }
 }
 
-/**
- * Generate content using Gemini
- */
 async function generateWithGemini(
   systemPrompt: string,
   userPrompt: string,
@@ -161,9 +142,6 @@ async function generateWithGemini(
   return { text: response.text() };
 }
 
-/**
- * Generate content using OpenAI
- */
 async function generateWithOpenAI(
   systemPrompt: string,
   userPrompt: string,
@@ -179,7 +157,7 @@ async function generateWithOpenAI(
   try {
     console.log('OpenAI schema:', JSON.stringify(openAISchema, null, 2));
     const response = await openai.responses.create({
-      model: "gpt-4o",
+      model: "o3",
       input: [
         {
           role: "system",
@@ -222,9 +200,6 @@ async function generateWithOpenAI(
 
 }
 
-/**
- * Generate content using Claude (Anthropic)
- */
 async function generateWithClaude(
   systemPrompt: string,
   userPrompt: string,
@@ -244,8 +219,8 @@ async function generateWithClaude(
     const combinedSystemPrompt = `${systemPrompt}\n\nYour response must be a valid JSON object that follows this schema:\n${schemaString}\n\nDo not include any explanations, only provide a RFC8259 compliant JSON response following the schema.`;
 
     const response = await anthropic.messages.create({
-      model: "claude-3-sonnet-20240229",
-      max_tokens: 4096,
+      model: "claude-3-7-sonnet-20250219",
+      max_tokens: 8000,
       system: combinedSystemPrompt,
       messages: [
         { role: "user", content: userPrompt }
