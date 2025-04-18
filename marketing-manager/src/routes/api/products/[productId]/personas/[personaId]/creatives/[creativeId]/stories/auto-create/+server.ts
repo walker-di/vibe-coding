@@ -56,6 +56,9 @@ export const POST: RequestHandler = async ({ request, params }: RequestEvent) =>
   let storyPrompt: string;
   let storyId: number | undefined;
   let aiProvider: AIProvider = 'gemini'; // Default to Gemini
+  let includeProductInfo: boolean = true; // Default to including product info
+  let includePersonaInfo: boolean = true; // Default to including persona info
+  let includeCreativeInfo: boolean = true; // Default to including creative info
 
   try {
     const body = await request.json();
@@ -63,8 +66,21 @@ export const POST: RequestHandler = async ({ request, params }: RequestEvent) =>
     storyId = body.storyId;
 
     // Get the AI provider from the request body, default to 'gemini' if not provided
-    if (body.aiProvider && (body.aiProvider === 'gemini' || body.aiProvider === 'openai')) {
+    if (body.aiProvider && ['gemini', 'openai', 'claude'].includes(body.aiProvider)) {
       aiProvider = body.aiProvider;
+    }
+
+    // Get whether to include specific context information from the request body
+    if (body.includeProductInfo !== undefined) {
+      includeProductInfo = body.includeProductInfo;
+    }
+
+    if (body.includePersonaInfo !== undefined) {
+      includePersonaInfo = body.includePersonaInfo;
+    }
+
+    if (body.includeCreativeInfo !== undefined) {
+      includeCreativeInfo = body.includeCreativeInfo;
     }
 
     if (!storyPrompt || typeof storyPrompt !== 'string') {
@@ -297,12 +313,14 @@ Reinforce brand identity with consistent visual elements and messaging
 
 **Key Takeaway:** Adapt the *pacing, depth, and visual execution* based on the platform's constraints and audience expectations, while maintaining the core logical and emotional flow of Problem -> Solution -> Benefit -> Action.`;
 
-    // Add context information
-    prompt += '\n\nDETAILED CONTEXT INFORMATION (Use it to make the content more interesting):\n';
+    // Add context information header if any context is included
+    if (includeProductInfo || includePersonaInfo || includeCreativeInfo) {
+      prompt += '\n\nDETAILED CONTEXT INFORMATION (Use it to make the content more interesting):\n';
 
-    // Product context (most important)
-    prompt += `\n## PRODUCT DETAILS (only promotion posts) ##\n`;
-    prompt += `Product Name: ${product.name}\n`;
+    // Product context (only if includeProductInfo is true)
+    if (includeProductInfo) {
+      prompt += `\n## PRODUCT DETAILS (only promotion posts) ##\n`;
+      prompt += `Product Name: ${product.name}\n`;
 
     if (product.overview) {
       prompt += `Overview: ${product.overview}\n`;
@@ -319,10 +337,12 @@ Reinforce brand identity with consistent visual elements and messaging
     if (product.featuresStrengths) {
       prompt += `Key Features and Strengths:\n${product.featuresStrengths}\n`;
     }
+    }
 
-    // Persona context
-    prompt += `\n## TARGET AUDIENCE ##\n`;
-    prompt += `Persona: ${persona.personaTitle ? ` (${persona.personaTitle})` : ''}\n`;
+    // Persona context (only if includePersonaInfo is true)
+    if (includePersonaInfo) {
+      prompt += `\n## TARGET AUDIENCE ##\n`;
+      prompt += `Persona: ${persona.personaTitle ? ` (${persona.personaTitle})` : ''}\n`;
 
     // Demographics
     prompt += `\nDemographics\n`;
@@ -390,6 +410,34 @@ Reinforce brand identity with consistent visual elements and messaging
 
     if (persona.purchaseProcess) {
       prompt += `Purchase Process\n${persona.purchaseProcess}\n`;
+    }
+    }
+
+    // Creative context (only if includeCreativeInfo is true)
+    if (includeCreativeInfo && creative) {
+      prompt += `\n## CREATIVE DETAILS ##\n`;
+      prompt += `Creative Name: ${creative.name}\n`;
+      prompt += `Creative Type: ${creative.type}\n`;
+
+      // Add type-specific creative details
+      if (creative.type === 'text' && creative.textData) {
+        if (creative.textData.headline) prompt += `Headline: ${creative.textData.headline}\n`;
+        if (creative.textData.body) prompt += `Body: ${creative.textData.body}\n`;
+        if (creative.textData.callToAction) prompt += `Call to Action: ${creative.textData.callToAction}\n`;
+      } else if (creative.type === 'image' && creative.imageData) {
+        if (creative.imageData.appealFeature) prompt += `Appeal/Feature: ${creative.imageData.appealFeature}\n`;
+        if (creative.imageData.emotion) prompt += `Emotion: ${creative.imageData.emotion}\n`;
+      } else if (creative.type === 'video' && creative.videoData) {
+        if (creative.videoData.duration) prompt += `Duration: ${creative.videoData.duration}\n`;
+        if (creative.videoData.emotion) prompt += `Emotion: ${creative.videoData.emotion}\n`;
+      } else if (creative.type === 'lp' && creative.lpData) {
+        if (creative.lpData.headline) prompt += `Headline: ${creative.lpData.headline}\n`;
+      }
+    }
+
+    // If not including any context, add a note about it
+    if (!includeProductInfo && !includePersonaInfo && !includeCreativeInfo) {
+      prompt += '\n\nCreate content based solely on the user\'s prompt without additional context information.\n';
     }
 
     // Log the full prompt for debugging
@@ -554,7 +602,7 @@ Reinforce brand identity with consistent visual elements and messaging
         clipCount: createdClips.length,
         scenes: createdScenes,
         clips: createdClips,
-        contextUsed: true,
+        contextUsed: includeProductInfo || includePersonaInfo || includeCreativeInfo,
         contextSummary
       });
 
@@ -562,7 +610,6 @@ Reinforce brand identity with consistent visual elements and messaging
       console.error('Error parsing AI response:', parseError);
       throw error(500, `Failed to parse AI response: ${parseError.message}`);
     }
-
   } catch (err: any) {
     console.error('Error in auto-create story process:', err);
 

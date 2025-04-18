@@ -209,8 +209,20 @@
   }
 
   // Handler for auto-creating a story using AI
-  async function handleAutoCreateStory(event: { storyPrompt: string; aiProvider: 'gemini' | 'openai' | 'claude' }) {
-    const { storyPrompt, aiProvider } = event;
+  async function handleAutoCreateStory(event: {
+    storyPrompt: string;
+    aiProvider: 'gemini' | 'openai' | 'claude';
+    includeProductInfo: boolean;
+    includePersonaInfo: boolean;
+    includeCreativeInfo: boolean;
+  }) {
+    const {
+      storyPrompt,
+      aiProvider,
+      includeProductInfo,
+      includePersonaInfo,
+      includeCreativeInfo
+    } = event;
     if (!storyPrompt.trim()) return;
 
     isAutoCreating = true;
@@ -292,6 +304,9 @@
                 storyPrompt,
                 storyId, // Pass the current storyId if available
                 aiProvider, // Pass the selected AI provider
+                includeProductInfo, // Pass whether to include product info
+                includePersonaInfo, // Pass whether to include persona info
+                includeCreativeInfo, // Pass whether to include creative info
               }),
             },
           );
@@ -325,6 +340,9 @@
               storyId, // Pass the current storyId if available
               creativeId, // Pass the creativeId for creating a new story if needed
               aiProvider, // Pass the selected AI provider
+              includeProductInfo, // Pass whether to include product info
+              includePersonaInfo, // Pass whether to include persona info
+              includeCreativeInfo, // Pass whether to include creative info
             }),
           });
 

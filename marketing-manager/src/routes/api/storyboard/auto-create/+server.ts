@@ -8,7 +8,15 @@ import { eq } from 'drizzle-orm';
 export const POST: RequestHandler = async ({ request, fetch }) => {
   try {
     const requestData = await request.json();
-    const { storyPrompt, storyId, creativeId, aiProvider = 'gemini' } = requestData;
+    const {
+      storyPrompt,
+      storyId,
+      creativeId,
+      aiProvider = 'gemini',
+      includeProductInfo = true,
+      includePersonaInfo = true,
+      includeCreativeInfo = true
+    } = requestData;
 
     // Validate aiProvider
     if (aiProvider && !['gemini', 'openai', 'claude'].includes(aiProvider)) {
@@ -244,8 +252,12 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storyPrompt,
-          contextData: Object.keys(simplifiedContextData).length > 0 ? simplifiedContextData : undefined,
-          aiProvider // Pass the AI provider to the storyboard creator
+          contextData: (includeProductInfo || includePersonaInfo || includeCreativeInfo) &&
+                      Object.keys(simplifiedContextData).length > 0 ? simplifiedContextData : undefined,
+          aiProvider, // Pass the AI provider to the storyboard creator
+          includeProductInfo, // Pass whether to include product info
+          includePersonaInfo, // Pass whether to include persona info
+          includeCreativeInfo // Pass whether to include creative info
         })
       });
 

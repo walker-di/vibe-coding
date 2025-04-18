@@ -13,17 +13,25 @@
   // State
   let storyPrompt = $state('');
   let aiProvider = $state<'gemini' | 'openai' | 'claude'>('gemini');
+  let includeProductInfo = $state(true); // Default to including product info
+  let includePersonaInfo = $state(true); // Default to including persona info
+  let includeCreativeInfo = $state(true); // Default to including creative info
   let modalElement = $state<HTMLDivElement | null>(null);
 
   // Create event dispatcher
   const dispatch = createEventDispatcher<{
     close: void;
-    create: { storyPrompt: string; aiProvider: 'gemini' | 'openai' | 'claude' };
+    create: {
+      storyPrompt: string;
+      aiProvider: 'gemini' | 'openai' | 'claude';
+      includeProductInfo: boolean;
+      includePersonaInfo: boolean;
+      includeCreativeInfo: boolean;
+    };
   }>();
 
   function handleClose() {
     if (!isLoading) {
-      show.set(false);
       dispatch('close');
     }
   }
@@ -34,7 +42,13 @@
       return;
     }
 
-    dispatch('create', { storyPrompt, aiProvider });
+    dispatch('create', {
+      storyPrompt,
+      aiProvider,
+      includeProductInfo,
+      includePersonaInfo,
+      includeCreativeInfo
+    });
   }
 
   // Handle clicking outside the modal to close it
@@ -100,7 +114,7 @@
 
       <div class="mb-4">
         <Label for="aiProvider" class="mb-2 block">AI Provider</Label>
-        <div class="flex space-x-4">
+        <div class="flex flex-wrap gap-4">
           <label class="flex items-center space-x-2 cursor-pointer">
             <input
               type="radio"
@@ -140,6 +154,56 @@
         </div>
         <p class="text-xs text-gray-500 mt-1">
           Select which AI provider to use for generating the story content.
+        </p>
+      </div>
+
+      <div class="mb-4">
+        <Label class="mb-2 block">Context Information</Label>
+        <div class="space-y-2 ml-1">
+          <div class="flex items-center justify-between">
+            <label for="includeProductInfo" class="text-sm flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="includeProductInfo"
+                checked={includeProductInfo}
+                onchange={() => includeProductInfo = !includeProductInfo}
+                disabled={isLoading}
+                class="h-4 w-4 text-purple-600 rounded"
+              />
+              <span>Include Product Information</span>
+            </label>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label for="includePersonaInfo" class="text-sm flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="includePersonaInfo"
+                checked={includePersonaInfo}
+                onchange={() => includePersonaInfo = !includePersonaInfo}
+                disabled={isLoading}
+                class="h-4 w-4 text-purple-600 rounded"
+              />
+              <span>Include Persona/Target Audience Information</span>
+            </label>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label for="includeCreativeInfo" class="text-sm flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="includeCreativeInfo"
+                checked={includeCreativeInfo}
+                onchange={() => includeCreativeInfo = !includeCreativeInfo}
+                disabled={isLoading}
+                class="h-4 w-4 text-purple-600 rounded"
+              />
+              <span>Include Creative Information</span>
+            </label>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">
+          Select which context information to include in the AI prompt.
         </p>
       </div>
 
