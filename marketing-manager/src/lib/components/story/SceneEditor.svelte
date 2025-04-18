@@ -209,7 +209,7 @@
   }
 
   // Handler for auto-creating a story using AI
-  async function handleAutoCreateStory(event: { storyPrompt: string; aiProvider: 'gemini' | 'openai' }) {
+  async function handleAutoCreateStory(event: { storyPrompt: string; aiProvider: 'gemini' | 'openai' | 'claude' }) {
     const { storyPrompt, aiProvider } = event;
     if (!storyPrompt.trim()) return;
 

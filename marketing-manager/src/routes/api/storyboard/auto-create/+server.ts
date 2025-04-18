@@ -10,6 +10,11 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     const requestData = await request.json();
     const { storyPrompt, storyId, creativeId, aiProvider = 'gemini' } = requestData;
 
+    // Validate aiProvider
+    if (aiProvider && !['gemini', 'openai', 'claude'].includes(aiProvider)) {
+      throw error(400, `Invalid AI provider: ${aiProvider}. Supported providers are: gemini, openai, claude`);
+    }
+
     if (!storyPrompt) {
       throw error(400, 'Missing required parameter: storyPrompt');
     }

@@ -12,13 +12,13 @@
 
   // State
   let storyPrompt = $state('');
-  let aiProvider = $state<'gemini' | 'openai'>('gemini');
+  let aiProvider = $state<'gemini' | 'openai' | 'claude'>('gemini');
   let modalElement = $state<HTMLDivElement | null>(null);
 
   // Create event dispatcher
   const dispatch = createEventDispatcher<{
     close: void;
-    create: { storyPrompt: string; aiProvider: 'gemini' | 'openai' };
+    create: { storyPrompt: string; aiProvider: 'gemini' | 'openai' | 'claude' };
   }>();
 
   function handleClose() {
@@ -124,6 +124,18 @@
               class="h-4 w-4 text-purple-600"
             />
             <span>OpenAI</span>
+          </label>
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="aiProvider"
+              value="claude"
+              checked={aiProvider === 'claude'}
+              onchange={() => aiProvider = 'claude'}
+              disabled={isLoading}
+              class="h-4 w-4 text-purple-600"
+            />
+            <span>Claude</span>
           </label>
         </div>
         <p class="text-xs text-gray-500 mt-1">

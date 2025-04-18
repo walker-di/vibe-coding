@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { env } from '$env/dynamic/private';
 
 /**
@@ -71,13 +72,15 @@ function convertGeminiSchemaToOpenAI(geminiSchema: any): any {
 // API Keys from environment variables
 const GEMINI_API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 // Initialize clients only if keys exist
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
 
 // Provider types
-export type AIProvider = 'gemini' | 'openai';
+export type AIProvider = 'gemini' | 'openai' | 'claude';
 
 // Error handling for missing API keys
 export function checkProviderAvailability(provider: AIProvider): void {
@@ -87,6 +90,10 @@ export function checkProviderAvailability(provider: AIProvider): void {
 
   if (provider === 'openai' && !OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY environment variable is not set.');
+  }
+
+  if (provider === 'claude' && !ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY environment variable is not set.');
   }
 }
 
@@ -116,6 +123,8 @@ export async function generateContent(
     return generateWithGemini(systemPrompt, userPrompt, schema);
   } else if (provider === 'openai') {
     return generateWithOpenAI(systemPrompt, userPrompt, schema);
+  } else if (provider === 'claude') {
+    return generateWithClaude(systemPrompt, userPrompt, schema);
   } else {
     throw new Error(`Unsupported AI provider: ${provider}`);
   }
@@ -211,4 +220,57 @@ async function generateWithOpenAI(
     throw error;
   }
 
+}
+
+/**
+ * Generate content using Claude (Anthropic)
+ */
+async function generateWithClaude(
+  systemPrompt: string,
+  userPrompt: string,
+  schema: any
+): Promise<AIResponse> {
+  if (!anthropic) {
+    throw new Error('Anthropic client not initialized. Check API key.');
+  }
+
+  try {
+    console.log('Generating content with Claude...');
+
+    // Convert the schema to a JSON string for inclusion in the system prompt
+    const schemaString = JSON.stringify(convertGeminiSchemaToOpenAI(schema), null, 2);
+
+    // Create a combined prompt that includes the schema
+    const combinedSystemPrompt = `${systemPrompt}\n\nYour response must be a valid JSON object that follows this schema:\n${schemaString}\n\nDo not include any explanations, only provide a RFC8259 compliant JSON response following the schema.`;
+
+    const response = await anthropic.messages.create({
+      model: "claude-3-sonnet-20240229",
+      max_tokens: 4096,
+      system: combinedSystemPrompt,
+      messages: [
+        { role: "user", content: userPrompt }
+      ],
+    });
+
+    // Extract the text content from the response
+    const textContent = response.content
+      .filter(item => item.type === 'text')
+      .map(item => item.text)
+      .join('');
+
+    return { text: textContent };
+  } catch (error: any) {
+    console.error('Claude API error:', error);
+
+    // Provide more specific error messages
+    if (error.status === 401) {
+      throw new Error('Claude authentication error. Please check your API key.');
+    } else if (error.status === 429) {
+      throw new Error('Claude rate limit exceeded. Please try again later.');
+    } else if (error.status === 400) {
+      throw new Error(`Claude request error: ${error.message}. Please check your inputs.`);
+    }
+
+    throw error;
+  }
 }
