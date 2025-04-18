@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 export const POST: RequestHandler = async ({ request, fetch }) => {
   try {
     const requestData = await request.json();
-    const { storyPrompt, storyId, creativeId } = requestData;
+    const { storyPrompt, storyId, creativeId, aiProvider = 'gemini' } = requestData;
 
     if (!storyPrompt) {
       throw error(400, 'Missing required parameter: storyPrompt');
@@ -239,7 +239,8 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storyPrompt,
-          contextData: Object.keys(simplifiedContextData).length > 0 ? simplifiedContextData : undefined
+          contextData: Object.keys(simplifiedContextData).length > 0 ? simplifiedContextData : undefined,
+          aiProvider // Pass the AI provider to the storyboard creator
         })
       });
 

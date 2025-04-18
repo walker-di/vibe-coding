@@ -3,6 +3,7 @@
   import CanvasEditor from "$lib/components/story/CanvasEditor.svelte";
   import ImageUploadModal from "$lib/components/story/ImageUploadModal.svelte";
   import VoiceSelector from "$lib/components/story/VoiceSelector.svelte";
+  import AutoCreateModal from "$lib/components/story/AutoCreateModal.svelte";
   import type { SceneWithRelations, Clip } from "$lib/types/story.types";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -208,9 +209,9 @@
   }
 
   // Handler for auto-creating a story using AI
-  async function handleAutoCreateStory() {
-    storyPrompt.trim();
-    if (!storyPrompt) return;
+  async function handleAutoCreateStory(event: { storyPrompt: string; aiProvider: 'gemini' | 'openai' }) {
+    const { storyPrompt, aiProvider } = event;
+    if (!storyPrompt.trim()) return;
 
     isAutoCreating = true;
 
@@ -290,6 +291,7 @@
               body: JSON.stringify({
                 storyPrompt,
                 storyId, // Pass the current storyId if available
+                aiProvider, // Pass the selected AI provider
               }),
             },
           );
@@ -322,6 +324,7 @@
               storyPrompt,
               storyId, // Pass the current storyId if available
               creativeId, // Pass the creativeId for creating a new story if needed
+              aiProvider, // Pass the selected AI provider
             }),
           });
 
@@ -2048,254 +2051,9 @@
 />
 
 <!-- Auto-Create Story Modal -->
-{#if showAutoCreateModal}
-  <div
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-  >
-    <div class="bg-white p-6 rounded-lg shadow-lg w-[500px] max-w-[90vw]">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold flex items-center">
-          <Sparkles class="h-5 w-5 mr-2 text-purple-500" />
-          Auto-Create Story
-        </h2>
-        <button
-          class="text-gray-500 hover:text-gray-700"
-          onclick={() => {
-            if (!isAutoCreating) {
-              showAutoCreateModal = false;
-            }
-          }}
-          disabled={isAutoCreating}
-          type="button"
-        >
-          &times;
-        </button>
-      </div>
-
-      <div class="mb-4">
-        {#if isLoadingContext}
-          <div class="flex items-center justify-center py-4">
-            <div
-              class="animate-spin h-5 w-5 border-2 border-purple-500 border-t-transparent rounded-full mr-2"
-            ></div>
-            <span>Loading context information...</span>
-          </div>
-        {:else}
-          {#if creativeContext}
-            <div
-              class="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200 overflow-auto max-h-60"
-            >
-              <h3 class="text-sm font-medium mb-2">Context Information</h3>
-
-              <!-- Product Information -->
-              {#if creativeContext.persona?.product}
-                <div class="mb-2">
-                  <h4
-                    class="text-xs font-semibold text-blue-700 border-b border-blue-100 pb-1 mb-1"
-                  >
-                    Product
-                  </h4>
-                  <div class="text-xs space-y-1 pl-2">
-                    <p>
-                      <span class="font-semibold">Name:</span>
-                      {creativeContext.persona.product.name}
-                    </p>
-                    {#if creativeContext.persona.product.overview}
-                      <p>
-                        <span class="font-semibold">Overview:</span>
-                        {creativeContext.persona.product.overview}
-                      </p>
-                    {/if}
-                    {#if creativeContext.persona.product.featuresStrengths}
-                      <p>
-                        <span class="font-semibold">Features:</span>
-                        {creativeContext.persona.product.featuresStrengths}
-                      </p>
-                    {/if}
-                  </div>
-                </div>
-              {/if}
-
-              <!-- Persona Information -->
-              {#if creativeContext.persona}
-                <div class="mb-2">
-                  <h4
-                    class="text-xs font-semibold text-green-700 border-b border-green-100 pb-1 mb-1"
-                  >
-                    Target Audience
-                  </h4>
-                  <div class="text-xs space-y-1 pl-2">
-                    <p>
-                      <span class="font-semibold">Persona:</span>
-                      {creativeContext.persona.name}
-                      {#if creativeContext.persona.personaTitle}
-                        ({creativeContext.persona.personaTitle})
-                      {/if}
-                    </p>
-                    {#if creativeContext.persona.needsPainPoints}
-                      <p>
-                        <span class="font-semibold">Pain Points:</span>
-                        {creativeContext.persona.needsPainPoints}
-                      </p>
-                    {/if}
-                    {#if creativeContext.persona.goalsExpectations}
-                      <p>
-                        <span class="font-semibold">Goals:</span>
-                        {creativeContext.persona.goalsExpectations}
-                      </p>
-                    {/if}
-                  </div>
-                </div>
-              {/if}
-
-              <!-- Creative Information -->
-              <div class="mb-2">
-                <h4
-                  class="text-xs font-semibold text-purple-700 border-b border-purple-100 pb-1 mb-1"
-                >
-                  Creative
-                </h4>
-                <div class="text-xs space-y-1 pl-2">
-                  <p>
-                    <span class="font-semibold">Name:</span>
-                    {creativeContext.name}
-                  </p>
-                  <p>
-                    <span class="font-semibold">Type:</span>
-                    {creativeContext.type}
-                  </p>
-
-                  <!-- Type-specific information -->
-                  {#if creativeContext.type === "text" && creativeContext.textData}
-                    <p>
-                      <span class="font-semibold">Headline:</span>
-                      {creativeContext.textData.headline || "N/A"}
-                    </p>
-                    {#if creativeContext.textData.body}
-                      <p>
-                        <span class="font-semibold">Body:</span>
-                        {creativeContext.textData.body}
-                      </p>
-                    {/if}
-                    {#if creativeContext.textData.callToAction}
-                      <p>
-                        <span class="font-semibold">CTA:</span>
-                        {creativeContext.textData.callToAction}
-                      </p>
-                    {/if}
-                  {:else if creativeContext.type === "image" && creativeContext.imageData}
-                    {#if creativeContext.imageData.appealFeature}
-                      <p>
-                        <span class="font-semibold">Appeal:</span>
-                        {creativeContext.imageData.appealFeature}
-                      </p>
-                    {/if}
-                    {#if creativeContext.imageData.emotion}
-                      <p>
-                        <span class="font-semibold">Emotion:</span>
-                        {creativeContext.imageData.emotion}
-                      </p>
-                    {/if}
-                  {:else if creativeContext.type === "video" && creativeContext.videoData}
-                    {#if creativeContext.videoData.duration}
-                      <p>
-                        <span class="font-semibold">Duration:</span>
-                        {creativeContext.videoData.duration}
-                      </p>
-                    {/if}
-                    {#if creativeContext.videoData.emotion}
-                      <p>
-                        <span class="font-semibold">Emotion:</span>
-                        {creativeContext.videoData.emotion}
-                      </p>
-                    {/if}
-                  {:else if creativeContext.type === "lp" && creativeContext.lpData}
-                    {#if creativeContext.lpData.headline}
-                      <p>
-                        <span class="font-semibold">Headline:</span>
-                        {creativeContext.lpData.headline}
-                      </p>
-                    {/if}
-                  {/if}
-                </div>
-              </div>
-            </div>
-          {/if}
-
-          <label for="storyPrompt" class="mb-2 block font-medium"
-            >Story Prompt</label
-          >
-          <Textarea
-            id="storyPrompt"
-            bind:value={storyPrompt}
-            placeholder="Describe the story you want to create..."
-            rows={6}
-            disabled={isAutoCreating}
-            class="w-full"
-          />
-          <div class="text-xs text-gray-500 mt-2 space-y-2">
-            <p>
-              Provide a detailed description of the story you want to create.
-              The AI will generate multiple clips based on your prompt and the
-              context information above.
-            </p>
-            <div class="p-2 bg-blue-50 rounded border border-blue-100">
-              <p class="font-medium text-blue-700 mb-1">
-                Tips for excellent content:
-              </p>
-              <ul class="list-disc pl-4 space-y-1">
-                <li>
-                  Be specific about the tone (professional, friendly,
-                  authoritative)
-                </li>
-                <li>Mention key benefits or features you want to highlight</li>
-                <li>
-                  Describe the visual style you prefer (modern, classic,
-                  minimalist)
-                </li>
-                <li>
-                  Include any specific call-to-action you want to emphasize
-                </li>
-                <li>
-                  Specify if you want a particular narrative structure
-                  (problem-solution, testimonial, etc.)
-                </li>
-              </ul>
-            </div>
-          </div>
-        {/if}
-      </div>
-
-      <div class="flex justify-end space-x-2">
-        <button
-          class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          onclick={() => {
-            if (!isAutoCreating) {
-              showAutoCreateModal = false;
-            }
-          }}
-          disabled={isAutoCreating}
-          type="button"
-        >
-          Cancel
-        </button>
-        <button
-          class="px-4 py-2 rounded-md bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 flex items-center justify-center"
-          onclick={handleAutoCreateStory}
-          disabled={isAutoCreating}
-          type="button"
-        >
-          {#if isAutoCreating}
-            <div
-              class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"
-            ></div>
-            Generating...
-          {:else}
-            <Sparkles class="h-4 w-4 mr-2" />
-            Create Story
-          {/if}
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}
+<AutoCreateModal
+  show={showAutoCreateModal}
+  isLoading={isAutoCreating}
+  on:close={() => showAutoCreateModal = false}
+  on:create={e => handleAutoCreateStory(e.detail)}
+/>

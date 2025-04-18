@@ -62,6 +62,7 @@
     "image-size": "^2.0.2",
     "ky": "^1.8.1",
     "microsoft-cognitiveservices-speech-sdk": "^1.43.1",
+    "openai": "^4.95.0",
     "postcss": "^8.5.3",
     "replicate": "^1.0.1",
     "sqlite3": "^5.1.7",

@@ -12,12 +12,13 @@
 
   // State
   let storyPrompt = $state('');
-  let modalElement: HTMLDivElement;
+  let aiProvider = $state<'gemini' | 'openai'>('gemini');
+  let modalElement = $state<HTMLDivElement | null>(null);
 
   // Create event dispatcher
   const dispatch = createEventDispatcher<{
     close: void;
-    create: { storyPrompt: string };
+    create: { storyPrompt: string; aiProvider: 'gemini' | 'openai' };
   }>();
 
   function handleClose() {
@@ -33,7 +34,7 @@
       return;
     }
 
-    dispatch('create', { storyPrompt });
+    dispatch('create', { storyPrompt, aiProvider });
   }
 
   // Handle clicking outside the modal to close it
@@ -74,7 +75,7 @@
         </h2>
         <button
           class="text-gray-500 hover:text-gray-700"
-          on:click={handleClose}
+          onclick={handleClose}
           disabled={isLoading}
           type="button"
         >
@@ -97,10 +98,43 @@
         </p>
       </div>
 
+      <div class="mb-4">
+        <Label for="aiProvider" class="mb-2 block">AI Provider</Label>
+        <div class="flex space-x-4">
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="aiProvider"
+              value="gemini"
+              checked={aiProvider === 'gemini'}
+              onchange={() => aiProvider = 'gemini'}
+              disabled={isLoading}
+              class="h-4 w-4 text-purple-600"
+            />
+            <span>Gemini</span>
+          </label>
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <input
+              type="radio"
+              name="aiProvider"
+              value="openai"
+              checked={aiProvider === 'openai'}
+              onchange={() => aiProvider = 'openai'}
+              disabled={isLoading}
+              class="h-4 w-4 text-purple-600"
+            />
+            <span>OpenAI</span>
+          </label>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">
+          Select which AI provider to use for generating the story content.
+        </p>
+      </div>
+
       <div class="flex justify-end space-x-2">
         <button
           class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          on:click={handleClose}
+          onclick={handleClose}
           disabled={isLoading}
           type="button"
         >
@@ -108,7 +142,7 @@
         </button>
         <button
           class="px-4 py-2 rounded-md bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 flex items-center justify-center"
-          on:click={handleSubmit}
+          onclick={handleSubmit}
           disabled={isLoading}
           type="button"
         >

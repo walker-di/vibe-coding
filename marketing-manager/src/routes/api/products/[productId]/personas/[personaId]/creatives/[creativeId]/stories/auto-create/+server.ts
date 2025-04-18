@@ -1,18 +1,14 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateContent, type AIProvider } from '$lib/server/aiProviderService';
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler, RequestEvent } from './$types';
 import { db } from '$lib/server/db';
 import { products, personas, creatives, scenes, clips, stories } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
-// Get the API key from environment variables
-const GEMINI_API_KEY = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-
-if (!GEMINI_API_KEY) {
-  console.error('GEMINI_API_KEY or GOOGLE_API_KEY environment variable is not set.');
-}
+// No need to check API keys here as it's handled in the aiProviderService
 
 // Schema for the storyboard with scenes and clips
+// Using uppercase types for Gemini compatibility, our converter will handle OpenAI's lowercase requirement
 const storyboardSchema = {
   type: 'OBJECT',
   properties: {
@@ -47,11 +43,7 @@ const storyboardSchema = {
 };
 
 export const POST: RequestHandler = async ({ request, params }: RequestEvent) => {
-  // Check if the API key is available
-  if (!GEMINI_API_KEY) {
-    console.error('API key is missing. Check your environment variables.');
-    throw error(500, 'Server configuration error: API key missing. Please set GOOGLE_API_KEY or GEMINI_API_KEY in your environment variables.');
-  }
+  // API key availability is checked in the aiProviderService
 
   const productId = parseInt(params.productId || '', 10);
   const personaId = parseInt(params.personaId || '', 10);
@@ -63,11 +55,17 @@ export const POST: RequestHandler = async ({ request, params }: RequestEvent) =>
 
   let storyPrompt: string;
   let storyId: number | undefined;
+  let aiProvider: AIProvider = 'gemini'; // Default to Gemini
 
   try {
     const body = await request.json();
     storyPrompt = body.storyPrompt;
     storyId = body.storyId;
+
+    // Get the AI provider from the request body, default to 'gemini' if not provided
+    if (body.aiProvider && (body.aiProvider === 'gemini' || body.aiProvider === 'openai')) {
+      aiProvider = body.aiProvider;
+    }
 
     if (!storyPrompt || typeof storyPrompt !== 'string') {
       throw new Error('Invalid or missing storyPrompt.');
@@ -169,18 +167,7 @@ export const POST: RequestHandler = async ({ request, params }: RequestEvent) =>
       console.log(`Created new story with ID: ${storyRecord.id}`);
     }
 
-    // Initialize Gemini API
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash-preview-04-17',
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.9,
-        // maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-        responseSchema: storyboardSchema as any // Type casting needed due to schema type mismatch
-      }
-    });
+    // We'll use the aiProviderService instead of initializing Gemini directly
 
     let targetPrompt = `\n## Channel info ##\n`;
     // Creative context
@@ -406,27 +393,28 @@ Reinforce brand identity with consistent visual elements and messaging
     }
 
     // Log the full prompt for debugging
-    console.log('FULL PROMPT TO GEMINI:\n' + prompt);
+    console.log(`FULL PROMPT TO ${aiProvider.toUpperCase()}:\n` + prompt);
 
-    // Generate content with Gemini
-    console.log('Sending prompt to Gemini...');
+    // Generate content with the selected AI provider
+    console.log(`Sending prompt to ${aiProvider}...`);
     let text;
     try {
-      const result = await model.generateContent({
-        systemInstruction: prompt,
-        contents: [{ role: "user", parts: [{ text: storyPrompt }] }]
-      });
-      const response = result.response;
-      text = response.text();
-      console.log('Received response from Gemini');
-    } catch (geminiError: any) {
-      console.error('Error generating content with Gemini:', geminiError);
-      throw error(500, `Failed to generate content with Gemini: ${geminiError.message || 'Unknown error'}`);
+      const result = await generateContent(
+        aiProvider,
+        prompt,
+        storyPrompt,
+        storyboardSchema
+      );
+      text = result.text;
+      console.log(`Received response from ${aiProvider}`);
+    } catch (aiError: any) {
+      console.error(`Error generating content with ${aiProvider}:`, aiError);
+      throw error(500, `Failed to generate content with ${aiProvider}: ${aiError.message || 'Unknown error'}`);
     }
 
     try {
       if (!text) {
-        throw new Error('No text received from Gemini');
+        throw new Error(`No text received from ${aiProvider}`);
       }
       const storyboardData = JSON.parse(text);
       console.log('Generated storyboard data:', storyboardData);
