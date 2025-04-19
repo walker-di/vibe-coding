@@ -10,7 +10,7 @@ This represents the main paths a user can take within the application. It's base
 *   **Authentication Flow:**
     *   Logout/Home
     *   Login Screen
-    *   Google Authentication (Initiation -> Authorization)
+    *   Lucia V3 + Drizzle 
     *   Acceptance/Consent Check
     *   Creator Page (Dashboard)
 
@@ -53,9 +53,9 @@ This represents the main paths a user can take within the application. It's base
 Based on the flows, here's a breakdown of the required features:
 
 *   **User Authentication:**
-    *   Google Sign-in/Sign-up.
+    *   Lucia + Drizzle Sign-in/Sign-up.
     *   User session management.
-    *   User profile (basic - linked to Google account).
+    *   User profile (jwt).
 
 *   **Energy Capture (EOT Creation):**
     *   Access device camera and microphone.
@@ -111,8 +111,7 @@ Based on the flows, here's a breakdown of the required features:
 These are potential RESTful API endpoints the mobile app would interact with.
 
 *   **Authentication:**
-    *   `GET /api/auth/google` - Initiate Google OAuth flow.
-    *   `GET /api/auth/google/callback` - Google OAuth callback endpoint.
+    *   `GET /api/auth` - Initiate Lucia Auth flow.
     *   `GET /api/users/me` - Get details of the currently authenticated user.
 
 *   **EOTs:**
@@ -154,7 +153,6 @@ Using a relational database model (e.g., PostgreSQL, MySQL).
 -- Users Table
 CREATE TABLE users (
     id UUID PRIMARY KEY, -- Unique internal ID
-    google_id VARCHAR(255) UNIQUE, -- Google user ID for auth linking
     email VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -245,8 +243,8 @@ CREATE TABLE sales (
 
 *   **Mobile App:** React Native or Flutter for cross-platform development, or native Kotlin (Android) / Swift (iOS) for performance/platform-specific features. React Native/Flutter are often faster for initial development.
 *   **Backend:** Node.js (Express/NestJS), Python (Django/Flask), Ruby on Rails, or similar web framework. Choose based on team expertise. Node.js is often chosen with React Native.
-*   **Database:** PostgreSQL or MySQL are solid choices.
-*   **File Storage:** AWS S3, Google Cloud Storage, or similar object storage for video and image files. For NFT assets/metadata, integrate with IPFS/Arweave via a service or library.
+*   **Database:** SQLite
+*   **File Storage:** Local Disk Storage.
 *   **AI Art API:** Integrate with a third-party service like OpenAI (DALL-E), Stability AI, Midjourney API (if available), or similar.
 *   **Payment Gateway:** Integrate with a local provider supporting PIX (e.g., Mercado Pago, PagSeguro, or direct PIX API integration with a bank or financial institution).
 *   **Blockchain Interaction:** Use libraries like Ethers.js (Ethereum/EVM chains), Web3.js, Flow-js, Solana-web3.js, etc. Use services like Infura, Alchemy, or Pocket Network for node access.
@@ -256,7 +254,7 @@ CREATE TABLE sales (
 
 1.  **Phase 1: Core Capture & Management**
     *   Setup project infrastructure (Backend, DB, File Storage).
-    *   Implement Google Authentication.
+    *   Implement Lucia + Drizzle Authentication.
     *   Develop Energy Capture (Video recording, metadata input, saving EOTs).
     *   Implement EOT Listing, Viewing (Replay), Editing, Deleting.
     *   Basic User Profile view.
@@ -287,7 +285,6 @@ CREATE TABLE sales (
     *   Implement robust security measures (API, database, wallet management).
     *   Performance optimization (video processing, API calls).
     *   Thorough testing (unit, integration, end-to-end).
-    *   Prepare for deployment to app stores (Apple App Store, Google Play Store).
     *   Set up monitoring and logging.
 
 This plan provides a solid foundation. Each section (API Endpoints, Database Schema) will require detailed design within the chosen technical stack, and the Web3 integration specifically needs careful consideration regarding key management, gas fees, and user experience complexity. Good luck!
