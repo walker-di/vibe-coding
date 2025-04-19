@@ -29,7 +29,10 @@
 		"vite": "^6.2.5"
 	},
 	"dependencies": {
+		"@types/three": "^0.175.0",
 		"better-sqlite3": "^11.8.0",
-		"drizzle-orm": "^0.40.0"
+		"cannon-es": "^0.20.0",
+		"drizzle-orm": "^0.40.0",
+		"three": "^0.175.0"
 	}
 }
