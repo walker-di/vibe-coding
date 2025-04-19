@@ -52,7 +52,6 @@ export const eotsTable = sqliteTable('eots', {
 		.$onUpdate(() => Math.floor(Date.now() / 1000)) // Update timestamp on modification
 });
 
-// --- Generated Art Table ---
 export const generatedArtTable = sqliteTable('generated_art', {
 	id: text('id')
 		.primaryKey()
@@ -70,15 +69,13 @@ export const generatedArtTable = sqliteTable('generated_art', {
 		.$defaultFn(() => Math.floor(Date.now() / 1000)) // Unix timestamp (seconds)
 });
 
-// --- NFTs Table ---
-// Represents a unique NFT asset, linked to the blockchain
 export const nftsTable = sqliteTable('nfts', {
 	id: text('id')
 		.primaryKey()
 		.$defaultFn(() => createId()), // Unique internal ID
-	userId: text('user_id')
+	userId: text('user_id') // Current owner - Nullable if sold/transferred outside platform? Let's keep NOT NULL for now.
 		.notNull()
-		.references(() => userTable.id, { onDelete: 'cascade' }), // Current owner
+		.references(() => userTable.id, { onDelete: 'cascade' }),
 	generatedArtId: text('generated_art_id')
 		.references(() => generatedArtTable.id, { onDelete: 'set null' }), // Link to the generated art
 	eotId: text('eot_id').references(() => eotsTable.id, { onDelete: 'set null' }), // Optional direct link to EOT
@@ -100,6 +97,35 @@ export const nftsTable = sqliteTable('nfts', {
 		.$onUpdate(() => Math.floor(Date.now() / 1000))
 });
 
+// --- Sales Table ---
+// Tracks sales transactions for NFTs
+export const salesTable = sqliteTable('sales', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => createId()), // Unique internal ID for the sale
+	nftId: text('nft_id')
+		.notNull()
+		.references(() => nftsTable.id, { onDelete: 'restrict' }), // The NFT being sold
+	sellerId: text('seller_id')
+		.notNull()
+		.references(() => userTable.id, { onDelete: 'restrict' }), // The user selling the NFT
+	buyerEmail: text('buyer_email'), // Email provided by the buyer
+	price: real('price').notNull(), // Sale price
+	currency: text('currency').notNull(), // Sale currency
+	paymentMethod: text('payment_method'), // e.g., 'PIX'
+	paymentStatus: text('payment_status').default('pending'), // e.g., 'pending', 'completed', 'failed'
+	paymentTransactionId: text('payment_transaction_id'), // ID from the payment gateway
+	deliveryStatus: text('delivery_status').default('pending'), // e.g., 'pending', 'delivered', 'failed'
+	deliveredAt: integer('delivered_at'), // Timestamp of delivery (Unix timestamp)
+	createdAt: integer('created_at')
+		.notNull()
+		.$defaultFn(() => Math.floor(Date.now() / 1000)), // Unix timestamp (seconds)
+	updatedAt: integer('updated_at')
+		.notNull()
+		.$defaultFn(() => Math.floor(Date.now() / 1000)) // Unix timestamp (seconds)
+		.$onUpdate(() => Math.floor(Date.now() / 1000))
+});
+
 
 // --- Relations ---
 
@@ -108,7 +134,8 @@ export const userRelations = relations(userTable, ({ many }) => ({
 	keys: many(keyTable),
 	eots: many(eotsTable),
 	generatedArt: many(generatedArtTable),
-	nfts: many(nftsTable) // Add relation from user to NFTs
+	nftsOwned: many(nftsTable, { relationName: 'owner' }), // NFTs currently owned by the user
+	salesMade: many(salesTable, { relationName: 'seller' }) // Sales initiated by the user
 }));
 
 export const sessionRelations = relations(sessionTable, ({ one }) => ({
@@ -131,10 +158,10 @@ export const eotsRelations = relations(eotsTable, ({ one, many }) => ({
 		references: [userTable.id]
 	}),
 	generatedArt: many(generatedArtTable),
-	nfts: many(nftsTable) // Add relation from EOT to NFTs
+	nfts: many(nftsTable)
 }));
 
-export const generatedArtRelations = relations(generatedArtTable, ({ one, many }) => ({ // Update relation
+export const generatedArtRelations = relations(generatedArtTable, ({ one, many }) => ({
 	user: one(userTable, {
 		fields: [generatedArtTable.userId],
 		references: [userTable.id]
@@ -143,22 +170,36 @@ export const generatedArtRelations = relations(generatedArtTable, ({ one, many }
 		fields: [generatedArtTable.eotId],
 		references: [eotsTable.id]
 	}),
-	nfts: many(nftsTable) // Add relation from Generated Art to NFTs
+	nfts: many(nftsTable)
 }));
 
-// Add relations for the new nftsTable
-export const nftsRelations = relations(nftsTable, ({ one }) => ({
-	user: one(userTable, { // Owner
+export const nftsRelations = relations(nftsTable, ({ one, many }) => ({ // Updated relation
+	owner: one(userTable, { // Renamed for clarity
 		fields: [nftsTable.userId],
-		references: [userTable.id]
+		references: [userTable.id],
+		relationName: 'owner'
 	}),
-	generatedArt: one(generatedArtTable, { // Source Art
+	generatedArt: one(generatedArtTable, {
 		fields: [nftsTable.generatedArtId],
 		references: [generatedArtTable.id]
 	}),
-	eot: one(eotsTable, { // Optional Source EOT
+	eot: one(eotsTable, {
 		fields: [nftsTable.eotId],
 		references: [eotsTable.id]
+	}),
+	sales: many(salesTable) // An NFT can be involved in multiple sale attempts/records
+}));
+
+// Add relations for the new salesTable
+export const salesRelations = relations(salesTable, ({ one }) => ({
+	nft: one(nftsTable, {
+		fields: [salesTable.nftId],
+		references: [nftsTable.id]
+	}),
+	seller: one(userTable, {
+		fields: [salesTable.sellerId],
+		references: [userTable.id],
+		relationName: 'seller' // Explicit relation name
 	})
-	// Add relation to Sales table later
+	// Note: Buyer is identified by email, not a direct user relation here
 }));
