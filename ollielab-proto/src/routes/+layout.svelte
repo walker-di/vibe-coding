@@ -10,9 +10,10 @@
 	<nav>
 		<a href="/">Home</a>
 		{#if data.user}
-			<span>Welcome, {data.user.email}!</span>
+			<a href="/eots">My EOTs</a> <!-- Add link to EOTs page -->
+			<span style="margin-left: auto;">Welcome, {data.user.email}!</span> <!-- Move welcome message -->
 			<!-- Logout Form -->
-			<form method="POST" action="/logout" style="display: inline;">
+			<form method="POST" action="/logout" style="display: inline; margin-left: 1rem;">
 				<button type="submit">Logout</button>
 			</form>
 		{:else}
