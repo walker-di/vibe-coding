@@ -83,5 +83,44 @@ export const actions: Actions = {
 				currency
 			});
 		}
+	},
+
+	// Action to unlist an NFT
+	unlist: async ({ request, locals, fetch }) => {
+		if (!locals.user) {
+			return fail(401, { error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const nftId = formData.get('nftId');
+
+		if (!nftId || typeof nftId !== 'string') {
+			return fail(400, { error: 'Missing NFT ID' });
+		}
+
+		try {
+			const response = await fetch(`/api/nfts/${nftId}/unlist`, {
+				method: 'POST' // No body needed for unlist
+			});
+
+			const result = await response.json();
+
+			if (!response.ok) {
+				return fail(response.status, {
+					error: result.error || 'Failed to unlist NFT',
+					nftId // Pass nftId back for error display context
+				});
+			}
+
+			// Success - the page will reload via invalidate/load function
+			return { success: true, unlistedNft: result };
+
+		} catch (e) {
+			console.error(`Error calling unlist API for NFT ${nftId}:`, e);
+			return fail(500, {
+				error: 'Internal server error calling API',
+				nftId
+			});
+		}
 	}
 };

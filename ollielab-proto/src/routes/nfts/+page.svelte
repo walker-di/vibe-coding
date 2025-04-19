@@ -1,3 +1,4 @@
+
 <script lang="ts">
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
@@ -46,7 +47,13 @@
 				{#if nft.status === 'listed'}
 					<p><strong>Price:</strong> {nft.price} {nft.currency}</p>
 					<p><em>Listed at: {nft.listedForSaleAt ? new Date(nft.listedForSaleAt * 1000).toLocaleString() : 'N/A'}</em></p>
-					<!-- TODO: Add Unlist button/form -->
+					<form method="POST" action="?/unlist" use:enhance style="display: inline; margin-left: 1rem;">
+						<input type="hidden" name="nftId" value={nft.id} />
+						<button type="submit" style="background-color: #ffc107; color: black;">Unlist</button>
+						{#if listErrors[nft.id]} <!-- Reuse error display logic -->
+							<p style="color: red; display: inline; margin-left: 10px;">Error: {listErrors[nft.id]}</p>
+						{/if}
+					</form>
 				{:else if nft.status === 'minted'}
 					<form method="POST" action="?/list" use:enhance style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed #eee;">
 						<h4>List for Sale:</h4>

@@ -30,11 +30,11 @@
 
 	onMount(() => {
 		if (artRecord?.status === 'pending') {
+			const artId = artRecord.id; // Capture ID for the interval closure
 			intervalId = setInterval(async () => {
-				// Re-run the load function for this page
-				await invalidate();
-				// Need to update local state if invalidate doesn't trigger $props update directly in Svelte 5?
-				// Let's assume for now invalidate() + load() updates `data` which updates `$props`
+				// Re-run the load function by invalidating the specific API endpoint dependency
+				await invalidate(`/api/art/${artId}`);
+				// In Svelte 5, changes to `data` passed via $props should automatically update `$state` variables derived from it.
 			}, 5000); // Poll every 5 seconds
 		}
 		// Cleanup interval on component destroy
