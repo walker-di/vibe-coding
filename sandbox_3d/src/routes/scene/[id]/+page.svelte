@@ -3,7 +3,8 @@
 	import { onDestroy, onMount } from 'svelte';
 	import * as THREE from 'three';
 	import * as CANNON from 'cannon-es';
-	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'; // Import GLTFLoader
+	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+    import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'; // Import TransformControls
 	import type {
         SceneObjectJsonData, UploadedModel, SceneData, BaseObjectData, PhysicalObjectData,
         SceneObjectRecord, SceneObjectType // Import missing types
@@ -28,6 +29,8 @@
     let selectedObject = $state<{ mesh: THREE.Object3D, body?: CANNON.Body, record: SceneObjectRecord } | null>(null);
     // Use a reactive statement ($derived) for easier binding in the properties panel
     let selectedObjData = $derived(selectedObject?.record.data.data as BaseObjectData | undefined);
+    type GizmoMode = 'translate' | 'rotate' | 'scale';
+    let gizmoMode = $state<GizmoMode>('translate');
 
 	// --- 3D & Physics Engine Refs ---
 	let renderer: THREE.WebGLRenderer | null = null;
@@ -43,6 +46,7 @@
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     let groundMesh: THREE.Mesh | null = null; // Declare groundMesh here
+    let transformControls: TransformControls | null = null; // Gizmo controls
 
     // --- Preset Definitions ---
     type PresetDefinition = {
@@ -193,14 +197,7 @@
 
 	// --- Initialize 3D Scene & Physics ---
 	function initEngine() {
-		if (!canvasElement) return;
-
-		// Renderer
-		renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true });
-		renderer.setSize(canvasElement.clientWidth, canvasElement.clientHeight);
-		renderer.setPixelRatio(window.devicePixelRatio);
-		renderer.outputColorSpace = THREE.SRGBColorSpace;
-
+		if (!canvasElement || !renderer) return; // Check renderer too
 
 		// Scene
 		scene = new THREE.Scene();
@@ -245,6 +242,44 @@
         groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0); // Match visual rotation
         physicsWorld.addBody(groundBody);
 
+        // --- Transform Controls (Gizmo) ---
+        transformControls = new TransformControls(camera, renderer.domElement);
+        transformControls.addEventListener('dragging-changed', (event) => {
+            // TODO: Disable OrbitControls while dragging if/when added
+            // orbitControls.enabled = !event.value;
+        });
+        transformControls.addEventListener('objectChange', () => {
+            // Update state when gizmo moves the object
+            if (selectedObject && selectedObjData) {
+                const mesh = selectedObject.mesh;
+                // Update Position
+                selectedObjData.x = mesh.position.x;
+                selectedObjData.y = mesh.position.y;
+                selectedObjData.z = mesh.position.z;
+                // Update Rotation (store Euler for UI, Quat for data)
+                const euler = new THREE.Euler().setFromQuaternion(mesh.quaternion, 'YXZ');
+                selectedObjData.rx = THREE.MathUtils.radToDeg(euler.x);
+                selectedObjData.ry = THREE.MathUtils.radToDeg(euler.y);
+                selectedObjData.rz = THREE.MathUtils.radToDeg(euler.z);
+                selectedObjData.qx = mesh.quaternion.x;
+                selectedObjData.qy = mesh.quaternion.y;
+                selectedObjData.qz = mesh.quaternion.z;
+                selectedObjData.qw = mesh.quaternion.w;
+                // Update Scale
+                selectedObjData.sx = mesh.scale.x;
+                selectedObjData.sy = mesh.scale.y;
+                selectedObjData.sz = mesh.scale.z;
+
+                // Update Physics Body
+                if (selectedObject.body) {
+                    selectedObject.body.position.copy(mesh.position as unknown as CANNON.Vec3);
+                    selectedObject.body.quaternion.copy(mesh.quaternion as unknown as CANNON.Quaternion);
+                    selectedObject.body.wakeUp();
+                }
+            }
+        });
+        // scene.add(transformControls as any); // Removed: Controls are not added directly to the scene
+
 
 		// Start Animation Loop
 		animate();
@@ -271,6 +306,7 @@
 		return () => {
             canvasElement?.removeEventListener('click', handleCanvasClick);
 			resizeObserver.disconnect();
+            transformControls?.dispose(); // Dispose controls on cleanup
 		};
 	}
 
@@ -280,26 +316,31 @@
              console.warn("Scene or Physics World not initialized for loading objects.");
              return;
         }
+        // Capture non-null references for use in async callbacks
+        const currentSceneRef = scene;
+        const currentWorldRef = physicsWorld;
 
         // --- Clear Existing Objects ---
-        while(linkedObjects.length > 0) {
-            const obj = linkedObjects.pop();
-            if (obj) {
-                scene.remove(obj.mesh); // Use scene directly (checked above)
-                // TODO: Dispose geometry/material on mesh?
-                const bodyToRemove = obj.body;
-                if (bodyToRemove) { // Check if body exists before removing
-                    physicsWorld.removeBody(bodyToRemove); // Use physicsWorld directly
-                }
-            }
-        }
-        // Also remove meshes directly added to scene if not managed by linkedObjects yet
-        scene.children.slice().forEach(child => {
-            if (child.userData.isSceneObject && scene) { // Add scene check inside loop
-                scene.remove(child);
-                // TODO: Dispose geometry/material?
+        selectedObject = null; // Deselect object when reloading
+        transformControls?.detach(); // Detach gizmo
+
+        // Remove all previously linked objects explicitly
+        linkedObjects.forEach(link => {
+            currentSceneRef.remove(link.mesh); // Use captured ref
+            // TODO: Dispose geometry/material?
+            if (link.body) {
+                currentWorldRef.removeBody(link.body); // Use captured ref
             }
         });
+        linkedObjects.length = 0; // Clear the array after removing
+
+        // Remove any other potential scene objects not in linkedObjects (less robust, might remove lights etc. if not careful)
+        // Consider adding specific userData flags if more scene elements are added besides linkedObjects
+        // scene.children.slice().forEach(child => {
+        //     if (child.userData.isSceneObject && scene) {
+        //         scene.remove(child);
+        //     }
+        // });
         // --- End Clear ---
 
 
@@ -376,10 +417,11 @@
                             const size = box.getSize(new THREE.Vector3());
                             const asyncShape = new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2));
 
-                            if (asyncShape && physicsWorld && scene) { // Re-check scene/world as they might be nullified during async op
+                            // Use captured refs inside the async callback
+                            if (asyncShape) {
                                 let mass = (objData.type === 'physical' || objData.type === 'player') ? (objData.data as PhysicalObjectData)?.mass ?? 1 : 0;
                                 const asyncBody = new CANNON.Body({ mass, shape: asyncShape, position, quaternion, allowSleep: true, sleepSpeedLimit: 0.1, sleepTimeLimit: 1 });
-                                physicsWorld.addBody(asyncBody);
+                                currentWorldRef.addBody(asyncBody); // Use captured ref
 
                                 loadedMesh.position.copy(position as unknown as THREE.Vector3);
                                 loadedMesh.quaternion.copy(quaternion as unknown as THREE.Quaternion);
@@ -390,7 +432,7 @@
                                     child.receiveShadow = true;
                                     child.userData.recordId = objRecord.id;
                                 });
-                                scene.add(loadedMesh);
+                                currentSceneRef.add(loadedMesh); // Use captured ref
                                 linkedObjects.push({ mesh: loadedMesh, body: asyncBody, record: objRecord });
                             }
                         })
@@ -400,15 +442,16 @@
                             const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
                             const fallbackMesh = new THREE.Mesh(fallbackGeom, fallbackMat);
                             const fallbackShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
-                             if (fallbackShape && physicsWorld && scene) { // Re-check scene/world
+                             // Use captured refs inside the async callback
+                             if (fallbackShape) {
                                 let mass = (objData.type === 'physical' || objData.type === 'player') ? (objData.data as PhysicalObjectData)?.mass ?? 1 : 0;
                                 const fallbackBody = new CANNON.Body({ mass, shape: fallbackShape, position, quaternion, allowSleep: true, sleepSpeedLimit: 0.1, sleepTimeLimit: 1 });
-                                physicsWorld.addBody(fallbackBody);
+                                currentWorldRef.addBody(fallbackBody); // Use captured ref
                                 fallbackMesh.position.copy(position as unknown as THREE.Vector3);
                                 fallbackMesh.quaternion.copy(quaternion as unknown as THREE.Quaternion);
                                 fallbackMesh.userData.isSceneObject = true;
                                 fallbackMesh.userData.recordId = objRecord.id;
-                                scene.add(fallbackMesh);
+                                currentSceneRef.add(fallbackMesh); // Use captured ref
                                 linkedObjects.push({ mesh: fallbackMesh, body: fallbackBody, record: objRecord });
                             }
                         });
@@ -612,7 +655,7 @@
 
     // --- Object Selection ---
     function handleCanvasClick(event: MouseEvent) {
-        if (!canvasElement || !camera || !scene || editorMode !== 'editor') return;
+        if (!canvasElement || !camera || !scene || editorMode !== 'editor' || transformControls?.dragging) return; // Don't select while dragging gizmo
 
         const rect = canvasElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -621,43 +664,42 @@
         raycaster.setFromCamera(mouse, camera);
         const intersects = raycaster.intersectObjects(scene.children, true); // Check recursively
 
+        let clickedLink: typeof selectedObject = null; // Use the same type as selectedObject
+
         if (intersects.length > 0) {
-            let clickedObject: THREE.Object3D | null = null;
+            let clickedMesh: THREE.Object3D | null = null;
             for (const intersect of intersects) {
                  let parent = intersect.object;
                  while (parent && parent.userData.recordId === undefined) {
                      parent = parent.parent!;
                  }
                  if (parent && parent.userData.recordId !== undefined) {
-                     // Ignore ground plane clicks if necessary (check name or userData)
-                     if (parent !== groundMesh) { // Example: Don't select the ground
-                        clickedObject = parent;
+                     if (parent !== groundMesh) { // Don't select the ground
+                        clickedMesh = parent;
                         break;
                      }
                  }
             }
 
-            if (clickedObject && clickedObject.userData.recordId !== undefined) {
-                const recordId = clickedObject.userData.recordId;
-                const foundLink = linkedObjects.find(link => link.record.id === recordId);
-
-                if (foundLink) {
-                    selectedObject = foundLink;
-                    activeEditorPanel = 'properties';
-                    statusMessage = `Selected object ID: ${recordId}`;
-                    console.log("Selected:", selectedObject);
-                    // TODO: Add visual indication (e.g., outline)
-                } else {
-                     console.warn(`Clicked mesh with recordId ${recordId}, but no matching linked object found.`);
-                     selectedObject = null;
-                }
-            } else {
-                selectedObject = null;
-                 statusMessage = 'Clicked empty space or non-selectable object.';
+            if (clickedMesh && clickedMesh.userData.recordId !== undefined) {
+                const recordId = clickedMesh.userData.recordId;
+                clickedLink = linkedObjects.find(link => link.record.id === recordId) ?? null;
             }
+        }
+
+        if (clickedLink) {
+            selectedObject = clickedLink;
+            transformControls?.attach(selectedObject.mesh); // Attach gizmo
+            activeEditorPanel = 'properties';
+            statusMessage = `Selected object ID: ${selectedObject.record.id}`;
+            console.log("Selected:", selectedObject);
         } else {
+            // Clicked empty space or non-selectable object
+            if (selectedObject) { // Only deselect if something was selected
+                 statusMessage = 'Deselected object.';
+            }
             selectedObject = null;
-             statusMessage = 'Clicked empty space.';
+            transformControls?.detach(); // Detach gizmo
         }
     }
 
@@ -668,12 +710,15 @@
 
 		animationFrameId = requestAnimationFrame(animate);
         const deltaTime = clock.getDelta();
-        physicsWorld.step(1 / 60, deltaTime, 3);
+        // Only step physics if not dragging a gizmo (to prevent conflicts)
+        if (!transformControls?.dragging) {
+            physicsWorld.step(1 / 60, deltaTime, 3);
 
-        for (const link of linkedObjects) {
-            if (link.body) {
-                link.mesh.position.copy(link.body.position as unknown as THREE.Vector3);
-                link.mesh.quaternion.copy(link.body.quaternion as unknown as THREE.Quaternion);
+            for (const link of linkedObjects) {
+                if (link.body) {
+                    link.mesh.position.copy(link.body.position as unknown as THREE.Vector3);
+                    link.mesh.quaternion.copy(link.body.quaternion as unknown as THREE.Quaternion);
+                }
             }
         }
 		renderer.render(scene, camera);
@@ -683,6 +728,7 @@
 	function cleanupEngine() {
 		if (animationFrameId) cancelAnimationFrame(animationFrameId);
         canvasElement?.removeEventListener('click', handleCanvasClick);
+        transformControls?.dispose(); // Dispose gizmo
         scene?.traverse(object => {
             if (object instanceof THREE.Mesh) {
                 object.geometry?.dispose();
@@ -694,24 +740,40 @@
             }
         });
 		if (renderer) renderer.dispose();
-		renderer = null; scene = null; camera = null; physicsWorld = null;
+		renderer = null; scene = null; camera = null; physicsWorld = null; transformControls = null;
 		console.log('3D Engine cleaned up');
 	}
 
     let resizeCleanup: (() => void) | undefined = undefined;
 
     onMount(() => {
-        fetchModels();
-        if (canvasElement) {
-           resizeCleanup = initEngine();
-        } else {
-            console.error("Canvas element not found on mount!");
+        // Initialize renderer first
+        if (!canvasElement) {
+             console.error("Canvas element not found on mount!");
+             return;
         }
+        renderer = new THREE.WebGLRenderer({ canvas: canvasElement, antialias: true });
+		renderer.setSize(canvasElement.clientWidth, canvasElement.clientHeight);
+		renderer.setPixelRatio(window.devicePixelRatio);
+		renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        fetchModels();
+        resizeCleanup = initEngine(); // initEngine now assumes renderer exists
+
     });
 
     onDestroy(() => {
         if (resizeCleanup) resizeCleanup();
         cleanupEngine();
+    });
+
+    // Reactive effect to update gizmo mode
+    $effect(() => {
+        if (transformControls) {
+            transformControls.mode = gizmoMode;
+        }
     });
 
 </script>
@@ -759,11 +821,12 @@
 		<!-- 3D Viewport -->
 		<section class="flex-grow bg-gray-900 relative">
 			{#if editorMode === 'editor'}
-				<div class="absolute top-2 left-2 bg-black bg-opacity-50 text-white p-2 rounded">
+				<div class="absolute top-2 left-2 bg-black bg-opacity-50 text-white p-2 rounded text-xs">
 					Editor Mode Active
+                    {#if selectedObject} (Selected: {selectedObject.record.id}) {/if}
 				</div>
 			{:else}
-				<div class="absolute top-2 left-2 bg-black bg-opacity-50 text-white p-2 rounded">
+				<div class="absolute top-2 left-2 bg-black bg-opacity-50 text-white p-2 rounded text-xs">
 					Player Mode Active
 				</div>
 			{/if}
@@ -869,6 +932,13 @@
 					{#if selectedObject && selectedObjData}
                         <p class="text-sm">Selected: ID {selectedObject.record.id}</p>
                         <p class="text-sm">Type: {selectedObject.record.data.type}</p>
+
+                         <!-- Gizmo Mode -->
+                         <div class="flex space-x-1">
+                            <button onclick={() => gizmoMode = 'translate'} class="flex-1 text-xs px-2 py-1 rounded {gizmoMode === 'translate' ? 'bg-green-600' : 'bg-gray-600 hover:bg-gray-500'}">Move</button>
+                            <button onclick={() => gizmoMode = 'rotate'} class="flex-1 text-xs px-2 py-1 rounded {gizmoMode === 'rotate' ? 'bg-green-600' : 'bg-gray-600 hover:bg-gray-500'}">Rotate</button>
+                            <button onclick={() => gizmoMode = 'scale'} class="flex-1 text-xs px-2 py-1 rounded {gizmoMode === 'scale' ? 'bg-green-600' : 'bg-gray-600 hover:bg-gray-500'}">Scale</button>
+                         </div>
 
                         <!-- Position -->
                         <div class="grid grid-cols-4 gap-1 items-center">
