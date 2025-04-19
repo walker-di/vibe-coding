@@ -10,7 +10,8 @@
 	<nav>
 		<a href="/">Home</a>
 		{#if data.user}
-			<a href="/eots">My EOTs</a> <!-- Add link to EOTs page -->
+			<a href="/eots">My EOTs</a>
+			<a href="/art/generate">Generate Art</a> <!-- Add link to Art Generation page -->
 			<span style="margin-left: auto;">Welcome, {data.user.email}!</span> <!-- Move welcome message -->
 			<!-- Logout Form -->
 			<form method="POST" action="/logout" style="display: inline; margin-left: 1rem;">

@@ -1,6 +1,6 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'; // Add real for decimal type
 import { relations } from 'drizzle-orm';
-import { createId } from '@paralleldrive/cuid2'; // For generating EOT IDs
+import { createId } from '@paralleldrive/cuid2'; // For generating IDs
 
 // --- Lucia Auth Tables ---
 
@@ -52,12 +52,63 @@ export const eotsTable = sqliteTable('eots', {
 		.$onUpdate(() => Math.floor(Date.now() / 1000)) // Update timestamp on modification
 });
 
+// --- Generated Art Table ---
+export const generatedArtTable = sqliteTable('generated_art', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => createId()), // Use CUID2 for unique IDs
+	userId: text('user_id')
+		.notNull()
+		.references(() => userTable.id, { onDelete: 'cascade' }), // Link to the user who generated it
+	eotId: text('eot_id').references(() => eotsTable.id, { onDelete: 'set null' }), // Optional link to inspiring EOT
+	prompt: text('prompt'), // Text prompt used for generation
+	style: text('style'), // Selected style/artist
+	imageUrl: text('image_url'), // URL to the generated image file
+	status: text('status').default('pending'), // e.g., 'pending', 'completed', 'failed', 'minted'
+	generatedAt: integer('generated_at')
+		.notNull()
+		.$defaultFn(() => Math.floor(Date.now() / 1000)) // Unix timestamp (seconds)
+});
+
+// --- NFTs Table ---
+// Represents a unique NFT asset, linked to the blockchain
+export const nftsTable = sqliteTable('nfts', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => createId()), // Unique internal ID
+	userId: text('user_id')
+		.notNull()
+		.references(() => userTable.id, { onDelete: 'cascade' }), // Current owner
+	generatedArtId: text('generated_art_id')
+		.references(() => generatedArtTable.id, { onDelete: 'set null' }), // Link to the generated art
+	eotId: text('eot_id').references(() => eotsTable.id, { onDelete: 'set null' }), // Optional direct link to EOT
+	tokenId: text('token_id'), // The token ID on the blockchain
+	contractAddress: text('contract_address'), // The NFT contract address
+	chainId: text('chain_id'), // The blockchain network ID
+	metadataUrl: text('metadata_url'), // URL to the NFT metadata (e.g., on IPFS)
+	mintedAt: integer('minted_at'), // Timestamp of minting (Unix timestamp)
+	status: text('status').default('minted'), // e.g., 'minted', 'listed', 'sold'
+	price: real('price'), // Price if listed for sale (use REAL for SQLite decimals)
+	currency: text('currency'), // Currency (e.g., 'BRL', 'ETH', 'USDC')
+	listedForSaleAt: integer('listed_for_sale_at'), // Timestamp when listed (Unix timestamp)
+	createdAt: integer('created_at')
+		.notNull()
+		.$defaultFn(() => Math.floor(Date.now() / 1000)), // Unix timestamp (seconds)
+	updatedAt: integer('updated_at')
+		.notNull()
+		.$defaultFn(() => Math.floor(Date.now() / 1000)) // Unix timestamp (seconds)
+		.$onUpdate(() => Math.floor(Date.now() / 1000))
+});
+
+
 // --- Relations ---
 
 export const userRelations = relations(userTable, ({ many }) => ({
 	sessions: many(sessionTable),
 	keys: many(keyTable),
-	eots: many(eotsTable)
+	eots: many(eotsTable),
+	generatedArt: many(generatedArtTable),
+	nfts: many(nftsTable) // Add relation from user to NFTs
 }));
 
 export const sessionRelations = relations(sessionTable, ({ one }) => ({
@@ -74,9 +125,40 @@ export const keyRelations = relations(keyTable, ({ one }) => ({
 	})
 }));
 
-export const eotsRelations = relations(eotsTable, ({ one }) => ({
+export const eotsRelations = relations(eotsTable, ({ one, many }) => ({
 	user: one(userTable, {
 		fields: [eotsTable.userId],
 		references: [userTable.id]
+	}),
+	generatedArt: many(generatedArtTable),
+	nfts: many(nftsTable) // Add relation from EOT to NFTs
+}));
+
+export const generatedArtRelations = relations(generatedArtTable, ({ one, many }) => ({ // Update relation
+	user: one(userTable, {
+		fields: [generatedArtTable.userId],
+		references: [userTable.id]
+	}),
+	eot: one(eotsTable, {
+		fields: [generatedArtTable.eotId],
+		references: [eotsTable.id]
+	}),
+	nfts: many(nftsTable) // Add relation from Generated Art to NFTs
+}));
+
+// Add relations for the new nftsTable
+export const nftsRelations = relations(nftsTable, ({ one }) => ({
+	user: one(userTable, { // Owner
+		fields: [nftsTable.userId],
+		references: [userTable.id]
+	}),
+	generatedArt: one(generatedArtTable, { // Source Art
+		fields: [nftsTable.generatedArtId],
+		references: [generatedArtTable.id]
+	}),
+	eot: one(eotsTable, { // Optional Source EOT
+		fields: [nftsTable.eotId],
+		references: [eotsTable.id]
 	})
+	// Add relation to Sales table later
 }));
