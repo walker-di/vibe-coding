@@ -321,7 +321,6 @@ function generatePromptForPlaceholder(placeholderParams: ReturnType<typeof parse
 
 // Function to create an image object from a placeholder
 async function createImageObject(placeholderObj: any, imageUrl: string) {
-  const img = // implement here
   placeholderObj.src = imageUrl;
   console.log(`Creating image object from placeholder: ${JSON.stringify(placeholderObj)}`);
   const response = await ky.get(`http://localhost:5173` + imageUrl);
