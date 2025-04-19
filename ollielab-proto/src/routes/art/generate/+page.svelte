@@ -68,8 +68,7 @@
 		<p><strong>Art generation started!</strong></p>
 		<p>Record ID: {generatedArtId}</p>
 		<p>Status is currently 'pending'.</p>
-		<!-- Add a link/button to view the status/result page later -->
-		<!-- e.g., <a href="/art/{generatedArtId}">View Status</a> -->
+		<a href="/art/{generatedArtId}" style="display: inline-block; margin-top: 0.5rem;">View Status / Result</a>
 	</div>
 {/if}
 
