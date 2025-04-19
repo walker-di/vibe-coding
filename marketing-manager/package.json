@@ -61,6 +61,7 @@
     "drizzle-orm": "^0.40.0",
     "fabric": "^6.6.2",
     "image-size": "^2.0.2",
+    "jszip": "^3.10.1",
     "ky": "^1.8.1",
     "microsoft-cognitiveservices-speech-sdk": "^1.43.1",
     "openai": "^4.95.0",

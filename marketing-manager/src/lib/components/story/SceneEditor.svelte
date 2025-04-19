@@ -5,6 +5,7 @@
   import VoiceSelector from "$lib/components/story/VoiceSelector.svelte";
   import AutoCreateModal from "$lib/components/story/AutoCreateModal.svelte";
   import AiFillAllModal from "$lib/components/story/AiFillAllModal.svelte";
+  import ExportModal from "$lib/components/story/ExportModal.svelte";
   import type { SceneWithRelations, Clip } from "$lib/types/story.types";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -18,7 +19,8 @@
     Sparkles,
     Wand,
     Mic,
-    RefreshCw
+    RefreshCw,
+    FileDown
   } from "lucide-svelte";
   import { tick } from "svelte";
   import { FabricImage } from "fabric";
@@ -62,6 +64,11 @@
   let isImageUploadModalOpen = $state(false);
   let isBackgroundImageModalOpen = $state(false);
   let showAiFillAllModal = $state(false);
+  let showExportModal = $state(false);
+  let isExporting = $state(false);
+  let exportProgress = $state(0);
+  let exportType = $state<'zip' | 'individual' | 'unified' | null>(null); // Tracks current export type
+  let exportError = $state<string | null>(null);
   let initialCheckDone = $state(false); // Track if initial check/action is done
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
 
@@ -119,9 +126,6 @@
   // Handler for opening the auto-create modal
   async function openAutoCreateModal() {
     // Reset state
-    storyPrompt = "";
-    isLoadingContext = true;
-    creativeContext = null;
     showAutoCreateModal = true;
 
     // Fetch creative context if we have a creativeId
@@ -1341,6 +1345,239 @@
     processCanvasChange(canvasJson);
   }
 
+  // Export functions
+  async function handleExportZip() {
+    if (isExporting || !scenes || scenes.length === 0) return;
+
+    isExporting = true;
+    exportType = 'zip';
+    exportProgress = 0;
+    exportError = null;
+
+    try {
+      // Create a safe name for the storyboard
+      const safeStoryboardName = `storyboard_${storyId}`;
+
+      // Use JSZip library (we'll need to add this to the project)
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      // Track progress
+      let processedClips = 0;
+      const totalClips = scenes.reduce((total: number, scene: SceneWithRelations) => total + (scene.clips?.length || 0), 0);
+
+      // Process each scene and its clips
+      for (const scene of scenes) {
+        if (!scene.clips || scene.clips.length === 0) continue;
+
+        for (const clip of scene.clips) {
+          // Create a folder structure for each clip
+          const clipPrefix = `clip_${clip.id}`;
+
+          // Add canvas data as JSON
+          if (clip.canvas) {
+            zip.file(`${clipPrefix}/canvas.json`, clip.canvas);
+          }
+
+          // Add narration text
+          if (clip.narration) {
+            zip.file(`${clipPrefix}/narration.txt`, clip.narration);
+          }
+
+          // Add description
+          if (clip.description) {
+            zip.file(`${clipPrefix}/description.txt`, clip.description);
+          }
+
+          // Add image if available
+          if (clip.imageUrl) {
+            try {
+              const response = await fetch(clip.imageUrl);
+              if (response.ok) {
+                const blob = await response.blob();
+                zip.file(`${clipPrefix}/image${getFileExtension(clip.imageUrl, blob)}`, blob);
+              }
+            } catch (error) {
+              console.error(`Failed to fetch image for clip ${clip.id}:`, error);
+            }
+          }
+
+          // Add narration audio if available
+          if (clip.narrationAudioUrl) {
+            try {
+              const response = await fetch(clip.narrationAudioUrl);
+              if (response.ok) {
+                const blob = await response.blob();
+                zip.file(`${clipPrefix}/narration${getFileExtension(clip.narrationAudioUrl, blob)}`, blob);
+              }
+            } catch (error) {
+              console.error(`Failed to fetch narration audio for clip ${clip.id}:`, error);
+            }
+          }
+
+          // Update progress
+          processedClips++;
+          exportProgress = processedClips / totalClips;
+        }
+      }
+
+      // Generate the ZIP file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      // Create a download link
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `${safeStoryboardName}_export.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Close the modal
+      showExportModal = false;
+    } catch (error: any) {
+      console.error('Error exporting ZIP:', error);
+      exportError = `Failed to export ZIP: ${error.message || 'Unknown error'}`;
+    } finally {
+      isExporting = false;
+      exportType = null;
+    }
+  }
+
+  async function handleExportIndividualClips() {
+    if (isExporting || !scenes || scenes.length === 0) return;
+
+    isExporting = true;
+    exportType = 'individual';
+    exportProgress = 0;
+    exportError = null;
+
+    try {
+      // Get all clips from all scenes
+      const allClips: Clip[] = [];
+      scenes.forEach((scene: SceneWithRelations) => {
+        if (scene.clips && scene.clips.length > 0) {
+          allClips.push(...scene.clips);
+        }
+      });
+
+      if (allClips.length === 0) {
+        throw new Error('No clips found to export');
+      }
+
+      // Process each clip
+      for (let i = 0; i < allClips.length; i++) {
+        const clip = allClips[i];
+
+        try {
+          // Call the API to generate a video for this clip
+          const response = await fetch(`/api/clips/${clip.id}/export-video`, {
+            method: 'GET'
+          });
+
+          if (!response.ok) {
+            console.error(`Failed to export clip ${clip.id}. Status: ${response.status}`);
+            continue; // Continue with the next clip
+          }
+
+          // Get the video blob
+          const videoBlob = await response.blob();
+
+          // Create a download link
+          const url = URL.createObjectURL(videoBlob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = `clip_${clip.id}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          // Wait a moment before processing the next clip
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.error(`Error exporting clip ${clip.id}:`, error);
+        }
+
+        // Update progress
+        exportProgress = (i + 1) / allClips.length;
+      }
+
+      // Close the modal
+      showExportModal = false;
+    } catch (error: any) {
+      console.error('Error exporting individual clips:', error);
+      exportError = `Failed to export clips: ${error.message || 'Unknown error'}`;
+    } finally {
+      isExporting = false;
+      exportType = null;
+    }
+  }
+
+  async function handleExportUnifiedVideo() {
+    if (isExporting || !scenes || scenes.length === 0) return;
+
+    isExporting = true;
+    exportType = 'unified';
+    exportProgress = 0;
+    exportError = null;
+
+    try {
+      // Call the API to generate a unified video
+      const response = await fetch(`/api/stories/${storyId}/export-video`, {
+        method: 'GET'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to export unified video. Status: ${response.status}`);
+      }
+
+      // Get the video blob
+      const videoBlob = await response.blob();
+
+      // Create a download link
+      const url = URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `story_${storyId}_unified.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Close the modal
+      showExportModal = false;
+      exportProgress = 1;
+    } catch (error: any) {
+      console.error('Error exporting unified video:', error);
+      exportError = `Failed to export unified video: ${error.message || 'Unknown error'}`;
+    } finally {
+      isExporting = false;
+      exportType = null;
+    }
+  }
+
+  // Helper function to get file extension
+  function getFileExtension(url: string | null, blob: Blob | null): string {
+    if (blob?.type) {
+      const parts = blob.type.split('/');
+      if (parts.length === 2) {
+        if (parts[1] === 'mpeg') return '.mp3';
+        if (parts[1] === 'jpeg') return '.jpg';
+        return `.${parts[1]}`;
+      }
+    }
+    if (url) {
+      const match = url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/);
+      if (match) return `.${match[1]}`;
+    }
+    return '.bin';
+  }
+
   // Function to handle AI fill and narration generation for all clips
   async function handleAiFillAllClips(options: { fillCanvas: boolean; generateNarration: boolean; generateAudio: boolean }) {
     if (isAiFillAllLoading) return;
@@ -1870,6 +2107,17 @@
               "Processing..." :
             "AI Fill All"}
         </Button>
+        <div class="border-t my-2"></div>
+        <Button
+          variant="outline"
+          class="w-full justify-start bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600"
+          onclick={() => showExportModal = true}
+          disabled={isExporting || scenes.length === 0}
+          title="Export Storyboard"
+        >
+          <FileDown class="h-4 w-4 mr-2" />
+          {isExporting ? "Exporting..." : "Export"}
+        </Button>
         {#if isAiFillAllLoading && currentProcessingClip}
           <div class="mt-2 text-xs text-center text-gray-600">
             <div class="w-full bg-gray-200 rounded-full h-1.5 mb-1">
@@ -2077,6 +2325,17 @@
     isLoading={isAiFillAllLoading}
     on:close={() => showAiFillAllModal = false}
     on:confirm={event => handleAiFillAllClips(event.detail)}
+  />
+
+  <!-- Export Modal -->
+  <ExportModal
+    bind:open={showExportModal}
+    isLoading={isExporting}
+    exportProgress={exportProgress}
+    on:close={() => showExportModal = false}
+    on:exportZip={handleExportZip}
+    on:exportIndividualClips={handleExportIndividualClips}
+    on:exportUnifiedVideo={handleExportUnifiedVideo}
   />
 </div>
 
