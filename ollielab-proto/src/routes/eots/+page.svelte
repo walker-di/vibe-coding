@@ -52,8 +52,9 @@
 	<ul style="list-style: none; padding: 0;">
 		{#each data.eots as eot (eot.id)}
 			<li style="border: 1px solid #ccc; margin-bottom: 1rem; padding: 1rem;">
-				<p><strong>Activity:</strong> {eot.activity ?? 'N/A'}</p>
-				<p><strong>Location:</strong> {eot.location ?? 'N/A'}</p>
+				<p><strong>Activity (What):</strong> {eot.activity ?? 'N/A'}</p>
+				<p><strong>Who:</strong> {eot.recordedBy ?? 'N/A'}</p>
+				<p><strong>Location (Where):</strong> {eot.location ?? 'N/A'}</p>
 				<p><strong>Video URL:</strong> <a href={eot.videoUrl} target="_blank">{eot.videoUrl}</a></p>
 				<p><strong>Created:</strong> {new Date((eot.createdAt ?? 0) * 1000).toLocaleString()}</p>
 				{#if eot.recordedAt}
