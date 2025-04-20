@@ -13,6 +13,11 @@
   let showGameOver = $state(false);
   let selectedObjectType = $state("platform");
 
+  // Mouse state
+  let isMouseDown = $state(false);
+  let mousePosition = $state({ x: 0, y: 0 });
+  let justFinishedDragging = $state(false);
+
   // Game components
   let game = $state<{ ground: THREE.Mesh | null }>({ ground: null });
   let player = $state<Player>();
@@ -40,8 +45,8 @@
     return isEditorMode;
   }
 
-  function handleObjectTypeChange(event) {
-    selectedObjectType = event.target.value;
+  function handleObjectTypeChange(event: Event) {
+    selectedObjectType = (event.target as HTMLSelectElement).value;
   }
 
   function saveLevel() {
@@ -76,9 +81,18 @@
     }
   }
 
-  function onMouseClick(event) {
+  function onMouseClick(event: MouseEvent) {
+    console.log(`onMouseClick - Start - justFinishedDragging: ${justFinishedDragging}`);
     if (!isEditorMode) return;
 
+    // If we just finished dragging, don't create a new object
+    if (justFinishedDragging) {
+      console.log("onMouseClick - Detected justFinishedDragging = true, returning early.");
+      justFinishedDragging = false;
+      return;
+    }
+
+    console.log("onMouseClick - Proceeding with click logic.");
     // Calcula posição do mouse normalizada
     const mouse = new THREE.Vector2(
       (event.clientX / window.innerWidth) * 2 - 1,
@@ -89,13 +103,94 @@
     const raycaster = new THREE.Raycaster();
     if (camera) raycaster.setFromCamera(mouse, camera);
 
-    const allObjects = game.ground ? [game.ground, ...levelEditor!.getAllObjects()] : levelEditor!.getAllObjects();
-    const intersects = raycaster.intersectObjects(allObjects as THREE.Object3D[]);
+    // Check if we clicked on an existing object or gizmo
+    if (camera && levelEditor) {
+      console.log("onMouseClick - Calling levelEditor.handleClick (for selection)");
+      const objectWasSelected = levelEditor.handleClick(raycaster, camera);
+      console.log(`onMouseClick - levelEditor.handleClick returned: ${objectWasSelected}`);
 
-    if (intersects.length > 0) {
-      const point = intersects[0].point;
-      levelEditor!.createObject(selectedObjectType, point);
+      // If handleClick did NOT select an object (meaning we clicked empty space or potentially the gizmo itself,
+      // but drag start is handled by onMouseDown now), then check for ground intersection to create a new object.
+      if (!objectWasSelected) {
+         // Also ensure that a drag wasn't started on mousedown (double check, though justFinishedDragging should cover this)
+         if (!levelEditor.isDragging) { 
+            console.log("onMouseClick - handleClick returned false and not dragging, checking for ground intersection.");
+            // Only target the ground for creating new objects
+            const targets = game.ground ? [game.ground] : [];
+            const intersects = raycaster.intersectObjects(targets as THREE.Object3D[]);
+
+            if (intersects.length > 0) {
+              const point = intersects[0].point;
+              console.log("onMouseClick - Ground intersected, creating object at:", point);
+              levelEditor.createObject(selectedObjectType, point);
+            } else {
+              console.log("onMouseClick - No ground intersection found.");
+              // If no ground intersection and no object selected, deselect any currently selected object
+              console.log("onMouseClick - Deselecting object as click was on empty space.");
+              levelEditor.selectObject(null); 
+            }
+         } else {
+             console.log("onMouseClick - handleClick returned false BUT isDragging is true (likely gizmo click handled by mousedown), doing nothing.");
+         }
+      }
     }
+  }
+
+  // Add mouse move handler for dragging
+  function onMouseMove(event: MouseEvent) {
+    // Update mouse position
+    mousePosition = {
+      x: (event.clientX / window.innerWidth) * 2 - 1,
+      y: -(event.clientY / window.innerHeight) * 2 + 1,
+    };
+
+    // Handle dragging in editor mode
+    if (isEditorMode && isMouseDown) {
+      const raycaster = new THREE.Raycaster();
+      if (camera) raycaster.setFromCamera(new THREE.Vector2(mousePosition.x, mousePosition.y), camera);
+
+      levelEditor!.handleDrag(raycaster);
+    }
+  }
+
+  // Add mouse down/up handlers
+  function onMouseDown(event: MouseEvent) { // Changed _event to event
+    console.log("onMouseDown - Start");
+    isMouseDown = true; // Set mouse down state regardless of mode
+
+    if (!isEditorMode || !camera || !levelEditor) return;
+
+    // Calculate mouse position and raycaster for potential drag start
+    const mouse = new THREE.Vector2(
+      (event.clientX / window.innerWidth) * 2 - 1,
+      -(event.clientY / window.innerHeight) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+
+    // Try to start dragging immediately if a gizmo axis is clicked
+    const dragStarted = levelEditor.startGizmoDrag(raycaster, camera);
+    console.log(`onMouseDown - levelEditor.startGizmoDrag returned: ${dragStarted}`);
+    // Note: We don't return early here. isMouseDown is set,
+    // and if dragStarted is true, onMouseUp will handle setting justFinishedDragging.
+    // If drag didn't start here, onMouseClick will handle potential object selection or creation.
+  }
+
+  function onMouseUp(_event: MouseEvent) {
+    console.log(`onMouseUp - Start - isMouseDown: ${isMouseDown}, levelEditor.isDragging: ${levelEditor?.isDragging}`);
+    isMouseDown = false;
+    if (isEditorMode && levelEditor) {
+      // Check if we were dragging before ending the drag
+      if (levelEditor.isDragging) {
+        console.log("onMouseUp - Detected active drag, calling endDrag and setting justFinishedDragging = true");
+        levelEditor.endDrag();
+        // Set flag to prevent object creation on the subsequent click event
+        justFinishedDragging = true;
+      } else {
+        console.log("onMouseUp - No active drag detected");
+      }
+    }
+    console.log(`onMouseUp - End - justFinishedDragging: ${justFinishedDragging}`);
   }
 
   function updateCameraPosition() {
@@ -201,6 +296,9 @@
 
     // Event listeners
     renderer.domElement.addEventListener("click", onMouseClick);
+    renderer.domElement.addEventListener("mousemove", onMouseMove);
+    renderer.domElement.addEventListener("mousedown", onMouseDown);
+    renderer.domElement.addEventListener("mouseup", onMouseUp);
   }
 
   function initializeGame() {
@@ -233,6 +331,9 @@
   onDestroy(() => {
     // window.removeEventListener('resize', onWindowResize); // Replaced with svelte:window
     renderer?.domElement?.removeEventListener("click", onMouseClick);
+    renderer?.domElement?.removeEventListener("mousemove", onMouseMove);
+    renderer?.domElement?.removeEventListener("mousedown", onMouseDown);
+    renderer?.domElement?.removeEventListener("mouseup", onMouseUp);
 
     // Clean up Three.js resources
     scene?.traverse((object: THREE.Object3D) => {
@@ -250,10 +351,20 @@
     renderer?.dispose();
     // No need to remove keydown/keyup event listeners - svelte:window handles this
   });
+
+  // Modify input handling to support keyboard shortcuts for axis selection
+  function onKeyDown(e: KeyboardEvent) {
+    inputManager && inputManager.onKeyDown(e);
+
+    // Pass key events to level editor in editor mode
+    if (isEditorMode && levelEditor) {
+      levelEditor.handleKeyDown(e.key.toLowerCase());
+    }
+  }
 </script>
 
 <svelte:window
-  onkeydown={(e: KeyboardEvent) => inputManager && inputManager.onKeyDown(e)}
+  onkeydown={(e: KeyboardEvent) => onKeyDown(e)}
   onkeyup={(e: KeyboardEvent) => inputManager && inputManager.onKeyUp(e)}
   onresize={onWindowResize}
 />

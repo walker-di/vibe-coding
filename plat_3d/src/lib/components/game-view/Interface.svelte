@@ -39,7 +39,9 @@
     <button onclick={loadLevel}>Carregar Nível</button>
     <button onclick={newLevel}>Novo Nível</button>
     <div class="instructions">
-      <p>Editor: Clique para adicionar objetos</p>
+      <p>Editor: Clique para adicionar objetos ou selecionar existentes</p>
+      <p>Movimento: Arraste as setas para mover nos eixos X, Y, Z</p>
+      <p>Atalhos: Teclas X, Y, Z para selecionar eixos</p>
       <p>Jogo: Use WASD para mover, ESPAÇO para pular</p>
       <p>Câmera: Use Q e E para rotacionar</p>
     </div>
