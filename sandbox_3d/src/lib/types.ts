@@ -37,8 +37,8 @@ export type SceneObjectRecord = {
 export type SceneData = {
 	id: number;
 	name: string;
-	createdAt: Date; // Drizzle maps timestamp to Date by default
-	updatedAt: Date;
+	createdAt?: Date; // Drizzle maps timestamp to Date by default
+	updatedAt?: Date;
 	objects: SceneObjectRecord[];
 };
 

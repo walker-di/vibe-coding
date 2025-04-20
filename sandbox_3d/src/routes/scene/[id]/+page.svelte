@@ -4,7 +4,8 @@
 	import * as THREE from 'three';
 	import * as CANNON from 'cannon-es';
 	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-    import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'; // Import TransformControls
+	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Use standard OrbitControls
+	import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'; // Use standard TransformControls
 	import type {
         SceneObjectJsonData, UploadedModel, SceneData, BaseObjectData, PhysicalObjectData,
         SceneObjectRecord, SceneObjectType // Import missing types
@@ -14,7 +15,22 @@
 	let { data } = $props(); // Data from +page.server.ts load function
 
 	// --- State ---
-	let sceneState = $state(data.scene); // Reactive scene data
+	// Define a default empty scene that matches the SceneData type
+	const defaultScene: SceneData = {
+		id: -1,
+		name: 'New Scene',
+		objects: []
+	};
+
+	// Debug function to help diagnose issues
+	function debugLog(message: string, ...args: any[]) {
+		const timestamp = new Date().toISOString().substr(11, 8); // HH:MM:SS
+		console.log(`[${timestamp}] ${message}`, ...args);
+		// Also update status message for visibility
+		statusMessage = `${timestamp}: ${message}`;
+	}
+
+	let sceneState = $state<SceneData>(data.scene || defaultScene); // Reactive scene data with default
 	let isNewScene = $state(data.isNew);
 	let sceneName = $state(data.scene?.name ?? 'New Scene');
 	let availableModels = $state<UploadedModel[]>([]);
@@ -47,6 +63,14 @@
     const mouse = new THREE.Vector2();
     let groundMesh: THREE.Mesh | null = null; // Declare groundMesh here
     let transformControls: TransformControls | null = null; // Gizmo controls
+    let orbitControls: OrbitControls | null = null; // Camera controls (using standard type)
+
+    // Variables for custom transform controls
+    let isDragging = false;
+    let selectionBox: THREE.BoxHelper | null = null;
+    let dragStartPosition = new THREE.Vector3();
+    let objectStartPosition = new THREE.Vector3();
+    let dragPlane = new THREE.Plane();
 
     // --- Preset Definitions ---
     type PresetDefinition = {
@@ -183,16 +207,33 @@
 	}
 
 	// --- Lifecycle ---
+	// Use a separate variable to track if we've already initialized the scene
+	let sceneInitialized = false;
+
 	$effect(() => {
 		// This effect runs when `data` prop changes from the load function
 		console.log('Scene data loaded:', data.scene);
-		sceneState = data.scene; // Keep state in sync if data prop changes externally
-        isNewScene = data.isNew;
-        sceneName = data.scene?.name ?? 'New Scene';
-        // Re-load objects when scene data changes (e.g., navigating between scenes)
-        if (renderer) { // Ensure engine is initialized
-             loadSceneObjects(sceneState);
-        }
+
+		// Only run this once to prevent infinite loops
+		if (!sceneInitialized) {
+			sceneInitialized = true;
+
+			// Only update scene state if data.scene is not null
+			if (data.scene) {
+				sceneState = data.scene; // Keep state in sync if data prop changes externally
+			} else if (!sceneState || data.isNew) {
+				// Initialize with default scene if data.scene is null and we don't have a scene state yet
+				sceneState = { ...defaultScene }; // Use the predefined default scene
+			}
+
+			isNewScene = data.isNew;
+			sceneName = data.scene?.name ?? 'New Scene';
+
+			// Re-load objects when scene data changes (e.g., navigating between scenes)
+			if (renderer) { // Ensure engine is initialized
+				loadSceneObjects(sceneState);
+			}
+		}
 	});
 
 	// --- Initialize 3D Scene & Physics ---
@@ -228,6 +269,19 @@
         physicsWorld.broadphase = new CANNON.NaiveBroadphase(); // Simple broadphase for now
         physicsWorld.allowSleep = true; // Allow bodies to sleep for performance
 
+        // Create a more stable contact material
+        const defaultMaterial = new CANNON.Material('default');
+        const defaultContactMaterial = new CANNON.ContactMaterial(
+            defaultMaterial, defaultMaterial, {
+                friction: 0.3,
+                restitution: 0.2, // Less bouncy
+                contactEquationStiffness: 1e6, // Stiffer contacts
+                contactEquationRelaxation: 3 // More relaxed solving
+            }
+        );
+        physicsWorld.addContactMaterial(defaultContactMaterial);
+        physicsWorld.defaultContactMaterial = defaultContactMaterial;
+
 		// Ground Plane (Visual + Physics)
 		const groundGeometry = new THREE.PlaneGeometry(100, 100);
 		const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
@@ -242,43 +296,159 @@
         groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0); // Match visual rotation
         physicsWorld.addBody(groundBody);
 
-        // --- Transform Controls (Gizmo) ---
-        transformControls = new TransformControls(camera, renderer.domElement);
-        transformControls.addEventListener('dragging-changed', (event) => {
-            // TODO: Disable OrbitControls while dragging if/when added
-            // orbitControls.enabled = !event.value;
-        });
-        transformControls.addEventListener('objectChange', () => {
-            // Update state when gizmo moves the object
-            if (selectedObject && selectedObjData) {
-                const mesh = selectedObject.mesh;
-                // Update Position
-                selectedObjData.x = mesh.position.x;
-                selectedObjData.y = mesh.position.y;
-                selectedObjData.z = mesh.position.z;
-                // Update Rotation (store Euler for UI, Quat for data)
-                const euler = new THREE.Euler().setFromQuaternion(mesh.quaternion, 'YXZ');
-                selectedObjData.rx = THREE.MathUtils.radToDeg(euler.x);
-                selectedObjData.ry = THREE.MathUtils.radToDeg(euler.y);
-                selectedObjData.rz = THREE.MathUtils.radToDeg(euler.z);
-                selectedObjData.qx = mesh.quaternion.x;
-                selectedObjData.qy = mesh.quaternion.y;
-                selectedObjData.qz = mesh.quaternion.z;
-                selectedObjData.qw = mesh.quaternion.w;
-                // Update Scale
-                selectedObjData.sx = mesh.scale.x;
-                selectedObjData.sy = mesh.scale.y;
-                selectedObjData.sz = mesh.scale.z;
+        // --- Orbit Controls (Camera) ---
+        orbitControls = new OrbitControls(camera, renderer.domElement); // Use standard OrbitControls
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+        orbitControls.screenSpacePanning = true; // Often useful
+        orbitControls.minDistance = 1;
+        orbitControls.maxDistance = 100;
+        orbitControls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-                // Update Physics Body
+        // --- Simple Custom Transform Controls ---
+        // Instead of using the standard TransformControls which might be causing issues,
+        // we'll implement a simpler approach with direct manipulation
+
+        // Create a helper object to visualize the selected object
+        selectionBox = new THREE.BoxHelper(new THREE.Mesh(), 0xffff00);
+        selectionBox.visible = false;
+        scene.add(selectionBox);
+
+        // Reset dragging state
+        isDragging = false;
+
+        // Function to update the selection box
+        function updateSelectionBox() {
+            if (!selectionBox) return;
+
+            if (selectedObject) {
+                selectionBox.setFromObject(selectedObject.mesh);
+                selectionBox.visible = true;
+                debugLog("Selection box updated");
+            } else {
+                selectionBox.visible = false;
+            }
+        }
+
+        // Function to start dragging
+        function startDrag(event: MouseEvent) {
+            if (!selectedObject || !camera || !canvasElement) return;
+
+            debugLog("Starting drag");
+            isDragging = true;
+
+            // Disable orbit controls during drag
+            if (orbitControls) orbitControls.enabled = false;
+
+            // Store the starting positions
+            objectStartPosition.copy(selectedObject.mesh.position);
+
+            // Create a drag plane perpendicular to the camera
+            const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+            dragPlane.setFromNormalAndCoplanarPoint(normal, objectStartPosition);
+
+            // Calculate the starting point on the drag plane
+            const rect = canvasElement.getBoundingClientRect();
+            const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
+
+            const intersection = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, intersection);
+            dragStartPosition.copy(intersection);
+
+            // Add event listeners for drag and end
+            window.addEventListener('mousemove', continueDrag);
+            window.addEventListener('mouseup', endDrag);
+        }
+
+        // Function to continue dragging
+        function continueDrag(event: MouseEvent) {
+            if (!isDragging || !selectedObject || !camera || !canvasElement || !selectedObjData) return;
+
+            // Calculate current point on drag plane
+            const rect = canvasElement.getBoundingClientRect();
+            const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
+
+            const intersection = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(dragPlane, intersection)) {
+                // Calculate the offset from the start position
+                const offset = new THREE.Vector3().subVectors(intersection, dragStartPosition);
+
+                // Apply the offset to the object's position
+                selectedObject.mesh.position.copy(objectStartPosition).add(offset);
+
+                // Update the data model
+                selectedObjData.x = selectedObject.mesh.position.x;
+                selectedObjData.y = selectedObject.mesh.position.y;
+                selectedObjData.z = selectedObject.mesh.position.z;
+
+                // Update physics body if it exists
                 if (selectedObject.body) {
-                    selectedObject.body.position.copy(mesh.position as unknown as CANNON.Vec3);
-                    selectedObject.body.quaternion.copy(mesh.quaternion as unknown as CANNON.Quaternion);
+                    selectedObject.body.position.copy(selectedObject.mesh.position as unknown as CANNON.Vec3);
+                    selectedObject.body.velocity.set(0, 0, 0); // Reset velocity during drag
                     selectedObject.body.wakeUp();
                 }
+
+                // Update the selection box
+                updateSelectionBox();
+
+                debugLog(`Dragging to: ${selectedObject.mesh.position.x.toFixed(2)}, ${selectedObject.mesh.position.y.toFixed(2)}, ${selectedObject.mesh.position.z.toFixed(2)}`);
+            }
+        }
+
+        // Function to end dragging
+        function endDrag() {
+            if (!isDragging) return;
+
+            debugLog("Ending drag");
+            isDragging = false;
+
+            // Re-enable orbit controls
+            if (orbitControls) orbitControls.enabled = true;
+
+            // Remove event listeners
+            window.removeEventListener('mousemove', continueDrag);
+            window.removeEventListener('mouseup', endDrag);
+        }
+
+        // Add mousedown listener to the canvas for dragging
+        canvasElement.addEventListener('mousedown', (event) => {
+            // Only start drag if we have a selected object and left mouse button is pressed
+            if (selectedObject && event.button === 0) {
+                startDrag(event);
             }
         });
-        // scene.add(transformControls as any); // Removed: Controls are not added directly to the scene
+
+        // Create a dummy transform controls object to maintain API compatibility
+        transformControls = {
+            attach: (_object: THREE.Object3D) => {
+                debugLog("Custom controls: attach called");
+                updateSelectionBox();
+            },
+            detach: () => {
+                debugLog("Custom controls: detach called");
+                if (selectionBox) selectionBox.visible = false;
+            },
+            dispose: () => {
+                debugLog("Custom controls: dispose called");
+                if (selectionBox) selectionBox.visible = false;
+                window.removeEventListener('mousemove', continueDrag);
+                window.removeEventListener('mouseup', endDrag);
+            },
+            dragging: false,
+            enabled: true,
+            mode: 'translate' as GizmoMode,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            update: () => {}
+        } as unknown as TransformControls;
 
 
 		// Start Animation Loop
@@ -299,14 +469,19 @@
 		});
 		resizeObserver.observe(canvasElement);
 
-        // Initial load of objects from data
-        loadSceneObjects(sceneState);
+        // Initial load of objects from data - only if we have a valid scene state
+        if (sceneState && sceneState.objects) {
+            loadSceneObjects(sceneState);
+        } else {
+            console.log("No scene state available for initial load");
+        }
 
 		// Return cleanup function for resize observer
 		return () => {
             canvasElement?.removeEventListener('click', handleCanvasClick);
 			resizeObserver.disconnect();
-            transformControls?.dispose(); // Dispose controls on cleanup
+            transformControls?.dispose(); // Dispose transform controls on cleanup
+            orbitControls?.dispose(); // Dispose orbit controls on cleanup
 		};
 	}
 
@@ -345,8 +520,11 @@
 
 
         if (!currentScene) {
-            console.log("No current scene data to load.");
-            return; // Exit if no scene data
+            console.log("No current scene data to load. Using empty scene.");
+            // Use an empty scene for loading, but don't update the global state
+            // This prevents potential infinite loops
+            currentScene = { ...defaultScene }; // Use the predefined default scene
+            // Don't update the global scene state here
         }
 
 
@@ -568,11 +746,15 @@
                  linkedObjects.push({ mesh, record: tempRecord }); // Add record for static mesh
             }
 
-             if (sceneState) {
-                 sceneState.objects = [...sceneState.objects, tempRecord];
-             } else {
-                 console.warn("Cannot add object to state: Scene state is null.");
+             // Initialize scene state if it's null
+             if (!sceneState) {
+                 sceneState = { ...defaultScene, name: sceneName }; // Use the predefined default scene with current name
+                 console.log("Created new scene state");
              }
+
+             // Add the object to the scene state
+             sceneState.objects = [...sceneState.objects, tempRecord];
+             console.log(`Added object to scene. Total objects: ${sceneState.objects.length}`);
         } else {
              console.warn("Could not create mesh for preset:", preset);
         }
@@ -581,10 +763,23 @@
 
     // --- Property Update Handlers ---
     function updateSelectedObjectPosition(axis: 'x' | 'y' | 'z', value: number) {
-        if (!selectedObject || !selectedObjData) return;
+        if (!selectedObject || !selectedObjData || !Number.isFinite(value)) return;
+
+        // Validate and store the value
         selectedObjData[axis] = value;
-        const pos = new CANNON.Vec3(selectedObjData.x, selectedObjData.y, selectedObjData.z);
+
+        // Ensure all position values are valid
+        const x = Number.isFinite(selectedObjData.x) ? selectedObjData.x : 0;
+        const y = Number.isFinite(selectedObjData.y) ? selectedObjData.y : 0;
+        const z = Number.isFinite(selectedObjData.z) ? selectedObjData.z : 0;
+
+        // Create position vector with validated values
+        const pos = new CANNON.Vec3(x, y, z);
+
+        // Update mesh position
         selectedObject.mesh.position.copy(pos as unknown as THREE.Vector3);
+
+        // Update physics body if it exists
         if (selectedObject.body) {
             selectedObject.body.position.copy(pos);
             selectedObject.body.wakeUp(); // Ensure physics body updates
@@ -592,23 +787,44 @@
     }
 
     function updateSelectedObjectRotation(axis: 'x' | 'y' | 'z', value: number) {
-         if (!selectedObject || !selectedObjData) return;
+         if (!selectedObject || !selectedObjData || !Number.isFinite(value)) return;
+
          // Store as Euler for simplicity in UI, convert to Quaternion for physics/rendering
          selectedObjData[`r${axis}`] = value; // Store Euler angle (e.g., rx, ry, rz)
+
+         // Ensure all rotation values are valid
+         const rx = Number.isFinite(selectedObjData.rx) ? selectedObjData.rx : 0;
+         const ry = Number.isFinite(selectedObjData.ry) ? selectedObjData.ry : 0;
+         const rz = Number.isFinite(selectedObjData.rz) ? selectedObjData.rz : 0;
+
+         // Create Euler with validated values
          const euler = new THREE.Euler(
-             THREE.MathUtils.degToRad(selectedObjData.rx ?? 0),
-             THREE.MathUtils.degToRad(selectedObjData.ry ?? 0),
-             THREE.MathUtils.degToRad(selectedObjData.rz ?? 0),
+             THREE.MathUtils.degToRad(rx as number),
+             THREE.MathUtils.degToRad(ry as number),
+             THREE.MathUtils.degToRad(rz as number),
              'YXZ' // Common order, adjust if needed
          );
+
+         // Convert to quaternion
          const quat = new THREE.Quaternion().setFromEuler(euler);
+
+         // Validate quaternion components
+         if (!Number.isFinite(quat.x) || !Number.isFinite(quat.y) ||
+             !Number.isFinite(quat.z) || !Number.isFinite(quat.w)) {
+             console.warn('Invalid quaternion generated, skipping rotation update');
+             return;
+         }
+
+         // Apply rotation to mesh
          selectedObject.mesh.quaternion.copy(quat);
+
          // Update quaternion representation in data for saving
          selectedObjData.qx = quat.x;
          selectedObjData.qy = quat.y;
          selectedObjData.qz = quat.z;
          selectedObjData.qw = quat.w;
 
+         // Update physics body if it exists
          if (selectedObject.body) {
              selectedObject.body.quaternion.copy(quat as unknown as CANNON.Quaternion);
              selectedObject.body.wakeUp();
@@ -616,7 +832,9 @@
     }
 
      function updateSelectedObjectScale(axis: 'x' | 'y' | 'z', value: number) {
-         if (!selectedObject || !selectedObjData || value <= 0) return;
+         if (!selectedObject || !selectedObjData || !Number.isFinite(value) || value <= 0) return;
+
+         // Store the validated value
          selectedObjData[`s${axis}`] = value;
 
          // NOTE: Changing scale after creation is complex for physics and mesh geometry.
@@ -625,11 +843,15 @@
          // Simplification: For now, only update the mesh scale visually for loaded models.
          // Primitive scale changes require recreating the object (more advanced).
          if (!selectedObjData.primitiveType && selectedObject.mesh) {
-             // Access scale properties directly
-             if (axis === 'x') selectedObject.mesh.scale.x = value;
-             else if (axis === 'y') selectedObject.mesh.scale.y = value;
-             else if (axis === 'z') selectedObject.mesh.scale.z = value;
-             console.warn("Visual scale updated, but physics shape may not match precisely for loaded models.");
+             try {
+                 // Access scale properties directly with validation
+                 if (axis === 'x') selectedObject.mesh.scale.x = value;
+                 else if (axis === 'y') selectedObject.mesh.scale.y = value;
+                 else if (axis === 'z') selectedObject.mesh.scale.z = value;
+                 console.warn("Visual scale updated, but physics shape may not match precisely for loaded models.");
+             } catch (err) {
+                 console.error("Error updating scale:", err);
+             }
          } else if (selectedObjData.primitiveType) {
              console.warn("Scaling primitives after creation is not fully supported yet. Recreate object for accurate physics.");
              // Ideally, find the linked object, remove it, update the record, and call a 'createObjectFromRecord' function.
@@ -655,7 +877,10 @@
 
     // --- Object Selection ---
     function handleCanvasClick(event: MouseEvent) {
-        if (!canvasElement || !camera || !scene || editorMode !== 'editor' || transformControls?.dragging) return; // Don't select while dragging gizmo
+        // Skip selection if we're in player mode or already dragging
+        if (!canvasElement || !camera || !scene || editorMode !== 'editor' || isDragging) return;
+
+        debugLog("Canvas click detected");
 
         const rect = canvasElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -669,37 +894,47 @@
         if (intersects.length > 0) {
             let clickedMesh: THREE.Object3D | null = null;
             for (const intersect of intersects) {
-                 let parent = intersect.object;
-                 while (parent && parent.userData.recordId === undefined) {
-                     parent = parent.parent!;
-                 }
-                 if (parent && parent.userData.recordId !== undefined) {
-                     if (parent !== groundMesh) { // Don't select the ground
+                // Skip selection box in raycast results
+                if (selectionBox && (intersect.object === selectionBox || intersect.object.parent === selectionBox)) {
+                    continue;
+                }
+
+                let parent = intersect.object;
+                while (parent && parent.userData.recordId === undefined) {
+                    if (!parent.parent) break;
+                    parent = parent.parent;
+                }
+
+                if (parent && parent.userData.recordId !== undefined) {
+                    if (parent !== groundMesh) { // Don't select the ground
                         clickedMesh = parent;
+                        debugLog(`Found clickable object: ${parent.userData.recordId}`);
                         break;
-                     }
-                 }
+                    }
+                }
             }
 
             if (clickedMesh && clickedMesh.userData.recordId !== undefined) {
                 const recordId = clickedMesh.userData.recordId;
                 clickedLink = linkedObjects.find(link => link.record.id === recordId) ?? null;
+                debugLog(`Found linked object with ID: ${recordId}`);
             }
         }
 
         if (clickedLink) {
             selectedObject = clickedLink;
-            transformControls?.attach(selectedObject.mesh); // Attach gizmo
+            transformControls?.attach(selectedObject.mesh); // This now calls our custom attach method
             activeEditorPanel = 'properties';
             statusMessage = `Selected object ID: ${selectedObject.record.id}`;
-            console.log("Selected:", selectedObject);
+            debugLog(`Selected object ID: ${selectedObject.record.id}`);
         } else {
             // Clicked empty space or non-selectable object
             if (selectedObject) { // Only deselect if something was selected
-                 statusMessage = 'Deselected object.';
+                debugLog("Deselected object");
+                statusMessage = 'Deselected object.';
             }
             selectedObject = null;
-            transformControls?.detach(); // Detach gizmo
+            transformControls?.detach(); // This now calls our custom detach method
         }
     }
 
@@ -710,14 +945,41 @@
 
 		animationFrameId = requestAnimationFrame(animate);
         const deltaTime = clock.getDelta();
+        // Update orbit controls
+        if (orbitControls) orbitControls.update();
+
         // Only step physics if not dragging a gizmo (to prevent conflicts)
         if (!transformControls?.dragging) {
             physicsWorld.step(1 / 60, deltaTime, 3);
 
             for (const link of linkedObjects) {
                 if (link.body) {
-                    link.mesh.position.copy(link.body.position as unknown as THREE.Vector3);
-                    link.mesh.quaternion.copy(link.body.quaternion as unknown as THREE.Quaternion);
+                    try {
+                        // Skip physics update for the currently selected object if being manipulated
+                        if (selectedObject === link && transformControls?.dragging) continue;
+
+                        // Simple direct update with minimal validation
+                        // Copy position from physics to visual mesh
+                        link.mesh.position.copy(link.body.position as unknown as THREE.Vector3);
+
+                        // Normalize quaternion before copying to ensure it's valid
+                        const quat = link.body.quaternion;
+                        const length = Math.sqrt(quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w);
+
+                        // Only apply rotation if quaternion is valid
+                        if (length > 0.0001) {
+                            link.mesh.quaternion.copy(quat as unknown as THREE.Quaternion);
+                        } else {
+                            // Reset to identity quaternion if invalid
+                            link.body.quaternion.set(0, 0, 0, 1);
+                            link.body.angularVelocity.set(0, 0, 0);
+                        }
+                    } catch (err) {
+                        console.error('Error updating physics:', err);
+                        // Reset physics state if there's an error
+                        link.body.velocity.set(0, 0, 0);
+                        link.body.angularVelocity.set(0, 0, 0);
+                    }
                 }
             }
         }
@@ -942,26 +1204,26 @@
 
                         <!-- Position -->
                         <div class="grid grid-cols-4 gap-1 items-center">
-                            <label class="text-sm col-span-1">Pos:</label>
-                            <input type="number" step="0.1" value={selectedObjData.x} oninput={(e) => updateSelectedObjectPosition('x', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
-                            <input type="number" step="0.1" value={selectedObjData.y} oninput={(e) => updateSelectedObjectPosition('y', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
-                            <input type="number" step="0.1" value={selectedObjData.z} oninput={(e) => updateSelectedObjectPosition('z', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <span class="text-sm col-span-1">Pos:</span>
+                            <input id="pos-x" aria-label="Position X" type="number" step="0.1" value={Number.isFinite(selectedObjData.x) ? selectedObjData.x : 0} oninput={(e) => updateSelectedObjectPosition('x', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <input id="pos-y" aria-label="Position Y" type="number" step="0.1" value={Number.isFinite(selectedObjData.y) ? selectedObjData.y : 0} oninput={(e) => updateSelectedObjectPosition('y', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <input id="pos-z" aria-label="Position Z" type="number" step="0.1" value={Number.isFinite(selectedObjData.z) ? selectedObjData.z : 0} oninput={(e) => updateSelectedObjectPosition('z', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
                         </div>
 
                          <!-- Rotation (Euler Degrees) -->
                          <div class="grid grid-cols-4 gap-1 items-center">
-                            <label class="text-sm col-span-1">Rot (°):</label>
-                            <input type="number" step="1" value={selectedObjData.rx ?? 0} oninput={(e) => updateSelectedObjectRotation('x', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
-                            <input type="number" step="1" value={selectedObjData.ry ?? 0} oninput={(e) => updateSelectedObjectRotation('y', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
-                            <input type="number" step="1" value={selectedObjData.rz ?? 0} oninput={(e) => updateSelectedObjectRotation('z', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <span class="text-sm col-span-1">Rot (°):</span>
+                            <input id="rot-x" aria-label="Rotation X" type="number" step="1" value={Number.isFinite(selectedObjData.rx) ? selectedObjData.rx : 0} oninput={(e) => updateSelectedObjectRotation('x', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <input id="rot-y" aria-label="Rotation Y" type="number" step="1" value={Number.isFinite(selectedObjData.ry) ? selectedObjData.ry : 0} oninput={(e) => updateSelectedObjectRotation('y', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <input id="rot-z" aria-label="Rotation Z" type="number" step="1" value={Number.isFinite(selectedObjData.rz) ? selectedObjData.rz : 0} oninput={(e) => updateSelectedObjectRotation('z', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
                         </div>
 
                          <!-- Scale -->
                          <div class="grid grid-cols-4 gap-1 items-center">
-                            <label class="text-sm col-span-1">Scale:</label>
-                            <input type="number" step="0.1" min="0.01" value={selectedObjData.sx ?? 1} oninput={(e) => updateSelectedObjectScale('x', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
-                            <input type="number" step="0.1" min="0.01" value={selectedObjData.sy ?? 1} oninput={(e) => updateSelectedObjectScale('y', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
-                            <input type="number" step="0.1" min="0.01" value={selectedObjData.sz ?? 1} oninput={(e) => updateSelectedObjectScale('z', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <span class="text-sm col-span-1">Scale:</span>
+                            <input id="scale-x" aria-label="Scale X" type="number" step="0.1" min="0.01" value={Number.isFinite(selectedObjData.sx) ? selectedObjData.sx : 1} oninput={(e) => updateSelectedObjectScale('x', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <input id="scale-y" aria-label="Scale Y" type="number" step="0.1" min="0.01" value={Number.isFinite(selectedObjData.sy) ? selectedObjData.sy : 1} oninput={(e) => updateSelectedObjectScale('y', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
+                            <input id="scale-z" aria-label="Scale Z" type="number" step="0.1" min="0.01" value={Number.isFinite(selectedObjData.sz) ? selectedObjData.sz : 1} oninput={(e) => updateSelectedObjectScale('z', e.currentTarget.valueAsNumber)} class="col-span-1 bg-gray-800 text-white px-1 py-0.5 rounded text-sm w-full">
                         </div>
 
                          <!-- Color -->
@@ -990,6 +1252,7 @@
 	}
     input[type="color"] {
         -webkit-appearance: none;
+        appearance: none;
         border: none;
         padding: 0; /* Remove padding for better size control */
         cursor: pointer;
