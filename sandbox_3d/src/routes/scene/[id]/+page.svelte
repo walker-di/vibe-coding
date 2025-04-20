@@ -1031,14 +1031,23 @@
             // Update physics objects in editor mode
             updatePhysicsObjects();
         } else if (editorMode === 'player') {
-            // Update player controller in player mode, but don't force updates every frame
+            // Update player controller in player mode
             if (playerController) {
                 // Normal update for movement
                 playerController.update(deltaTime);
 
-                // Only update camera matrices once per frame
+                // Force camera matrices to update
                 camera.updateMatrix();
                 camera.updateMatrixWorld(true);
+
+                // Log camera position occasionally for debugging
+                if (Math.random() < 0.01) { // Only log ~1% of the time
+                    console.log('Camera position:', {
+                        x: camera.position.x.toFixed(2),
+                        y: camera.position.y.toFixed(2),
+                        z: camera.position.z.toFixed(2)
+                    });
+                }
             }
 
             // Update non-player physics objects
@@ -1058,7 +1067,12 @@
 					if (selectedObject === link && transformControls?.dragging) continue;
 
 					// Skip physics update for player object if requested
-					if (skipPlayer && link.record.data.type === 'player' && playerController) continue;
+					if (skipPlayer && link.record.data.type === 'player' && playerController) {
+						// In player mode, the player controller handles updating the player mesh
+						// So we skip the normal physics update for the player object
+						console.log('Skipping physics update for player object - handled by PlayerController');
+						continue;
+					}
 
 					// Simple direct update with minimal validation
 					// Copy position from physics to visual mesh
@@ -1075,6 +1089,15 @@
 						// Reset to identity quaternion if invalid
 						link.body.quaternion.set(0, 0, 0, 1);
 						link.body.angularVelocity.set(0, 0, 0);
+					}
+
+					// Log position updates for debugging (only occasionally)
+					if (Math.random() < 0.01) { // Only log ~1% of the time
+						console.log(`Updated ${link.record.data.type} mesh position:`, {
+							x: link.mesh.position.x.toFixed(2),
+							y: link.mesh.position.y.toFixed(2),
+							z: link.mesh.position.z.toFixed(2)
+						});
 					}
 				} catch (err) {
 					console.error('Error updating physics:', err);
@@ -1189,8 +1212,8 @@
                 camera.updateMatrix();
                 camera.updateMatrixWorld(true);
 
-                // Initialize player controller
-                playerController = new PlayerController(camera, playerObject.body, canvasElement);
+                // Initialize player controller with the player's mesh
+                playerController = new PlayerController(camera, playerObject.body, canvasElement, playerObject.mesh);
 
                 // Name the controller object for easier cleanup
                 playerController.getObject().name = 'playerController';
