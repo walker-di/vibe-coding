@@ -6,9 +6,10 @@
 	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 	import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; // Use standard OrbitControls
 	import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'; // Use standard TransformControls
+	import { PlayerController } from '$lib/PlayerController';
 	import type {
         SceneObjectJsonData, UploadedModel, SceneData, BaseObjectData, PhysicalObjectData,
-        SceneObjectRecord, SceneObjectType // Import missing types
+        SceneObjectRecord, SceneObjectType, PlayerData // Import missing types
     } from '$lib/types';
 
 	// --- Props ---
@@ -39,6 +40,13 @@
 	let editorMode = $state<'editor' | 'player'>('editor'); // Default to editor mode
     type EditorPanelView = 'create' | 'presets' | 'properties' | 'models';
     let activeEditorPanel = $state<EditorPanelView>('create'); // Default panel view
+
+    // Function to switch to player mode
+    function switchToPlayerMode() {
+        editorMode = 'player';
+        // The player controller will be initialized in the effect
+        // that watches for editorMode changes
+    }
 	let statusMessage = $state('');
 	let canvasElement = $state<HTMLCanvasElement | null>(null);
     // Selected object now includes the record for easier data access
@@ -64,6 +72,7 @@
     let groundMesh: THREE.Mesh | null = null; // Declare groundMesh here
     let transformControls: TransformControls | null = null; // Gizmo controls
     let orbitControls: OrbitControls | null = null; // Camera controls (using standard type)
+    let playerController: PlayerController | null = null; // Player controller
 
     // Variables for custom transform controls
     let isDragging = false;
@@ -76,11 +85,11 @@
     type PresetDefinition = {
         name: string;
         type: SceneObjectType; // Use imported type
-        primitive: 'box' | 'sphere' | 'cylinder';
+        primitive: 'box' | 'sphere' | 'cylinder' | 'capsule';
         scale: { x: number; y: number; z: number };
         color?: string;
         mass?: number; // Only relevant for physical types
-        collisionShape?: 'box' | 'sphere' | 'cylinder'; // Should match primitive for simplicity here
+        collisionShape?: 'box' | 'sphere' | 'cylinder' | 'capsule'; // Should match primitive for simplicity here
     };
 
     const presets: PresetDefinition[] = [
@@ -92,6 +101,7 @@
         { name: 'Tree Leaves', type: 'static', primitive: 'sphere', scale: { x: 1.5, y: 1.5, z: 1.5 }, color: '#228B22' }, // Forest Green
         { name: 'Crate', type: 'physical', primitive: 'box', scale: { x: 1, y: 1, z: 1 }, color: '#D2B48C', mass: 5 }, // Tan
         { name: 'Ball', type: 'physical', primitive: 'sphere', scale: { x: 0.5, y: 0.5, z: 0.5 }, color: '#FF4500', mass: 1 }, // OrangeRed
+        { name: 'Player', type: 'player', primitive: 'capsule', scale: { x: 0.5, y: 1.8, z: 0.5 }, color: '#4169E1', mass: 70 }, // Royal Blue
     ];
 
 
@@ -571,6 +581,37 @@
                         const cylGeom = new THREE.CylinderGeometry(cylRadius, cylRadius, cylHeight, 16);
                         mesh = new THREE.Mesh(cylGeom, material);
                         break;
+                    case 'capsule':
+                        // For capsule, we'll use a cylinder with spheres at the ends for visual
+                        // and a cylinder for physics (since CANNON.js doesn't have a capsule shape)
+                        const capsRadius = Math.max(scale.x, scale.z) / 2;
+                        const capsHeight = scale.y - (capsRadius * 2); // Subtract sphere diameters
+
+                        // Create physics shape (cylinder)
+                        shape = new CANNON.Cylinder(capsRadius, capsRadius, capsHeight, 16);
+
+                        // Create visual mesh (cylinder + 2 spheres)
+                        const capsuleGroup = new THREE.Group();
+
+                        // Cylinder body
+                        const capsBodyGeom = new THREE.CylinderGeometry(capsRadius, capsRadius, capsHeight, 16);
+                        const capsBody = new THREE.Mesh(capsBodyGeom, material);
+                        capsuleGroup.add(capsBody);
+
+                        // Top sphere
+                        const topSphereGeom = new THREE.SphereGeometry(capsRadius, 16, 16);
+                        const topSphere = new THREE.Mesh(topSphereGeom, material);
+                        topSphere.position.y = capsHeight / 2;
+                        capsuleGroup.add(topSphere);
+
+                        // Bottom sphere
+                        const bottomSphereGeom = new THREE.SphereGeometry(capsRadius, 16, 16);
+                        const bottomSphere = new THREE.Mesh(bottomSphereGeom, material);
+                        bottomSphere.position.y = -capsHeight / 2;
+                        capsuleGroup.add(bottomSphere);
+
+                        mesh = capsuleGroup;
+                        break;
                 }
             }
             // --- Load Custom Model ---
@@ -719,6 +760,37 @@
                 shape = new CANNON.Cylinder(cylRadius, cylRadius, cylHeight, 16);
                 const cylGeom = new THREE.CylinderGeometry(cylRadius, cylRadius, cylHeight, 16);
                 mesh = new THREE.Mesh(cylGeom, material);
+                break;
+            case 'capsule':
+                // For capsule, we'll use a cylinder with spheres at the ends for visual
+                // and a cylinder for physics (since CANNON.js doesn't have a capsule shape)
+                const capsRadius = Math.max(scale.x, scale.z) / 2;
+                const capsHeight = scale.y - (capsRadius * 2); // Subtract sphere diameters
+
+                // Create physics shape (cylinder)
+                shape = new CANNON.Cylinder(capsRadius, capsRadius, capsHeight, 16);
+
+                // Create visual mesh (cylinder + 2 spheres)
+                const capsuleGroup = new THREE.Group();
+
+                // Cylinder body
+                const capsBodyGeom = new THREE.CylinderGeometry(capsRadius, capsRadius, capsHeight, 16);
+                const capsBody = new THREE.Mesh(capsBodyGeom, material);
+                capsuleGroup.add(capsBody);
+
+                // Top sphere
+                const topSphereGeom = new THREE.SphereGeometry(capsRadius, 16, 16);
+                const topSphere = new THREE.Mesh(topSphereGeom, material);
+                topSphere.position.y = capsHeight / 2;
+                capsuleGroup.add(topSphere);
+
+                // Bottom sphere
+                const bottomSphereGeom = new THREE.SphereGeometry(capsRadius, 16, 16);
+                const bottomSphere = new THREE.Mesh(bottomSphereGeom, material);
+                bottomSphere.position.y = -capsHeight / 2;
+                capsuleGroup.add(bottomSphere);
+
+                mesh = capsuleGroup;
                 break;
         }
 
@@ -944,46 +1016,74 @@
 		if (!renderer || !scene || !camera || !physicsWorld) return;
 
 		animationFrameId = requestAnimationFrame(animate);
-        const deltaTime = clock.getDelta();
-        // Update orbit controls
-        if (orbitControls) orbitControls.update();
+        const deltaTime = Math.min(clock.getDelta(), 0.1); // Cap delta time to prevent large jumps
 
-        // Only step physics if not dragging a gizmo (to prevent conflicts)
+        // Step physics world first
         if (!transformControls?.dragging) {
             physicsWorld.step(1 / 60, deltaTime, 3);
-
-            for (const link of linkedObjects) {
-                if (link.body) {
-                    try {
-                        // Skip physics update for the currently selected object if being manipulated
-                        if (selectedObject === link && transformControls?.dragging) continue;
-
-                        // Simple direct update with minimal validation
-                        // Copy position from physics to visual mesh
-                        link.mesh.position.copy(link.body.position as unknown as THREE.Vector3);
-
-                        // Normalize quaternion before copying to ensure it's valid
-                        const quat = link.body.quaternion;
-                        const length = Math.sqrt(quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w);
-
-                        // Only apply rotation if quaternion is valid
-                        if (length > 0.0001) {
-                            link.mesh.quaternion.copy(quat as unknown as THREE.Quaternion);
-                        } else {
-                            // Reset to identity quaternion if invalid
-                            link.body.quaternion.set(0, 0, 0, 1);
-                            link.body.angularVelocity.set(0, 0, 0);
-                        }
-                    } catch (err) {
-                        console.error('Error updating physics:', err);
-                        // Reset physics state if there's an error
-                        link.body.velocity.set(0, 0, 0);
-                        link.body.angularVelocity.set(0, 0, 0);
-                    }
-                }
-            }
         }
+
+        // Update controls based on mode
+        if (editorMode === 'editor') {
+            // Update orbit controls in editor mode
+            if (orbitControls) orbitControls.update();
+
+            // Update physics objects in editor mode
+            updatePhysicsObjects();
+        } else if (editorMode === 'player') {
+            // Update player controller in player mode, but don't force updates every frame
+            if (playerController) {
+                // Normal update for movement
+                playerController.update(deltaTime);
+
+                // Only update camera matrices once per frame
+                camera.updateMatrix();
+                camera.updateMatrixWorld(true);
+            }
+
+            // Update non-player physics objects
+            updatePhysicsObjects(true);
+        }
+
+		// Render the scene
 		renderer.render(scene, camera);
+	}
+
+	// Helper function to update physics objects
+	function updatePhysicsObjects(skipPlayer = false) {
+		for (const link of linkedObjects) {
+			if (link.body) {
+				try {
+					// Skip physics update for the currently selected object if being manipulated
+					if (selectedObject === link && transformControls?.dragging) continue;
+
+					// Skip physics update for player object if requested
+					if (skipPlayer && link.record.data.type === 'player' && playerController) continue;
+
+					// Simple direct update with minimal validation
+					// Copy position from physics to visual mesh
+					link.mesh.position.copy(link.body.position as unknown as THREE.Vector3);
+
+					// Normalize quaternion before copying to ensure it's valid
+					const quat = link.body.quaternion;
+					const length = Math.sqrt(quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w);
+
+					// Only apply rotation if quaternion is valid
+					if (length > 0.0001) {
+						link.mesh.quaternion.copy(quat as unknown as THREE.Quaternion);
+					} else {
+						// Reset to identity quaternion if invalid
+						link.body.quaternion.set(0, 0, 0, 1);
+						link.body.angularVelocity.set(0, 0, 0);
+					}
+				} catch (err) {
+					console.error('Error updating physics:', err);
+					// Reset physics state if there's an error
+					link.body.velocity.set(0, 0, 0);
+					link.body.angularVelocity.set(0, 0, 0);
+				}
+			}
+		}
 	}
 
 	// --- Cleanup ---
@@ -991,6 +1091,8 @@
 		if (animationFrameId) cancelAnimationFrame(animationFrameId);
         canvasElement?.removeEventListener('click', handleCanvasClick);
         transformControls?.dispose(); // Dispose gizmo
+        orbitControls?.dispose(); // Dispose orbit controls
+        playerController?.dispose(); // Dispose player controller
         scene?.traverse(object => {
             if (object instanceof THREE.Mesh) {
                 object.geometry?.dispose();
@@ -1003,6 +1105,7 @@
         });
 		if (renderer) renderer.dispose();
 		renderer = null; scene = null; camera = null; physicsWorld = null; transformControls = null;
+        orbitControls = null; playerController = null;
 		console.log('3D Engine cleaned up');
 	}
 
@@ -1038,6 +1141,82 @@
         }
     });
 
+    // Reactive effect to handle mode switching
+    $effect(() => {
+        if (!scene || !camera || !canvasElement) return;
+
+        if (editorMode === 'editor') {
+            // Switch to editor mode
+            if (playerController) {
+                // Clean up player controller
+                playerController.dispose();
+                playerController = null;
+
+                // Remove any remaining player controller objects from scene
+                const playerControlObj = scene.getObjectByName('playerController');
+                if (playerControlObj) {
+                    scene.remove(playerControlObj);
+                }
+            }
+
+            // Re-enable orbit controls
+            if (orbitControls) {
+                orbitControls.enabled = true;
+            }
+
+            // Reset camera position and rotation
+            if (camera) {
+                camera.position.set(5, 5, 5);
+                camera.rotation.set(0, 0, 0);
+                camera.lookAt(0, 0, 0);
+            }
+
+            statusMessage = 'Editor mode activated';
+        } else if (editorMode === 'player') {
+            // Switch to player mode
+            if (orbitControls) {
+                orbitControls.enabled = false;
+            }
+
+            // Find a player object in the scene
+            const playerObject = linkedObjects.find(link => link.record.data.type === 'player');
+
+            if (playerObject && playerObject.body && camera) {
+                // Reset camera state before initializing player controller
+                camera.position.set(0, 0, 0);
+                camera.rotation.set(0, 0, 0);
+                camera.quaternion.set(0, 0, 0, 1);
+                camera.updateMatrix();
+                camera.updateMatrixWorld(true);
+
+                // Initialize player controller
+                playerController = new PlayerController(camera, playerObject.body, canvasElement);
+
+                // Name the controller object for easier cleanup
+                playerController.getObject().name = 'playerController';
+
+                // Add player controller object to the scene
+                scene.add(playerController.getObject());
+
+                // Position the camera at the player position
+                const playerPos = playerObject.body.position.clone();
+                // Adjust Y position to be at eye level
+                playerPos.y += 1.7; // Approximate eye height
+                playerController.getObject().position.copy(playerPos as unknown as THREE.Vector3);
+
+                // Force a single update to initialize the camera position
+                playerController.forceUpdate();
+
+                // Log initialization
+                console.log('Player controller initialized at position:', playerPos);
+                statusMessage = 'Player mode activated. Click on the canvas to control.';
+            } else {
+                statusMessage = 'No player object found. Add a player object first.';
+                editorMode = 'editor'; // Switch back to editor mode
+            }
+        }
+    });
+
 </script>
 
 <svelte:head>
@@ -1070,7 +1249,7 @@
 				Editor Mode
 			</button>
 			<button
-				onclick={() => editorMode = 'player'}
+				onclick={switchToPlayerMode}
 				class="px-3 py-1 rounded {editorMode === 'player' ? 'bg-green-600' : 'bg-gray-600 hover:bg-gray-700'}"
 			>
 				Player Mode

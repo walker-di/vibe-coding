@@ -22,7 +22,7 @@ export type BaseObjectData = {
 	sz?: number;
 	// Reference to an uploaded model ID or a built-in primitive key
 	modelId?: number; // Foreign key to uploadedModels.id
-	primitiveType?: 'box' | 'sphere' | 'cylinder'; // Use if no modelId
+	primitiveType?: 'box' | 'sphere' | 'cylinder' | 'capsule'; // Use if no modelId
 	color?: string; // Simple color for primitives
 };
 
