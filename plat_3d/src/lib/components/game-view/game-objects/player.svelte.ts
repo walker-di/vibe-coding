@@ -1,7 +1,16 @@
 import * as THREE from 'three';
 
 export class Player {
-    constructor(scene) {
+    mesh: THREE.Mesh;
+    velocity: THREE.Vector3;
+    gravity: number;
+    isOnGround: boolean;
+    canJump: boolean;
+    jumpPower: number;
+    moveSpeed: number;
+    hasReachedGoal: boolean;
+
+    constructor(scene: THREE.Scene) {
         // Configuração do jogador
         const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
         const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x3333ff });
@@ -21,7 +30,7 @@ export class Player {
         this.hasReachedGoal = false;
     }
 
-    update(keysPressed, cameraAngle, platforms, obstacles, goals) {
+    update(keysPressed: Record<string, boolean>, cameraAngle: number, platforms: THREE.Mesh[], obstacles: THREE.Mesh[], goals: THREE.Mesh[]) {
         this.updateMovement(keysPressed, cameraAngle);
         this.applyGravity();
         this.checkGroundCollision();
@@ -32,7 +41,7 @@ export class Player {
         this.checkGoalCollision(goals);
     }
 
-    updateMovement(keysPressed, cameraAngle) {
+    updateMovement(keysPressed: Record<string, boolean>, cameraAngle: number) {
         // Cria um vetor para a direção de movimento baseado na orientação da câmera
         const moveDirection = new THREE.Vector3();
 
@@ -87,7 +96,7 @@ export class Player {
         }
     }
 
-    checkPlatformCollision(platforms) {
+    checkPlatformCollision(platforms: THREE.Mesh[]) {
         // Flag para verificar se o jogador está em alguma plataforma
         let onAnyPlatform = false;
 
@@ -136,7 +145,7 @@ export class Player {
         }
     }
 
-    handleJump(keysPressed) {
+    handleJump(keysPressed: Record<string, boolean>) {
         // Pulo - verifica se a tecla espaço foi pressionada
         if (this.canJump && this.isOnGround && (keysPressed[' '] || keysPressed['spacebar'])) {
             this.velocity.y = this.jumpPower;
@@ -153,7 +162,7 @@ export class Player {
         this.mesh.position.z += this.velocity.z;
     }
 
-    checkObstacleCollision(obstacles) {
+    checkObstacleCollision(obstacles: THREE.Mesh[]) {
         for (const obstacle of obstacles) {
             const distance = this.mesh.position.distanceTo(obstacle.position);
             if (distance < 1.5) { // Raio de colisão
@@ -163,7 +172,7 @@ export class Player {
         }
     }
 
-    checkGoalCollision(goals) {
+    checkGoalCollision(goals: THREE.Mesh[]) {
         for (const goal of goals) {
             const distance = this.mesh.position.distanceTo(goal.position);
             if (distance < 1.5) { // Raio de colisão

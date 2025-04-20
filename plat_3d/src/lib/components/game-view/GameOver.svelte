@@ -1,12 +1,16 @@
 <script lang="ts">
-    export let show = false;
-    export let onNextLevel;
+  interface Props {
+    show?: boolean;
+    onNextLevel: any;
+  }
+
+  let { show = false, onNextLevel }: Props = $props();
   </script>
   
   {#if show}
     <div class="game-over">
       <h2>Nível Concluído!</h2>
-      <button on:click={onNextLevel}>Continuar</button>
+      <button onclick={onNextLevel}>Continuar</button>
     </div>
   {/if}
   

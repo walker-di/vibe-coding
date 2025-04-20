@@ -1,14 +1,19 @@
 import * as THREE from 'three';
 
 export class LevelEditor {
-    constructor(scene) {
+    scene: THREE.Scene;
+    platforms: THREE.Mesh[];
+    obstacles: THREE.Mesh[];
+    goals: THREE.Mesh[];
+
+    constructor(scene: THREE.Scene) {
       this.scene = scene;
       this.platforms = [];
       this.obstacles = [];
       this.goals = [];
     }
 
-    createObject(type, position) {
+    createObject(type: string, position: THREE.Vector3): THREE.Mesh | undefined {
       let geometry, material, object;
 
       switch (type) {
@@ -79,16 +84,16 @@ export class LevelEditor {
       this.goals = [];
     }
 
-    saveLevel() {
+    saveLevel(): any {
       const levelData = {
-        platforms: this.platforms.map(p => ({
+        platforms: this.platforms.map((p: THREE.Mesh) => ({
           position: { x: p.position.x, y: p.position.y, z: p.position.z },
           scale: { x: p.scale.x, y: p.scale.y, z: p.scale.z }
         })),
-        obstacles: this.obstacles.map(o => ({
+        obstacles: this.obstacles.map((o: THREE.Mesh) => ({
           position: { x: o.position.x, y: o.position.y, z: o.position.z }
         })),
-        goals: this.goals.map(g => ({
+        goals: this.goals.map((g: THREE.Mesh) => ({
           position: { x: g.position.x, y: g.position.y, z: g.position.z }
         }))
       };
@@ -97,7 +102,7 @@ export class LevelEditor {
       return levelData;
     }
 
-    loadLevel() {
+    loadLevel(): boolean {
       const levelData = localStorage.getItem('platformerLevel');
       if (!levelData) {
         return false;
@@ -107,18 +112,20 @@ export class LevelEditor {
       const level = JSON.parse(levelData);
 
       // Carrega plataformas
-      level.platforms.forEach(p => {
+      level.platforms.forEach((p: any) => {
         const platform = this.createObject('platform', new THREE.Vector3(p.position.x, p.position.y, p.position.z));
-        platform.scale.set(p.scale.x, p.scale.y, p.scale.z);
+        if (platform) {
+          platform.scale.set(p.scale.x, p.scale.y, p.scale.z);
+        }
       });
 
       // Carrega obstáculos
-      level.obstacles.forEach(o => {
+      level.obstacles.forEach((o: any) => {
         this.createObject('obstacle', new THREE.Vector3(o.position.x, o.position.y, o.position.z));
       });
 
       // Carrega objetivos
-      level.goals.forEach(g => {
+      level.goals.forEach((g: any) => {
         this.createObject('goal', new THREE.Vector3(g.position.x, g.position.y, g.position.z));
       });
 

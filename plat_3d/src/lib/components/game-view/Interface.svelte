@@ -1,30 +1,43 @@
 <script lang="ts">
+    
+  interface Props {
     // Props
-    export let isEditorMode;
-    export let selectedObjectType;
-    export let toggleMode;
-    export let handleObjectTypeChange;
-    export let saveLevel;
-    export let loadLevel;
-    export let newLevel;
+    isEditorMode: any;
+    selectedObjectType: any;
+    toggleMode: any;
+    handleObjectTypeChange: any;
+    saveLevel: any;
+    loadLevel: any;
+    newLevel: any;
+  }
+
+  let {
+    isEditorMode,
+    selectedObjectType,
+    toggleMode,
+    handleObjectTypeChange,
+    saveLevel,
+    loadLevel,
+    newLevel
+  }: Props = $props();
   </script>
   
   <div class="interface">
     <h3>Platformer Editor</h3>
     <div>
       <label for="objectType">Tipo de Objeto:</label>
-      <select id="objectType" value={selectedObjectType} on:change={handleObjectTypeChange}>
+      <select id="objectType" value={selectedObjectType} onchange={handleObjectTypeChange}>
         <option value="platform">Plataforma</option>
         <option value="obstacle">Obstáculo</option>
         <option value="goal">Objetivo</option>
       </select>
     </div>
-    <button on:click={toggleMode}>
+    <button onclick={toggleMode}>
       Modo: {isEditorMode ? 'Editor' : 'Jogo'}
     </button>
-    <button on:click={saveLevel}>Salvar Nível</button>
-    <button on:click={loadLevel}>Carregar Nível</button>
-    <button on:click={newLevel}>Novo Nível</button>
+    <button onclick={saveLevel}>Salvar Nível</button>
+    <button onclick={loadLevel}>Carregar Nível</button>
+    <button onclick={newLevel}>Novo Nível</button>
     <div class="instructions">
       <p>Editor: Clique para adicionar objetos</p>
       <p>Jogo: Use WASD para mover, ESPAÇO para pular</p>

@@ -1,12 +1,15 @@
 
 export class InputManager {
+    keysPressed: Record<string, boolean>;
+    keyJustPressed: Record<string, boolean>;
+
     constructor() {
       this.keysPressed = {};
       this.keyJustPressed = {};
       // No longer adding event listeners here - using svelte:window instead
     }
 
-    onKeyDown(e) {
+    onKeyDown(e: KeyboardEvent) {
       const key = e.key.toLowerCase();
       if (!this.keysPressed[key]) {
         this.keyJustPressed[key] = true;
@@ -14,7 +17,7 @@ export class InputManager {
       this.keysPressed[key] = true;
     }
 
-    onKeyUp(e) {
+    onKeyUp(e: KeyboardEvent) {
       this.keysPressed[e.key.toLowerCase()] = false;
     }
 
@@ -27,7 +30,7 @@ export class InputManager {
       }
     }
 
-    isKeyJustPressed(key) {
+    isKeyJustPressed(key: string): boolean {
       return this.keyJustPressed[key.toLowerCase()];
     }
   }
