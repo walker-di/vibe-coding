@@ -43,6 +43,7 @@ export const eotsTable = sqliteTable('eots', {
 	recordedBy: text('recorded_by'), // The "Who" (text field)
 	activity: text('activity'), // The "What" (text field)
 	location: text('location'), // The "Where" (text field)
+	landmarkData: text('landmark_data'), // Store JSON string of landmark data (nullable)
 	createdAt: integer('created_at')
 		.notNull()
 		.$defaultFn(() => Math.floor(Date.now() / 1000)), // Unix timestamp (seconds)

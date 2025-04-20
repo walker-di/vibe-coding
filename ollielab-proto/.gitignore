@@ -8,6 +8,7 @@ node_modules
 /.svelte-kit
 /build
 /static/uploads
+/static/mediapipe
 
 # OS
 .DS_Store

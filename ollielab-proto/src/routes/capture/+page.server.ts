@@ -11,6 +11,7 @@ const eotSchema = z.object({
   recorded_by: z.string().min(1, { message: 'Who is required' }),
   activity: z.string().min(1, { message: 'What is required' }),
   location: z.string().min(1, { message: 'Where is required' }),
+  landmark_data: z.string().optional(), // Add landmark data as an optional string (JSON)
 });
 
 export const actions: Actions = {
@@ -50,6 +51,18 @@ export const actions: Actions = {
     try {
       const validatedData = validationResult.data;
 
+      // Parse landmark data JSON string
+      let parsedLandmarkData: any = null; // Use 'any' for now, or define a stricter type if needed
+      if (validatedData.landmark_data) {
+        try {
+          parsedLandmarkData = JSON.parse(validatedData.landmark_data);
+        } catch (jsonError) {
+          console.error('Failed to parse landmark_data JSON:', jsonError);
+          // Decide how to handle: fail, or save null? Let's fail for now.
+          return fail(400, { data, errors: { landmark_data: ['Invalid landmark data format.'] } });
+        }
+      }
+
       // Manually parse the datetime-local string and convert to Unix timestamp (seconds)
       // IMPORTANT: new Date() parsing of datetime-local strings assumes LOCAL timezone.
       // If you need UTC consistently, adjust client-side or use a library for robust parsing.
@@ -69,6 +82,7 @@ export const actions: Actions = {
         recordedBy: validatedData.recorded_by,
         activity: validatedData.activity,
         location: validatedData.location,
+        landmarkData: validatedData.landmark_data, // Pass the original JSON string
         // createdAt and updatedAt have default values in the schema
       }).returning(); // Use returning() to get the inserted row
 
