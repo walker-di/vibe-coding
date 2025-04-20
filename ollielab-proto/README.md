@@ -15,14 +15,19 @@ This represents the main paths a user can take within the application. It's base
     *   Creator Page (Dashboard)
 
 *   **Energy Capture Flow:**
-    *   Creator Page -> Capture Energy
-    *   Video Recording (Player -> Recording)
-    *   Metadata Input (4W Dados)
-    *   Save EOT
-    *   Success Message (Msg Salvo)
-    *   (Paths from Msg Salvo: New Capture, Edit)
-    *   (Path from 4W Dados: Excluir -> back to Player)
-    *   (Path from Msg Salvo (Edit): back to 4W Editar)
+    *   Creator Page -> Capture Energy (Initiates the process)
+    *   Camera View / Player (Ready to record, shows camera feed & REC button)
+    *   Start Recording (User presses REC)
+    *   Recording Screen (Shows timer, live video feed, STOP button)
+    *   Stop Recording (User presses STOP)
+    *   **Preview Recorded Video** (User reviews the capture)
+        *   *Option:* Discard/Delete Video -> Returns to Camera View / Player
+    *   Proceed to Metadata Input (User accepts the preview)
+    *   Metadata Input Screen (4W Dados: Input When, Who, What, Where)
+        *   *Option:* Discard/Delete Video & Data (Excluir Button) -> Returns to Camera View / Player
+    *   Save EOT (User presses Salvar)
+    *   Success Message (Msg Salvo: Confirmation shown)
+    *   (Paths from Msg Salvo: New Capture -> Camera View/Player, Edit -> Metadata Edit Screen for the saved EOT)
 
 *   **EOT Management & Art Generation Flow:**
     *   Creator Page -> EOT

@@ -12,7 +12,12 @@
 	
 </script>
 
-<h1>My EOTs (Energy of Things)</h1>
+<div class="flex justify-between items-center mb-4">
+  <h1 class="text-2xl font-bold">My EOTs (Energy of Things)</h1>
+  <a href="/capture" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded no-underline">
+    Capture New Energy
+  </a>
+</div>
 
 <!-- Create EOT Form -->
 <h2>Create New EOT</h2>
