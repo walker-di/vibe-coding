@@ -168,10 +168,13 @@
     scene.add(basePlate);
 
     // Initialize transform controls
-    // TransformControls is NOT added to the scene graph like a mesh.
-    // It's an overlay that operates on the renderer's DOM element and attaches to objects in the scene.
+    // TransformControls needs to be added to the scene to be visible
     transformControls = new TransformControls(camera, renderer.domElement);
     transformControls.size = 0.75; // Adjust size of the gizmo
+    // Add to scene - this is critical for visibility!
+    // We need to add it to the scene for it to be rendered
+    scene.add(transformControls);
+
     // Listen for when the user starts/stops dragging the controls
     transformControls.addEventListener('dragging-changed', function(event) {
       // Set the flag to disable camera movement when using transform controls
@@ -768,7 +771,7 @@
                      if (Array.isArray(obj.material)) {
                          for (const mat of obj.material) mat.dispose();
                      } else {
-                          mat.dispose();
+                          obj.material.dispose();
                      }
                  }
              }
@@ -912,7 +915,7 @@
 
 <!-- Canvas element where Three.js renders -->
 <canvas
-  bind:this={canvas} 
+  bind:this={canvas}
   on:mousemove={onMouseMove}
   on:mousedown={onMouseDown}
   on:mouseup={onMouseUp}
