@@ -12,17 +12,46 @@ const execPromise = promisify(exec);
  * Run an FFmpeg command with the given arguments
  */
 export async function runFFmpeg(args: string[]): Promise<string> {
-    const command = `ffmpeg -y ${args.join(' ')}`;
-    console.log(`Running FFmpeg command: ${command}`);
+    // For complex filter graphs, we need more detailed logging
+    // Check if we're using a complex filter
+    const hasComplexFilter = args.includes('-filter_complex');
+
+    // Set appropriate log level based on command complexity
+    const logLevel = hasComplexFilter ? 'info' : 'warning';
+
+    // Add -hide_banner to reduce noise in logs
+    // Always include -y to overwrite output files without asking
+    const command = `ffmpeg -y -hide_banner -loglevel ${logLevel} ${args.join(' ')}`;
+
+    // Log a shortened version of the command for readability
+    let logCommand = command;
+    if (command.length > 500) {
+        logCommand = command.substring(0, 500) + '... [truncated]';
+    }
+    console.log(`Running FFmpeg command: ${logCommand}`);
 
     try {
         const { stdout, stderr } = await execPromise(command);
-        if (stderr) {
-            console.log(`FFmpeg stderr: ${stderr}`);
+        if (stderr && stderr.trim().length > 0) {
+            // Log stderr but truncate if it's too long
+            let logStderr = stderr;
+            if (stderr.length > 1000) {
+                logStderr = stderr.substring(0, 1000) + '... [truncated]';
+            }
+            console.log(`FFmpeg stderr: ${logStderr}`);
         }
         return stdout;
     } catch (error: any) {
+        // Log the full error for debugging
         console.error(`FFmpeg error: ${error.message}`);
+        if (error.stderr) {
+            // Log stderr but truncate if it's too long
+            let logStderr = error.stderr;
+            if (error.stderr.length > 1000) {
+                logStderr = error.stderr.substring(0, 1000) + '... [truncated]';
+            }
+            console.error(`FFmpeg stderr: ${logStderr}`);
+        }
         throw new Error(`FFmpeg command failed: ${error.message}`);
     }
 }

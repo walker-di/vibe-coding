@@ -82,6 +82,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             // Create a file to list all videos for concatenation
             const concatListPath = path.join(tempDir, 'concat_list.txt');
             let concatFileContent = '';
+            let totalDuration = 0;
 
             // Process each clip
             for (let i = 0; i < allClips.length; i++) {
@@ -102,68 +103,70 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                     clip.duration = duration;
                 }
 
+                totalDuration += clip.duration;
+
                 // Download image if available
                 let mainImagePath = null;
                 if (clip.imageUrl) {
                     const imageFileName = `image_${clip.id}_${uuidv4()}.jpg`;
                     mainImagePath = path.join(tempDir, imageFileName);
                     await downloadFile(clip.imageUrl, mainImagePath);
+                } else {
+                    // Create a black image if no image is available
+                    mainImagePath = path.join(tempDir, `black_${clip.id}.png`);
+                    await runFFmpeg([
+                        '-f', 'lavfi',
+                        '-i', 'color=c=black:s=1280x720',
+                        '-frames:v', '1',
+                        mainImagePath
+                    ]);
                 }
 
-                // Generate clip video
+                // Generate clip video - using a simpler approach
                 const clipOutputFileName = `clip_${clip.id}_${uuidv4()}.mp4`;
                 const clipOutputPath = path.join(tempDir, clipOutputFileName);
 
-                // Prepare FFmpeg command for this clip
-                const clipFfmpegArgs = [];
-
-                // Add inputs
-                if (mainImagePath) {
-                    // Use the image as input with loop
-                    clipFfmpegArgs.push('-loop', '1', '-i', mainImagePath);
-                } else {
-                    // Create a black background
-                    clipFfmpegArgs.push('-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=25');
-                }
-
-                // Add narration audio
-                clipFfmpegArgs.push('-i', narrationPath);
-
-                // Add output options
-                clipFfmpegArgs.push(
-                    '-c:v', 'libx264',
-                    '-pix_fmt', 'yuv420p',
+                // Create a video with exact duration matching the audio
+                await runFFmpeg([
+                    // Input image with loop
+                    '-loop', '1', '-i', mainImagePath,
+                    // Input audio
+                    '-i', narrationPath,
+                    // Map streams
+                    '-map', '0:v', '-map', '1:a',
+                    // Video codec settings
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                    // Audio codec
                     '-c:a', 'aac',
+                    // Set exact duration
+                    '-shortest',
+                    // Optimize for still images
+                    '-tune', 'stillimage',
+                    // Framerate
+                    '-r', '25',
+                    // Optimize for streaming
                     '-movflags', '+faststart',
-                    '-t', clip.duration.toString(),
+                    // Output file
                     clipOutputPath
-                );
+                ]);
 
-                // Run FFmpeg for this clip
-                await runFFmpeg(clipFfmpegArgs);
                 console.log(`Generated clip video: ${clipOutputPath}`);
+
+                // Verify the clip was created successfully
+                try {
+                    const clipStats = await fs.stat(clipOutputPath);
+                    if (clipStats.size === 0) {
+                        throw new Error(`Generated clip file is empty: ${clipOutputPath}`);
+                    }
+                    console.log(`Clip size: ${clipStats.size} bytes`);
+                } catch (err: any) {
+                    console.error(`Error verifying clip file: ${err.message || 'Unknown error'}`);
+                    continue; // Skip this clip if there was an error
+                }
 
                 // Add to concat list
                 concatFileContent += `file '${clipOutputPath.replace(/'/g, "'\\''")}'
 `;
-
-                // Add a fade transition if this is not the last clip
-                if (i < allClips.length - 1) {
-                    // Create a 1-second fade transition
-                    const transitionFileName = `transition_${i}_${uuidv4()}.mp4`;
-                    const transitionPath = path.join(tempDir, transitionFileName);
-
-                    // Generate a 1-second black video with fade
-                    await runFFmpeg([
-                        '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=25:d=1',
-                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-                        transitionPath
-                    ]);
-
-                    // Add transition to concat list
-                    concatFileContent += `file '${transitionPath.replace(/'/g, "'\\''")}'
-`;
-                }
             }
 
             // Write the concat list file
@@ -180,9 +183,15 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 '-f', 'concat',
                 '-safe', '0',
                 '-i', concatListPath,
-                '-c', 'copy',
+                '-c', 'copy',  // Copy streams without re-encoding
+                '-movflags', '+faststart', // Optimize for web playback
                 outputPath
             ]);
+
+            // Verify the output file exists and has content
+            const fileStats = await fs.stat(outputPath);
+            console.log(`Output file size: ${fileStats.size} bytes`);
+            console.log(`Expected duration: ${totalDuration} seconds`);
 
             console.log(`Generated unified video: ${outputPath}`);
 

@@ -94,6 +94,9 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             // Prepare FFmpeg command
             const ffmpegArgs = [];
 
+            // Create a filter complex approach for more precise control
+            const filterComplex = [];
+
             // Add inputs
             if (mainImagePath) {
                 // Use the image as input with loop
@@ -106,13 +109,23 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             // Add narration audio
             ffmpegArgs.push('-i', narrationPath);
 
+            // Create filter complex to trim video to exact audio duration
+            filterComplex.push(
+                `[0:v]trim=duration=${duration}[v0];` +
+                `[1:a]atrim=duration=${duration}[a0]`
+            );
+
             // Add output options
             ffmpegArgs.push(
+                '-filter_complex', filterComplex.join(''),
+                '-map', '[v0]', // Map the filtered video stream
+                '-map', '[a0]', // Map the filtered audio stream
                 '-c:v', 'libx264',
                 '-pix_fmt', 'yuv420p',
                 '-c:a', 'aac',
+                '-r', '25', // Maintain consistent framerate
+                '-tune', 'stillimage', // Optimize for still images
                 '-movflags', '+faststart',
-                '-t', duration.toString(),
                 outputPath
             );
 
