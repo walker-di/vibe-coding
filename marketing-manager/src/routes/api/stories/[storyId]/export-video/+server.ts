@@ -1,7 +1,5 @@
-import { error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { runFFmpeg, getAudioDuration, downloadFile, withTemporaryDirectory } from '$lib/server/ffmpegUtils';
+import { error, type RequestHandler } from '@sveltejs/kit';
+import { runFFmpeg, downloadFile, getAudioDuration, withTemporaryDirectory } from '$lib/server/ffmpegUtils';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,7 +11,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
         throw error(400, 'Invalid story ID');
     }
 
-    return await withTemporaryDirectory(`story-export-${storyId}-`, async (tempDir) => {
+    return withTemporaryDirectory(`story-export-${storyId}-`, async (tempDir) => {
         try {
             // 1. Fetch the story data with all scenes and clips
             const storyResponse = await fetch(`/api/stories/${storyId}?includeScenes=true&includeClips=true`);
@@ -126,16 +124,50 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 const clipOutputFileName = `clip_${clip.id}_${uuidv4()}.mp4`;
                 const clipOutputPath = path.join(tempDir, clipOutputFileName);
 
+                // Determine if this is the first or last clip for special effects
+                const isFirstClip = i === 0;
+                const isLastClip = i === allClips.length - 1;
+
+                // Prepare video filters
+                let videoFilters = [];
+
+                // Add fade-in effect to the first clip
+                if (isFirstClip) {
+                    videoFilters.push('fade=t=in:st=0:d=0.5');
+                }
+
+                // Add fade-out effect to the last clip
+                if (isLastClip) {
+                    const fadeOutStart = Math.max(0, clip.duration - 0.5);
+                    videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=0.5`);
+                }
+
+                // If not the first clip, add a fade-in at the beginning
+                if (!isFirstClip) {
+                    videoFilters.push('fade=t=in:st=0:d=0.3');
+                }
+
+                // If not the last clip, add a fade-out at the end
+                if (!isLastClip) {
+                    const fadeOutStart = Math.max(0, clip.duration - 0.3);
+                    videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=0.3`);
+                }
+
                 // Create a video with exact duration matching the audio
                 await runFFmpeg([
+                    // Set framerate before input
+                    '-framerate', '25',
                     // Input image with loop
                     '-loop', '1', '-i', mainImagePath,
                     // Input audio
                     '-i', narrationPath,
+                    // Add video filters if any
+                    ...(videoFilters.length > 0 ? ['-vf', videoFilters.join(',')] : []),
                     // Map streams
                     '-map', '0:v', '-map', '1:a',
                     // Video codec settings
-                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+                    '-c:v', 'libx264',
+                    '-pix_fmt', 'yuv420p',
                     // Audio codec
                     '-c:a', 'aac',
                     // Set exact duration
@@ -165,8 +197,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 }
 
                 // Add to concat list
-                concatFileContent += `file '${clipOutputPath.replace(/'/g, "'\\''")}'
-`;
+                concatFileContent += `file '${clipOutputPath.replace(/'/g, "'\\''")}'\n`;
             }
 
             // Write the concat list file
