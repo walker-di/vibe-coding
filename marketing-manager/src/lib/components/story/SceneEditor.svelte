@@ -1472,7 +1472,41 @@
         const clip = allClips[i];
 
         try {
+          // First, ensure the clip has narration audio
+          if (!clip.narrationAudioUrl && clip.narration) {
+            console.log(`Generating narration audio for clip ${clip.id}...`);
+            try {
+              const narrationResponse = await fetch('/api/ai-storyboard/generate-narration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  clipId: clip.id,
+                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural'
+                })
+              });
+
+              if (narrationResponse.ok) {
+                const narrationResult = await narrationResponse.json();
+                clip.narrationAudioUrl = narrationResult.narrationAudioUrl;
+
+                // Update the clip with the new narration audio URL
+                await fetch(`/api/clips/${clip.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    narrationAudioUrl: clip.narrationAudioUrl
+                  })
+                });
+
+                console.log(`Generated narration audio for clip ${clip.id}`);
+              }
+            } catch (narrationError) {
+              console.error(`Error generating narration for clip ${clip.id}:`, narrationError);
+            }
+          }
+
           // Call the API to generate a video for this clip
+          console.log(`Exporting clip ${clip.id} (${i+1}/${allClips.length})...`);
           const response = await fetch(`/api/clips/${clip.id}/export-video`, {
             method: 'GET'
           });
@@ -1526,7 +1560,47 @@
     exportError = null;
 
     try {
+      // First, ensure all clips have narration audio
+      for (const scene of scenes) {
+        if (!scene.clips || scene.clips.length === 0) continue;
+
+        for (const clip of scene.clips) {
+          if (!clip.narrationAudioUrl && clip.narration) {
+            console.log(`Generating narration audio for clip ${clip.id}...`);
+            try {
+              const narrationResponse = await fetch('/api/ai-storyboard/generate-narration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  clipId: clip.id,
+                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural'
+                })
+              });
+
+              if (narrationResponse.ok) {
+                const narrationResult = await narrationResponse.json();
+                clip.narrationAudioUrl = narrationResult.narrationAudioUrl;
+
+                // Update the clip with the new narration audio URL
+                await fetch(`/api/clips/${clip.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    narrationAudioUrl: clip.narrationAudioUrl
+                  })
+                });
+
+                console.log(`Generated narration audio for clip ${clip.id}`);
+              }
+            } catch (narrationError) {
+              console.error(`Error generating narration for clip ${clip.id}:`, narrationError);
+            }
+          }
+        }
+      }
+
       // Call the API to generate a unified video
+      console.log(`Exporting unified video for story ${storyId}...`);
       const response = await fetch(`/api/stories/${storyId}/export-video`, {
         method: 'GET'
       });
@@ -2332,10 +2406,11 @@
     bind:open={showExportModal}
     isLoading={isExporting}
     exportProgress={exportProgress}
-    on:close={() => showExportModal = false}
-    on:exportZip={handleExportZip}
-    on:exportIndividualClips={handleExportIndividualClips}
-    on:exportUnifiedVideo={handleExportUnifiedVideo}
+    bind:exportError={exportError}
+    onClose={() => showExportModal = false}
+    onExportZip={handleExportZip}
+    onExportIndividualClips={handleExportIndividualClips}
+    onExportUnifiedVideo={handleExportUnifiedVideo}
   />
 </div>
 

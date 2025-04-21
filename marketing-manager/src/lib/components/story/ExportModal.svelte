@@ -1,43 +1,45 @@
 <script lang="ts">
   import * as Dialog from '$lib/components/ui/dialog';
   import { Button } from '$lib/components/ui/button';
-  import { FileDown, Film, FileArchive, Video } from 'lucide-svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { Film, FileArchive, Video } from 'lucide-svelte';
 
   // Props
   let {
     open = $bindable(false),
     isLoading = false,
-    exportProgress = 0
+    exportProgress = 0,
+    exportError = $bindable<string | null>(null),
+    onClose = $bindable(() => {}),
+    onExportZip = $bindable(() => {}),
+    onExportIndividualClips = $bindable(() => {}),
+    onExportUnifiedVideo = $bindable(() => {})
   } = $props<{
     open?: boolean;
     isLoading?: boolean;
     exportProgress?: number;
-  }>();
-
-  const dispatch = createEventDispatcher<{
-    close: void;
-    exportZip: void;
-    exportIndividualClips: void;
-    exportUnifiedVideo: void;
+    exportError?: string | null;
+    onClose?: () => void;
+    onExportZip?: () => void;
+    onExportIndividualClips?: () => void;
+    onExportUnifiedVideo?: () => void;
   }>();
 
   function handleClose() {
     if (!isLoading) {
-      dispatch('close');
+      onClose();
     }
   }
 
   function handleExportZip() {
-    dispatch('exportZip');
+    onExportZip();
   }
 
   function handleExportIndividualClips() {
-    dispatch('exportIndividualClips');
+    onExportIndividualClips();
   }
 
   function handleExportUnifiedVideo() {
-    dispatch('exportUnifiedVideo');
+    onExportUnifiedVideo();
   }
 </script>
 
@@ -51,6 +53,13 @@
     </Dialog.Header>
 
     <div class="grid gap-4 py-4">
+      {#if exportError}
+        <div class="p-4 bg-destructive/10 text-destructive rounded-md">
+          <div class="font-medium mb-1">Export Error</div>
+          <div class="text-sm">{exportError}</div>
+        </div>
+      {/if}
+
       {#if isLoading}
         <div class="p-4 bg-muted rounded-md">
           <div class="flex items-center justify-between mb-2">
@@ -58,16 +67,16 @@
             <span>{(exportProgress * 100).toFixed(0)}%</span>
           </div>
           <div class="w-full bg-secondary h-2 rounded-full overflow-hidden">
-            <div 
-              class="bg-primary h-full transition-all duration-300 ease-in-out" 
+            <div
+              class="bg-primary h-full transition-all duration-300 ease-in-out"
               style="width: {exportProgress * 100}%"
             ></div>
           </div>
         </div>
       {:else}
         <div class="grid gap-4">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             class="w-full justify-start h-auto py-4 px-4"
             onclick={handleExportZip}
           >
@@ -81,9 +90,9 @@
               </div>
             </div>
           </Button>
-          
-          <Button 
-            variant="outline" 
+
+          <Button
+            variant="outline"
             class="w-full justify-start h-auto py-4 px-4"
             onclick={handleExportIndividualClips}
           >
@@ -97,9 +106,9 @@
               </div>
             </div>
           </Button>
-          
-          <Button 
-            variant="outline" 
+
+          <Button
+            variant="outline"
             class="w-full justify-start h-auto py-4 px-4"
             onclick={handleExportUnifiedVideo}
           >
