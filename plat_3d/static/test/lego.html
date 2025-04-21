@@ -104,9 +104,19 @@
     
     <canvas id="canvas"></canvas>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.min.js"></script>
-    <script>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.175.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.175.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js';
+        
         // Initialize Three.js scene
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB); // Sky blue background
@@ -148,21 +158,6 @@
         basePlate.receiveShadow = true;
         scene.add(basePlate);
         
-        // Initialize transform controls
-        const transformControls = new THREE.TransformControls(camera, renderer.domElement);
-        transformControls.size = 0.75;
-        transformControls.addEventListener('dragging-changed', function(event) {
-            // Disable camera movement when using transform controls
-            isTransforming = event.value;
-        });
-        
-        // Add snap functionality
-        let gridSnapEnabled = true;
-        const snapSize = 1; // Size of grid cells
-        const rotationSnap = Math.PI / 2; // 90 degrees rotation snap
-        
-        scene.add(transformControls);
-        
         // Block variables
         let blocks = [];
         let selectedBlock = null;
@@ -187,6 +182,23 @@
         let isPanning = false;
         let previousMousePosition = { x: 0, y: 0 };
         let deltaMove = { x: 0, y: 0 };
+        
+        // Initialize transform controls - need to create it after renderer is set up
+        const transformControls = new TransformControls(camera, renderer.domElement);
+        transformControls.size = 0.75;
+        transformControls.addEventListener('dragging-changed', function(event) {
+            // Disable camera movement when using transform controls
+            isTransforming = event.value;
+        });
+        scene.add(transformControls.getHelper()); // Add the helper to make gizmo visible
+        
+        // Add snap functionality
+        let gridSnapEnabled = true;
+        const snapSize = 1; // Size of grid cells
+        const rotationSnap = Math.PI / 2; // 90 degrees rotation snap
+        
+        // In newer versions of Three.js, the TransformControls are automatically added to the scene
+        // when you attach an object to them, so we don't need to add them explicitly
         
         // Create a Lego block
         function createLegoBlock(width, length, color) {
@@ -266,10 +278,10 @@
                 30, // Start from high up
                 object.position.z
             );
-            const rayDirection = new THREE.Vector3(0, -1, 0);
+            const rayDirection = new THREE.Vector3(0, -1, 0).normalize();
             
-            const ray = new THREE.Raycaster(rayStart, rayDirection);
-            const intersects = ray.intersectObjects(blocks.filter(b => b !== object), true);
+            raycaster.set(rayStart, rayDirection);
+            const intersects = raycaster.intersectObjects(blocks.filter(b => b !== object), true);
             
             // Filter out any studs from the current object
             const validIntersects = intersects.filter(intersect => {
@@ -284,7 +296,7 @@
                 let highestY = -Infinity;
                 for (const intersect of validIntersects) {
                     // Find the parent block if we hit a stud
-                    const hitBlock = intersect.object.parent.type === "Group" ? 
+                    const hitBlock = intersect.object.parent && intersect.object.parent.type === "Group" ? 
                                     intersect.object.parent : 
                                     intersect.object;
                     
@@ -317,21 +329,25 @@
         
         // Select a block and attach transform controls
         function selectBlock(block) {
-            if (selectedBlock) {
-                // Deselect previous block
-                blocks.forEach(block => {
-                    if (block.children[0]) {
-                        block.children[0].material.emissive.set(0x000000);
-                    }
-                });
+            // Deselect the PREVIOUSLY selected block, if there was one
+            if (selectedBlock && selectedBlock !== block) { // Check if there was a selection and it's different
+                if (selectedBlock.children[0]) {
+                    selectedBlock.children[0].material.emissive.set(0x000000); // Reset highlight
+                }
+                transformControls.detach(); // Detach controls from the old block
             }
-            
-            selectedBlock = block;
-            
-            // Highlight the selected block
-            if (selectedBlock && selectedBlock.children[0]) {
-                selectedBlock.children[0].material.emissive.set(0x333333);
-                transformControls.attach(selectedBlock);
+
+            selectedBlock = block; // Assign the newly clicked block
+
+            // Highlight the NEWLY selected block and attach controls
+            if (selectedBlock) {
+                if (selectedBlock.children[0]) {
+                    selectedBlock.children[0].material.emissive.set(0x333333); // Highlight new selection
+                }
+                transformControls.attach(selectedBlock); // Attach controls to the new block
+            } else {
+                 // If the new selection is null (e.g., clicked empty space), ensure controls are detached
+                 transformControls.detach();
             }
         }
         
@@ -391,7 +407,9 @@
             // Handle block placement preview
             if (placementMode && placementBlock && !isDragging) {
                 raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects([basePlate, ...blocks], true);
+                const intersectsObjects = [...blocks];
+                if (basePlate) intersectsObjects.push(basePlate);
+                const intersects = raycaster.intersectObjects(intersectsObjects, true);
                 
                 if (intersects.length > 0) {
                     const intersect = intersects[0];
@@ -406,7 +424,7 @@
                     let y = 0;
                     if (intersect.object !== basePlate && intersect.object.parent !== gridHelper) {
                         // Find the parent block if we hit a stud
-                        const hitBlock = intersect.object.parent.type === "Group" ? 
+                        const hitBlock = intersect.object.parent && intersect.object.parent.type === "Group" ? 
                                          intersect.object.parent : 
                                          intersect.object;
                         
@@ -479,7 +497,7 @@
                     if (intersects.length > 0) {
                         const intersected = intersects[0].object;
                         // Find the parent block if we hit a stud
-                        const clickedBlock = intersected.parent.type === "Group" ? 
+                        const clickedBlock = intersected.parent && intersected.parent.type === "Group" ? 
                                             intersected.parent : 
                                             intersected;
                         
@@ -593,10 +611,13 @@
                     currentBlockSize.length, 
                     currentBlockColor
                 );
-                placementBlock.material = new THREE.MeshPhongMaterial({ 
-                    color: currentBlockColor,
-                    transparent: true,
-                    opacity: 0.7
+                // In Three.js 0.175.0, we need to set materials for each child instead
+                placementBlock.children.forEach(child => {
+                    if (child.material) {
+                        child.material = child.material.clone(); // Clone to not affect other blocks
+                        child.material.transparent = true;
+                        child.material.opacity = 0.7;
+                    }
                 });
                 scene.add(placementBlock);
                 placementMode = true;
@@ -611,6 +632,14 @@
             if (placementBlock) {
                 scene.remove(placementBlock);
                 placementBlock = createLegoBlock(1, 1, currentBlockColor);
+                // Apply transparency
+                placementBlock.children.forEach(child => {
+                    if (child.material) {
+                        child.material = child.material.clone();
+                        child.material.transparent = true;
+                        child.material.opacity = 0.7;
+                    }
+                });
                 scene.add(placementBlock);
             }
         });
@@ -620,6 +649,14 @@
             if (placementBlock) {
                 scene.remove(placementBlock);
                 placementBlock = createLegoBlock(2, 2, currentBlockColor);
+                // Apply transparency
+                placementBlock.children.forEach(child => {
+                    if (child.material) {
+                        child.material = child.material.clone();
+                        child.material.transparent = true;
+                        child.material.opacity = 0.7;
+                    }
+                });
                 scene.add(placementBlock);
             }
         });
@@ -629,6 +666,14 @@
             if (placementBlock) {
                 scene.remove(placementBlock);
                 placementBlock = createLegoBlock(2, 4, currentBlockColor);
+                // Apply transparency
+                placementBlock.children.forEach(child => {
+                    if (child.material) {
+                        child.material = child.material.clone();
+                        child.material.transparent = true;
+                        child.material.opacity = 0.7;
+                    }
+                });
                 scene.add(placementBlock);
             }
         });

@@ -168,12 +168,12 @@
     scene.add(basePlate);
 
     // Initialize transform controls
-    // TransformControls needs to be added to the scene to be visible
+    // In Three.js v0.175.0+, we need to use getHelper() to add the visual gizmo to the scene
     transformControls = new TransformControls(camera, renderer.domElement);
     transformControls.size = 0.75; // Adjust size of the gizmo
-    // Add to scene - this is critical for visibility!
-    // We need to add it to the scene for it to be rendered
-    scene.add(transformControls);
+
+    // Add the helper to the scene - this is critical for visibility in newer Three.js versions!
+    scene.add(transformControls.getHelper());
 
     // Listen for when the user starts/stops dragging the controls
     transformControls.addEventListener('dragging-changed', function(event) {
@@ -409,7 +409,9 @@
      // If the transform controls are attached to this object, update their gizmo position
      // to match the snapped object position immediately.
     if (transformControls.object === object) {
+         // In newer Three.js versions, we need to update the helper's matrix world
          transformControls.updateMatrixWorld(); // Update controls matrix to follow the object
+         transformControls.getHelper().updateMatrixWorld(true); // Force update the helper's matrix world
     }
   }
 
@@ -436,6 +438,8 @@
         }
         // Attach transform controls to the selected block
         transformControls.attach(selectedBlock);
+        // Make sure the helper is updated
+        transformControls.getHelper().updateMatrixWorld(true);
     }
     // If selectedBlock is null (e.g., calling selectBlock(null) to deselect),
     // the logic above will detach controls and clear selectedBlock.
@@ -624,12 +628,29 @@
     // The `dragging-changed` event is best for knowing when a *drag* is active,
     // but not just a simple click on the gizmo.
 
-    // A basic check: If controls are attached to an object and this is a left click,
-    // assume the user might be trying to interact with controls,
-    // unless they are in placement mode which has higher priority for left click.
-    const attemptingControlInteraction = selectedBlock && transformControls.object === selectedBlock && event.button === 0;
+    // In newer Three.js versions, we need to check if the click is on the transform controls helper
+    // We'll perform a raycast to see if we hit the helper first
+    let clickingOnHelper = false;
+    if (selectedBlock && transformControls.object === selectedBlock && event.button === 0) {
+      // Create a temporary raycaster to check if we're clicking on the helper
+      const tempRaycaster = new THREE.Raycaster();
+      const tempMouse = new THREE.Vector2(
+        (event.clientX / window.innerWidth) * 2 - 1,
+        -(event.clientY / window.innerHeight) * 2 + 1
+      );
+      tempRaycaster.setFromCamera(tempMouse, camera);
 
-    if (!attemptingControlInteraction || placementMode) {
+      // Check if we're intersecting with the helper
+      const helperObjects = [];
+      transformControls.getHelper().traverse(obj => {
+        if (obj.visible) helperObjects.push(obj);
+      });
+
+      const helperIntersects = tempRaycaster.intersectObjects(helperObjects, true);
+      clickingOnHelper = helperIntersects.length > 0;
+    }
+
+    if (!clickingOnHelper || placementMode) {
         if (event.button === 0) { // Left click
             if (placementMode && placementBlock) {
                 // --- Handle placing the block ---
