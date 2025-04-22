@@ -28,6 +28,8 @@
   import ImageGallery from "./ImageGallery.svelte";
   import { addImageFromUrl } from "./canvas-tools/canvas-image.svelte";
   import ImageUploadModal from "./ImageUploadModal.svelte";
+  import { onMount } from "svelte";
+  import type { CanvasAspectRatio } from "$lib/constants";
 
   let {
     canvas,
@@ -36,6 +38,10 @@
     $props();
   let activeTab = $state("elements");
   let isBackgroundImageModalOpen = $state(false);
+  let templates = $state<any[]>([]);
+  let isLoadingTemplates = $state(false);
+  let templateError = $state<string | null>(null);
+
   // Define the shapes for the shapes tab
   const shapes = [
     { id: "rectangle", icon: "■", action: () => addRectangle(canvas) },
@@ -75,6 +81,82 @@
   async function addImageFromURl(url: string) {
     addImageFromUrl(canvas, url)();
   }
+
+  // Function to fetch templates
+  async function fetchTemplates() {
+    isLoadingTemplates = true;
+    templateError = null;
+    try {
+      const response = await fetch('/api/canvas-templates');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch templates: ${response.statusText}`);
+      }
+      const data = await response.json();
+      templates = data;
+    } catch (err: any) {
+      console.error('Error fetching canvas templates:', err);
+      templateError = err.message || 'An unknown error occurred.';
+    } finally {
+      isLoadingTemplates = false;
+    }
+  }
+
+  // Function to apply a template to the canvas
+  async function applyTemplate(templateId: number) {
+    if (!canvas || !canvasService) return;
+
+    try {
+      const response = await fetch(`/api/canvas-templates/${templateId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch template: ${response.statusText}`);
+      }
+      const template = await response.json();
+
+      // Load the template data into the canvas
+      if (template.canvasData) {
+        await canvas.loadFromJSON(template.canvasData);
+        canvas.renderAll();
+      }
+    } catch (err: any) {
+      console.error('Error applying template:', err);
+      alert(`Failed to apply template: ${err.message}`);
+    }
+  }
+
+  // Get the current canvas aspect ratio
+  function getCurrentAspectRatio(): CanvasAspectRatio {
+    if (!canvasService) return "16:9";
+
+    const width = canvasService.width;
+    const height = canvasService.height;
+
+    // Calculate the aspect ratio
+    const ratio = width / height;
+
+    // Match to known aspect ratios
+    if (Math.abs(ratio - 16/9) < 0.1) return "16:9";
+    if (Math.abs(ratio - 9/16) < 0.1) return "9:16";
+    if (Math.abs(ratio - 1) < 0.1) return "1:1";
+    if (Math.abs(ratio - 4/5) < 0.1) return "4:5";
+    if (Math.abs(ratio - 1.91) < 0.1) return "1.91:1";
+
+    return "Other";
+  }
+
+  // Filter templates based on current canvas aspect ratio
+  function getFilteredTemplates() {
+    if (!templates.length) return [];
+
+    const currentAspectRatio = getCurrentAspectRatio();
+    return templates.filter(template => template.aspectRatio === currentAspectRatio);
+  }
+
+  // Load templates when the component mounts or when the activeTab changes to "templates"
+  $effect(() => {
+    if (activeTab === "templates" && templates.length === 0) {
+      fetchTemplates();
+    }
+  });
 </script>
 
 <div class="flex">
@@ -130,12 +212,38 @@
       </div>
     {:else if activeTab === "templates"}
       <div class="content-section">
-        <h3 class="section-title">Templates</h3>
-        <div class="items-grid">
-          <div class="template-placeholder">Template 1</div>
-          <div class="template-placeholder">Template 2</div>
-          <div class="template-placeholder">Template 3</div>
-        </div>
+        <h3 class="section-title">Templates for {getCurrentAspectRatio()} Aspect Ratio</h3>
+
+        {#if isLoadingTemplates}
+          <div class="loading-indicator">Loading templates...</div>
+        {:else if templateError}
+          <div class="error-message">
+            <p>Error: {templateError}</p>
+            <button class="retry-button" onclick={() => fetchTemplates()}>Retry</button>
+          </div>
+        {:else if getFilteredTemplates().length === 0}
+          <div class="no-templates-message">
+            <p>No templates available for the current canvas aspect ratio ({getCurrentAspectRatio()}).</p>
+            <p class="hint">You can create templates in Settings > Canvas Templates.</p>
+          </div>
+        {:else}
+          <div class="templates-grid">
+            {#each getFilteredTemplates() as template (template.id)}
+              <button
+                class="template-item"
+                onclick={() => applyTemplate(template.id)}
+                title={template.description || template.name}
+              >
+                {#if template.previewImageUrl}
+                  <img src={template.previewImageUrl} alt={template.name} class="template-preview" />
+                {:else}
+                  <div class="template-placeholder">{template.name}</div>
+                {/if}
+                <div class="template-name">{template.name}</div>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
     {:else if activeTab === "photos"}
       <div class="content-section">
@@ -243,8 +351,7 @@
     color: hsl(var(--sidebar-foreground));
   }
 
-  .template-placeholder,
-  .photo-placeholder {
+  .template-placeholder {
     aspect-ratio: 16/9;
     background-color: hsl(var(--sidebar-accent));
     display: flex;
@@ -253,5 +360,80 @@
     border-radius: 4px;
     font-size: 0.8rem;
     color: hsl(var(--sidebar-foreground));
+  }
+
+  .templates-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .template-item {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid hsl(var(--sidebar-border));
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: none;
+    padding: 0;
+  }
+
+  .template-item:hover {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .template-preview {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+  }
+
+  .template-name {
+    padding: 6px;
+    font-size: 0.8rem;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .loading-indicator {
+    padding: 12px 0;
+    text-align: center;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .error-message {
+    padding: 12px;
+    color: hsl(var(--destructive));
+    background-color: hsl(var(--destructive) / 0.1);
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  .retry-button {
+    margin-top: 8px;
+    padding: 4px 8px;
+    background-color: hsl(var(--primary));
+    color: white;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+
+  .no-templates-message {
+    padding: 12px;
+    color: hsl(var(--muted-foreground));
+    text-align: center;
+    font-size: 0.9rem;
+  }
+
+  .hint {
+    font-size: 0.8rem;
+    margin-top: 8px;
+    font-style: italic;
   }
 </style>
