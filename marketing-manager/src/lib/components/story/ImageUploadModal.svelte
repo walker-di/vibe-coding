@@ -113,7 +113,7 @@
             </div>
           </div>
         {:else if activeTab === 'gallery'}
-          <div class="max-h-[400px] overflow-y-auto">
+          <div class="h-[400px] overflow-hidden">
             <ImageGallery onImageSelected={(url) => {
               onImageSelected?.(url);
               close();
