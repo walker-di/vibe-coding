@@ -16,17 +16,48 @@
   let menuRef: HTMLDivElement | null = $state(null);
   let menuPosition = $state({ top: 0, left: 0 });
 
-  // Function to check if an object is a group
+  // Function to check if an object is a group (but not an SVG group with data.isSvg)
   function isGroupObject(obj: any): boolean {
-    return obj instanceof Group;
+    // Check if it's a group
+    if (!(obj instanceof Group)) {
+      console.log('UngroupMenu: Not a group');
+      return false;
+    }
+
+    // Check if it has the data.isSvg property - if so, it should be handled by SvgEditMenu
+    if (obj.get('data') && obj.get('data').isSvg === true) {
+      console.log('UngroupMenu: Detected SVG group with data.isSvg, ignoring');
+      return false;
+    }
+
+    // Check if it has the preventUngroup flag
+    if (obj.get('data') && obj.get('data').preventUngroup === true) {
+      console.log('UngroupMenu: Object has preventUngroup flag, ignoring');
+      return false;
+    }
+
+    // Check if the name starts with "SVG " (legacy method)
+    if (obj.get('name') && obj.get('name').toString().startsWith("SVG ")) {
+      console.log('UngroupMenu: Found SVG group with name starting with "SVG ", ignoring');
+      return false;
+    }
+
+    console.log('UngroupMenu: Regular group detected, can be ungrouped');
+    return true;
   }
 
   // Function to get the group type (SVG or regular)
   function getGroupType(obj: any): string {
     if (!obj || !(obj instanceof Group)) return 'not-a-group';
 
+    // Check for data.isSvg property
+    if (obj.get('data') && obj.get('data').isSvg === true) {
+      return 'svg-group-data';
+    }
+
+    // Check for SVG name prefix (legacy method)
     if (isSVGGroup(obj)) {
-      return 'svg-group';
+      return 'svg-group-name';
     }
 
     return 'regular-group';
