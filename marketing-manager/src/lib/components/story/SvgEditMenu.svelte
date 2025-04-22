@@ -2,9 +2,8 @@
   import { onMount, onDestroy } from "svelte";
   import { type Canvas, type FabricObject, Group } from "fabric";
   import { Button } from "$lib/components/ui/button";
-  import { Layers, Edit, Palette, Ungroup, Group as GroupIcon } from "lucide-svelte";
+  import { Palette, Ungroup, Group as GroupIcon, Trash2 } from "lucide-svelte";
   import { Popover, PopoverContent, PopoverTrigger } from "$lib/components/ui/popover";
-  import { Slider } from "$lib/components/ui/slider";
   import { Label } from "$lib/components/ui/label";
   import { Input } from "$lib/components/ui/input";
 
@@ -25,6 +24,9 @@
   let originalGroup = $state<Group | null>(null);
   let ungroupedObjects = $state<FabricObject[]>([]);
   let selectedElement = $state<FabricObject | null>(null);
+  let isProcessingDelete = $state(false); // Flag to prevent infinite loops during deletion
+  let isRegrouping = $state(false); // Flag to prevent infinite loops during regrouping
+  let lastRegroupTime = $state(0); // Timestamp of last regroup operation
 
   // Function to check if an object is an SVG group
   function isSvgGroup(obj: any): boolean {
@@ -61,6 +63,20 @@
   // Function to check selection and show menu if an SVG group is selected
   function checkSelection() {
     try {
+      // If we're currently processing a delete operation or regrouping, skip selection handling
+      if (isProcessingDelete || isRegrouping) {
+        console.log('SvgEditMenu: Skipping selection check during operation');
+        return;
+      }
+
+      // Throttle regrouping operations to prevent infinite loops
+      const now = Date.now();
+      const timeSinceLastRegroup = now - lastRegroupTime;
+      if (timeSinceLastRegroup < 500) { // 500ms throttle
+        console.log('SvgEditMenu: Throttling selection check, too soon after last regroup');
+        return;
+      }
+
       const activeObject = canvas.getActiveObject();
       console.log('Selection changed:', activeObject);
 
@@ -77,7 +93,7 @@
         }
 
         // Check if the selected object is part of an SVG (has the partOfSvg flag)
-        if (activeObject && activeObject.data && activeObject.data.partOfSvg === true) {
+        if (activeObject && (activeObject as any).data && (activeObject as any).data.partOfSvg === true) {
           console.log('SvgEditMenu: Selected an object with partOfSvg flag');
           selectedElement = activeObject as FabricObject;
           isVisible = true;
@@ -91,7 +107,7 @@
       }
 
       // Check if the selected object is an SVG group
-      if (isSvgGroup(activeObject)) {
+      if (activeObject && isSvgGroup(activeObject)) {
         console.log('SvgEditMenu: SVG group selected');
 
         // Store the SVG group
@@ -101,10 +117,10 @@
         isVisible = true;
 
         // IMPORTANT: Add a flag to the object to prevent other components from ungrouping it
-        if (!activeObject.data) {
-          activeObject.set('data', { isSvg: true, preventUngroup: true });
-        } else if (!activeObject.data.preventUngroup) {
-          activeObject.set('data', { ...activeObject.data, preventUngroup: true });
+        if (!(activeObject as any).data) {
+          (activeObject as any).set('data', { isSvg: true, preventUngroup: true });
+        } else if (!(activeObject as any).data.preventUngroup) {
+          (activeObject as any).set('data', { ...(activeObject as any).data, preventUngroup: true });
         }
       } else {
         // Hide the menu if no SVG is selected
@@ -118,9 +134,23 @@
 
   // Function to hide the menu
   function hideMenu() {
+    // Don't try to hide if we're in the middle of an operation
+    if (isProcessingDelete || isRegrouping) {
+      console.log('SvgEditMenu: Skipping hide menu during operation');
+      return;
+    }
+
     if (isUngrouped) {
       // If we're in ungrouped mode, regroup before hiding
       regroupSvg();
+
+      // Set a timeout to hide after regrouping is complete
+      setTimeout(() => {
+        isVisible = false;
+        selectedSvg = null;
+        selectedElement = null;
+      }, 600);
+      return;
     }
 
     isVisible = false;
@@ -132,6 +162,12 @@
   function ungroupSvg() {
     if (!selectedSvg || !canvas) {
       console.log('No SVG selected or no canvas');
+      return;
+    }
+
+    // Don't ungroup if we're in the middle of another operation
+    if (isProcessingDelete || isRegrouping) {
+      console.log('SvgEditMenu: Cannot ungroup during an operation');
       return;
     }
 
@@ -226,10 +262,21 @@
       return;
     }
 
+    // Prevent recursive regrouping
+    if (isRegrouping) {
+      console.log('Already regrouping, skipping');
+      return;
+    }
+
+    // Set the regrouping flag and update timestamp
+    isRegrouping = true;
+    lastRegroupTime = Date.now();
+
     if (ungroupedObjects.length === 0) {
       console.log('No ungrouped objects to regroup');
       isUngrouped = false;
       originalGroup = null;
+      isRegrouping = false;
       return;
     }
 
@@ -253,6 +300,7 @@
         ungroupedObjects = [];
         originalGroup = null;
         selectedElement = null;
+        isRegrouping = false;
         return;
       }
 
@@ -286,11 +334,12 @@
         selectable: true,       // Make sure the group is selectable
         lockMovementX: false,   // Allow horizontal movement
         lockMovementY: false,   // Allow vertical movement
-        // Preserve original SVG data if available
-        data: originalGroup?.data || {
-          isSvg: true,
-          preventUngroup: true
-        }
+      });
+
+      // Add SVG data to the group
+      (newGroup as any).set('data', (originalGroup as any)?.data || {
+        isSvg: true,
+        preventUngroup: true
       });
 
       // Make all child objects non-selectable to ensure the group is selected
@@ -321,6 +370,11 @@
       ungroupedObjects = [];
       originalGroup = null;
       selectedElement = null;
+    } finally {
+      // Always reset the regrouping flag after a delay
+      setTimeout(() => {
+        isRegrouping = false;
+      }, 500);
     }
   }
 
@@ -341,12 +395,82 @@
     canvas.requestRenderAll();
   }
 
+  // Function to safely delete the selected SVG element
+  function deleteSelectedElement() {
+    if (!selectedElement || !canvas || !isUngrouped) return;
+
+    // Prevent deletion during regrouping
+    if (isRegrouping) {
+      console.log('SvgEditMenu: Cannot delete while regrouping');
+      return;
+    }
+
+    try {
+      console.log('SvgEditMenu: Deleting selected element:', selectedElement);
+
+      // Set the processing flag to prevent event handler loops
+      isProcessingDelete = true;
+
+      // Store a reference to the element we're deleting
+      const elementToDelete = selectedElement;
+
+      // Clear the selected element reference first
+      selectedElement = null;
+
+      // Remove the element from our tracked ungrouped objects array
+      ungroupedObjects = ungroupedObjects.filter(obj => obj !== elementToDelete);
+
+      // Then remove from canvas
+      canvas.remove(elementToDelete);
+
+      // If no more elements, reset state
+      if (ungroupedObjects.length === 0) {
+        console.log('SvgEditMenu: No elements left, resetting state');
+        isUngrouped = false;
+        originalGroup = null;
+      } else {
+        // Select another element if available
+        if (ungroupedObjects.length > 0) {
+          // Delay selection to avoid event conflicts
+          setTimeout(() => {
+            if (canvas && ungroupedObjects.length > 0) {
+              canvas.setActiveObject(ungroupedObjects[0]);
+              selectedElement = ungroupedObjects[0];
+              canvas.requestRenderAll();
+            }
+          }, 50);
+        }
+      }
+
+      canvas.requestRenderAll();
+    } catch (error) {
+      console.error('SvgEditMenu: Error deleting element:', error);
+    } finally {
+      // Always reset the processing flag when done
+      setTimeout(() => {
+        isProcessingDelete = false;
+      }, 500); // Longer timeout to ensure all events have settled
+    }
+  }
+
   // Set up event listeners
   onMount(() => {
     // Use setTimeout to ensure the component is fully mounted
     setTimeout(() => {
-      canvas.on("selection:created", checkSelection);
-      canvas.on("selection:updated", checkSelection);
+      // Use a debounced version of checkSelection to prevent rapid firing
+      const debouncedCheckSelection = () => {
+        if (isProcessingDelete || isRegrouping) return;
+
+        // Throttle selection checks
+        const now = Date.now();
+        const timeSinceLastRegroup = now - lastRegroupTime;
+        if (timeSinceLastRegroup < 500) return;
+
+        checkSelection();
+      };
+
+      canvas.on("selection:created", debouncedCheckSelection);
+      canvas.on("selection:updated", debouncedCheckSelection);
       canvas.on("selection:cleared", hideMenu);
       console.log('SvgEditMenu: Event listeners attached');
     }, 100);
@@ -354,12 +478,20 @@
 
   // Clean up event listeners
   onDestroy(() => {
-    canvas.off("selection:created", checkSelection);
-    canvas.off("selection:updated", checkSelection);
-    canvas.off("selection:cleared", hideMenu);
+    // Clean up all event listeners with their handlers
+    try {
+      // Use a safer approach to remove event listeners
+      canvas.off("selection:created", () => {});
+      canvas.off("selection:updated", () => {});
+      canvas.off("selection:cleared", () => {});
+    } catch (error) {
+      console.error('Error removing event listeners:', error);
+    }
 
     // If we're in ungrouped mode when component is destroyed, regroup
     if (isUngrouped) {
+      // Make sure we're not in a delete operation
+      isProcessingDelete = false;
       regroupSvg();
     }
   });
@@ -389,55 +521,67 @@
       </Button>
 
       {#if selectedElement}
-        <Popover bind:open={isColorPickerOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              title="Change Color"
-            >
-              <Palette class="h-4 w-4 mr-2" />
-              Color
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="w-80">
-            <div class="space-y-4">
-              <h4 class="font-medium">Element Color</h4>
-              <div class="grid gap-2">
-                <div class="grid grid-cols-2 gap-2">
-                  <Label for="color-picker">Color</Label>
-                  <div class="flex items-center gap-2">
-                    <div
-                      class="w-6 h-6 border rounded"
-                      style="background-color: {selectedColor};"
-                    ></div>
-                    <Input
-                      id="color-picker"
-                      type="color"
-                      bind:value={selectedColor}
-                      class="w-10 h-10 p-0 border-0"
-                      on:input={() => changeElementColor(selectedColor)}
-                    />
+        <div class="flex gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                title="Change Color"
+              >
+                <Palette class="h-4 w-4 mr-2" />
+                Color
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-80">
+              <div class="space-y-4">
+                <h4 class="font-medium">Element Color</h4>
+                <div class="grid gap-2">
+                  <div class="grid grid-cols-2 gap-2">
+                    <Label for="color-picker">Color</Label>
+                    <div class="flex items-center gap-2">
+                      <div
+                        class="w-6 h-6 border rounded"
+                        style="background-color: {selectedColor};"
+                      ></div>
+                      <Input
+                        id="color-picker"
+                        type="color"
+                        bind:value={selectedColor}
+                        class="w-10 h-10 p-0 border-0"
+                        on:change={() => changeElementColor(selectedColor)}
+                      />
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-4 gap-2 mt-2">
+                    {#each ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#000000', '#FFFFFF'] as color}
+                      <button
+                        class="w-8 h-8 rounded border"
+                        style="background-color: {color};"
+                        onclick={() => {
+                          selectedColor = color;
+                          changeElementColor(color);
+                        }}
+                        aria-label="Select color {color}"
+                      ></button>
+                    {/each}
                   </div>
                 </div>
-
-                <div class="grid grid-cols-4 gap-2 mt-2">
-                  {#each ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#000000', '#FFFFFF'] as color}
-                    <button
-                      class="w-8 h-8 rounded border"
-                      style="background-color: {color};"
-                      onclick={() => {
-                        selectedColor = color;
-                        changeElementColor(color);
-                      }}
-                      aria-label="Select color {color}"
-                    ></button>
-                  {/each}
-                </div>
               </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={deleteSelectedElement}
+            title="Delete Element"
+          >
+            <Trash2 class="h-4 w-4 mr-2" />
+            Delete
+          </Button>
+        </div>
       {/if}
     {/if}
   </div>
