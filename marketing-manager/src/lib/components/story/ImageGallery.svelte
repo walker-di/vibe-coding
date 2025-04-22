@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui/button';
-  import { Loader2, RefreshCw, Sparkles, FileText } from 'lucide-svelte';
+  import { Loader2, RefreshCw, Sparkles, FileText, Plus, Image as ImageIcon } from 'lucide-svelte';
   import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
+  import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '$lib/components/ui/dropdown-menu';
+  import SvgGeneratorModal from './SvgGeneratorModal.svelte';
+  import ImageGeneratorModal from './ImageGeneratorModal.svelte';
 
   // Props
   let {
@@ -28,6 +31,8 @@
   let isLoading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state('uploaded');
+  let isSvgGeneratorOpen = $state(false);
+  let isImageGeneratorOpen = $state(false);
 
   // Load images on mount
   onMount(() => {
@@ -133,14 +138,59 @@
   function selectImage(url: string) {
     onImageSelected?.(url);
   }
+
+  // Open SVG generator modal
+  function openSvgGenerator() {
+    isSvgGeneratorOpen = true;
+  }
+
+  // Open Image generator modal
+  function openImageGenerator() {
+    isImageGeneratorOpen = true;
+  }
+
+  // Handle SVG selection from generator
+  function handleSvgSelected(url: string) {
+    // Refresh SVG images to include the new one
+    loadSvgImages().then(() => {
+      // Select the image
+      selectImage(url);
+    });
+  }
+
+  // Handle image selection from generator
+  function handleImageSelected(url: string) {
+    // Refresh AI images to include the new one
+    loadAiGeneratedImages().then(() => {
+      // Select the image
+      selectImage(url);
+    });
+  }
 </script>
 
 <div class="image-gallery w-full h-full flex flex-col">
   <div class="flex justify-between items-center mb-4">
     <h3 class="text-sm font-medium">Image Gallery</h3>
-    <Button variant="ghost" size="sm" onclick={loadAllImages} title="Refresh Gallery">
-      <RefreshCw class="h-4 w-4" />
-    </Button>
+    <div class="flex items-center space-x-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" title="Create New">
+            <Plus class="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onclick={openImageGenerator}>
+            <ImageIcon class="h-4 w-4 mr-2" /> Generate Image
+          </DropdownMenuItem>
+          <DropdownMenuItem onclick={openSvgGenerator}>
+            <FileText class="h-4 w-4 mr-2" /> Generate SVG
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button variant="ghost" size="sm" onclick={loadAllImages} title="Refresh Gallery">
+        <RefreshCw class="h-4 w-4" />
+      </Button>
+    </div>
   </div>
 
   {#if isLoading}
@@ -273,6 +323,20 @@
     </Tabs>
   {/if}
 </div>
+
+<!-- SVG Generator Modal -->
+<SvgGeneratorModal
+  open={isSvgGeneratorOpen}
+  onClose={() => isSvgGeneratorOpen = false}
+  onSvgSelected={handleSvgSelected}
+/>
+
+<!-- Image Generator Modal -->
+<ImageGeneratorModal
+  open={isImageGeneratorOpen}
+  onClose={() => isImageGeneratorOpen = false}
+  onImageSelected={handleImageSelected}
+/>
 
 <style>
   /* Custom scrollbar styles */
