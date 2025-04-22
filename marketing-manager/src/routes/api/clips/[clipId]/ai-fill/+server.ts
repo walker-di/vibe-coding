@@ -17,6 +17,15 @@ export const POST: RequestHandler = async ({ params, request }) => {
     throw error(400, 'Invalid clip ID');
   }
 
+  // Parse request body to get aspect ratio and resolution parameters
+  let requestBody = {};
+  try {
+    requestBody = await request.json();
+    console.log('AI Fill request body:', requestBody);
+  } catch (err) {
+    console.log('No request body or invalid JSON');
+  }
+
   try {
     // Get the clip data
     const clip = await db.query.clips.findFirst({
@@ -72,8 +81,21 @@ export const POST: RequestHandler = async ({ params, request }) => {
       throw error(404, 'Product not found');
     }
 
-    // Select a template based on context
-    const template = await selectTemplateForClip(clip, story, creative, persona, product);
+    // Get aspect ratio and resolution from request body or use story values
+    const requestAspectRatio = requestBody.aspectRatio;
+    const requestResolution = requestBody.resolution;
+    const requestWidth = requestBody.width;
+    const requestHeight = requestBody.height;
+
+    // Use request values if provided, otherwise use story values
+    const aspectRatioToUse = requestAspectRatio || story.aspectRatio;
+    const resolutionToUse = requestResolution || story.resolution;
+
+    console.log(`Using aspect ratio: ${aspectRatioToUse}, resolution: ${resolutionToUse}`);
+    console.log(`Requested dimensions: ${requestWidth}x${requestHeight}`);
+
+    // Select a template based on context and the specified aspect ratio
+    const template = await selectTemplateForClip(clip, { ...story, aspectRatio: aspectRatioToUse }, creative, persona, product);
 
     if (!template) {
       throw error(500, 'Failed to select a template');
@@ -98,38 +120,51 @@ export const POST: RequestHandler = async ({ params, request }) => {
     // Update the canvas data with the processed objects
     canvasData.objects = updatedObjects;
 
-    // Set the canvas dimensions based on the template's resolution
-    if (template.resolution) {
+    // Set the canvas dimensions based on the request parameters first, then template
+    if (requestWidth && requestHeight) {
+      // Use the dimensions provided in the request
+      console.log(`Setting canvas dimensions from request: ${requestWidth}x${requestHeight}`);
+      canvasData.width = requestWidth;
+      canvasData.height = requestHeight;
+    } else if (resolutionToUse) {
+      // Use the resolution from the request or story
+      const dimensions = calculateDimensions(resolutionToUse);
+      console.log(`Setting canvas dimensions from resolution: ${dimensions.width}x${dimensions.height}`);
+      canvasData.width = dimensions.width;
+      canvasData.height = dimensions.height;
+    } else if (template.resolution) {
+      // Fall back to template resolution
       const dimensions = calculateDimensions(template.resolution);
       console.log(`Setting canvas dimensions from template resolution: ${dimensions.width}x${dimensions.height}`);
       canvasData.width = dimensions.width;
       canvasData.height = dimensions.height;
-    } else if (template.aspectRatio) {
+    } else if (aspectRatioToUse || template.aspectRatio) {
       // If no resolution but we have aspect ratio, calculate dimensions based on a default width
       const defaultWidth = 1920; // Use a high-quality default width
       let height;
+      const ratioToUse = aspectRatioToUse || template.aspectRatio;
 
       // Calculate height based on aspect ratio
-      if (template.aspectRatio === '16:9') {
+      if (ratioToUse === '16:9') {
         height = Math.round(defaultWidth * (9/16));
-      } else if (template.aspectRatio === '9:16') {
+      } else if (ratioToUse === '9:16') {
         height = Math.round(defaultWidth * (16/9));
-      } else if (template.aspectRatio === '1:1') {
+      } else if (ratioToUse === '1:1') {
         height = defaultWidth;
-      } else if (template.aspectRatio === '4:5') {
+      } else if (ratioToUse === '4:5') {
         height = Math.round(defaultWidth * (5/4));
-      } else if (template.aspectRatio === '1.91:1') {
+      } else if (ratioToUse === '1.91:1') {
         height = Math.round(defaultWidth / 1.91);
       } else {
         // Default to 16:9 if aspect ratio is not recognized
         height = Math.round(defaultWidth * (9/16));
       }
 
-      console.log(`No resolution in template, using calculated dimensions from aspect ratio: ${defaultWidth}x${height}`);
+      console.log(`Using calculated dimensions from aspect ratio ${ratioToUse}: ${defaultWidth}x${height}`);
       canvasData.width = defaultWidth;
       canvasData.height = height;
     } else {
-      console.log('Template has no resolution or aspect ratio set, using default dimensions');
+      console.log('No dimensions, resolution, or aspect ratio available, using default dimensions');
     }
 
     // Log final canvas dimensions for debugging
@@ -184,16 +219,29 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 // Function to select a template based on context
 async function selectTemplateForClip(clip: any, story: any, creative: any, persona: any, product: any) {
+  console.log(`Selecting template for aspect ratio: ${story.aspectRatio}`);
+
   // For now, just select a random template that matches the aspect ratio
   const templates = await db.query.canvasTemplates.findMany({
     where: eq(canvasTemplates.aspectRatio, story.aspectRatio)
   });
 
   if (templates.length === 0) {
-    // Use sveltekit error helper
-    throw error(404, `No templates found for the story aspect ratio: ${story.aspectRatio}`);
+    console.log(`No templates found for aspect ratio: ${story.aspectRatio}, trying to find any template`);
+
+    // If no templates match the exact aspect ratio, try to find any template
+    const allTemplates = await db.query.canvasTemplates.findMany();
+
+    if (allTemplates.length === 0) {
+      // Use sveltekit error helper
+      throw error(404, `No templates found at all. Please create at least one template.`);
+    }
+
+    console.log(`Found ${allTemplates.length} templates with various aspect ratios`);
+    return allTemplates[Math.floor(Math.random() * allTemplates.length)];
   }
 
+  console.log(`Found ${templates.length} templates with aspect ratio: ${story.aspectRatio}`);
   // In a real implementation, we would use AI to select the best template
   // based on the context data
   return templates[Math.floor(Math.random() * templates.length)];

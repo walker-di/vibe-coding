@@ -99,6 +99,50 @@
     };
   }
 
+  // Helper function to calculate canvas dimensions based on aspect ratio and resolution
+  function calculateCanvasDimensions(): { width: number; height: number } {
+    // Default dimensions for 16:9 aspect ratio
+    const defaultDimensions = { width: 1920, height: 1080 };
+
+    // If we have a resolution string, parse it
+    if (resolution) {
+      // Extract dimensions from resolution string (e.g., "1920x1080 (16:9 HD)" or "800x600")
+      const match = resolution.match(/^(\d+)\s*x\s*(\d+)/);
+      if (match && match[1] && match[2]) {
+        const width = parseInt(match[1], 10);
+        const height = parseInt(match[2], 10);
+        if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+          return { width, height };
+        }
+      }
+    }
+
+    // If no valid resolution, calculate based on aspect ratio
+    if (aspectRatio) {
+      // Use a standard width and calculate height based on aspect ratio
+      const width = 1920; // Standard HD width
+      let height;
+
+      // Parse the aspect ratio (e.g., "16:9", "4:3", etc.)
+      const parts = aspectRatio.split(':');
+      if (parts.length === 2) {
+        const ratioWidth = parseFloat(parts[0]);
+        const ratioHeight = parseFloat(parts[1]);
+        if (!isNaN(ratioWidth) && !isNaN(ratioHeight) && ratioWidth > 0 && ratioHeight > 0) {
+          height = Math.round(width * (ratioHeight / ratioWidth));
+          return { width, height };
+        }
+      } else if (aspectRatio === "1.91:1") {
+        // Special case for 1.91:1 aspect ratio
+        height = Math.round(width / 1.91);
+        return { width, height };
+      }
+    }
+
+    // Return default dimensions if all else fails
+    return defaultDimensions;
+  }
+
   // Handler for when a clip is selected in SceneList
   async function handleSelectClip(clip: Clip) {
     if (selectedClip?.id === clip.id) {
@@ -120,7 +164,19 @@
       voiceName: clip.voiceName || "pt-BR-FranciscaNeural",
     };
     console.log("Clip selected in SceneEditor:", clip.id, clip.orderIndex);
-    canvasEditorInstance?.loadCanvasData(clip.canvas);
+
+    // Get canvas dimensions based on story's aspect ratio and resolution
+    const dimensions = calculateCanvasDimensions();
+    console.log("Using canvas dimensions based on story config:", dimensions);
+
+    // If we have a canvas editor instance, load the canvas data and resize it
+    if (canvasEditorInstance) {
+      // First load the canvas data
+      await canvasEditorInstance.loadCanvasData(clip.canvas);
+
+      // Then resize the canvas to match the story's aspect ratio and resolution
+      canvasEditorInstance.resizeCanvas(dimensions.width, dimensions.height);
+    }
   }
 
   // State for the auto-create modal
@@ -562,7 +618,7 @@
         body: JSON.stringify({
           prompt: selectedClip.description,
           clipId: selectedClip.id,
-          aspectRatio: "1:1", // Default to square aspect ratio
+          aspectRatio: aspectRatio || "16:9", // Use the story's aspect ratio
         }),
       });
 
@@ -1084,6 +1140,15 @@
   // Fetch story data when component mounts
   $effect(() => {
     fetchStoryData();
+  });
+
+  // Effect to resize canvas when aspectRatio or resolution changes
+  $effect(() => {
+    if (canvasEditorInstance && (aspectRatio || resolution)) {
+      const dimensions = calculateCanvasDimensions();
+      console.log("Resizing canvas based on story config:", { aspectRatio, resolution, dimensions });
+      canvasEditorInstance.resizeCanvas(dimensions.width, dimensions.height);
+    }
   });
 
   // Effect to update currentVoice when selectedClip changes
@@ -1865,11 +1930,21 @@
           if (options.fillCanvas) {
             console.log(`Processing clip ${i+1}/${allClips.length} (ID: ${clip.id}): Running AI Fill...`);
 
+            // Get canvas dimensions based on story's aspect ratio and resolution
+            const dimensions = calculateCanvasDimensions();
+            console.log(`AI Fill All: Using canvas dimensions for clip ${clip.id}:`, dimensions);
+
             const aiFillResponse = await fetch(`/api/clips/${clip.id}/ai-fill`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
+              body: JSON.stringify({
+                aspectRatio: aspectRatio,
+                resolution: resolution,
+                width: dimensions.width,
+                height: dimensions.height
+              })
             });
 
             if (!aiFillResponse.ok) {
@@ -2120,11 +2195,21 @@
         isProcessingAiFill,
       );
 
+      // Get canvas dimensions based on story's aspect ratio and resolution
+      const dimensions = calculateCanvasDimensions();
+      console.log("AI Fill: Using canvas dimensions based on story config:", dimensions);
+
       const response = await fetch(`/api/clips/${selectedClip.id}/ai-fill`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          aspectRatio: aspectRatio,
+          resolution: resolution,
+          width: dimensions.width,
+          height: dimensions.height
+        })
       });
 
       if (!response.ok) {
