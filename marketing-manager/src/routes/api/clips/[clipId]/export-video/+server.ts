@@ -28,6 +28,27 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 throw error(404, `Clip data not found for ID ${clipId}`);
             }
 
+            // 1.1 Fetch the story data to get audio settings
+            const storyResponse = await fetch(`/api/stories/${clip.storyId}`);
+            let story = null;
+            let narrationVolume = 1.0;
+            let bgmVolume = 0.5;
+            let narrationSpeed = 1.0;
+
+            if (storyResponse.ok) {
+                const storyData = await storyResponse.json();
+                story = storyData.data;
+
+                // Get audio settings from the story
+                narrationVolume = story.narrationVolume ?? 1.0;
+                bgmVolume = story.bgmVolume ?? 0.5;
+                narrationSpeed = story.narrationSpeed ?? 1.0;
+
+                console.log('Story audio settings:', { narrationVolume, bgmVolume, narrationSpeed });
+            } else {
+                console.warn(`Could not fetch story data for clip ${clipId}, using default audio settings`);
+            }
+
             // 2. Check if the clip has the required data for video generation
             if (!clip.narration) {
                 throw error(400, `Clip ${clipId} is missing narration text`);
@@ -40,9 +61,12 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         clipId: clip.id,
-                        voiceName: clip.voiceName || 'pt-BR-FranciscaNeural'
+                        voiceName: clip.voiceName || 'pt-BR-FranciscaNeural',
+                        narrationSpeed: narrationSpeed // Use story's narration speed setting
                     })
                 });
+
+                console.log(`Generating narration with speed: ${narrationSpeed} for clip ${clip.id}`);
 
                 if (!narrationResponse.ok) {
                     throw error(500, 'Failed to generate narration audio');
@@ -66,9 +90,26 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 
             // Download narration audio
             const narrationFileName = `narration_${uuidv4()}.mp3`;
-            const narrationPath = path.join(tempDir, narrationFileName);
+            let narrationPath = path.join(tempDir, narrationFileName);
+            const normalizedNarrationPath = path.join(tempDir, `normalized_${narrationFileName}`);
             await downloadFile(clip.narrationAudioUrl, narrationPath);
             console.log(`Downloaded narration to ${narrationPath}`);
+
+            // Normalize the narration audio to ensure consistent volume levels
+            try {
+                await runFFmpeg([
+                    '-i', narrationPath,
+                    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+                    '-ar', '44100',
+                    normalizedNarrationPath
+                ]);
+                console.log(`Normalized narration audio for clip ${clipId}`);
+                // Use the normalized audio file instead of the original
+                narrationPath = normalizedNarrationPath;
+            } catch (normError) {
+                console.warn(`Failed to normalize narration audio for clip ${clipId}, using original: ${normError.message}`);
+                // Continue with the original audio file if normalization fails
+            }
 
             // Get narration duration
             const duration = await getAudioDuration(narrationPath);
@@ -109,11 +150,13 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             // Add narration audio
             ffmpegArgs.push('-i', narrationPath);
 
-            // Create filter complex to trim video to exact audio duration
+            // Create filter complex to trim video to exact audio duration, apply volume, and normalize audio
             filterComplex.push(
                 `[0:v]trim=duration=${duration}[v0];` +
-                `[1:a]atrim=duration=${duration}[a0]`
+                `[1:a]volume=${narrationVolume},dynaudnorm=f=150:g=15,atrim=duration=${duration}[a0]`
             );
+
+            console.log(`Applying narration volume: ${narrationVolume} to clip ${clipId}`);
 
             // Add output options
             ffmpegArgs.push(

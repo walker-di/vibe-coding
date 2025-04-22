@@ -27,6 +27,13 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 throw error(404, `Story data not found or has no scenes for ID ${storyId}`);
             }
 
+            // Log audio settings for debugging
+            console.log('Story audio settings:', {
+                narrationVolume: story.narrationVolume ?? 1.0,
+                bgmVolume: story.bgmVolume ?? 0.5,
+                narrationSpeed: story.narrationSpeed ?? 1.0
+            });
+
             // 1.1 Fetch all transitions for this story
             console.log('Fetching transitions for story...');
             const transitionsResponse = await fetch(`/api/transitions?storyId=${storyId}`);
@@ -93,9 +100,12 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 clipId: clip.id,
-                                voiceName: clip.voiceName || 'pt-BR-FranciscaNeural'
+                                voiceName: clip.voiceName || 'pt-BR-FranciscaNeural',
+                                narrationSpeed: story.narrationSpeed ?? 1.0 // Use story's narration speed setting
                             })
                         });
+
+                        console.log(`Generating narration with speed: ${story.narrationSpeed ?? 1.0} for clip ${clip.id}`);
 
                         if (narrationResponse.ok) {
                             const narrationResult = await narrationResponse.json();
@@ -201,8 +211,25 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 
                 // Download narration audio
                 const narrationFileName = `narration_${clip.id}_${uuidv4()}.mp3`;
-                const narrationPath = path.join(tempDir, narrationFileName);
+                let narrationPath = path.join(tempDir, narrationFileName);
+                const normalizedNarrationPath = path.join(tempDir, `normalized_${narrationFileName}`);
                 await downloadFile(clip.narrationAudioUrl, narrationPath);
+
+                // Normalize the narration audio to ensure consistent volume levels
+                try {
+                    await runFFmpeg([
+                        '-i', narrationPath,
+                        '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+                        '-ar', '44100',
+                        normalizedNarrationPath
+                    ]);
+                    console.log(`Normalized narration audio for clip ${clip.id}`);
+                    // Use the normalized audio file instead of the original
+                    narrationPath = normalizedNarrationPath;
+                } catch (normError) {
+                    console.warn(`Failed to normalize narration audio for clip ${clip.id}, using original: ${normError.message}`);
+                    // Continue with the original audio file if normalization fails
+                }
 
                 // Get narration duration
                 const duration = await getAudioDuration(narrationPath);
@@ -396,7 +423,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                     // Volume: narration at 1.0 (100%), BGM at 0.3 (30%)
                     ffmpegArgs.push(
                         '-filter_complex',
-                        `[1:a]volume=1.0[narration];[2:a]volume=0.3[bgm];[narration][bgm]amix=inputs=2:duration=shortest[aout]`,
+                        `[1:a]volume=${story.narrationVolume ?? 1.0},dynaudnorm=f=150:g=15[narration];[2:a]volume=${story.bgmVolume ?? 0.5}[bgm];[narration][bgm]amix=inputs=2:duration=shortest:normalize=0[aout]`,
                         '-map', '0:v',   // Map video from first input
                         '-map', '[aout]' // Map mixed audio
                     );
@@ -535,7 +562,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                         '-i', tempSceneOutputPath,
                         '-i', bgmPath,
                         '-filter_complex',
-                        `[0:a]volume=1.0[narration];[1:a]volume=0.3[bgm];[narration][bgm]amix=inputs=2:duration=first[aout]`,
+                        `[0:a]volume=${story.narrationVolume ?? 1.0},dynaudnorm=f=150:g=15[narration];[1:a]volume=${story.bgmVolume ?? 0.5}[bgm];[narration][bgm]amix=inputs=2:duration=first:normalize=0[aout]`,
                         '-map', '0:v',
                         '-map', '[aout]',
                         '-c:v', 'copy',
@@ -583,7 +610,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             const outputFileName = `story_${storyId}_${uuidv4()}.mp4`;
             const outputPath = path.join(tempDir, outputFileName);
 
-            // Run FFmpeg to concatenate with memory optimizations
+            // Run FFmpeg to concatenate with memory optimizations and audio normalization
             await runFFmpeg([
                 '-f', 'concat',
                 '-safe', '0',
@@ -592,13 +619,17 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 '-c:v', 'libx264', // Re-encode video to ensure transitions work correctly
                 '-preset', 'ultrafast', // Use fastest preset to reduce memory usage
                 '-crf', '28',      // Lower quality but faster encoding
+                // Apply audio normalization to ensure consistent levels
+                '-af', 'dynaudnorm=f=150:g=15,loudnorm=I=-16:TP=-1.5:LRA=11',
                 '-c:a', 'aac',     // Re-encode audio to match
-                '-b:a', '128k',    // Lower audio bitrate
+                '-b:a', '192k',    // Higher audio bitrate for better quality
                 '-pix_fmt', 'yuv420p',
                 '-r', '25',        // Maintain consistent framerate
                 '-movflags', '+faststart', // Optimize for web playback
                 outputPath
             ]);
+
+            console.log('Applied audio normalization to final video');
 
             // Verify the output file exists and has content
             const fileStats = await fs.stat(outputPath);

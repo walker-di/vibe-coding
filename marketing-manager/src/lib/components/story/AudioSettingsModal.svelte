@@ -64,10 +64,8 @@
     const value = parseFloat((e.target as HTMLInputElement).value);
     if (type === 'narration') {
       narrationVolume = value;
-      console.log('Narration volume changed:', narrationVolume);
     } else {
       bgmVolume = value;
-      console.log('BGM volume changed:', bgmVolume);
     }
   }
 
