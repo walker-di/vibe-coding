@@ -67,6 +67,19 @@ export const PUT = withErrorHandling(async ({ params, request }: RequestEvent) =
     updateData['resolution'] = storyData.resolution;
   }
 
+  // Include audio settings if provided
+  if (storyData.narrationVolume !== undefined) {
+    updateData['narrationVolume'] = storyData.narrationVolume;
+  }
+
+  if (storyData.bgmVolume !== undefined) {
+    updateData['bgmVolume'] = storyData.bgmVolume;
+  }
+
+  if (storyData.narrationSpeed !== undefined) {
+    updateData['narrationSpeed'] = storyData.narrationSpeed;
+  }
+
   // Update story
   const [updatedStory] = await db.update(stories)
     .set(updateData)

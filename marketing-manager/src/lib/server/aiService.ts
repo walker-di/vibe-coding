@@ -87,7 +87,8 @@ export async function generateNarrationText(description: string): Promise<string
 export async function generateNarrationAudio(
   text: string,
   clipId: number,
-  voiceName?: string
+  voiceName?: string,
+  narrationSpeed?: number
 ): Promise<string | null> {
   // Check if Azure Speech credentials are configured
   if (!AZURE_API_KEY || !AZURE_SPEECH_REGION) {
@@ -98,6 +99,10 @@ export async function generateNarrationAudio(
   // Determine the voice to use: Prioritize requested, then env var, then default
   const voiceToUse = voiceName || AZURE_SPEECH_VOICE_NAME || 'en-US-JennyNeural';
 
+  // Use the provided narration speed or default to 1.0
+  const speedToUse = narrationSpeed || 1.0;
+  console.log(`Using narration speed: ${speedToUse} for clip ${clipId}`);
+
   console.log(`Requesting Azure TTS for clip ${clipId} (Voice: ${voiceToUse}): "${text.substring(0, 50)}..."`);
 
   let synthesizer: SpeechSDK.SpeechSynthesizer | null = null;
@@ -105,19 +110,60 @@ export async function generateNarrationAudio(
     const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(AZURE_API_KEY, AZURE_SPEECH_REGION);
     speechConfig.speechSynthesisVoiceName = voiceToUse;
     speechConfig.speechSynthesisOutputFormat = SpeechSDK.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+
+    // Set the speech synthesis rate (speed)
+    // The rate is a value between 0.5 and 2.0, where 1.0 is normal speed
+    // Use the proper SSML format to set the rate
+    console.log(`Setting speech rate to ${speedToUse} for clip ${clipId}`);
+
+    // We need to use SSML to control the speaking rate
+    // Extract language code from voice name (e.g., pt-BR-FranciscaNeural -> pt-BR)
+    const langCode = voiceToUse.split('-').slice(0, 2).join('-');
+
+    // Escape any special characters in the text to ensure valid XML
+    const escapedText = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
+    // Convert the speed value to a proper SSML rate value
+    // For SSML, rate can be specified as a relative value or a percentage
+    // If speedToUse is 1.0, we use "medium" (normal speed)
+    // If speedToUse is > 1.0, we use a percentage (e.g., "150%" for 1.5x)
+    // If speedToUse is < 1.0, we use a percentage (e.g., "50%" for 0.5x)
+    let rateValue;
+    if (speedToUse === 1.0) {
+      rateValue = "medium";
+    } else {
+      // Convert to percentage
+      rateValue = `${Math.round(speedToUse * 100)}%`;
+    }
+
+    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${langCode}">
+      <voice name="${voiceToUse}">
+        <prosody rate="${rateValue}">
+          ${escapedText}
+        </prosody>
+      </voice>
+    </speak>`;
+
+    console.log(`Generated SSML with rate ${speedToUse} (${rateValue}) for voice ${voiceToUse}:`);
+    console.log(ssml);
     console.log(`SpeechConfig created. Voice: ${speechConfig.speechSynthesisVoiceName}, Format: ${speechConfig.speechSynthesisOutputFormat}`);
 
     // Pass 'undefined' for the second argument to receive the audio data as an ArrayBuffer
     synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig, undefined);
 
-    console.log(`Synthesizer created for clip ${clipId}. Attempting speakTextAsync...`);
+    console.log(`Synthesizer created for clip ${clipId}. Attempting speakSsmlAsync...`);
 
     // Use the pattern from the example, wrapped in a Promise
     const result: SpeechSDK.SpeechSynthesisResult = await new Promise((resolve, reject) => {
-      synthesizer!.speakTextAsync(
-        text,
+      synthesizer!.speakSsmlAsync(
+        ssml,
         (resultCallback: SpeechSDK.SpeechSynthesisResult) => {
-          console.log(`speakTextAsync result received. Reason: ${SpeechSDK.ResultReason[resultCallback.reason]}`);
+          console.log(`speakSsmlAsync result received. Reason: ${SpeechSDK.ResultReason[resultCallback.reason]}`);
           // Check the reason *inside* the callback before resolving/rejecting
           if (resultCallback.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
             resolve(resultCallback); // Resolve successfully
@@ -134,8 +180,8 @@ export async function generateNarrationAudio(
         },
         (errorCallback: string) => {
           // This callback signals an immediate error
-          console.error(`speakTextAsync error callback: ${errorCallback}`);
-          reject(new Error(`Azure TTS speakTextAsync Error: ${errorCallback}`)); // Reject the promise
+          console.error(`speakSsmlAsync error callback: ${errorCallback}`);
+          reject(new Error(`Azure TTS speakSsmlAsync Error: ${errorCallback}`)); // Reject the promise
         }
       );
     });
@@ -191,7 +237,8 @@ export async function generateNarrationAudio(
 export async function generateNarration(
   description: string,
   clipId: number,
-  voiceName?: string
+  voiceName?: string,
+  narrationSpeed?: number
 ): Promise<{ narrationText: string | null; narrationAudioUrl: string | null }> {
   try {
     // First, generate the narration text
@@ -201,7 +248,7 @@ export async function generateNarration(
     }
 
     // Then, generate the narration audio
-    const narrationAudioUrl = await generateNarrationAudio(narrationText, clipId, voiceName);
+    const narrationAudioUrl = await generateNarrationAudio(narrationText, clipId, voiceName, narrationSpeed);
 
     return {
       narrationText,

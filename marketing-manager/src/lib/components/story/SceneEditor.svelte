@@ -6,6 +6,7 @@
   import AutoCreateModal from "$lib/components/story/AutoCreateModal.svelte";
   import AiFillAllModal from "$lib/components/story/AiFillAllModal.svelte";
   import ExportModal from "$lib/components/story/ExportModal.svelte";
+  import AudioSettingsModal from "$lib/components/story/AudioSettingsModal.svelte";
   import type { SceneWithRelations, Clip } from "$lib/types/story.types";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -20,7 +21,8 @@
     Mic,
     RefreshCw,
     FileDown,
-    Sparkles
+    Sparkles,
+    Volume2
   } from "lucide-svelte";
   import { tick } from "svelte";
   import { FabricImage } from "fabric";
@@ -32,6 +34,9 @@
     creativeId, // We need this for creating new stories
     aspectRatio = "16:9", // Default to 16:9 if not provided
     resolution = null, // Now we'll use the resolution from the story
+    narrationVolume = 1.0, // Default to 100% volume
+    bgmVolume = 0.5, // Default to 50% volume
+    narrationSpeed = 1.0, // Default to normal speed
     onEditScene,
     onDeleteScene,
     onSelectScene,
@@ -44,6 +49,9 @@
     storyId: number;
     aspectRatio?: string;
     resolution?: string | null;
+    narrationVolume?: number;
+    bgmVolume?: number;
+    narrationSpeed?: number;
     onAddScene?: () => void;
     onEditScene: (sceneId: number) => void;
     onDeleteScene: (sceneId: number) => void;
@@ -71,6 +79,8 @@
   let exportError = $state<string | null>(null);
   let initialCheckDone = $state(false); // Track if initial check/action is done
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
+  let showAudioSettingsModal = $state(false);
+  let story = $state<any>(null);
 
   function debounce<T extends (...args: any[]) => any>(
     func: T,
@@ -122,6 +132,79 @@
   let storyPrompt = $state("");
   let creativeContext = $state<any>(null);
   let isLoadingContext = $state(false);
+
+  // Fetch story data
+  async function fetchStoryData() {
+    try {
+      const response = await fetch(`/api/stories/${storyId}`);
+      if (response.ok) {
+        const data = await response.json();
+        story = data.data;
+        console.log("Fetched story data:", story);
+      } else {
+        console.error("Failed to fetch story data:", response.status);
+        // Initialize story with props if fetch fails
+        story = {
+          id: storyId,
+          creativeId,
+          narrationVolume,
+          bgmVolume,
+          narrationSpeed
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching story data:", error);
+      // Initialize story with props if fetch fails
+      story = {
+        id: storyId,
+        creativeId,
+        narrationVolume,
+        bgmVolume,
+        narrationSpeed
+      };
+    }
+  }
+
+  // Handler for saving audio settings
+  async function handleSaveAudioSettings(settings: {
+    narrationVolume: number;
+    bgmVolume: number;
+    narrationSpeed: number;
+  }) {
+    try {
+      const response = await fetch(`/api/stories/${storyId}/audio-settings`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
+      });
+
+      if (response.ok) {
+        const updatedStory = await response.json();
+        story = updatedStory.data;
+        console.log("Updated story with audio settings:", story);
+        // Apply the settings to any currently playing audio
+        applyAudioSettings();
+      } else {
+        console.error("Failed to update story audio settings:", response.status);
+      }
+    } catch (error) {
+      console.error("Error updating story audio settings:", error);
+    }
+  }
+
+  // Apply audio settings to any currently playing audio
+  function applyAudioSettings() {
+    if (narrationAudioElement && story) {
+      console.log('Applying audio settings:', {
+        narrationVolume: story.narrationVolume,
+        narrationSpeed: story.narrationSpeed
+      });
+      narrationAudioElement.volume = story.narrationVolume ?? 1.0;
+      narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.0;
+    }
+  }
 
   // Handler for opening the auto-create modal
   async function openAutoCreateModal() {
@@ -613,8 +696,11 @@
         body: JSON.stringify({
           clipId: selectedClip.id,
           voiceName: currentVoice || "pt-BR-FranciscaNeural",
+          narrationSpeed: story?.narrationSpeed || 1.0, // Pass the narration speed from story settings
         }),
       });
+
+      console.log('Generating narration with speed:', story?.narrationSpeed || 1.0);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -658,6 +744,26 @@
 
         // Force a refresh of the scene list
         forceSceneRefresh++;
+
+        // Play the generated narration with the correct audio settings
+        if (narrationAudioElement) {
+          narrationAudioElement.src = audioUrlWithTimestamp;
+          narrationAudioElement.load();
+
+          // Apply audio settings before playing
+          if (story) {
+            narrationAudioElement.volume = story.narrationVolume ?? 1.0;
+            narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.0;
+            console.log('Applied audio settings to newly generated narration:', {
+              volume: narrationAudioElement.volume,
+              speed: narrationAudioElement.playbackRate
+            });
+          }
+
+          narrationAudioElement.play().catch((err) => {
+            console.error('Error playing newly generated narration:', err);
+          });
+        }
 
         // Update the clip in the database with the new voice name if needed
         if (currentVoice && currentVoice !== selectedClip.voiceName) {
@@ -974,6 +1080,11 @@
       alert("Failed to duplicate clip. Please try again.");
     }
   }
+
+  // Fetch story data when component mounts
+  $effect(() => {
+    fetchStoryData();
+  });
 
   // Effect to update currentVoice when selectedClip changes
   $effect(() => {
@@ -1481,9 +1592,12 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   clipId: clip.id,
-                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural'
+                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural',
+                  narrationSpeed: story?.narrationSpeed || 1.0 // Pass the narration speed from story settings
                 })
               });
+
+              console.log('Export: Generating narration with speed:', story?.narrationSpeed || 1.0);
 
               if (narrationResponse.ok) {
                 const narrationResult = await narrationResponse.json();
@@ -1573,9 +1687,12 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   clipId: clip.id,
-                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural'
+                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural',
+                  narrationSpeed: story?.narrationSpeed || 1.0 // Pass the narration speed from story settings
                 })
               });
+
+              console.log('Unified Export: Generating narration with speed:', story?.narrationSpeed || 1.0);
 
               if (narrationResponse.ok) {
                 const narrationResult = await narrationResponse.json();
@@ -1901,8 +2018,11 @@
                 body: JSON.stringify({
                   clipId: allClips[i].id,
                   voiceName: allClips[i].voiceName || "pt-BR-FranciscaNeural",
+                  narrationSpeed: story?.narrationSpeed || 1.0, // Pass the narration speed from story settings
                 }),
               });
+
+              console.log('AI Fill All: Generating narration with speed:', story?.narrationSpeed || 1.0);
 
               if (!narrationResponse.ok) {
                 console.error(`Failed to generate narration for clip ${allClips[i].id}. Status: ${narrationResponse.status}`);
@@ -2246,6 +2366,16 @@
         <div class="border-t my-2"></div>
         <Button
           variant="outline"
+          class="w-full justify-start"
+          onclick={() => showAudioSettingsModal = true}
+          title="Audio Settings"
+        >
+          <Volume2 class="h-4 w-4 mr-2" />
+          Audio Settings
+        </Button>
+        <div class="border-t my-2"></div>
+        <Button
+          variant="outline"
           class="w-full justify-start bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600"
           onclick={() => showExportModal = true}
           disabled={isExporting || scenes.length === 0}
@@ -2383,6 +2513,17 @@
                         // Set the source and load it
                         narrationAudioElement.src = audioUrlWithTimestamp;
                         narrationAudioElement.load();
+
+                        // Apply audio settings before playing
+                        if (story) {
+                          narrationAudioElement.volume = story.narrationVolume ?? 1.0;
+                          narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.0;
+                          console.log('Applied audio settings to narration:', {
+                            volume: narrationAudioElement.volume,
+                            speed: narrationAudioElement.playbackRate
+                          });
+                        }
+
                         narrationAudioElement.play().catch((err: Error) => {
                           console.error('Error playing narration audio:', err);
                         });
@@ -2554,4 +2695,12 @@
   isLoading={isAutoCreating}
   on:close={() => showAutoCreateModal = false}
   on:create={e => handleAutoCreateStory(e.detail)}
+/>
+
+<!-- Audio Settings Modal -->
+<AudioSettingsModal
+  open={showAudioSettingsModal}
+  story={story}
+  onClose={() => showAudioSettingsModal = false}
+  onSave={handleSaveAudioSettings}
 />

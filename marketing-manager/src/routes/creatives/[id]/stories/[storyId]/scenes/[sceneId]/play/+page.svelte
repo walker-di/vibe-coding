@@ -11,8 +11,12 @@
   let storyId = $state<number | null>(null);
   let sceneId = $state<number | null>(null);
   let scene = $state<SceneWithRelations | null>(null);
+  let story = $state<any>(null);
   let isLoading = $state(true);
   let error = $state<string | null>(null);
+  let narrationVolume = $state(1.0);
+  let bgmVolume = $state(0.5);
+  let narrationSpeed = $state(1.0);
 
   // Fetch scene data
   $effect(() => {
@@ -29,8 +33,39 @@
     creativeId = parseInt(cId);
     storyId = parseInt(sId);
     sceneId = parseInt(scId);
+
+    // Fetch both story and scene data
+    fetchStory(storyId);
     fetchScene(sceneId);
   });
+
+  async function fetchStory(id: number) {
+    try {
+      const response = await fetch(`/api/stories/${id}`);
+      if (!response.ok) {
+        console.error(`Failed to fetch story. Status: ${response.status}`);
+        return;
+      }
+
+      const responseData = await response.json();
+
+      // Handle the response format
+      if (responseData.success && responseData.data) {
+        story = responseData.data;
+      } else if (responseData.id) {
+        story = responseData;
+      }
+
+      // Update audio settings from story data
+      if (story) {
+        narrationVolume = story.narrationVolume ?? 1.0;
+        bgmVolume = story.bgmVolume ?? 0.5;
+        narrationSpeed = story.narrationSpeed ?? 1.0;
+      }
+    } catch (e: any) {
+      console.error('Error fetching story:', e);
+    }
+  };
 
   async function fetchScene(id: number) {
     isLoading = true;
@@ -89,13 +124,16 @@
     <div class="space-y-6">
       <div class="rounded border p-6 shadow">
         <h1 class="text-3xl font-bold mb-6 text-center">Scene {scene.orderIndex + 1}</h1>
-        
+
         {#if scene.clips && scene.clips.length > 0}
-          <ScenePlayer 
-            clips={scene.clips} 
-            bgmUrl={scene.bgmUrl || ''} 
+          <ScenePlayer
+            clips={scene.clips}
+            bgmUrl={scene.bgmUrl || ''}
             bgmName={scene.bgmName || ''}
             autoPlay={true}
+            narrationVolume={narrationVolume}
+            bgmVolume={bgmVolume}
+            narrationSpeed={narrationSpeed}
           />
         {:else}
           <div class="text-center py-8 border border-dashed rounded-md">

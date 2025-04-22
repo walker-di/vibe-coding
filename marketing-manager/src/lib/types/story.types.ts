@@ -8,6 +8,9 @@ export interface Story {
   description: string | null;
   aspectRatio: CanvasAspectRatio; // Added
   resolution: string | null; // Added
+  narrationVolume: number; // Volume for narration audio (0.0 to 1.0)
+  bgmVolume: number; // Volume for background music (0.0 to 1.0)
+  narrationSpeed: number; // Playback speed for narration (0.5 to 2.0)
   createdAt: number;
   updatedAt: number | null;
 }

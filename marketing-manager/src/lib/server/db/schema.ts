@@ -152,6 +152,9 @@ export const stories = sqliteTable('stories', {
   description: text('description'),
   aspectRatio: text('aspect_ratio', { enum: canvasAspectRatios }).default('16:9'), // Added
   resolution: text('resolution'), // Added - Store as text (e.g., "1920x1080", "Custom")
+  narrationVolume: real('narration_volume').default(1.0), // Default to 100% volume
+  bgmVolume: real('bgm_volume').default(0.5), // Default to 50% volume
+  narrationSpeed: real('narration_speed').default(1.0), // Default to normal speed (1.0)
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 });

@@ -69,6 +69,9 @@ export const POST = withErrorHandling(async ({ request }: RequestEvent) => {
     description: storyData.description || null,
     aspectRatio: storyData.aspectRatio || '16:9', // Default to 16:9 if not provided
     resolution: storyData.resolution || null,
+    narrationVolume: storyData.narrationVolume ?? 1.0, // Default to 100% if not provided
+    bgmVolume: storyData.bgmVolume ?? 0.5, // Default to 50% if not provided
+    narrationSpeed: storyData.narrationSpeed ?? 1.0, // Default to normal speed if not provided
     createdAt: new Date(),
     updatedAt: new Date()
   }).returning();
