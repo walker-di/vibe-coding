@@ -3,6 +3,7 @@ import { runFFmpeg, downloadFile, getAudioDuration, withTemporaryDirectory } fro
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import type { SceneTransition } from '$lib/types/story.types';
 
 export const GET: RequestHandler = async ({ params, fetch }) => {
     const { storyId } = params;
@@ -26,15 +27,39 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 throw error(404, `Story data not found or has no scenes for ID ${storyId}`);
             }
 
+            // 1.1 Fetch all transitions for this story
+            console.log('Fetching transitions for story...');
+            const transitionsResponse = await fetch(`/api/transitions?storyId=${storyId}`);
+            let transitions: SceneTransition[] = [];
+
+            if (transitionsResponse.ok) {
+                const transitionsData = await transitionsResponse.json();
+                if (transitionsData.success && Array.isArray(transitionsData.data)) {
+                    transitions = transitionsData.data;
+                    console.log(`Found ${transitions.length} transitions for story ${storyId}`);
+                }
+            } else {
+                console.warn(`Failed to fetch transitions for story ${storyId}. Will proceed without transitions.`);
+            }
+
             // 2. Ensure all clips have narration audio and download assets
             console.log('Processing clips and downloading assets...');
 
-            // Collect all clips from all scenes
+            // Collect all clips from all scenes and organize by scene
             const allClips = [];
-            for (const scene of story.scenes) {
+            const clipsByScene = new Map();
+
+            // Sort scenes by orderIndex to ensure correct sequence
+            const sortedScenes = [...story.scenes].sort((a, b) => a.orderIndex - b.orderIndex);
+
+            for (const scene of sortedScenes) {
                 if (!scene.clips || scene.clips.length === 0) continue;
 
-                for (const clip of scene.clips) {
+                // Sort clips within each scene by orderIndex
+                const sortedClips = [...scene.clips].sort((a, b) => a.orderIndex - b.orderIndex);
+                clipsByScene.set(scene.id, sortedClips);
+
+                for (const clip of sortedClips) {
                     // Generate narration audio if it doesn't exist
                     if (!clip.narrationAudioUrl && clip.narration) {
                         console.log(`Generating narration audio for clip ${clip.id}...`);
@@ -82,6 +107,10 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             let concatFileContent = '';
             let totalDuration = 0;
 
+            // Track videos for each scene to apply transitions between scenes
+            const sceneVideos = new Map();
+            let previousSceneId = null;
+
             // Process each clip
             for (let i = 0; i < allClips.length; i++) {
                 const clip = allClips[i];
@@ -124,31 +153,83 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 const clipOutputFileName = `clip_${clip.id}_${uuidv4()}.mp4`;
                 const clipOutputPath = path.join(tempDir, clipOutputFileName);
 
-                // Determine if this is the first or last clip for special effects
+                // Get the scene this clip belongs to
+                const sceneId = clip.sceneId;
+
+                // Track this clip's video for its scene
+                if (!sceneVideos.has(sceneId)) {
+                    sceneVideos.set(sceneId, []);
+                }
+
+                // Determine if this is the first or last clip overall
                 const isFirstClip = i === 0;
                 const isLastClip = i === allClips.length - 1;
+
+                // Determine if this is the first or last clip in its scene
+                const sceneClips = clipsByScene.get(sceneId) || [];
+                const isFirstInScene = sceneClips.indexOf(clip) === 0;
+                const isLastInScene = sceneClips.indexOf(clip) === sceneClips.length - 1;
 
                 // Prepare video filters
                 let videoFilters = [];
 
-                // Add fade-in effect to the first clip
+                // Add fade-in effect to the first clip of the story
                 if (isFirstClip) {
                     videoFilters.push('fade=t=in:st=0:d=0.5');
                 }
 
-                // Add fade-out effect to the last clip
+                // Add fade-out effect to the last clip of the story
                 if (isLastClip) {
                     const fadeOutStart = Math.max(0, clip.duration - 0.5);
                     videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=0.5`);
                 }
 
-                // If not the first clip, add a fade-in at the beginning
-                if (!isFirstClip) {
+                // Check if there's a transition from the previous scene to this scene
+                if (previousSceneId !== null && isFirstInScene) {
+                    const transition = transitions.find(t =>
+                        t.fromSceneId === previousSceneId && t.toSceneId === sceneId);
+
+                    if (transition) {
+                        console.log(`Applying transition from scene ${previousSceneId} to scene ${sceneId}: ${transition.type} (${transition.duration}ms)`);
+
+                        // Convert transition duration from ms to seconds
+                        const transitionDurationSec = transition.duration / 1000;
+
+                        // Apply transition based on type
+                        switch (transition.type) {
+                            case 'Fade':
+                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
+                                break;
+                            case 'Slide':
+                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec},zoompan=z=1:x='if(lte(x,0),iw,x-1)':y=0:d=${Math.ceil(transitionDurationSec * 25)}:s=1280x720`);
+                                break;
+                            case 'Zoom':
+                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec},zoompan=z='min(max(1,1.5-0.5*on/${Math.ceil(transitionDurationSec * 25)}),1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${Math.ceil(transitionDurationSec * 25)}:s=1280x720`);
+                                break;
+                            case 'Wipe':
+                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
+                                break;
+                            case 'None':
+                                // No transition effect
+                                break;
+                            default:
+                                // Default to fade if type is unknown
+                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
+                        }
+                    } else if (!isFirstClip) {
+                        // If no specific transition is defined but it's not the first clip,
+                        // add a default gentle fade-in
+                        videoFilters.push('fade=t=in:st=0:d=0.3');
+                    }
+                } else if (!isFirstClip && isFirstInScene) {
+                    // If it's the first clip in a scene but no transition is defined,
+                    // add a default gentle fade-in
                     videoFilters.push('fade=t=in:st=0:d=0.3');
                 }
 
-                // If not the last clip, add a fade-out at the end
-                if (!isLastClip) {
+                // If it's the last clip in a scene and not the last clip overall,
+                // add a fade-out at the end to prepare for the next scene
+                if (isLastInScene && !isLastClip) {
                     const fadeOutStart = Math.max(0, clip.duration - 0.3);
                     videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=0.3`);
                 }
@@ -198,6 +279,14 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 
                 // Add to concat list
                 concatFileContent += `file '${clipOutputPath.replace(/'/g, "'\\''")}'\n`;
+
+                // Track this video for its scene
+                sceneVideos.get(sceneId).push(clipOutputPath);
+
+                // Update previous scene ID if this is the last clip in the scene
+                if (isLastInScene) {
+                    previousSceneId = sceneId;
+                }
             }
 
             // Write the concat list file
