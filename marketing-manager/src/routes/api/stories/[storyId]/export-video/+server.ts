@@ -124,8 +124,8 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 throw error(400, 'No clips found to export');
             }
 
-            // 3. Generate individual clip videos and prepare for concatenation
-            console.log('Generating individual clip videos...');
+            // 3. Generate scene-based videos and prepare for concatenation
+            console.log('Generating scene-based videos...');
 
             // Log BGM information for debugging
             if (sceneBgmPaths.size > 0) {
@@ -135,6 +135,54 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 }
             } else {
                 console.log('No BGM found for any scenes.');
+            }
+
+            // Update clips by scene with more detailed filtering
+            for (const scene of sortedScenes) {
+                // Update the existing clipsByScene map with filtered clips
+                clipsByScene.set(scene.id, allClips.filter(clip => clip.sceneId === scene.id));
+            }
+
+            // Calculate clip start times within each scene for transitions
+            const clipStartTimes = new Map<number, number>(); // Map of clipId -> startTime
+            const sceneDurations = new Map<number, number>(); // Track cumulative duration for each scene
+
+            // Initialize scene durations
+            for (const scene of sortedScenes) {
+                sceneDurations.set(scene.id, 0);
+            }
+
+            // Calculate start time of each clip within its scene
+            for (const clip of allClips) {
+                const sceneId = clip.sceneId;
+                const currentSceneDuration = sceneDurations.get(sceneId) || 0;
+
+                // Set this clip's start time within the scene
+                clipStartTimes.set(clip.id, currentSceneDuration);
+
+                // Update the scene's cumulative duration
+                const clipDuration = clip.duration || 3; // Default to 3 seconds
+                sceneDurations.set(sceneId, currentSceneDuration + clipDuration);
+
+                // Ensure clip duration is set
+                clip.duration = clipDuration;
+            }
+
+            // Debug: Check if any clip start times are unusually large
+            for (const [clipId, startTime] of clipStartTimes.entries()) {
+                if (startTime > 1000) {
+                    console.warn(`Unusually large start time detected for clip ${clipId}: ${startTime}s, resetting to 0`);
+                    clipStartTimes.set(clipId, 0);
+                }
+            }
+
+            // Log clip start times for debugging
+            console.log('Clip start times within scenes:');
+            for (const [clipId, startTime] of clipStartTimes.entries()) {
+                const clip = allClips.find(c => c.id === clipId);
+                if (clip) {
+                    console.log(`  - Clip ${clipId} (Scene ${clip.sceneId}): starts at ${startTime}s`);
+                }
             }
 
             // Create a file to list all videos for concatenation
@@ -316,20 +364,25 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 const bgmPath = sceneBgmPaths.get(sceneId);
                 const hasBgm = !!bgmPath;
 
-                // Create FFmpeg command array
+                // Create FFmpeg command array with memory optimization
                 const ffmpegArgs = [
                     // Set framerate before input
                     '-framerate', '25',
+                    // Add memory optimization flags
+                    '-threads', '2',  // Limit threads to reduce memory usage
                     // Input image with loop
                     '-loop', '1', '-i', mainImagePath,
                     // Input narration audio
                     '-i', narrationPath
                 ];
 
-                // Add BGM input if available
-                if (hasBgm) {
+                // Add BGM input if available and this is the first clip in the scene
+                // For subsequent clips in the same scene, we'll use the narration only and add BGM later
+                const isFirstClipInScene = clipsByScene.get(sceneId)?.indexOf(clip) === 0;
+
+                if (hasBgm && isFirstClipInScene) {
                     ffmpegArgs.push('-i', bgmPath);
-                    console.log(`Added BGM to clip ${clip.id} using original BGM file: ${bgmPath}`);
+                    console.log(`Added BGM to first clip ${clip.id} in scene ${sceneId} using original BGM file: ${bgmPath}`);
                 }
 
                 // Add video filters if any
@@ -337,33 +390,37 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                     ffmpegArgs.push('-vf', videoFilters.join(','));
                 }
 
-                // Create filter complex for audio mixing if we have BGM
-                if (hasBgm) {
-                    // Create a filter complex to mix narration and BGM
+                // Handle audio mapping based on whether this is the first clip in the scene
+                if (hasBgm && isFirstClipInScene) {
+                    // For the first clip in a scene with BGM, mix narration with BGM
                     // Volume: narration at 1.0 (100%), BGM at 0.3 (30%)
-                    // Use atrim to start BGM at 0 and limit to clip duration
-                    const clipDuration = clip.duration || 3; // Default to 3 seconds if no duration
-
                     ffmpegArgs.push(
                         '-filter_complex',
-                        `[1:a]volume=1.0[narration];[2:a]volume=0.3,atrim=0:${clipDuration}[bgm];[narration][bgm]amix=inputs=2:duration=shortest[aout]`,
+                        `[1:a]volume=1.0[narration];[2:a]volume=0.3[bgm];[narration][bgm]amix=inputs=2:duration=shortest[aout]`,
                         '-map', '0:v',   // Map video from first input
                         '-map', '[aout]' // Map mixed audio
                     );
 
-                    console.log(`Added BGM to clip ${clip.id} with duration: ${clipDuration}s`);
+                    console.log(`Added BGM to first clip ${clip.id} in scene ${sceneId}`);
                 } else {
-                    // No BGM, just map the narration audio
+                    // For subsequent clips in the scene or clips without BGM, just use narration
                     ffmpegArgs.push('-map', '0:v', '-map', '1:a');
+
+                    if (hasBgm && !isFirstClipInScene) {
+                        console.log(`Skipping BGM for non-first clip ${clip.id} in scene ${sceneId} - will be added during scene concatenation`);
+                    }
                 }
 
-                // Add remaining encoding parameters
+                // Add remaining encoding parameters with memory optimizations
                 ffmpegArgs.push(
-                    // Video codec settings
+                    // Video codec settings with memory optimizations
                     '-c:v', 'libx264',
+                    '-preset', 'ultrafast', // Use fastest preset to reduce memory usage
+                    '-crf', '28',          // Lower quality but faster encoding
                     '-pix_fmt', 'yuv420p',
                     // Audio codec
                     '-c:a', 'aac',
+                    '-b:a', '128k',        // Lower audio bitrate
                     // Set exact duration
                     '-shortest',
                     // Optimize for still images
@@ -405,23 +462,138 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 }
             }
 
-            // Write the concat list file
-            await fs.writeFile(concatListPath, concatFileContent);
-            console.log(`Created concat list at ${concatListPath}`);
+            // Process each scene separately first
+            console.log('Processing scenes with continuous BGM...');
+            const sceneOutputPaths = [];
 
-            // 4. Concatenate all videos
-            console.log('Concatenating videos...');
+            // Group clips by scene
+            const sceneClips = new Map();
+            for (const scene of sortedScenes) {
+                sceneClips.set(scene.id, allClips.filter(clip => clip.sceneId === scene.id));
+            }
+
+            // Process each scene
+            for (const scene of sortedScenes) {
+                const clips = sceneClips.get(scene.id) || [];
+                if (clips.length === 0) {
+                    console.log(`Scene ${scene.id} has no clips, skipping...`);
+                    continue;
+                }
+
+                console.log(`Processing scene ${scene.id} with ${clips.length} clips...`);
+
+                // Create a concat list for this scene's clips
+                const sceneClipListPath = path.join(tempDir, `scene_${scene.id}_clips.txt`);
+                let sceneClipListContent = '';
+
+                // Add all clips in this scene to the list
+                for (const clip of clips) {
+                    // Get the clip file from the sceneVideos map
+                    const clipFiles = sceneVideos.get(scene.id) || [];
+                    if (clipFiles.length === 0) {
+                        console.warn(`No clip files found for scene ${scene.id}, skipping...`);
+                        continue;
+                    }
+
+                    // Find the clip file for this clip
+                    const clipFile = clipFiles.find(file => file.includes(`clip_${clip.id}_`));
+                    if (!clipFile) {
+                        console.warn(`No clip file found for clip ${clip.id}, skipping...`);
+                        continue;
+                    }
+
+                    sceneClipListContent += `file '${clipFile.replace(/'/g, "'\\''")}'
+`;
+                }
+
+                // Write the scene clip list
+                await fs.writeFile(sceneClipListPath, sceneClipListContent);
+
+                // Create a scene output file
+                const sceneOutputPath = path.join(tempDir, `scene_${scene.id}_${uuidv4()}.mp4`);
+
+                // Check if this scene has BGM
+                const bgmPath = sceneBgmPaths.get(scene.id);
+                const hasBgm = !!bgmPath;
+
+                if (hasBgm) {
+                    // For scenes with BGM, concatenate clips first
+                    const tempSceneOutputPath = path.join(tempDir, `scene_${scene.id}_temp_${uuidv4()}.mp4`);
+
+                    // Concatenate clips without re-encoding
+                    await runFFmpeg([
+                        '-f', 'concat',
+                        '-safe', '0',
+                        '-i', sceneClipListPath,
+                        '-c', 'copy',
+                        tempSceneOutputPath
+                    ]);
+
+                    // Now add BGM to the entire scene
+                    console.log(`Adding continuous BGM to scene ${scene.id}...`);
+                    await runFFmpeg([
+                        '-i', tempSceneOutputPath,
+                        '-i', bgmPath,
+                        '-filter_complex',
+                        `[0:a]volume=1.0[narration];[1:a]volume=0.3[bgm];[narration][bgm]amix=inputs=2:duration=first[aout]`,
+                        '-map', '0:v',
+                        '-map', '[aout]',
+                        '-c:v', 'copy',
+                        '-c:a', 'aac',
+                        '-b:a', '128k',
+                        sceneOutputPath
+                    ]);
+
+                    // Clean up temporary file
+                    try {
+                        await fs.unlink(tempSceneOutputPath);
+                    } catch (err) {
+                        console.warn(`Failed to delete temporary scene file: ${err.message}`);
+                    }
+                } else {
+                    // For scenes without BGM, just concatenate the clips
+                    await runFFmpeg([
+                        '-f', 'concat',
+                        '-safe', '0',
+                        '-i', sceneClipListPath,
+                        '-c', 'copy',
+                        sceneOutputPath
+                    ]);
+                }
+
+                // Add this scene to the final list
+                sceneOutputPaths.push(sceneOutputPath);
+            }
+
+            // Create a final concat list with all scenes
+            const finalConcatListPath = path.join(tempDir, 'final_concat_list.txt');
+            let finalConcatContent = '';
+
+            for (const scenePath of sceneOutputPaths) {
+                finalConcatContent += `file '${scenePath.replace(/'/g, "'\\''")}'
+`;
+            }
+
+            // Write the final concat list
+            await fs.writeFile(finalConcatListPath, finalConcatContent);
+            console.log(`Created final concat list at ${finalConcatListPath}`);
+
+            // 4. Concatenate all scene videos
+            console.log('Concatenating scene videos...');
             const outputFileName = `story_${storyId}_${uuidv4()}.mp4`;
             const outputPath = path.join(tempDir, outputFileName);
 
-            // Run FFmpeg to concatenate
-            // Note: We're not using '-c copy' to ensure transitions are applied correctly
+            // Run FFmpeg to concatenate with memory optimizations
             await runFFmpeg([
                 '-f', 'concat',
                 '-safe', '0',
-                '-i', concatListPath,
+                '-i', finalConcatListPath,
+                '-threads', '2',    // Limit threads to reduce memory usage
                 '-c:v', 'libx264', // Re-encode video to ensure transitions work correctly
+                '-preset', 'ultrafast', // Use fastest preset to reduce memory usage
+                '-crf', '28',      // Lower quality but faster encoding
                 '-c:a', 'aac',     // Re-encode audio to match
+                '-b:a', '128k',    // Lower audio bitrate
                 '-pix_fmt', 'yuv420p',
                 '-r', '25',        // Maintain consistent framerate
                 '-movflags', '+faststart', // Optimize for web playback
