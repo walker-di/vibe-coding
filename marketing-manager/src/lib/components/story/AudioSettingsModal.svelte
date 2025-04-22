@@ -24,8 +24,8 @@
 
   // Local state
   let narrationVolume = $state(story?.narrationVolume ?? 1.0);
-  let bgmVolume = $state(story?.bgmVolume ?? 0.5);
-  let narrationSpeed = $state(story?.narrationSpeed ?? 1.0);
+  let bgmVolume = $state(story?.bgmVolume ?? 0.09);
+  let narrationSpeed = $state(story?.narrationSpeed ?? 1.1);
   let isSaving = $state(false);
 
   // Track previous open state to avoid infinite loops
@@ -37,8 +37,8 @@
       if (open && story) {
         // Use nullish coalescing to handle cases where the fields might not exist yet
         narrationVolume = story.narrationVolume ?? 1.0;
-        bgmVolume = story.bgmVolume ?? 0.5;
-        narrationSpeed = story.narrationSpeed ?? 1.0;
+        bgmVolume = story.bgmVolume ?? 0.09;
+        narrationSpeed = story.narrationSpeed ?? 1.1;
 
         // Log the values for debugging
         console.log('Audio settings loaded:', { narrationVolume, bgmVolume, narrationSpeed });

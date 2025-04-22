@@ -35,8 +35,8 @@
     aspectRatio = "16:9", // Default to 16:9 if not provided
     resolution = null, // Now we'll use the resolution from the story
     narrationVolume = 1.0, // Default to 100% volume
-    bgmVolume = 0.5, // Default to 50% volume
-    narrationSpeed = 1.0, // Default to normal speed
+    bgmVolume = 0.09, // Default to 9% volume
+    narrationSpeed = 1.1, // Default to 1.1x speed
     onEditScene,
     onDeleteScene,
     onSelectScene,
@@ -202,7 +202,7 @@
         narrationSpeed: story.narrationSpeed
       });
       narrationAudioElement.volume = story.narrationVolume ?? 1.0;
-      narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.0;
+      narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.1;
     }
   }
 
