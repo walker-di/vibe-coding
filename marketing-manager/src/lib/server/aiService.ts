@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import Replicate from 'replicate';
 import { env } from '$env/dynamic/private';
@@ -131,14 +131,19 @@ export async function generateNarrationAudio(
     // Convert the speed value to a proper SSML rate value
     // For SSML, rate can be specified as a relative value or a percentage
     // If speedToUse is 1.0, we use "medium" (normal speed)
-    // If speedToUse is > 1.0, we use a percentage (e.g., "150%" for 1.5x)
-    // If speedToUse is < 1.0, we use a percentage (e.g., "50%" for 0.5x)
+    // If speedToUse is > 1.0, we use a percentage with + prefix (e.g., "+50%" for 1.5x)
+    // If speedToUse is < 1.0, we use a percentage with - prefix (e.g., "-50%" for 0.5x)
     let rateValue;
     if (speedToUse === 1.0) {
       rateValue = "medium";
+    } else if (speedToUse > 1.0) {
+      // For speeds > 1.0, calculate percentage increase and add + prefix
+      const percentIncrease = Math.round((speedToUse - 1.0) * 100);
+      rateValue = `+${percentIncrease}%`;
     } else {
-      // Convert to percentage
-      rateValue = `${Math.round(speedToUse * 100)}%`;
+      // For speeds < 1.0, calculate percentage decrease and add - prefix
+      const percentDecrease = Math.round((1.0 - speedToUse) * 100);
+      rateValue = `-${percentDecrease}%`;
     }
 
     const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${langCode}">
@@ -149,8 +154,9 @@ export async function generateNarrationAudio(
       </voice>
     </speak>`;
 
-    console.log(`Generated SSML with rate ${speedToUse} (${rateValue}) for voice ${voiceToUse}:`);
+    console.log(`Generated SSML with rate ${speedToUse} (converted to SSML format: ${rateValue}) for voice ${voiceToUse}:`);
     console.log(ssml);
+    console.log(`For reference: 1.1 speed should be +10%, 0.9 speed should be -10%`);
     console.log(`SpeechConfig created. Voice: ${speechConfig.speechSynthesisVoiceName}, Format: ${speechConfig.speechSynthesisOutputFormat}`);
 
     // Pass 'undefined' for the second argument to receive the audio data as an ArrayBuffer
