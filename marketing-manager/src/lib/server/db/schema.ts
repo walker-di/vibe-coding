@@ -182,6 +182,18 @@ export const clips = sqliteTable('clips', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 });
 
+// BGM Files Table
+export const bgmFiles = sqliteTable('bgm_files', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  description: text('description'),
+  audioUrl: text('audio_url').notNull(),
+  duration: integer('duration'), // Duration in seconds
+  fileSize: integer('file_size'), // Size in bytes
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
+});
+
 // NEW: Canvas Templates Table
 export const canvasTemplates = sqliteTable('canvas_templates', {
   id: integer('id').primaryKey({ autoIncrement: true }),

@@ -3,8 +3,9 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { ArrowLeft, Save, Music, FileText } from 'lucide-svelte';
+  import { ArrowLeft, Save, Music, FileText, Upload } from 'lucide-svelte';
   import type { Scene } from '$lib/types/story.types';
+  import AudioUploadModal from './AudioUploadModal.svelte';
 
   // Props
   let {
@@ -28,6 +29,9 @@
   let orderIndex = $state(scene?.orderIndex !== undefined ? scene.orderIndex : 0);
   let isSubmitting = $state(false);
   let errors = $state<Record<string, string>>({});
+  let showAudioUploadModal = $state(false);
+  let audioElement = $state<HTMLAudioElement | null>(null);
+  let isPlaying = $state(false);
 
   // Validate form
   function validate(): boolean {
@@ -64,6 +68,39 @@
       console.error('Error submitting scene:', error);
     } finally {
       isSubmitting = false;
+    }
+  }
+
+  // Handle audio selection from the modal
+  function handleAudioSelected(url: string, name: string) {
+    bgmUrl = url;
+    bgmName = name;
+    showAudioUploadModal = false;
+  }
+
+  // Play/pause audio preview
+  function toggleAudioPreview() {
+    if (!audioElement || !bgmUrl) return;
+
+    if (isPlaying) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      isPlaying = false;
+    } else {
+      // Add a timestamp to prevent browser caching
+      const timestamp = Date.now();
+      const audioUrlWithTimestamp = `${bgmUrl}?t=${timestamp}`;
+
+      audioElement.src = audioUrlWithTimestamp;
+      audioElement.load();
+      audioElement.play()
+        .then(() => {
+          isPlaying = true;
+        })
+        .catch(err => {
+          console.error('Error playing audio:', err);
+          isPlaying = false;
+        });
     }
   }
 </script>
@@ -112,6 +149,19 @@
       </h3>
 
       <div class="space-y-4">
+        <!-- Audio upload button -->
+        <Button
+          variant="outline"
+          onclick={() => showAudioUploadModal = true}
+          class="w-full"
+        >
+          <Upload class="h-4 w-4 mr-2" />
+          Upload or Select Audio
+        </Button>
+
+        <!-- Or use URL option -->
+        <div class="text-center text-sm text-muted-foreground my-2">- or -</div>
+
         <div class="space-y-2">
           <Label for="bgmUrl">BGM URL</Label>
           <Input
@@ -133,6 +183,24 @@
             <p class="text-xs text-red-500">{errors.bgmName}</p>
           {/if}
         </div>
+
+        <!-- Audio preview -->
+        {#if bgmUrl}
+          <div class="mt-2 p-3 bg-muted rounded-md">
+            <div class="flex items-center justify-between">
+              <div class="font-medium">{bgmName || 'Background Music'}</div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={toggleAudioPreview}
+                class="h-8 px-2"
+              >
+                {isPlaying ? 'Stop' : 'Preview'}
+              </Button>
+            </div>
+            <audio bind:this={audioElement} class="hidden"></audio>
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -143,4 +211,11 @@
       </Button>
     </div>
   </form>
+
+  <!-- Audio Upload Modal -->
+  <AudioUploadModal
+    open={showAudioUploadModal}
+    onAudioSelected={handleAudioSelected}
+    onClose={() => showAudioUploadModal = false}
+  />
 </div>

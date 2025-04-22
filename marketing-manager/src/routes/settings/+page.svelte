@@ -14,6 +14,14 @@
 			<p class="text-sm text-muted-foreground">Manage reusable canvas layouts and designs.</p>
 		</a>
 
+		<a
+			href="/settings/bgm"
+			class="block rounded border p-4 transition-colors hover:bg-muted hover:text-muted-foreground"
+		>
+			<h2 class="mb-1 text-lg font-semibold">Background Music</h2>
+			<p class="text-sm text-muted-foreground">Manage background music files for scenes.</p>
+		</a>
+
 		<!-- Add links to other settings sections here later -->
 	</div>
 </div>
