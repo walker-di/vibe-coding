@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { type Canvas, type FabricObject, FabricImage } from "fabric";
+  import ImageUploadModal from "./ImageUploadModal.svelte";
 
   // Props
   const props: {
@@ -13,6 +14,7 @@
   let isVisible = $state(false);
   let selectedImage = $state<FabricObject>();
   let menuRef: HTMLDivElement | null = $state(null);
+  let isImageUploadModalOpen = $state(false);
 
   // Function to check if an object is an image
   function isImageObject(obj: any): boolean {
@@ -38,103 +40,90 @@
     selectedImage = undefined;
   }
 
-  // Function to replace the selected image
+  // Function to open the image upload modal
   function replaceImage() {
     if (!selectedImage || !canvas) return;
+    isImageUploadModalOpen = true;
+  }
 
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async (f) => {
-          const data = f.target?.result as string;
-          if (!data) return;
+  // Function to handle image selection from the modal
+  async function handleImageSelected(url: string) {
+    if (!selectedImage || !canvas || !url) return;
 
-          try {
-            // Ensure selectedImage is not null at this point
-            if (!selectedImage) return;
+    try {
+      // Get current image properties
+      const currentLeft = selectedImage.left || 0;
+      const currentTop = selectedImage.top || 0;
+      const currentAngle = selectedImage.angle || 0;
+      const currentFlipX = selectedImage.flipX || false;
+      const currentFlipY = selectedImage.flipY || false;
+      const currentOpacity = selectedImage.opacity || 1;
+      // Use type assertion for name property
+      const currentName =
+        (selectedImage as any).name || `Image ${Date.now()}`;
+      const currentClipPath = selectedImage.clipPath;
+      const currentVisible = selectedImage.visible !== false;
 
-            // Get current image properties
-            const currentLeft = selectedImage.left || 0;
-            const currentTop = selectedImage.top || 0;
-            const currentAngle = selectedImage.angle || 0;
-            const currentFlipX = selectedImage.flipX || false;
-            const currentFlipY = selectedImage.flipY || false;
-            const currentOpacity = selectedImage.opacity || 1;
-            // Use type assertion for name property
-            const currentName =
-              (selectedImage as any).name || `Image ${Date.now()}`;
-            const currentClipPath = selectedImage.clipPath;
-            const currentVisible = selectedImage.visible !== false;
+      // Calculate the current displayed dimensions of the image
+      // This is what we want to preserve
+      const originalImage = selectedImage as FabricImage;
+      const currentWidth =
+        originalImage.width * (originalImage.scaleX || 1);
+      const currentHeight =
+        originalImage.height * (originalImage.scaleY || 1);
 
-            // Calculate the current displayed dimensions of the image
-            // This is what we want to preserve
-            const originalImage = selectedImage as FabricImage;
-            const currentWidth =
-              originalImage.width * (originalImage.scaleX || 1);
-            const currentHeight =
-              originalImage.height * (originalImage.scaleY || 1);
+      console.log(
+        "Current image dimensions:",
+        currentWidth,
+        "x",
+        currentHeight,
+      );
 
-            console.log(
-              "Current image dimensions:",
-              currentWidth,
-              "x",
-              currentHeight,
-            );
+      // Create new image from URL
+      const img = await FabricImage.fromURL(url, {
+        crossOrigin: "anonymous",
+      });
 
-            // Create new image from URL
-            const img = await FabricImage.fromURL(data, {
-              crossOrigin: "anonymous",
-            });
+      // Calculate scale factors to maintain the same visual dimensions
+      const newScaleX = currentWidth / img.width;
+      const newScaleY = currentHeight / img.height;
 
-            // Calculate scale factors to maintain the same visual dimensions
-            const newScaleX = currentWidth / img.width;
-            const newScaleY = currentHeight / img.height;
+      console.log(
+        "New image original dimensions:",
+        img.width,
+        "x",
+        img.height,
+      );
+      console.log("New scale factors:", newScaleX, newScaleY);
 
-            console.log(
-              "New image original dimensions:",
-              img.width,
-              "x",
-              img.height,
-            );
-            console.log("New scale factors:", newScaleX, newScaleY);
+      // Apply properties from the old image
+      img.set({
+        left: currentLeft,
+        top: currentTop,
+        scaleX: newScaleX,
+        scaleY: newScaleY,
+        angle: currentAngle,
+        flipX: currentFlipX,
+        flipY: currentFlipY,
+        opacity: currentOpacity,
+        name: currentName,
+        clipPath: currentClipPath,
+        visible: currentVisible,
+      });
 
-            // Apply properties from the old image
-            img.set({
-              left: currentLeft,
-              top: currentTop,
-              scaleX: newScaleX,
-              scaleY: newScaleY,
-              angle: currentAngle,
-              flipX: currentFlipX,
-              flipY: currentFlipY,
-              opacity: currentOpacity,
-              name: currentName,
-              clipPath: currentClipPath,
-              visible: currentVisible,
-            });
+      // Remove the old image (we've already checked it's not null)
+      canvas.remove(selectedImage);
 
-            // Remove the old image (we've already checked it's not null)
-            canvas.remove(selectedImage);
+      // Add the new image
+      canvas.add(img);
+      canvas.setActiveObject(img);
+      canvas.requestRenderAll();
 
-            // Add the new image
-            canvas.add(img);
-            canvas.setActiveObject(img);
-            canvas.requestRenderAll();
-
-            // Update the selected image reference
-            selectedImage = img;
-          } catch (error) {
-            console.error("Error replacing image:", error);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-    input.click();
+      // Update the selected image reference
+      selectedImage = img;
+    } catch (error) {
+      console.error("Error replacing image:", error);
+    }
   }
 
   // Set up event listeners
@@ -147,8 +136,8 @@
   // Clean up event listeners
   onDestroy(() => {
     canvas.off("selection:created", checkSelection);
-      canvas.off("selection:updated", checkSelection);
-      canvas.off("selection:cleared", hideMenu);
+    canvas.off("selection:updated", checkSelection);
+    canvas.off("selection:cleared", hideMenu);
   });
 </script>
 
@@ -159,6 +148,17 @@
     </button>
   </div>
 {/if}
+
+<!-- Image Upload Modal -->
+<ImageUploadModal
+  open={isImageUploadModalOpen}
+  onClose={() => (isImageUploadModalOpen = false)}
+  onImageSelected={(url) => {
+    handleImageSelected(url);
+    isImageUploadModalOpen = false;
+  }}
+  modalTitle="Replace Image"
+/>
 
 <style>
   .image-replace-menu {
