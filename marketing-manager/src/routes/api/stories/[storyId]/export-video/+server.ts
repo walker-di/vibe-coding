@@ -37,6 +37,14 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 if (transitionsData.success && Array.isArray(transitionsData.data)) {
                     transitions = transitionsData.data;
                     console.log(`Found ${transitions.length} transitions for story ${storyId}`);
+
+                    // Log all transitions for debugging
+                    if (transitions.length > 0) {
+                        console.log('Transitions configuration:');
+                        transitions.forEach(t => {
+                            console.log(`  - From scene ${t.fromSceneId} to scene ${t.toSceneId}: ${t.type}, ${t.duration}ms`);
+                        });
+                    }
                 }
             } else {
                 console.warn(`Failed to fetch transitions for story ${storyId}. Will proceed without transitions.`);
@@ -192,21 +200,29 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                     if (transition) {
                         console.log(`Applying transition from scene ${previousSceneId} to scene ${sceneId}: ${transition.type} (${transition.duration}ms)`);
 
-                        // Convert transition duration from ms to seconds
-                        const transitionDurationSec = transition.duration / 1000;
+                        // Convert transition duration from ms to seconds and ensure it's a valid value
+                        // Make sure we have a valid duration (minimum 0.1 seconds, maximum 5 seconds)
+                        const rawDurationSec = transition.duration / 1000;
+                        const transitionDurationSec = Math.max(0.1, Math.min(5.0, rawDurationSec));
 
-                        // Apply transition based on type
+                        console.log(`Applying transition with duration: ${transition.duration}ms (${transitionDurationSec}s)`);
+
+                        // Apply transition based on type - using simpler effects to ensure correct speed
                         switch (transition.type) {
                             case 'Fade':
+                                // Simple fade in effect with exact duration
                                 videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
                                 break;
                             case 'Slide':
-                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec},zoompan=z=1:x='if(lte(x,0),iw,x-1)':y=0:d=${Math.ceil(transitionDurationSec * 25)}:s=1280x720`);
+                                // Simplified slide effect - just use fade for now to ensure correct timing
+                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
                                 break;
                             case 'Zoom':
-                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec},zoompan=z='min(max(1,1.5-0.5*on/${Math.ceil(transitionDurationSec * 25)}),1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${Math.ceil(transitionDurationSec * 25)}:s=1280x720`);
+                                // Simplified zoom effect - just use fade for now to ensure correct timing
+                                videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
                                 break;
                             case 'Wipe':
+                                // Simplified wipe effect - just use fade for now to ensure correct timing
                                 videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
                                 break;
                             case 'None':
@@ -214,6 +230,7 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                                 break;
                             default:
                                 // Default to fade if type is unknown
+                                console.log(`Unknown transition type: ${transition.type}, defaulting to fade`);
                                 videoFilters.push(`fade=t=in:st=0:d=${transitionDurationSec}`);
                         }
                     } else if (!isFirstClip) {
@@ -230,8 +247,42 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                 // If it's the last clip in a scene and not the last clip overall,
                 // add a fade-out at the end to prepare for the next scene
                 if (isLastInScene && !isLastClip) {
-                    const fadeOutStart = Math.max(0, clip.duration - 0.3);
-                    videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=0.3`);
+                    // Apply fade-out for the last clip in a scene (not the last clip overall)
+                    let fadeOutDuration = 0.3; // Default duration in seconds
+                    let nextSceneId = null;
+
+                    // Try to find the current scene and the next scene
+                    const currentScene = sortedScenes.find(s => s.id === sceneId);
+                    if (currentScene) {
+                        // Find the next scene by order index
+                        const nextScene = sortedScenes.find(s => s.orderIndex > currentScene.orderIndex);
+                        if (nextScene) {
+                            nextSceneId = nextScene.id;
+
+                            // Check if there's a transition defined
+                            const transition = transitions.find(t =>
+                                t.fromSceneId === sceneId && t.toSceneId === nextSceneId);
+
+                            if (transition) {
+                                // Convert transition duration from ms to seconds and ensure it's a valid value
+                                const rawDurationSec = transition.duration / 1000;
+                                fadeOutDuration = Math.max(0.1, Math.min(5.0, rawDurationSec));
+
+                                console.log(`Applying outgoing transition from scene ${sceneId} to scene ${nextSceneId}: ${transition.type} (${transition.duration}ms, ${fadeOutDuration}s)`);
+                            }
+                        }
+                    } else {
+                        console.warn(`Could not find scene with ID ${sceneId} in sortedScenes`);
+                    }
+
+                    // Apply the fade-out effect with the determined duration
+                    const fadeOutStart = Math.max(0, clip.duration - fadeOutDuration);
+                    videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=${fadeOutDuration}`);
+                }
+
+                // Log the video filters being applied
+                if (videoFilters.length > 0) {
+                    console.log(`Video filters for clip ${clip.id}: ${videoFilters.join(',')}`);
                 }
 
                 // Create a video with exact duration matching the audio
@@ -299,11 +350,15 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             const outputPath = path.join(tempDir, outputFileName);
 
             // Run FFmpeg to concatenate
+            // Note: We're not using '-c copy' to ensure transitions are applied correctly
             await runFFmpeg([
                 '-f', 'concat',
                 '-safe', '0',
                 '-i', concatListPath,
-                '-c', 'copy',  // Copy streams without re-encoding
+                '-c:v', 'libx264', // Re-encode video to ensure transitions work correctly
+                '-c:a', 'aac',     // Re-encode audio to match
+                '-pix_fmt', 'yuv420p',
+                '-r', '25',        // Maintain consistent framerate
                 '-movflags', '+faststart', // Optimize for web playback
                 outputPath
             ]);
