@@ -3,9 +3,10 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { ArrowLeft, Save, Music, FileText, Upload } from 'lucide-svelte';
+  import { ArrowLeft, Save, Music, FileText, Upload, Sparkles } from 'lucide-svelte';
   import type { Scene } from '$lib/types/story.types';
-  import AudioUploadModal from './AudioUploadModal.svelte';
+  import AddBgmModal from './AddBgmModal.svelte';
+  import { toast } from 'svelte-sonner';
 
   // Props
   let {
@@ -28,6 +29,7 @@
   let description = $state(scene?.description || '');
   let orderIndex = $state(scene?.orderIndex !== undefined ? scene.orderIndex : 0);
   let isSubmitting = $state(false);
+  let isAutoSelectingBgm = $state(false);
   let errors = $state<Record<string, string>>({});
   let showAudioUploadModal = $state(false);
   let audioElement = $state<HTMLAudioElement | null>(null);
@@ -71,11 +73,23 @@
     }
   }
 
-  // Handle audio selection from the modal
-  function handleAudioSelected(url: string, name: string) {
+  // Handle BGM selection from the modal
+  function handleBgmSelected(event: CustomEvent<{ bgmUrl: string; bgmName: string }>) {
+    const { bgmUrl: url, bgmName: name } = event.detail;
     bgmUrl = url;
     bgmName = name;
     showAudioUploadModal = false;
+  }
+
+  // Open the BGM modal with the Generate tab active
+  function handleAutoSelectBgm() {
+    if (!scene?.id) {
+      toast.error('Scene must be saved before auto-selecting BGM');
+      return;
+    }
+
+    // Open the modal
+    showAudioUploadModal = true;
   }
 
   // Play/pause audio preview
@@ -149,15 +163,29 @@
       </h3>
 
       <div class="space-y-4">
-        <!-- Audio upload button -->
-        <Button
-          variant="outline"
-          onclick={() => showAudioUploadModal = true}
-          class="w-full"
-        >
-          <Upload class="h-4 w-4 mr-2" />
-          Upload or Select Audio
-        </Button>
+        <!-- Audio buttons -->
+        <div class="grid grid-cols-2 gap-2">
+          <!-- Upload button -->
+          <Button
+            variant="outline"
+            onclick={() => showAudioUploadModal = true}
+            class="w-full"
+          >
+            <Upload class="h-4 w-4 mr-2" />
+            Upload or Select
+          </Button>
+
+          <!-- Auto-select button -->
+          <Button
+            variant="outline"
+            onclick={handleAutoSelectBgm}
+            disabled={isAutoSelectingBgm || !scene?.id}
+            class="w-full"
+          >
+            <Sparkles class="h-4 w-4 mr-2" />
+            {isAutoSelectingBgm ? 'Selecting...' : 'Auto-Select BGM'}
+          </Button>
+        </div>
 
         <!-- Or use URL option -->
         <div class="text-center text-sm text-muted-foreground my-2">- or -</div>
@@ -212,10 +240,13 @@
     </div>
   </form>
 
-  <!-- Audio Upload Modal -->
-  <AudioUploadModal
-    open={showAudioUploadModal}
-    onAudioSelected={handleAudioSelected}
-    onClose={() => showAudioUploadModal = false}
+  <!-- BGM Modal -->
+  <AddBgmModal
+    bind:open={showAudioUploadModal}
+    sceneId={scene?.id || null}
+    sceneName={`Scene ${scene?.orderIndex !== undefined ? scene.orderIndex + 1 : ''}`}
+    isLoading={isSubmitting}
+    on:select={handleBgmSelected}
+    on:close={() => showAudioUploadModal = false}
   />
 </div>

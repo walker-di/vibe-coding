@@ -10,10 +10,13 @@
     Copy,
     MessageSquare,
     ChevronsLeftRightEllipsis,
+    Sparkles,
   } from "lucide-svelte";
+  import { toast } from 'svelte-sonner';
   import ClipNarrationModal from "./ClipNarrationModal.svelte";
   import TransitionModal from "./TransitionModal.svelte";
   import AddClipBetweenButton from "./AddClipBetweenButton.svelte";
+  import AddBgmModal from "./AddBgmModal.svelte";
   import type {
     SceneWithRelations,
     Clip,
@@ -28,6 +31,7 @@
   // State for modals and transitions
   let isNarrationModalOpen = $state(false);
   let isTransitionModalOpen = $state(false);
+  let isAutoSelectBgmModalOpen = $state(false);
   let currentEditingClip = $state<Clip | null>(null);
   let currentTransition = $state<{
     fromSceneId: number;
@@ -36,7 +40,12 @@
     toSceneName: string;
     existingTransition?: SceneTransition;
   } | null>(null);
+  let currentBgmScene = $state<{
+    id: number;
+    name: string;
+  } | null>(null);
   let sceneTransitions = $state<SceneTransition[]>([]);
+  let isApplyingBgm = $state(false);
 
   // Function to refresh the timestamp
   function refreshTimestamp() {
@@ -387,6 +396,83 @@
     }
   }
 
+  // Open the auto-select BGM modal for a scene
+  function openAutoSelectBgmModal(sceneId: number, event: Event) {
+    // Prevent event bubbling to avoid triggering other actions
+    event.stopPropagation();
+
+    // Find the scene to get its index for better display
+    const sceneIndex = scenes.findIndex((s: SceneWithRelations) => s.id === sceneId);
+    const sceneName = sceneIndex >= 0 ? `Scene ${sceneIndex + 1}` : `Scene ID ${sceneId}`;
+
+    // Check if the scene exists
+    const scene = scenes.find((s: SceneWithRelations) => s.id === sceneId);
+    if (!scene) {
+      toast.error(`Scene not found`);
+      return;
+    }
+
+    // Set the current scene for the modal
+    currentBgmScene = {
+      id: sceneId,
+      name: sceneName
+    };
+
+    // Open the modal
+    isAutoSelectBgmModalOpen = true;
+  }
+
+  // Handle BGM selection from the modal
+  async function handleBgmSelected(event: CustomEvent<{ bgmUrl: string; bgmName: string }>) {
+    if (!currentBgmScene) return;
+
+    const { bgmUrl, bgmName } = event.detail;
+    const sceneId = currentBgmScene.id;
+    const sceneName = currentBgmScene.name;
+
+    isApplyingBgm = true;
+
+    try {
+      // Update the scene with the selected BGM
+      const response = await fetch(`/api/scenes/${sceneId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bgmUrl,
+          bgmName,
+          // We need to include orderIndex which is required
+          orderIndex: scenes.find((s: SceneWithRelations) => s.id === sceneId)?.orderIndex || 0
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update scene. Status: ${response.status}`);
+      }
+
+      // Update the scene in the local state
+      scenes = scenes.map((s: SceneWithRelations) => {
+        if (s.id === sceneId) {
+          return {
+            ...s,
+            bgmUrl,
+            bgmName
+          };
+        }
+        return s;
+      });
+
+      // Show success message
+      toast.success(`BGM "${bgmName}" applied to ${sceneName}`);
+
+    } catch (err: any) {
+      console.error('Error applying BGM:', err);
+      toast.error(err.message || `Failed to apply BGM to ${sceneName}`);
+    } finally {
+      isApplyingBgm = false;
+      currentBgmScene = null;
+    }
+  }
+
   async function createNewClip(sceneId: number) {
     // Skip if already creating a clip for this scene
     if (isCreatingClip[sceneId]) return;
@@ -706,6 +792,14 @@
               <Button
                 variant="ghost"
                 class="h-8 w-8 p-0"
+                onclick={(e) => openAutoSelectBgmModal(scene.id, e)}
+                title="Auto-Select BGM"
+              >
+                <Sparkles class="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                class="h-8 w-8 p-0"
                 onclick={() => onEditScene(scene.id)}
                 title="Edit Scene"
               >
@@ -883,4 +977,17 @@
       onSave={handleSaveTransition}
     />
   {/if}
+
+  <!-- Always render the modal but control visibility with the open prop -->
+  <AddBgmModal
+    bind:open={isAutoSelectBgmModalOpen}
+    sceneId={currentBgmScene?.id || 0}
+    sceneName={currentBgmScene?.name || ''}
+    isLoading={isApplyingBgm}
+    on:close={() => {
+      isAutoSelectBgmModalOpen = false;
+      currentBgmScene = null;
+    }}
+    on:select={handleBgmSelected}
+  />
 </div>

@@ -16,11 +16,11 @@
     FileText,
     MessageSquare,
     Clock,
-    Sparkles,
     Wand,
     Mic,
     RefreshCw,
-    FileDown
+    FileDown,
+    Sparkles
   } from "lucide-svelte";
   import { tick } from "svelte";
   import { FabricImage } from "fabric";
@@ -1653,7 +1653,7 @@
   }
 
   // Function to handle AI fill and narration generation for all clips
-  async function handleAiFillAllClips(options: { fillCanvas: boolean; generateNarration: boolean; generateAudio: boolean }) {
+  async function handleAiFillAllClips(options: { fillCanvas: boolean; generateNarration: boolean; generateAudio: boolean; autoSelectBgm: boolean }) {
     if (isAiFillAllLoading) return;
 
     // Close the modal
@@ -1676,6 +1676,59 @@
       if (allClips.length === 0) {
         alert("No clips found to process.");
         return;
+      }
+
+      // If auto-select BGM is enabled, process each scene first
+      if (options.autoSelectBgm) {
+        console.log('Auto-selecting BGM for all scenes...');
+
+        // Create a map to track which scenes have been processed
+        const processedScenes = new Set<number>();
+
+        // Process each scene
+        for (const scene of scenes) {
+          // Skip if already processed
+          if (processedScenes.has(scene.id)) continue;
+
+          console.log(`Auto-selecting BGM for scene ${scene.id}...`);
+
+          try {
+            const response = await fetch(`/api/scenes/${scene.id}/auto-select-bgm`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+              console.error(`Failed to auto-select BGM for scene ${scene.id}. Status: ${response.status}`);
+              continue; // Continue with the next scene
+            }
+
+            const result = await response.json();
+
+            if (result.success && result.data && result.data.selectedBgm) {
+              console.log(`Successfully auto-selected BGM "${result.data.selectedBgm.name}" for scene ${scene.id}`);
+
+              // Update the scene in our local array
+              scenes = scenes.map((s: SceneWithRelations) => {
+                if (s.id === scene.id) {
+                  return {
+                    ...s,
+                    bgmUrl: result.data.selectedBgm.audioUrl,
+                    bgmName: result.data.selectedBgm.name
+                  };
+                }
+                return s;
+              });
+            }
+
+            // Mark this scene as processed
+            processedScenes.add(scene.id);
+
+          } catch (error) {
+            console.error(`Error auto-selecting BGM for scene ${scene.id}:`, error);
+            // Continue with the next scene
+          }
+        }
       }
 
       // Process each clip one by one
@@ -1911,7 +1964,16 @@
         }
       }
 
-      alert(`Processing complete! Processed ${allClips.length} clips.`);
+      // Create a detailed success message
+      let successMessage = `Processing complete!\n\nProcessed ${allClips.length} clips`;
+
+      // Add BGM information if that option was selected
+      if (options.autoSelectBgm) {
+        const scenesWithBgm = scenes.filter((scene: SceneWithRelations) => scene.bgmUrl).length;
+        successMessage += `\nAuto-selected BGM for ${scenesWithBgm} scenes`;
+      }
+
+      alert(successMessage);
 
     } catch (error: any) {
       console.error("Error in AI Fill All process:", error);
@@ -2164,7 +2226,7 @@
           disabled={!selectedClip || isAiFillLoading}
           title="AI Fill Clip"
         >
-          <Wand class="h-4 w-4 mr-2" />
+          <Sparkles class="h-4 w-4 mr-2" />
           {isAiFillLoading ? "Filling..." : "AI Fill"}
         </Button>
         <Button
@@ -2174,7 +2236,7 @@
           disabled={isAiFillAllLoading}
           title="AI Fill All Clips and Generate Narration"
         >
-          <Wand class="h-4 w-4 mr-2" />
+          <Sparkles class="h-4 w-4 mr-2" />
           {isAiFillAllLoading ?
             currentProcessingClip ?
               `Processing ${currentProcessingClip.index + 1}/${currentProcessingClip.total}...` :
@@ -2351,7 +2413,7 @@
                 class="w-full"
                 disabled={isGeneratingImage || !selectedClip?.description}
               >
-                <Wand class="h-4 w-4 mr-2" />
+                <Sparkles class="h-4 w-4 mr-2" />
                 {isGeneratingImage ? "Generating..." : "Generate Image"}
               </Button>
               <Button

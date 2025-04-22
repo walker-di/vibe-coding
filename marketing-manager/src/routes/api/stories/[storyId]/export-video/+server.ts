@@ -56,12 +56,29 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
             // Collect all clips from all scenes and organize by scene
             const allClips = [];
             const clipsByScene = new Map();
+            const sceneBgmPaths = new Map(); // Map to store downloaded BGM file paths
 
             // Sort scenes by orderIndex to ensure correct sequence
             const sortedScenes = [...story.scenes].sort((a, b) => a.orderIndex - b.orderIndex);
 
             for (const scene of sortedScenes) {
                 if (!scene.clips || scene.clips.length === 0) continue;
+
+                // Download BGM for this scene if available
+                if (scene.bgmUrl) {
+                    console.log(`Downloading BGM for scene ${scene.id}: ${scene.bgmName || 'Unnamed BGM'}`);
+                    const bgmFileName = `bgm_scene_${scene.id}_${uuidv4()}.mp3`;
+                    const bgmPath = path.join(tempDir, bgmFileName);
+
+                    try {
+                        await downloadFile(scene.bgmUrl, bgmPath);
+                        sceneBgmPaths.set(scene.id, bgmPath);
+                        console.log(`Downloaded BGM for scene ${scene.id} to ${bgmPath}`);
+                    } catch (err) {
+                        console.error(`Failed to download BGM for scene ${scene.id}:`, err);
+                        // Continue without BGM if download fails
+                    }
+                }
 
                 // Sort clips within each scene by orderIndex
                 const sortedClips = [...scene.clips].sort((a, b) => a.orderIndex - b.orderIndex);
@@ -109,6 +126,16 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
 
             // 3. Generate individual clip videos and prepare for concatenation
             console.log('Generating individual clip videos...');
+
+            // Log BGM information for debugging
+            if (sceneBgmPaths.size > 0) {
+                console.log(`Found BGM for ${sceneBgmPaths.size} scenes:`);
+                for (const [sceneId, bgmPath] of sceneBgmPaths.entries()) {
+                    console.log(`  - Scene ${sceneId}: ${bgmPath}`);
+                }
+            } else {
+                console.log('No BGM found for any scenes.');
+            }
 
             // Create a file to list all videos for concatenation
             const concatListPath = path.join(tempDir, 'concat_list.txt');
@@ -285,18 +312,53 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                     console.log(`Video filters for clip ${clip.id}: ${videoFilters.join(',')}`);
                 }
 
-                // Create a video with exact duration matching the audio
-                await runFFmpeg([
+                // Check if this scene has BGM
+                const bgmPath = sceneBgmPaths.get(sceneId);
+                const hasBgm = !!bgmPath;
+
+                // Create FFmpeg command array
+                const ffmpegArgs = [
                     // Set framerate before input
                     '-framerate', '25',
                     // Input image with loop
                     '-loop', '1', '-i', mainImagePath,
-                    // Input audio
-                    '-i', narrationPath,
-                    // Add video filters if any
-                    ...(videoFilters.length > 0 ? ['-vf', videoFilters.join(',')] : []),
-                    // Map streams
-                    '-map', '0:v', '-map', '1:a',
+                    // Input narration audio
+                    '-i', narrationPath
+                ];
+
+                // Add BGM input if available
+                if (hasBgm) {
+                    ffmpegArgs.push('-i', bgmPath);
+                    console.log(`Added BGM to clip ${clip.id} using original BGM file: ${bgmPath}`);
+                }
+
+                // Add video filters if any
+                if (videoFilters.length > 0) {
+                    ffmpegArgs.push('-vf', videoFilters.join(','));
+                }
+
+                // Create filter complex for audio mixing if we have BGM
+                if (hasBgm) {
+                    // Create a filter complex to mix narration and BGM
+                    // Volume: narration at 1.0 (100%), BGM at 0.3 (30%)
+                    // Use atrim to start BGM at 0 and limit to clip duration
+                    const clipDuration = clip.duration || 3; // Default to 3 seconds if no duration
+
+                    ffmpegArgs.push(
+                        '-filter_complex',
+                        `[1:a]volume=1.0[narration];[2:a]volume=0.3,atrim=0:${clipDuration}[bgm];[narration][bgm]amix=inputs=2:duration=shortest[aout]`,
+                        '-map', '0:v',   // Map video from first input
+                        '-map', '[aout]' // Map mixed audio
+                    );
+
+                    console.log(`Added BGM to clip ${clip.id} with duration: ${clipDuration}s`);
+                } else {
+                    // No BGM, just map the narration audio
+                    ffmpegArgs.push('-map', '0:v', '-map', '1:a');
+                }
+
+                // Add remaining encoding parameters
+                ffmpegArgs.push(
                     // Video codec settings
                     '-c:v', 'libx264',
                     '-pix_fmt', 'yuv420p',
@@ -312,7 +374,10 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
                     '-movflags', '+faststart',
                     // Output file
                     clipOutputPath
-                ]);
+                );
+
+                // Run FFmpeg with the constructed arguments
+                await runFFmpeg(ffmpegArgs);
 
                 console.log(`Generated clip video: ${clipOutputPath}`);
 
