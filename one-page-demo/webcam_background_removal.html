@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Configurable Background Removal Demo</title>
+    <title>Configurable Background Removal with Fabric.js</title>
     <style>
         body {
             font-family: sans-serif;
@@ -93,6 +93,23 @@
               background-color: #c82333;
          }
 
+        #fabricControls {
+             margin-top: 10px;
+             padding: 10px;
+             border: 1px solid #eee;
+             border-radius: 5px;
+             background-color: #f9f9f9;
+             display: flex;
+             gap: 10px;
+             flex-wrap: wrap;
+             justify-content: center;
+             margin-bottom: 20px;
+        }
+
+        #fabricControls .file-input-container {
+            margin-left: 0; /* Reset margin for Fabric controls */
+        }
+
 
         #container {
             position: relative;
@@ -101,18 +118,22 @@
             margin-bottom: 20px;
             border: 1px solid #ccc;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            /* Minimum size to prevent collapse before video loads */
+            min-width: 320px;
+            min-height: 240px;
         }
-        video, canvas {
-            display: block; /* Remove extra space below elements */
+
+        /* The canvas element will be managed by Fabric.js */
+        #videoOutput {
+            display: block; /* Remove extra space below element */
             max-width: 100%;
             height: auto;
         }
+
         #videoInput {
             display: none; /* Hide the raw video feed */
         }
-        #videoOutput {
-            /* Canvas for processed video */
-        }
+
         #controls {
             margin-top: 10px;
             display: flex;
@@ -141,11 +162,21 @@
             opacity: 0.6;
             cursor: not-allowed;
         }
+
+        /* Fabric.js adds its own canvas elements for interaction layer, if using overlay.
+           But we are using a single canvas strategy, so this might not be needed.
+           If you switch to overlay strategy, you'd need styles like:
+           .canvas-container { position: relative; width: ...; height: ...; }
+           .canvas-container canvas { position: absolute; top: 0; left: 0; }
+           #videoOutput { z-index: 1; }
+           .upper-canvas { z-index: 2; }
+        */
+
     </style>
 </head>
 <body>
 
-    <h1>Real-time Background Removal</h1>
+    <h1>Real-time Background Removal with Graphics</h1>
 
     <div id="loadingMessage">Loading TensorFlow.js and model...</div>
 
@@ -160,7 +191,7 @@
         <div class="config-group">
             <label>Background Image:</label>
              <div class="file-input-container">
-                 <button class="file-input-button">Choose Image</button>
+                 <button class="file-input-button">Choose Background</button>
                  <input type="file" id="backgroundImageInput" accept="image/*">
              </div>
              <span id="backgroundFileName">No image selected</span>
@@ -168,11 +199,22 @@
         </div>
     </div>
 
+    <!-- New controls for adding Fabric.js elements -->
+    <div id="fabricControls">
+        <label>Add Elements:</label>
+         <div class="file-input-container">
+             <button class="file-input-button">Add Image</button>
+             <input type="file" id="addImageInput" accept="image/*">
+         </div>
+         <button id="addTextButton">Add Text</button>
+         <button id="deleteSelectedButton">Delete Selected</button>
+    </div>
+
 
     <div id="container">
         <!-- Hidden video element for raw camera feed -->
         <video id="videoInput" playsinline autoplay muted></video>
-        <!-- Canvas element for processed output -->
+        <!-- Canvas element for processed output, managed by Fabric.js -->
         <canvas id="videoOutput"></canvas>
     </div>
 
@@ -190,16 +232,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
 
-    <!-- *** IMPORTANT: Include the MediaPipe Selfie Segmentation solution FIRST *** -->
+    <!-- MediaPipe Selfie Segmentation -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
 
-    <!-- Then include the body-segmentation library -->
+    <!-- Body-segmentation library -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation@latest/dist/body-segmentation.min.js"></script>
+
+    <!-- Fabric.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
 
     <script>
         const videoInput = document.getElementById('videoInput');
-        const videoOutput = document.getElementById('videoOutput');
+        const videoOutput = document.getElementById('videoOutput'); // This canvas will be managed by Fabric.js
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const startRecordingButton = document.getElementById('startRecordingButton');
@@ -207,25 +252,31 @@
         const downloadLink = document.getElementById('downloadLink');
         const loadingMessage = document.getElementById('loadingMessage');
         const modelTypeSelect = document.getElementById('modelTypeSelect');
-        const backgroundImageInput = document.getElementById('backgroundImageInput'); // File input
-        const backgroundFileNameSpan = document.getElementById('backgroundFileName'); // Span for filename
-        const clearBackgroundButton = document.getElementById('clearBackgroundButton'); // Clear button
-        const fileInputButton = document.querySelector('.file-input-button'); // The button styled element
-        const ctx = videoOutput.getContext('2d');
+        const backgroundImageInput = document.getElementById('backgroundImageInput'); // File input for static background
+        const backgroundFileNameSpan = document.getElementById('backgroundFileName'); // Span for background filename
+        const clearBackgroundButton = document.getElementById('clearBackgroundButton'); // Clear background button
+        const fileInputButtons = document.querySelectorAll('.file-input-button'); // All file input buttons
+
+        // New elements for Fabric.js controls
+        const addImageInput = document.getElementById('addImageInput'); // File input for adding images
+        const addTextButton = document.getElementById('addTextButton');
+        const deleteSelectedButton = document.getElementById('deleteSelectedButton');
+        const fabricControlsDiv = document.getElementById('fabricControls');
 
         let stream = null;
-        let model = null; // This will hold the segmenter object
+        let segmenter = null; // Renamed from 'model' for clarity (it's the segmenter instance)
         let rafId = null; // requestAnimationFrame ID
         let mediaRecorder = null;
         let recordedChunks = [];
         let isProcessing = false;
         let isLoadingModel = false; // Flag to prevent multiple loadModel calls at once
 
-        let backgroundImage = null; // Holds the loaded background image object
+        let fabricCanvas = null; // The Fabric.js canvas instance
+        let videoObject = null; // The Fabric.js image object representing the video feed (masked person)
 
-        // Create a temporary canvas for processing the person cutout
-        let tempCanvas = null;
-        let tempCtx = null;
+        // Create a temporary canvas for drawing the masked person frame *before* converting to a Fabric.js image
+        let tempCanvas = document.createElement('canvas');
+        let tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true }); // willReadFrequently can help performance
 
 
         // --- Model Loading ---
@@ -237,13 +288,20 @@
             }
             isLoadingModel = true;
             stopCamera(); // Stop camera before changing/reloading the model
+             // Also stop/dispose Fabric.js canvas if it exists
+             disposeFabricCanvas();
 
             // Disable relevant controls while loading
             startButton.disabled = true;
             modelTypeSelect.disabled = true;
-            backgroundImageInput.disabled = true; // Disable background image input
-            fileInputButton.disabled = true; // Disable the visible button too
-            clearBackgroundButton.disabled = true; // Disable clear button
+            backgroundImageInput.disabled = true;
+            fileInputButtons.forEach(btn => btn.disabled = true); // Disable all file input buttons
+            clearBackgroundButton.disabled = true;
+            addTextButton.disabled = true; // Disable new fabric controls
+            deleteSelectedButton.disabled = true;
+            fabricControlsDiv.style.pointerEvents = 'none'; // Visually indicate disabled state for control container
+
+
             loadingMessage.innerText = 'Loading TensorFlow.js and model...'; // Reset message
 
             try {
@@ -267,11 +325,15 @@
                  if (typeof bodySegmentation.createSegmenter !== 'function') {
                      throw new Error("bodySegmentation.createSegmenter function not found. Library may not be fully loaded or is incorrect version.");
                  }
-
-                // Check if MediaPipe SelfieSegmentation is available globally (should be if script loaded)
+                // Ensure MediaPipe SelfieSegmentation is available globally
                  if (typeof SelfieSegmentation === 'undefined') {
                      throw new Error("MediaPipe Selfie Segmentation library not loaded. Please check CDN link for @mediapipe/selfie_segmentation.");
                  }
+                 // Ensure Fabric.js is available globally
+                 if (typeof fabric === 'undefined') {
+                     throw new Error("Fabric.js library not loaded. Please check CDN link for fabric.js.");
+                 }
+
 
                 // Get the selected model type from the dropdown
                 const selectedModelType = modelTypeSelect.value;
@@ -285,28 +347,26 @@
                 };
                 console.log('Creating segmenter with config:', segmenterConfig);
 
-                // Dispose of the previous model if it exists
-                if (model && typeof model.dispose === 'function') {
+                // Dispose of the previous segmenter model if it exists
+                if (segmenter && typeof segmenter.dispose === 'function') {
                      try {
-                        await model.dispose();
-                        console.log("Previous model disposed.");
+                        await segmenter.dispose();
+                        console.log("Previous segmenter disposed.");
                      } catch (disposeError) {
-                        console.warn("Error disposing previous model:", disposeError);
-                        // Continue loading the new model despite dispose error
+                        console.warn("Error disposing previous segmenter:", disposeError);
                      }
                 }
 
-
                 // Use createSegmenter to get the segmenter instance
-                model = await bodySegmentation.createSegmenter(modelDefinition, segmenterConfig);
-                console.log('Segmenter created:', model);
+                segmenter = await bodySegmentation.createSegmenter(modelDefinition, segmenterConfig);
+                console.log('Segmenter created:', segmenter);
 
 
                 loadingMessage.innerText = `Model '${selectedModelType}' loaded. Click "Start Camera".`;
                 startButton.disabled = false;
 
             } catch (error) {
-                model = null; // Ensure model is null on error
+                segmenter = null; // Ensure segmenter is null on error
                 loadingMessage.innerText = `Error loading model: ${error.message}. Select a different model or check console.`;
                 console.error('Error loading model:', error);
                 startButton.disabled = true; // Keep start button disabled if model load failed
@@ -314,19 +374,34 @@
                  // Re-enable the dropdown and file input after loading attempt finishes
                  modelTypeSelect.disabled = false;
                  backgroundImageInput.disabled = false;
-                 fileInputButton.disabled = false;
-                 // Re-enable clear button only if an image is loaded
-                 if (backgroundImage) {
-                    clearBackgroundButton.disabled = false;
+                 fileInputButtons.forEach(btn => btn.disabled = false); // Re-enable all file input buttons
+                 // Re-enable clear button only if an image is loaded (logic handled by check in clearBackgroundImage)
+                 if (backgroundImageInput.value) { // Check file input value to see if an image was loaded
+                     clearBackgroundButton.disabled = false;
+                 } else {
+                     clearBackgroundButton.disabled = true; // Ensure it's disabled if no image
                  }
+
+                 // Fabric controls enabled only if model loaded successfully
+                 if (segmenter) {
+                     addTextButton.disabled = false;
+                     deleteSelectedButton.disabled = false; // Delete can be enabled even with no objects
+                     fabricControlsDiv.style.pointerEvents = 'auto'; // Enable clicks on container
+                 } else {
+                     addTextButton.disabled = true;
+                     deleteSelectedButton.disabled = true;
+                     fabricControlsDiv.style.pointerEvents = 'none';
+                 }
+
+
                  isLoadingModel = false;
             }
         }
 
         // --- Camera Access ---
         async function startCamera() {
-            if (!model) {
-                console.warn("Model is not loaded yet.");
+            if (!segmenter) {
+                console.warn("Model (segmenter) is not loaded yet.");
                 loadingMessage.innerText = "Model not loaded. Please wait or check for errors.";
                 return; // Don't start if model isn't ready
             }
@@ -337,8 +412,13 @@
             // Disable config dropdown and file input while camera is active
             modelTypeSelect.disabled = true;
             backgroundImageInput.disabled = true;
-            fileInputButton.disabled = true;
+            fileInputButtons.forEach(btn => btn.disabled = true); // Disable all file input buttons
             clearBackgroundButton.disabled = true;
+
+            // Disable fabric controls while camera is connecting/starting
+            addTextButton.disabled = true;
+            deleteSelectedButton.disabled = true;
+            fabricControlsDiv.style.pointerEvents = 'none';
 
 
             try {
@@ -358,22 +438,43 @@
                     // Wait for video to be ready before starting processing
                     videoInput.addEventListener('canplay', () => {
                          // Set canvas dimensions to match video
-                        videoOutput.width = videoInput.videoWidth;
-                        videoOutput.height = videoInput.videoHeight;
+                         videoOutput.width = videoInput.videoWidth;
+                         videoOutput.height = videoInput.videoHeight;
 
-                         // Initialize or resize temporary canvas
-                        if (!tempCanvas) {
-                             tempCanvas = document.createElement('canvas');
-                             tempCtx = tempCanvas.getContext('2d');
+                         // Initialize or resize Fabric.js canvas
+                         if (!fabricCanvas) {
+                             fabricCanvas = new fabric.Canvas('videoOutput', {
+                                 selection: true, // Allow object selection
+                                 backgroundColor: 'transparent' // Default background is transparent
+                             });
+                             console.log("Fabric.js canvas initialized.");
+
+                             // Add event listeners for Fabric.js events if needed (e.g., selection)
+                              fabricCanvas.on('selection:created', updateDeleteButtonState);
+                              fabricCanvas.on('selection:updated', updateDeleteButtonState);
+                              fabricCanvas.on('selection:cleared', updateDeleteButtonState);
+                              fabricCanvas.on('object:added', updateDeleteButtonState);
+                              fabricCanvas.on('object:removed', updateDeleteButtonState);
+                              // Initial state check
+                              updateDeleteButtonState();
+
+                         } else {
+                            // Resize existing Fabric canvas
+                            fabricCanvas.setDimensions({
+                                width: videoInput.videoWidth,
+                                height: videoInput.videoHeight
+                            });
+                             // Fabric objects might need scaling if aspect ratio changes significantly,
+                             // but we'll skip that for this example. User can reposition/scale manually.
                          }
-                         tempCanvas.width = videoOutput.width;
-                         tempCanvas.height = videoOutput.height;
-                         if (!tempCtx) { // Ensure context is available
-                             tempCtx = tempCanvas.getContext('2d');
-                         }
+
+                         // Initialize or resize temporary canvas for masked cutout
+                         tempCanvas.width = videoInput.videoWidth;
+                         tempCanvas.height = videoInput.videoHeight;
+                         tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
 
 
-                        // Start processing and recording setup
+                         // Start processing and recording setup
                         isProcessing = true;
                         processFrame(); // Start the processing loop
 
@@ -382,6 +483,12 @@
                         startRecordingButton.disabled = false;
                         stopRecordingButton.disabled = true; // Recording starts only when explicitly clicked
                         loadingMessage.style.display = 'none'; // Hide message during active use
+
+                         // Enable fabric controls now that camera is running
+                         addTextButton.disabled = false;
+                         deleteSelectedButton.disabled = false; // Still enabled as objects can be added/removed
+                         fabricControlsDiv.style.pointerEvents = 'auto';
+
 
                     }, { once: true }); // Only run this setup once
                 };
@@ -394,10 +501,15 @@
                 // Re-enable config on camera error
                 modelTypeSelect.disabled = false;
                 backgroundImageInput.disabled = false;
-                fileInputButton.disabled = false;
-                if (backgroundImage) {
+                fileInputButtons.forEach(btn => btn.disabled = false);
+                if (backgroundImageInput.value) {
                     clearBackgroundButton.disabled = false;
                  }
+
+                // Ensure fabric controls are disabled if camera fails
+                 addTextButton.disabled = true;
+                 deleteSelectedButton.disabled = true;
+                 fabricControlsDiv.style.pointerEvents = 'none';
             }
         }
 
@@ -414,14 +526,25 @@
                  mediaRecorder.stop();
              }
 
-
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
             }
 
-             // Clear the canvas
-            ctx.clearRect(0, 0, videoOutput.width, videoOutput.height);
+             // Clear the canvases and Fabric.js objects
+             if (fabricCanvas) {
+                 fabricCanvas.clear(); // Clears all objects and background image
+                 fabricCanvas.renderAll(); // Ensure canvas is visually cleared
+             }
+             videoObject = null; // Clear the reference to the video image object
+
+             // Dispose temporary canvas context (not strictly necessary for 2D, but good practice)
+             if (tempCtx) {
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                // tempCanvas = null; // Could null the element if needed, re-create on start
+                // tempCtx = null;
+             }
+
 
             videoInput.srcObject = null; // Disconnect stream from video element
 
@@ -431,8 +554,8 @@
             stopRecordingButton.disabled = true;
 
             loadingMessage.style.display = 'block'; // Show message placeholder
-            // Update message based on whether a model is loaded
-             if (model) {
+            // Update message based on whether a segmenter is loaded
+             if (segmenter) {
                 loadingMessage.innerText = `Camera stopped. Click "Start Camera" to restart or change config.`;
              } else {
                  loadingMessage.innerText = `Camera stopped. No model loaded. Select a model type.`;
@@ -441,113 +564,134 @@
             // Re-enable config dropdown and file input when camera stops
             modelTypeSelect.disabled = false;
             backgroundImageInput.disabled = false;
-            fileInputButton.disabled = false;
-            if (backgroundImage) {
+            fileInputButtons.forEach(btn => btn.disabled = false);
+            if (backgroundImageInput.value) {
                 clearBackgroundButton.disabled = false;
              }
 
-             // Dispose temporary canvas context
-             if (tempCtx) {
-                // No explicit dispose for 2D contexts needed, just clear
-                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+            // Disable fabric controls when camera stops
+            addTextButton.disabled = true;
+            deleteSelectedButton.disabled = true;
+            fabricControlsDiv.style.pointerEvents = 'none'; // Disable clicks on container
+        }
+
+        function disposeFabricCanvas() {
+             if (fabricCanvas) {
+                 // Remove all event listeners added manually
+                  fabricCanvas.off('selection:created', updateDeleteButtonState);
+                  fabricCanvas.off('selection:updated', updateDeleteButtonState);
+                  fabricCanvas.off('selection:cleared', updateDeleteButtonState);
+                  fabricCanvas.off('object:added', updateDeleteButtonState);
+                  fabricCanvas.off('object:removed', updateDeleteButtonState);
+
+                 fabricCanvas.dispose(); // Clean up Fabric.js instance
+                 fabricCanvas = null;
+                 console.log("Fabric.js canvas disposed.");
              }
+             videoObject = null; // Ensure this is also cleared
         }
 
 
         // --- Video Processing Loop ---
         async function processFrame() {
             // Check video readiness (readyState >= 2 means HAVE_CURRENT_DATA or more)
-            // Also check if model is still valid (not disposed during reload attempt)
-            if (!isProcessing || !model || !videoInput.srcObject || videoInput.readyState < 2 || typeof model.segmentPeople !== 'function') {
+            // Also check if segmenter is still valid and processing is enabled
+            if (!isProcessing || !segmenter || !videoInput.srcObject || videoInput.readyState < 2 || typeof segmenter.segmentPeople !== 'function' || !fabricCanvas) {
                  // Stop loop if processing is no longer needed, resources aren't ready,
-                 // video isn't playing, or model became invalid (e.g., during dispose/reload)
+                 // video isn't playing, segmenter became invalid, or fabricCanvas isn't initialized
                  rafId = null;
+                 console.warn("Stopping processFrame loop due to invalid state.");
                  return;
             }
 
-            // Ensure temporary canvas exists and matches output canvas size
-            if (!tempCanvas || tempCanvas.width !== videoOutput.width || tempCanvas.height !== videoOutput.height) {
-                 tempCanvas = document.createElement('canvas');
-                 tempCanvas.width = videoOutput.width;
-                 tempCanvas.height = videoOutput.height;
-                 tempCtx = tempCanvas.getContext('2d');
+            // Ensure temporary canvas exists and matches output canvas size (Fabric.js canvas size)
+            // Note: Fabric.js manages videoOutput dimensions, so we check fabricCanvas size.
+            if (!tempCanvas || tempCanvas.width !== fabricCanvas.width || tempCanvas.height !== fabricCanvas.height) {
+                 tempCanvas.width = fabricCanvas.width;
+                 tempCanvas.height = fabricCanvas.height;
+                 tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
             } else if (!tempCtx) {
-                tempCtx = tempCanvas.getContext('2d'); // Ensure context is available
+                tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true }); // Ensure context is available
             }
 
 
             try {
-                // Perform segmentation using the segmentPeople method
-                const segmentationEstimations = await model.segmentPeople(videoInput);
-
-
-                // --- Drawing Logic ---
-                // Use a temporary canvas to create the masked foreground before combining with background.
-
-                // 1. Clear the main output canvas.
-                ctx.clearRect(0, 0, videoOutput.width, videoOutput.height);
-
-                // 2. Draw the background image onto the main output canvas (if one is loaded).
-                if (backgroundImage) {
-                    // Draw image scaled to cover the canvas
-                    const hRatio = videoOutput.width / backgroundImage.width ;
-                    const vRatio = videoOutput.height / backgroundImage.height ;
-                    const ratio = Math.max ( hRatio, vRatio ); // Use max ratio to cover
-                    const centershiftX = ( videoOutput.width - backgroundImage.width * ratio ) / 2;
-                    const centershiftY = ( videoOutput.height - backgroundImage.height * ratio ) / 2;
-                    ctx.drawImage(backgroundImage, 0, 0, backgroundImage.width, backgroundImage.height,
-                                  centershiftX, centershiftY, backgroundImage.width * ratio, backgroundImage.height * ratio);
-                }
-                // If no background image, the main canvas remains transparent after clearing.
-
-
-                // 3. Prepare the temporary canvas with the masked foreground (the person).
-                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height); // Clear temporary canvas for this frame
-                // Draw the original video frame onto the temporary canvas first.
+                // 1. Draw the current video frame onto the temporary canvas
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
                 tempCtx.drawImage(videoInput, 0, 0, tempCanvas.width, tempCanvas.height);
 
+                // 2. Perform segmentation
+                const segmentationEstimations = await segmenter.segmentPeople(videoInput);
 
+                // 3. Apply the mask to the temporary canvas if segmentation data exists
                 if (segmentationEstimations && segmentationEstimations.length > 0) {
                     const segmentation = segmentationEstimations[0]; // MediaPipe returns one segmentation
 
                     if (segmentation && segmentation.mask && typeof segmentation.mask.toCanvasImageSource === 'function') {
                         const mask = await segmentation.mask.toCanvasImageSource();
 
-                        // Use 'destination-in' on the temporary canvas:
-                        // This keeps the destination pixels (the video drawn just above)
-                        // only where the source pixels (the mask) are opaque.
-                        // The mask is drawn on top, acting as a clipping path for the video.
+                        // Use 'destination-in' on the temporary canvas to cut out the person
                         tempCtx.globalCompositeOperation = 'destination-in';
-
-                        // Draw the mask onto the temporary canvas.
                         tempCtx.drawImage(mask, 0, 0, tempCanvas.width, tempCanvas.height);
-
-                        // Reset the composite operation for subsequent drawings on the temp canvas (if any)
-                        tempCtx.globalCompositeOperation = 'source-over';
-
-                        // 4. Draw the contents of the temporary canvas (the masked person) onto the main canvas.
-                        // Since the temporary canvas is now transparent where the person isn't,
-                        // drawing it onto the main canvas (which has the background) correctly composites them.
-                         ctx.drawImage(tempCanvas, 0, 0, videoOutput.width, videoOutput.height);
-
+                        tempCtx.globalCompositeOperation = 'source-over'; // Reset composite operation
                     } else {
-                         console.warn("Segmentation mask or its method not available for this frame. Showing just background.");
-                         // If mask is missing but segmentation object was found, skip drawing the masked person.
-                         // The main canvas will contain just the background (from step 2) or be transparent.
+                         // console.warn("Segmentation mask or its method not available for this frame. Showing full video frame.");
+                         // If mask is missing, the temp canvas already has the full video frame (step 1).
+                         // Do nothing here, the full frame will be used for the videoObject.
                     }
-
                 } else {
                     // If no segmentation found (e.g., no person detected)
-                    // Skip drawing the temporary canvas. The main canvas will contain
-                    // just the background image (from step 2) or be transparent. This is the desired behavior.
+                    // console.warn("No segmentation estimations found. Showing full video frame.");
+                    // The temp canvas already has the full video frame (step 1).
+                    // Do nothing here, the full frame will be used for the videoObject.
                 }
 
-                // --- End Drawing Logic ---
+                // 4. Convert the temporary canvas (containing the masked or full video frame) to an image source (Data URL is simple)
+                const videoFrameDataUrl = tempCanvas.toDataURL();
+
+                // 5. Update or create the Fabric.js image object for the video feed
+                if (!videoObject) {
+                    // Create the video object the first time
+                    videoObject = new fabric.Image(videoFrameDataUrl, {
+                        left: 0, top: 0,
+                        selectable: false, // Cannot select the video feed itself
+                        evented: false, // Does not participate in mouse events
+                        lockMovementX: true, // Cannot be moved
+                        lockMovementY: true,
+                        lockRotation: true, // Cannot be rotated
+                        lockScalingX: true, // Cannot be scaled
+                        lockScalingY: true,
+                        hasControls: false, // No controls to show
+                        hasBorders: false, // No borders to show
+                        objectCaching: false // Disable caching as the image changes every frame
+                        // Add crossOrigin: 'anonymous' if loading video from external URL, not needed for dataUrl or local stream
+                    });
+                    // Add it to the canvas and send it to the back (index 0)
+                    fabricCanvas.add(videoObject);
+                    fabricCanvas.sendToBack(videoObject); // Ensure video is always at the bottom
+                    console.log("Fabric video object created and added.");
+
+                } else {
+                    // Update the source of the existing video object
+                    // The callback is optional here if you just need to update the image data
+                    // and rely on renderAll() later. If setSrc also handles async loading,
+                    // a callback might be needed to ensure render happens AFTER load.
+                    // For data URLs, it's usually synchronous enough, or renderAll() handles it.
+                    videoObject.setSrc(videoFrameDataUrl, null, { crossOrigin: 'anonymous' }); // Pass null for callback if not needed
+                     // Note: setSrc with callback structure: videoObject.setSrc(url, function() { fabricCanvas.renderAll(); });
+                     // If using the callback method, the requestAnimationFrame(processFrame) would go INSIDE that callback.
+                     // For simplicity and consistent frame rate, we'll call renderAll and raf outside the setSrc callback.
+                }
+
+
+                // 6. Tell Fabric.js to render the canvas
+                // This draws the background image, the videoObject, and all other Fabric objects on top.
+                fabricCanvas.renderAll();
 
 
             } catch (error) {
                  console.error("Error processing frame:", error);
-                 // If an error occurs during segmentation, stop the loop
+                 // If an error occurs during segmentation or drawing, stop the loop
                  isProcessing = false;
                  rafId = null;
                  loadingMessage.style.display = 'block';
@@ -556,9 +700,10 @@
                  return; // Exit the function early
             }
 
-
             // Request the next frame only if still processing
             if (isProcessing) {
+               // Request the next frame. This happens regardless of setSrc callback
+               // which maintains a consistent requestAnimationFrame loop speed.
                rafId = requestAnimationFrame(processFrame);
             }
         }
@@ -566,8 +711,8 @@
         // --- Recording ---
         function startRecording() {
             recordedChunks = []; // Clear previous chunks
-            // Capture stream from the canvas element (the processed video)
-            // Use the current dimensions of the output canvas
+            // Capture stream from the canvas element (the processed video + fabric objects)
+            // Use the current dimensions of the output canvas (managed by Fabric)
             const canvasStream = videoOutput.captureStream ? videoOutput.captureStream(30) : null; // 30fps capture
 
             if (!canvasStream) {
@@ -600,7 +745,7 @@
                 'video/webm;codecs=vp8,opus', // VP8 video with Opus audio (more compatible)
                 'video/webm', // General webm (codec decided by browser)
                 'video/mp4;codecs=h264,aac', // H.264 video with AAC audio (less compatible on some browsers/OSs)
-                'video/mp4', // General mp4 (codec decided by browser)
+                // Add other potential types like 'video/webm;codecs=h264' or 'video/mp4;codecs=avc1' if needed
             ];
 
             let supportedType = null;
@@ -644,7 +789,6 @@
                 downloadLink.style.display = 'block';
 
                 // Revoke URL after a delay or when clicked to free up memory
-                // Using setTimeout with a small delay after click is a common pattern
                 downloadLink.onclick = () => {
                      setTimeout(() => { URL.revokeObjectURL(url); }, 100);
                      // Ensure the link is clickable after showing it
@@ -694,34 +838,143 @@
             stopRecordingButton.disabled = true;
         }
 
+        // --- Fabric.js Object Management ---
+
+        // Load an image and add it to the canvas
+        function addImageToCanvas(file) {
+            if (!fabricCanvas) {
+                console.warn("Fabric canvas not initialized.");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                fabric.Image.fromURL(e.target.result, function(img) {
+                    // Set initial properties (optional)
+                    img.set({
+                        left: 50,
+                        top: 50,
+                        // Scale down large images if needed
+                        scaleX: Math.min(1, (fabricCanvas.width / 4) / img.width),
+                        scaleY: Math.min(1, (fabricCanvas.height / 4) / img.height),
+                        // Ensure it doesn't go behind the video object
+                        // zIndex is not a direct property, order is determined by `add` or `sendToBack/BringToFront`
+                    });
+                    fabricCanvas.add(img); // Add the image to the canvas
+                    fabricCanvas.renderAll(); // Redraw the canvas to show the new object
+                    console.log("Image added to canvas.");
+                }, { crossOrigin: 'anonymous' }); // Use anonymous for cross-origin images if any
+            };
+             reader.onerror = (error) => {
+                 console.error("Error reading image file for adding:", error);
+                 alert("Error reading image file.");
+             }
+            reader.readAsDataURL(file); // Read the file as a data URL
+        }
+
+        // Add a text object to the canvas
+        function addTextToCanvas() {
+             if (!fabricCanvas) {
+                console.warn("Fabric canvas not initialized.");
+                return;
+            }
+            const defaultText = 'Your Text Here';
+            const text = new fabric.IText(defaultText, {
+                left: 100,
+                top: 100,
+                fill: '#000', // Default text color black
+                fontFamily: 'sans-serif',
+                fontSize: 24,
+                // Add other properties like fontWeight, fontStyle, underline, etc.
+            });
+
+            fabricCanvas.add(text); // Add the text to the canvas
+            fabricCanvas.setActiveObject(text); // Select the text object so it's ready for editing
+            fabricCanvas.renderAll(); // Redraw the canvas
+            console.log("Text added to canvas.");
+        }
+
+        // Delete selected objects
+        function deleteSelectedObjects() {
+            if (!fabricCanvas) {
+                console.warn("Fabric canvas not initialized.");
+                return;
+            }
+            const activeObjects = fabricCanvas.getActiveObjects(); // Get all selected objects
+            if (activeObjects.length > 0) {
+                activeObjects.forEach(obj => {
+                    fabricCanvas.remove(obj); // Remove each selected object
+                });
+                fabricCanvas.discardActiveObject(); // Deselect the objects
+                fabricCanvas.renderAll(); // Redraw the canvas
+                console.log(`${activeObjects.length} object(s) deleted.`);
+            } else {
+                console.log("No object selected to delete.");
+            }
+            updateDeleteButtonState(); // Update button state after potential deletion
+        }
+
+        // Helper to update the delete button's disabled state
+        function updateDeleteButtonState() {
+             if (!fabricCanvas) {
+                 deleteSelectedButton.disabled = true;
+                 return;
+             }
+             const activeObjects = fabricCanvas.getActiveObjects();
+             // Enable the delete button only if there is at least one selected object
+             deleteSelectedButton.disabled = activeObjects.length === 0;
+        }
+
+
         // --- Background Image Handling ---
         backgroundImageInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        backgroundImage = img; // Store the loaded image object
-                        backgroundFileNameSpan.innerText = file.name; // Display filename
-                        clearBackgroundButton.style.display = 'inline-block'; // Show clear button
-                        clearBackgroundButton.disabled = false; // Enable clear button
-                         console.log("Background image loaded:", file.name);
-                         // If camera is already running, the next frame will use the new background
-                         // If not running, the background will appear when camera starts
-                    };
-                    img.onerror = (error) => {
-                         console.error("Error loading image:", error);
-                         alert("Error loading image.");
-                         clearBackgroundImage(); // Clear potentially partial state
+                    // Use Fabric.js to load the image and set it as canvas background
+                    if (fabricCanvas) {
+                         fabric.Image.fromURL(e.target.result, function(img) {
+                             // Set background image to cover the canvas
+                             // Fabric has a scaling option for background images
+                             fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas), {
+                                 // Scale the image to cover the canvas while maintaining aspect ratio
+                                 scaleX: fabricCanvas.width / img.width,
+                                 scaleY: fabricCanvas.height / img.height,
+                                 // Using `cover` option (if available in newer Fabric versions) is simpler
+                                 // if not, calculate scale and centering manually like before, but for Fabric's setBackgroundImage options
+                                 // Eg: { scaleX: ratio, scaleY: ratio, originX: 'center', originY: 'center', top: fabricCanvas.height / 2, left: fabricCanvas.width / 2 }
+                                 // For simplicity using just scale here which might stretch or tile if img < canvas
+                                 // Let's use the manual calculation from before for better 'cover' effect
+                                 originX: 'left',
+                                 originY: 'top',
+                                 // Calculate scale to cover
+                                 scaleX: Math.max(fabricCanvas.width / img.width, fabricCanvas.height / img.height),
+                                 scaleY: Math.max(fabricCanvas.width / img.width, fabricCanvas.height / img.height),
+                                 // Calculate centering offsets
+                                 left: (fabricCanvas.width - img.width * Math.max(fabricCanvas.width / img.width, fabricCanvas.height / img.height)) / 2,
+                                 top: (fabricCanvas.height - img.height * Math.max(fabricCanvas.width / img.width, fabricCanvas.height / img.height)) / 2
+                             });
+                             console.log("Background image set via Fabric.js");
+                             // Redraw is handled by the callback
+                         }, { crossOrigin: 'anonymous' }); // Use anonymous if loading from external URL
+                    } else {
+                        console.warn("Fabric canvas not initialized. Cannot set background image.");
+                        alert("Cannot set background image: Camera is not started or model not loaded.");
+                        clearBackgroundImage(); // Clear input state if canvas isn't ready
+                        return; // Exit early if fabricCanvas is null
                     }
-                    img.src = e.target.result; // Set the image source from the file data
+
+                    backgroundFileNameSpan.innerText = file.name; // Display filename
+                    clearBackgroundButton.style.display = 'inline-block'; // Show clear button
+                    clearBackgroundButton.disabled = false; // Enable clear button
+                    console.log("Background image loaded:", file.name);
+
                 };
                 reader.onerror = (error) => {
-                    console.error("Error reading file:", error);
-                    alert("Error reading image file.");
-                     clearBackgroundImage(); // Clear potentially partial state
-                }
+                     console.error("Error reading file:", error);
+                     alert("Error reading image file.");
+                      clearBackgroundImage(); // Clear potentially partial state
+                 }
                 reader.readAsDataURL(file); // Read the file as a data URL
             } else {
                 // If file input is cleared or cancelled
@@ -734,13 +987,18 @@
         });
 
         function clearBackgroundImage() {
-             backgroundImage = null; // Remove the image reference
+             if (fabricCanvas) {
+                 fabricCanvas.setBackgroundImage(null, fabricCanvas.renderAll.bind(fabricCanvas)); // Remove the background image
+                 console.log("Background image removed via Fabric.js");
+             } else {
+                 console.warn("Fabric canvas not initialized. Cannot clear background image.");
+             }
+
              backgroundImageInput.value = null; // Clear the file input itself
              backgroundFileNameSpan.innerText = 'No image selected'; // Reset filename display
              clearBackgroundButton.style.display = 'none'; // Hide clear button
              clearBackgroundButton.disabled = true; // Disable clear button
              console.log("Background image cleared.");
-             // If camera is running, the background will become transparent on the next frame
         }
 
 
@@ -753,6 +1011,17 @@
         // Add event listener for the model type dropdown
         modelTypeSelect.addEventListener('change', loadModel);
 
+        // Add event listeners for new Fabric controls
+        addImageInput.addEventListener('change', (event) => {
+             const file = event.target.files[0];
+             if (file) {
+                 addImageToCanvas(file);
+                 addImageInput.value = null; // Clear input so same file can be added again
+             }
+        });
+        addTextButton.addEventListener('click', addTextToCanvas);
+        deleteSelectedButton.addEventListener('click', deleteSelectedObjects);
+
 
         // Stop camera and processing when the page is closed/navigated away
         window.addEventListener('beforeunload', () => {
@@ -760,10 +1029,11 @@
              if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop(); // Stop recording if ongoing
             }
-            // Attempt to dispose of the model if it exists
-             if (model && typeof model.dispose === 'function') {
-                model.dispose().catch(e => console.error("Error disposing model on unload:", e));
+            // Attempt to dispose of the model and Fabric canvas
+             if (segmenter && typeof segmenter.dispose === 'function') {
+                segmenter.dispose().catch(e => console.error("Error disposing segmenter on unload:", e));
              }
+             disposeFabricCanvas(); // Dispose Fabric.js instance
         });
 
         // --- Initialization ---
@@ -773,6 +1043,10 @@
             // Ensure the clear button is initially hidden
             clearBackgroundButton.style.display = 'none';
             clearBackgroundButton.disabled = true;
+            // Ensure Fabric controls are initially disabled
+            addTextButton.disabled = true;
+            deleteSelectedButton.disabled = true;
+            fabricControlsDiv.style.pointerEvents = 'none';
         };
     </script>
 
