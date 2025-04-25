@@ -4,6 +4,32 @@
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte'; // Remove tick, no longer needed with manual fetch
   import { PoseLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
+  // Import ONNX Runtime for YOLO models - only in browser
+  import { browser } from '$app/environment';
+  // Use global ONNX runtime that was initialized in app.html
+  let ort: any;
+  if (browser && typeof window !== 'undefined') {
+    // Use the global ONNX runtime if available
+    if (window.ort) {
+      ort = window.ort;
+      if (typeof window.initOnnxRuntime === 'function') {
+        window.initOnnxRuntime();
+      }
+    } else {
+      // Wait for ONNX runtime to be available
+      console.log('Waiting for global ONNX runtime to be available');
+      const checkOrt = setInterval(() => {
+        if (window.ort) {
+          clearInterval(checkOrt);
+          ort = window.ort;
+          if (typeof window.initOnnxRuntime === 'function') {
+            window.initOnnxRuntime();
+          }
+          console.log('Global ONNX runtime is now available');
+        }
+      }, 100);
+    }
+  }
 
   let recording = false;
   let videoPreviewUrl: string | null = null;
@@ -14,6 +40,9 @@
   let recordedChunks: Blob[] = [];
   let errorMsg: string | null = null;
   let uploadedVideoUrl: string | null = null; // To store URL after upload
+
+  // Model selection variables
+  let modelType: "mediapipe" | "yolo" = "mediapipe"; // Default to MediaPipe
 
   // MediaPipe variables
   let poseLandmarker: PoseLandmarker | undefined = undefined;
@@ -28,6 +57,17 @@
   let animationFrameId: number | null = null; // Used for both live and recorded processing
   let modelError: string | null = null; // To display model loading errors
 
+  // YOLO variables
+  import { getYoloDetector, type YoloDetection } from '$lib/yolo/YoloDetector';
+  let yoloLoaded = false;
+  let yoloModelType: "n" | "s" | "m" | "l" | "x" = "s"; // Default to small model
+  let yoloDetector: ReturnType<typeof getYoloDetector>;
+
+  // Initialize YOLO detector only in browser environment
+  if (browser) {
+    yoloDetector = getYoloDetector(yoloModelType);
+  }
+
   // --- MediaPipe Configuration ---
   let mpNumPoses = 1;
   let mpMinPoseDetectionConfidence = 0.5;
@@ -38,10 +78,22 @@
   let isReinitializing = false; // Flag during re-init
 
   onMount(async () => {
-    // Initialize MediaPipe first
-    await initializePoseLandmarker(); // This will now set modelError if it fails
+    // Only run initialization in browser environment
+    if (!browser) {
+      console.log('Not in browser environment, skipping initialization');
+      return;
+    }
+
+    // Initialize selected model
+    if (modelType === "mediapipe") {
+      await initializePoseLandmarker(); // This will set modelError if it fails
+    } else if (modelType === "yolo") {
+      await initializeYolo(); // Initialize YOLO model
+    }
+
     // Then request camera access
-    await initializeCamera(); // This will NOT trigger live detection automatically anymore
+    await initializeCamera(); // This will NOT trigger live detection automatically
+
     // Get canvas context after component mounts
     if (canvasElement) {
         canvasCtx = canvasElement.getContext('2d');
@@ -64,6 +116,12 @@
   });
 
   async function initializeCamera() {
+    // Check if we're in a browser environment
+    if (!browser) {
+      console.log('Not in browser environment, skipping camera initialization');
+      return;
+    }
+
     errorMsg = null;
     stopCamera(); // Ensure previous stream is stopped
     try {
@@ -81,6 +139,12 @@
   }
 
   async function initializePoseLandmarker() {
+    // Check if we're in a browser environment
+    if (!browser) {
+      console.log('Not in browser environment, skipping PoseLandmarker initialization');
+      return;
+    }
+
     try {
       const vision = await FilesetResolver.forVisionTasks(
         // Path to the WASM backend files - adjust if necessary
@@ -108,34 +172,179 @@
     }
   }
 
-  // --- Re-initialize MP when config changes ---
+  // Initialize YOLO model
+  async function initializeYolo() {
+    // Check if we're in a browser environment
+    if (!browser) {
+      console.log('Not in browser environment, skipping YOLO initialization');
+      return;
+    }
+
+    // Wait for ONNX runtime to be available
+    if (!window.ort) {
+      console.log('Waiting for ONNX runtime to load...');
+      await new Promise<void>((resolve) => {
+        const checkOrt = setInterval(() => {
+          if (window.ort) {
+            clearInterval(checkOrt);
+            ort = window.ort;
+            // Initialize ONNX runtime if needed
+            if (typeof window.initOnnxRuntime === 'function') {
+              window.initOnnxRuntime();
+            }
+            resolve();
+          }
+        }, 100);
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          clearInterval(checkOrt);
+          console.warn('Timed out waiting for ONNX runtime');
+          resolve();
+        }, 10000);
+      });
+    } else {
+      // Make sure ONNX runtime is initialized
+      if (typeof window.initOnnxRuntime === 'function') {
+        window.initOnnxRuntime();
+      }
+    }
+
+    // If ONNX runtime is still not available, show error
+    if (!window.ort) {
+      console.error('ONNX runtime not available');
+      modelError = 'ONNX runtime not available. Please try refreshing the page.';
+      errorMsg = modelError;
+      return;
+    }
+
+    // Make sure yoloDetector is initialized
+    if (!yoloDetector) {
+      yoloDetector = getYoloDetector(yoloModelType);
+    }
+
+    try {
+      console.log("Initializing YOLO model with type:", yoloModelType);
+
+      // Update detector with current model size
+      yoloDetector.setModelSize(yoloModelType);
+
+      // Load the model
+      const success = await yoloDetector.loadModel();
+
+      if (success) {
+        yoloLoaded = true;
+        modelError = null; // Clear any previous model error
+        console.log(`YOLO model ${yoloModelType} initialized successfully`);
+
+        // Teste rápido para verificar se o detector está funcionando
+        if (videoElement) {
+          console.log("Realizando teste de detecção YOLO...");
+          try {
+            const testDetections = await yoloDetector.detect(videoElement);
+            console.log(`Teste de detecção YOLO: ${testDetections.length} objetos encontrados`);
+          } catch (testError) {
+            console.warn("Teste de detecção YOLO falhou:", testError);
+          }
+        }
+      } else {
+        throw new Error('Failed to load YOLO model');
+      }
+    } catch (err: any) {
+      console.error("Error initializing YOLO:", err);
+      modelError = `Failed to load YOLO model: ${err.message || 'Unknown error'}. Live preview disabled.`;
+      errorMsg = modelError; // Also show in main error area
+      yoloLoaded = false;
+      showLiveLandmarks = false; // Disable toggle if model failed
+    }
+  }
+
+  // --- Re-initialize model when config changes ---
   async function handleConfigChange() {
-      if (!poseLandmarker) return; // Don't re-init if initial load failed
+      // Clear canvas regardless of model type
+      if (canvasCtx) canvasCtx.clearRect(0, 0, canvasElement?.width ?? 0, canvasElement?.height ?? 0);
 
-      console.log("Config changed, re-initializing PoseLandmarker...");
-      isReinitializing = true;
-      const wasShowingLive = isShowingLiveLandmarks;
-      stopLiveLandmarkDetection(); // Stop current loop if running
-      if (canvasCtx) canvasCtx.clearRect(0, 0, canvasElement?.width ?? 0, canvasElement?.height ?? 0); // Clear canvas
+      // Handle based on selected model type
+      if (modelType === "mediapipe") {
+          if (!poseLandmarker) return; // Don't re-init if initial load failed
 
-      poseLandmarker?.close(); // Close existing instance
-      poseLandmarker = undefined; // Set to undefined
+          console.log("Config changed, re-initializing PoseLandmarker...");
+          isReinitializing = true;
+          const wasShowingLive = isShowingLiveLandmarks;
+          stopLiveLandmarkDetection(); // Stop current loop if running
 
-      await initializePoseLandmarker(); // Re-initialize with new settings
+          poseLandmarker?.close(); // Close existing instance
+          poseLandmarker = undefined; // Set to undefined
 
-      isReinitializing = false;
-      // Restart live detection if it was on before and the toggle is still on
-      if (wasShowingLive && showLiveLandmarks && poseLandmarker) {
-          startLiveLandmarkDetection();
+          await initializePoseLandmarker(); // Re-initialize with new settings
+
+          isReinitializing = false;
+          // Restart live detection if it was on before and the toggle is still on
+          if (wasShowingLive && showLiveLandmarks && poseLandmarker) {
+              startLiveLandmarkDetection();
+          }
+      } else if (modelType === "yolo") {
+          // Check if we're in a browser environment
+          if (!browser) {
+              console.log('Not in browser environment, skipping YOLO re-initialization');
+              return;
+          }
+
+          console.log("Config changed, re-initializing YOLO...");
+          isReinitializing = true;
+          const wasShowingLive = isShowingLiveLandmarks;
+          stopLiveLandmarkDetection(); // Stop current loop if running
+
+          yoloLoaded = false;
+
+          await initializeYolo(); // Re-initialize with new settings
+
+          isReinitializing = false;
+          // Restart live detection if it was on before and the toggle is still on
+          if (wasShowingLive && showLiveLandmarks && yoloLoaded) {
+              startLiveLandmarkDetection();
+          }
       }
   }
 
 
   // Reactive statement to start/stop live detection based on the toggle
-  $: if (showLiveLandmarks && mediaStream && poseLandmarker && !isShowingLiveLandmarks && !recording && !videoPreviewUrl && !isReinitializing) {
-      startLiveLandmarkDetection();
+  $: if (showLiveLandmarks && mediaStream && !isShowingLiveLandmarks && !recording && !videoPreviewUrl && !isReinitializing) {
+      // Check which model is active
+      if ((modelType === "mediapipe" && poseLandmarker) || (modelType === "yolo" && yoloLoaded)) {
+          startLiveLandmarkDetection();
+      }
   } else if (!showLiveLandmarks && isShowingLiveLandmarks) {
       stopLiveLandmarkDetection();
+  }
+
+  // Variável para rastrear a mudança de modelo
+  let previousModelType: "mediapipe" | "yolo" = modelType;
+
+  // Reactive statement to handle model type change
+  $: if (modelType !== previousModelType) {
+      // Only reinitialize if we're not already in the process of initializing
+      if (!isReinitializing && !recording && !videoPreviewUrl) {
+          console.log("Model type changed from", previousModelType, "to", modelType);
+          previousModelType = modelType; // Atualiza o valor anterior
+
+          // Stop any running detection
+          stopLiveLandmarkDetection();
+          // Clear canvas
+          if (canvasCtx) canvasCtx.clearRect(0, 0, canvasElement?.width ?? 0, canvasElement?.height ?? 0);
+
+          // Only proceed with initialization in browser environment
+          if (browser) {
+              // Clean up previous model
+              if (modelType === "mediapipe") {
+                  // If switching to MediaPipe, initialize it
+                  initializePoseLandmarker();
+              } else if (modelType === "yolo") {
+                  // If switching to YOLO, initialize it
+                  initializeYolo();
+              }
+          }
+      }
   }
 
   function stopCamera() {
@@ -209,23 +418,45 @@
 
   // --- Live Landmark Detection Loop ---
   function startLiveLandmarkDetection() {
-    // Check conditions again, including the user toggle state
-    if (!showLiveLandmarks || !poseLandmarker || !videoElement || !canvasCtx || !drawingUtils || !mediaStream || videoElement.paused || videoElement.ended) {
-      console.log("Conditions not met for live landmark detection.");
+    // Check basic conditions for all model types
+    if (!showLiveLandmarks || !videoElement || !canvasCtx || !drawingUtils || !mediaStream || videoElement.paused || videoElement.ended) {
+      console.log("Basic conditions not met for live detection.");
       isShowingLiveLandmarks = false;
       return;
     }
+
+    // Check model-specific conditions
+    if (modelType === "mediapipe" && !poseLandmarker) {
+      console.log("MediaPipe model not initialized.");
+      isShowingLiveLandmarks = false;
+      return;
+    } else if (modelType === "yolo" && !yoloLoaded) {
+      console.log("YOLO model not initialized.");
+      isShowingLiveLandmarks = false;
+      return;
+    }
+
     isShowingLiveLandmarks = true; // Set internal state
-    console.log("Starting live landmark detection loop.");
+    console.log(`Starting live ${modelType} detection loop.`);
 
     const processLiveFrame = async () => {
-        // Check internal state and other conditions
-        if (!isShowingLiveLandmarks || !poseLandmarker || !videoElement || !canvasCtx || !drawingUtils || videoElement.paused || videoElement.ended || !mediaStream) {
-            console.log("Stopping live landmark detection loop.");
+        // Check internal state and basic conditions
+        if (!isShowingLiveLandmarks || !videoElement || !canvasCtx || !drawingUtils || videoElement.paused || videoElement.ended || !mediaStream) {
+            console.log("Stopping live detection loop - basic conditions not met.");
             isShowingLiveLandmarks = false;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
             // Clear canvas when stopping live view
+            if (canvasCtx) canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            return;
+        }
+
+        // Check model-specific conditions
+        if ((modelType === "mediapipe" && !poseLandmarker) || (modelType === "yolo" && !yoloLoaded)) {
+            console.log(`Stopping live detection loop - ${modelType} model not available.`);
+            isShowingLiveLandmarks = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
             if (canvasCtx) canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             return;
         }
@@ -235,29 +466,259 @@
         if (canvasElement.width !== videoElement.videoWidth) canvasElement.width = videoElement.videoWidth;
         if (canvasElement.height !== videoElement.videoHeight) canvasElement.height = videoElement.videoHeight;
 
-        // Detect landmarks on the current video frame
-        const results = poseLandmarker.detectForVideo(videoElement, startTimeMs);
-
         // Clear canvas before drawing new frame
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-        // Draw landmarks if found
-        if (results.landmarks && results.landmarks.length > 0) {
-            const utils = drawingUtils; // Assign to local const for TS narrowing
-            results.landmarks.forEach(landmark => {
-                // Define drawing options based on toggles
-                const landmarkOptions = {
-                    color: mpShowCertainty ? (data: any) => `rgba(0, 255, 0, ${data.from!.visibility ?? 1})` : '#00FF00', // Green, alpha based on visibility if toggled
-                    radius: mpShowDepth ? (data: any) => DrawingUtils.lerp(data.from!.z, -0.5, 0.5, 20, 0.1) : 3 // New radius range: 20 to 0.1
-                };
-                const connectorOptions = {
-                     color: mpShowCertainty ? (data: any) => `rgba(255, 255, 255, ${Math.min(data.from!.visibility ?? 1, data.to!.visibility ?? 1)})` : '#FFFFFF', // White, alpha based on connected points' visibility
-                     lineWidth: mpShowDepth ? (data: any) => DrawingUtils.lerp((data.from!.z + data.to!.z) / 2, -0.5, 0.5, 20, 6) : 2 // Line width based on average depth, range 20 to 6
-                };
+        if (modelType === "mediapipe") {
+            // Detect landmarks using MediaPipe
+            const results = poseLandmarker!.detectForVideo(videoElement, startTimeMs);
 
-                utils.drawLandmarks(landmark, landmarkOptions);
-                utils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS, connectorOptions);
-            });
+            // Draw landmarks if found
+            if (results.landmarks && results.landmarks.length > 0) {
+                const utils = drawingUtils; // Assign to local const for TS narrowing
+                results.landmarks.forEach(landmark => {
+                    // Define drawing options based on toggles
+                    const landmarkOptions = {
+                        color: mpShowCertainty ? (data: any) => `rgba(0, 255, 0, ${data.from!.visibility ?? 1})` : '#00FF00', // Green, alpha based on visibility if toggled
+                        radius: mpShowDepth ? (data: any) => DrawingUtils.lerp(data.from!.z, -0.5, 0.5, 20, 0.1) : 3 // New radius range: 20 to 0.1
+                    };
+                    const connectorOptions = {
+                         color: mpShowCertainty ? (data: any) => `rgba(255, 255, 255, ${Math.min(data.from!.visibility ?? 1, data.to!.visibility ?? 1)})` : '#FFFFFF', // White, alpha based on connected points' visibility
+                         lineWidth: mpShowDepth ? (data: any) => DrawingUtils.lerp((data.from!.z + data.to!.z) / 2, -0.5, 0.5, 20, 6) : 2 // Line width based on average depth, range 20 to 6
+                    };
+
+                    utils.drawLandmarks(landmark, landmarkOptions);
+                    utils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS, connectorOptions);
+                });
+            }
+        } else if (modelType === "yolo") {
+            // Use real YOLO detection
+            if (canvasCtx && yoloDetector.isLoaded()) {
+                try {
+                    // Detect objects using YOLO
+                    const detections = await yoloDetector.detect(videoElement);
+
+                    // Log para depuração
+                    console.log(`YOLO detecções recebidas: ${detections.length}`, detections);
+
+                    // Draw detections
+                    detections.forEach(detection => {
+                        const [x, y, width, height] = detection.bbox;
+                        const label = detection.class;
+                        const confidence = detection.confidence;
+
+                        // Determine color based on class
+                        let color = '#FF0000'; // Default red for person
+                        if (label === 'person') {
+                            color = '#FF0000';
+                        } else if (label === 'chair') {
+                            color = '#00FF00';
+                        } else {
+                            // Generate a consistent color based on class name
+                            const hash = label.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                            const hue = hash % 360;
+                            color = `hsl(${hue}, 100%, 50%)`;
+                        }
+
+                        // Draw bounding box
+                        canvasCtx.strokeStyle = color;
+                        canvasCtx.lineWidth = 3;
+                        canvasCtx.strokeRect(x, y, width, height);
+
+                        // Draw background for label
+                        canvasCtx.fillStyle = color;
+                        const textMetrics = canvasCtx.measureText(label + ": " + confidence.toFixed(2));
+                        canvasCtx.fillRect(x, y - 25, textMetrics.width + 10, 25);
+
+                        // Add label
+                        canvasCtx.fillStyle = '#FFFFFF';
+                        canvasCtx.font = 'bold 16px Arial';
+                        canvasCtx.fillText(label + ": " + confidence.toFixed(2), x + 5, y - 7);
+
+                        // If it's a person, draw keypoints (simplified skeleton)
+                        if (label === 'person') {
+                            // Log para depuração
+                            console.log('Processando pessoa:', {
+                                bbox: detection.bbox,
+                                has_keypoints: !!detection.keypoints,
+                                keypoints_length: detection.keypoints?.length || 0
+                            });
+                            // Use the keypoints provided by the detector
+                            canvasCtx.fillStyle = '#00FFFF';
+                            canvasCtx.strokeStyle = '#00FFFF';
+                            canvasCtx.lineWidth = 2;
+
+                            // Only proceed if keypoints exist
+                            if (!detection.keypoints || detection.keypoints.length === 0) {
+                                console.warn('Pessoa detectada sem keypoints.');
+                                return; // Skip this person detection
+                            }
+
+                            const keypoints = detection.keypoints;
+                            console.log('Keypoints disponíveis:', keypoints.map(kp => kp.name));
+
+                            const head = keypoints.find(kp => kp.name === "head");
+                            const leftShoulder = keypoints.find(kp => kp.name === "left_shoulder");
+                            const rightShoulder = keypoints.find(kp => kp.name === "right_shoulder");
+                            const leftElbow = keypoints.find(kp => kp.name === "left_elbow");
+                            const rightElbow = keypoints.find(kp => kp.name === "right_elbow");
+                            const leftWrist = keypoints.find(kp => kp.name === "left_wrist");
+                            const rightWrist = keypoints.find(kp => kp.name === "right_wrist");
+                            const hip = keypoints.find(kp => kp.name === "hip");
+                            const leftKnee = keypoints.find(kp => kp.name === "left_knee");
+                            const rightKnee = keypoints.find(kp => kp.name === "right_knee");
+                            const leftAnkle = keypoints.find(kp => kp.name === "left_ankle");
+                            const rightAnkle = keypoints.find(kp => kp.name === "right_ankle");
+
+                            // Draw keypoints
+                            // Head
+                            if (head) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(head.x, head.y, 8, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+
+                            // Shoulders
+                            if (leftShoulder) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(leftShoulder.x, leftShoulder.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+                            if (rightShoulder) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(rightShoulder.x, rightShoulder.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+
+                            // Elbows
+                            if (leftElbow) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(leftElbow.x, leftElbow.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+                            if (rightElbow) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(rightElbow.x, rightElbow.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+
+                            // Wrists
+                            if (leftWrist) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(leftWrist.x, leftWrist.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+                            if (rightWrist) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(rightWrist.x, rightWrist.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+
+                            // Hip
+                            if (hip) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(hip.x, hip.y, 8, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+
+                            // Knees
+                            if (leftKnee) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(leftKnee.x, leftKnee.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+                            if (rightKnee) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(rightKnee.x, rightKnee.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+
+                            // Ankles
+                            if (leftAnkle) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(leftAnkle.x, leftAnkle.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+                            if (rightAnkle) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(rightAnkle.x, rightAnkle.y, 6, 0, Math.PI * 2);
+                                canvasCtx.fill();
+                            }
+
+                            // Connect points
+                            // Trunk
+                            if (head && hip) {
+                                canvasCtx.beginPath();
+                                canvasCtx.moveTo(head.x, head.y);
+                                canvasCtx.lineTo(hip.x, hip.y);
+                                canvasCtx.stroke();
+                            }
+
+                            // Arms
+                            if (leftShoulder && leftElbow && leftWrist) {
+                                canvasCtx.beginPath();
+                                canvasCtx.moveTo(leftShoulder.x, leftShoulder.y);
+                                canvasCtx.lineTo(leftElbow.x, leftElbow.y);
+                                canvasCtx.lineTo(leftWrist.x, leftWrist.y);
+                                canvasCtx.stroke();
+                            }
+
+                            if (rightShoulder && rightElbow && rightWrist) {
+                                canvasCtx.beginPath();
+                                canvasCtx.moveTo(rightShoulder.x, rightShoulder.y);
+                                canvasCtx.lineTo(rightElbow.x, rightElbow.y);
+                                canvasCtx.lineTo(rightWrist.x, rightWrist.y);
+                                canvasCtx.stroke();
+                            }
+
+                            // Shoulders
+                            if (leftShoulder && rightShoulder) {
+                                canvasCtx.beginPath();
+                                canvasCtx.moveTo(leftShoulder.x, leftShoulder.y);
+                                canvasCtx.lineTo(rightShoulder.x, rightShoulder.y);
+                                canvasCtx.stroke();
+                            }
+
+                            // Legs
+                            if (hip && leftKnee && leftAnkle) {
+                                canvasCtx.beginPath();
+                                canvasCtx.moveTo(hip.x, hip.y);
+                                canvasCtx.lineTo(leftKnee.x, leftKnee.y);
+                                canvasCtx.lineTo(leftAnkle.x, leftAnkle.y);
+                                canvasCtx.stroke();
+                            }
+
+                            if (hip && rightKnee && rightAnkle) {
+                                canvasCtx.beginPath();
+                                canvasCtx.moveTo(hip.x, hip.y);
+                                canvasCtx.lineTo(rightKnee.x, rightKnee.y);
+                                canvasCtx.lineTo(rightAnkle.x, rightAnkle.y);
+                                canvasCtx.stroke();
+                            }
+                        }
+                    });
+
+                    // If no detections, show a message
+                    if (detections.length === 0) {
+                        console.warn('YOLO: Nenhuma detecção encontrada para desenhar');
+                        canvasCtx.fillStyle = '#FFFFFF';
+                        canvasCtx.font = 'bold 24px Arial';
+                        canvasCtx.fillText('No objects detected', 20, 40);
+                    } else {
+                        console.log(`YOLO: Desenhadas ${detections.length} detecções na tela`);
+                    }
+                } catch (error) {
+                    console.error('Error during YOLO detection:', error);
+                    canvasCtx.fillStyle = '#FF0000';
+                    canvasCtx.font = 'bold 24px Arial';
+                    canvasCtx.fillText('Error during detection', 20, 40);
+                }
+            } else if (canvasCtx) {
+                // Model not loaded yet
+                canvasCtx.fillStyle = '#FFFFFF';
+                canvasCtx.font = 'bold 24px Arial';
+                canvasCtx.fillText('Loading YOLO model...', 20, 40);
+            }
         }
 
         // Continue processing next frame
@@ -277,11 +738,22 @@
   }
 
 
-  // --- Recorded Video Landmark Analysis ---
-  // Renamed from analyzeVideoPoses
+  // --- Recorded Video Analysis ---
   async function analyzeRecordedVideo() {
-    if (!poseLandmarker || !videoElement || !canvasCtx || !drawingUtils || videoElement.paused || videoElement.ended) {
-      console.log("Conditions not met for recorded video landmark analysis. Stopping.");
+    // Check basic conditions for all model types
+    if (!videoElement || !canvasCtx || !drawingUtils || videoElement.paused || videoElement.ended) {
+      console.log("Basic conditions not met for recorded video analysis. Stopping.");
+      processingRecordedVideo = false;
+      return;
+    }
+
+    // Check model-specific conditions
+    if (modelType === "mediapipe" && !poseLandmarker) {
+      console.log("MediaPipe model not initialized for recorded video analysis.");
+      processingRecordedVideo = false;
+      return;
+    } else if (modelType === "yolo" && !yoloLoaded) {
+      console.log("YOLO model not initialized for recorded video analysis.");
       processingRecordedVideo = false;
       return;
     }
@@ -291,17 +763,28 @@
     lastVideoTime = -1; // Reset time tracking
 
     const processRecordedFrame = async () => {
-        // Stop condition check
-        if (!processingRecordedVideo || !poseLandmarker || !videoElement || !canvasCtx || !drawingUtils || videoElement.paused || videoElement.ended) {
-            console.log("Stopping recorded video analysis loop.");
+        // Check basic stop conditions
+        if (!processingRecordedVideo || !videoElement || !canvasCtx || !drawingUtils || videoElement.paused || videoElement.ended) {
+            console.log("Stopping recorded video analysis - basic conditions not met.");
             processingRecordedVideo = false;
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
-            // Clear canvas when done or stopped (check context first)
+            // Clear canvas when done or stopped
             if (canvasCtx) {
                 canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             }
-            // Maybe redraw the final frame without analysis overlay? Or just leave it clear.
+            return;
+        }
+
+        // Check model-specific conditions
+        if ((modelType === "mediapipe" && !poseLandmarker) || (modelType === "yolo" && !yoloLoaded)) {
+            console.log(`Stopping recorded video analysis - ${modelType} model not available.`);
+            processingRecordedVideo = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            if (canvasCtx) {
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            }
             return;
         }
 
@@ -310,35 +793,268 @@
 
         // Only process if time has changed to avoid redundant processing
         if (currentTime > lastVideoTime) {
-            const results = poseLandmarker.detectForVideo(videoElement, startTimeMs);
             lastVideoTime = currentTime;
 
-            // Clear canvas before drawing new frame (check context first)
+            // Clear canvas before drawing new frame
             if (canvasCtx) {
                 canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             }
 
-            if (results.landmarks && results.landmarks.length > 0) {
-                landmarkData.push({ timestamp: currentTime, landmarks: results.landmarks }); // Store data
+            if (modelType === "mediapipe") {
+                // Process with MediaPipe
+                const results = poseLandmarker!.detectForVideo(videoElement, startTimeMs);
 
-                // Draw landmarks and connectors (check context and drawingUtils again)
-                if (canvasCtx && drawingUtils) { // Check drawingUtils exists here
-                    const utils = drawingUtils; // Assign to local const for TS narrowing
-                    results.landmarks.forEach(landmark => {
-                         // Define drawing options based on toggles
-                        const landmarkOptions = {
-                            color: mpShowCertainty ? (data: any) => `rgba(0, 255, 0, ${data.from!.visibility ?? 1})` : '#00FF00', // Green, alpha based on visibility if toggled
-                            radius: mpShowDepth ? (data: any) => DrawingUtils.lerp(data.from!.z, -0.5, 0.5, 20, 0.1) : 3 // New radius range: 20 to 0.1
-                        };
-                        const connectorOptions = {
-                             color: mpShowCertainty ? (data: any) => `rgba(255, 255, 255, ${Math.min(data.from!.visibility ?? 1, data.to!.visibility ?? 1)})` : '#FFFFFF', // White, alpha based on connected points' visibility
-                             lineWidth: mpShowDepth ? (data: any) => DrawingUtils.lerp((data.from!.z + data.to!.z) / 2, -0.5, 0.5, 20, 6) : 2 // Line width based on average depth, range 20 to 6
-                        };
+                if (results.landmarks && results.landmarks.length > 0) {
+                    landmarkData.push({ timestamp: currentTime, landmarks: results.landmarks, model: "mediapipe" }); // Store data with model type
 
-                        // No need to check drawingUtils again inside loop due to narrowing above
-                        utils.drawLandmarks(landmark, landmarkOptions);
-                        utils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS, connectorOptions);
-                    });
+                    // Draw landmarks and connectors
+                    if (canvasCtx && drawingUtils) {
+                        const utils = drawingUtils; // Assign to local const for TS narrowing
+                        results.landmarks.forEach(landmark => {
+                            // Define drawing options based on toggles
+                            const landmarkOptions = {
+                                color: mpShowCertainty ? (data: any) => `rgba(0, 255, 0, ${data.from!.visibility ?? 1})` : '#00FF00', // Green, alpha based on visibility if toggled
+                                radius: mpShowDepth ? (data: any) => DrawingUtils.lerp(data.from!.z, -0.5, 0.5, 20, 0.1) : 3 // New radius range: 20 to 0.1
+                            };
+                            const connectorOptions = {
+                                color: mpShowCertainty ? (data: any) => `rgba(255, 255, 255, ${Math.min(data.from!.visibility ?? 1, data.to!.visibility ?? 1)})` : '#FFFFFF', // White, alpha based on connected points' visibility
+                                lineWidth: mpShowDepth ? (data: any) => DrawingUtils.lerp((data.from!.z + data.to!.z) / 2, -0.5, 0.5, 20, 6) : 2 // Line width based on average depth, range 20 to 6
+                            };
+
+                            utils.drawLandmarks(landmark, landmarkOptions);
+                            utils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS, connectorOptions);
+                        });
+                    }
+                }
+            } else if (modelType === "yolo") {
+                // Use real YOLO detection for recorded video
+                if (canvasCtx && yoloDetector.isLoaded()) {
+                    try {
+                        // Detect objects using YOLO
+                        const detections = await yoloDetector.detect(videoElement);
+
+                        // Draw detections
+                        detections.forEach(detection => {
+                            const [x, y, width, height] = detection.bbox;
+                            const label = detection.class;
+                            const confidence = detection.confidence;
+
+                            // Determine color based on class
+                            let color = '#FF0000'; // Default red for person
+                            if (label === 'person') {
+                                color = '#FF0000';
+                            } else if (label === 'chair') {
+                                color = '#00FF00';
+                            } else {
+                                // Generate a consistent color based on class name
+                                const hash = label.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                                const hue = hash % 360;
+                                color = `hsl(${hue}, 100%, 50%)`;
+                            }
+
+                            // Draw bounding box
+                            canvasCtx.strokeStyle = color;
+                            canvasCtx.lineWidth = 3;
+                            canvasCtx.strokeRect(x, y, width, height);
+
+                            // Draw background for label
+                            canvasCtx.fillStyle = color;
+                            const textMetrics = canvasCtx.measureText(label + ": " + confidence.toFixed(2));
+                            canvasCtx.fillRect(x, y - 25, textMetrics.width + 10, 25);
+
+                            // Add label
+                            canvasCtx.fillStyle = '#FFFFFF';
+                            canvasCtx.font = 'bold 16px Arial';
+                            canvasCtx.fillText(label + ": " + confidence.toFixed(2), x + 5, y - 7);
+
+                            // If it's a person, draw keypoints (simplified skeleton)
+                            if (label === 'person') {
+                                // Log para depuração
+                                console.log('Processando pessoa (vídeo gravado):', {
+                                    bbox: detection.bbox,
+                                    has_keypoints: !!detection.keypoints,
+                                    keypoints_length: detection.keypoints?.length || 0
+                                });
+                                // Use the keypoints provided by the detector
+                                canvasCtx.fillStyle = '#00FFFF';
+                                canvasCtx.strokeStyle = '#00FFFF';
+                                canvasCtx.lineWidth = 2;
+
+                                // Only proceed if keypoints exist
+                                if (!detection.keypoints || detection.keypoints.length === 0) {
+                                    console.warn('Pessoa detectada sem keypoints (vídeo gravado).');
+                                    return; // Skip this person detection
+                                }
+
+                                const keypoints = detection.keypoints;
+                                console.log('Keypoints disponíveis (vídeo gravado):', keypoints.map(kp => kp.name));
+
+                                const head = keypoints.find(kp => kp.name === "head");
+                                const leftShoulder = keypoints.find(kp => kp.name === "left_shoulder");
+                                const rightShoulder = keypoints.find(kp => kp.name === "right_shoulder");
+                                const leftElbow = keypoints.find(kp => kp.name === "left_elbow");
+                                const rightElbow = keypoints.find(kp => kp.name === "right_elbow");
+                                const leftWrist = keypoints.find(kp => kp.name === "left_wrist");
+                                const rightWrist = keypoints.find(kp => kp.name === "right_wrist");
+                                const hip = keypoints.find(kp => kp.name === "hip");
+                                const leftKnee = keypoints.find(kp => kp.name === "left_knee");
+                                const rightKnee = keypoints.find(kp => kp.name === "right_knee");
+                                const leftAnkle = keypoints.find(kp => kp.name === "left_ankle");
+                                const rightAnkle = keypoints.find(kp => kp.name === "right_ankle");
+
+                                // Draw keypoints
+                                // Head
+                                if (head) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(head.x, head.y, 8, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+
+                                // Shoulders
+                                if (leftShoulder) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(leftShoulder.x, leftShoulder.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+                                if (rightShoulder) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(rightShoulder.x, rightShoulder.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+
+                                // Elbows
+                                if (leftElbow) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(leftElbow.x, leftElbow.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+                                if (rightElbow) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(rightElbow.x, rightElbow.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+
+                                // Wrists
+                                if (leftWrist) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(leftWrist.x, leftWrist.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+                                if (rightWrist) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(rightWrist.x, rightWrist.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+
+                                // Hip
+                                if (hip) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(hip.x, hip.y, 8, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+
+                                // Knees
+                                if (leftKnee) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(leftKnee.x, leftKnee.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+                                if (rightKnee) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(rightKnee.x, rightKnee.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+
+                                // Ankles
+                                if (leftAnkle) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(leftAnkle.x, leftAnkle.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+                                if (rightAnkle) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.arc(rightAnkle.x, rightAnkle.y, 6, 0, Math.PI * 2);
+                                    canvasCtx.fill();
+                                }
+
+                                // Connect points
+                                // Trunk
+                                if (head && hip) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.moveTo(head.x, head.y);
+                                    canvasCtx.lineTo(hip.x, hip.y);
+                                    canvasCtx.stroke();
+                                }
+
+                                // Arms
+                                if (leftShoulder && leftElbow && leftWrist) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.moveTo(leftShoulder.x, leftShoulder.y);
+                                    canvasCtx.lineTo(leftElbow.x, leftElbow.y);
+                                    canvasCtx.lineTo(leftWrist.x, leftWrist.y);
+                                    canvasCtx.stroke();
+                                }
+
+                                if (rightShoulder && rightElbow && rightWrist) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.moveTo(rightShoulder.x, rightShoulder.y);
+                                    canvasCtx.lineTo(rightElbow.x, rightElbow.y);
+                                    canvasCtx.lineTo(rightWrist.x, rightWrist.y);
+                                    canvasCtx.stroke();
+                                }
+
+                                // Shoulders
+                                if (leftShoulder && rightShoulder) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.moveTo(leftShoulder.x, leftShoulder.y);
+                                    canvasCtx.lineTo(rightShoulder.x, rightShoulder.y);
+                                    canvasCtx.stroke();
+                                }
+
+                                // Legs
+                                if (hip && leftKnee && leftAnkle) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.moveTo(hip.x, hip.y);
+                                    canvasCtx.lineTo(leftKnee.x, leftKnee.y);
+                                    canvasCtx.lineTo(leftAnkle.x, leftAnkle.y);
+                                    canvasCtx.stroke();
+                                }
+
+                                if (hip && rightKnee && rightAnkle) {
+                                    canvasCtx.beginPath();
+                                    canvasCtx.moveTo(hip.x, hip.y);
+                                    canvasCtx.lineTo(rightKnee.x, rightKnee.y);
+                                    canvasCtx.lineTo(rightAnkle.x, rightAnkle.y);
+                                    canvasCtx.stroke();
+                                }
+                            }
+                        });
+
+                        // If no detections, show a message
+                        if (detections.length === 0) {
+                            canvasCtx.fillStyle = '#FFFFFF';
+                            canvasCtx.font = 'bold 24px Arial';
+                            canvasCtx.fillText('No objects detected', 20, 40);
+                        }
+
+                        // Store YOLO data
+                        landmarkData.push({
+                            timestamp: currentTime,
+                            detections: detections,
+                            model: "yolo",
+                            modelSize: yoloModelType
+                        });
+                    } catch (error) {
+                        console.error('Error during YOLO detection:', error);
+                        canvasCtx.fillStyle = '#FF0000';
+                        canvasCtx.font = 'bold 24px Arial';
+                        canvasCtx.fillText('Error during detection', 20, 40);
+                    }
+                } else if (canvasCtx) {
+                    // Model not loaded yet
+                    canvasCtx.fillStyle = '#FFFFFF';
+                    canvasCtx.font = 'bold 24px Arial';
+                    canvasCtx.fillText('Loading YOLO model...', 20, 40);
                 }
             }
         }
@@ -552,7 +1268,25 @@
   {#if !recording && !videoPreviewUrl}
     <!-- Player View - Ready to Record -->
 
-    <!-- MediaPipe Config Box -->
+    <!-- Model Selection Box -->
+    <div class="border rounded-lg p-4 mb-4 bg-gray-50 space-y-3">
+        <h3 class="text-lg font-semibold text-center text-gray-700">Modelo de Detecção</h3>
+        <div class="flex items-center justify-between">
+            <label for="model-type" class="block text-sm font-medium text-gray-700">Tipo de Modelo:</label>
+            <select
+                id="model-type"
+                bind:value={modelType}
+                disabled={recording || isReinitializing}
+                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-200"
+            >
+                <option value="mediapipe">MediaPipe (Pontos)</option>
+                <option value="yolo">YOLO (Objetos)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- MediaPipe Config Box, shown only when MediaPipe is selected -->
+    {#if modelType === "mediapipe"}
     <div class="border rounded-lg p-4 mb-4 bg-gray-50 space-y-3">
         <h3 class="text-lg font-semibold text-center text-gray-700">MediaPipe Settings</h3>
         <div class="flex items-center justify-between">
@@ -635,25 +1369,60 @@
              </div>
         </div>
     </div>
+    {/if}
+
+    <!-- YOLO Config Box, shown only when YOLO is selected -->
+    {#if modelType === "yolo"}
+    <div class="border rounded-lg p-4 mb-4 bg-gray-50 space-y-3">
+        <h3 class="text-lg font-semibold text-center text-gray-700">YOLO Settings</h3>
+        <div class="flex items-center justify-between">
+            <label for="yolo-model-type" class="block text-sm font-medium text-gray-700">Tamanho do Modelo:</label>
+            <select
+                id="yolo-model-type"
+                bind:value={yoloModelType}
+                on:change={handleConfigChange}
+                disabled={!yoloLoaded || isReinitializing || !!modelError}
+                class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:opacity-50 disabled:bg-gray-200"
+            >
+                <option value="n">Nano (Mais rápido)</option>
+                <option value="s">Small (Equilibrado)</option>
+                <option value="m">Medium (Preciso)</option>
+                <option value="l">Large (Muito preciso)</option>
+                <option value="x">XLarge (Máxima precisão)</option>
+            </select>
+        </div>
+        {#if isReinitializing}
+            <p class="text-sm text-center text-blue-600">Aplicando configurações...</p>
+        {/if}
+    </div>
+    {/if}
 
     <div class="mb-4 flex items-center justify-center">
         <input
             type="checkbox"
             id="live-landmarks-toggle"
             bind:checked={showLiveLandmarks}
-            disabled={!poseLandmarker || !!modelError}
+            disabled={((modelType === "mediapipe" && !poseLandmarker) || (modelType === "yolo" && !yoloLoaded)) || !!modelError}
             class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded disabled:opacity-50"
         />
-        <label for="live-landmarks-toggle" class="ml-2 block text-sm text-gray-900 {(!poseLandmarker || !!modelError) ? 'text-gray-400' : ''}">
-            Show Live Landmarks
+        <label for="live-landmarks-toggle" class="ml-2 block text-sm text-gray-900 {(((modelType === "mediapipe" && !poseLandmarker) || (modelType === "yolo" && !yoloLoaded)) || !!modelError) ? 'text-gray-400' : ''}">
+            Mostrar Detecção ao Vivo
         </label>
     </div>
      <button
       on:click={startRecording}
-      disabled={!mediaStream || !poseLandmarker || !!modelError}
+      disabled={!mediaStream || ((modelType === "mediapipe" && !poseLandmarker) || (modelType === "yolo" && !yoloLoaded)) || !!modelError}
       class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      {#if !poseLandmarker && !modelError}Loading Model...{:else if modelError}Model Error{:else}REC{/if}
+      {#if modelType === "mediapipe" && !poseLandmarker && !modelError}
+        Carregando MediaPipe...
+      {:else if modelType === "yolo" && !yoloLoaded && !modelError}
+        Carregando YOLO...
+      {:else if modelError}
+        Erro no Modelo
+      {:else}
+        GRAVAR
+      {/if}
     </button>
   {:else if recording}
     <!-- Recording View -->

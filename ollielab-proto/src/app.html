@@ -4,6 +4,11 @@
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- ONNX Runtime initialization script - must be loaded first -->
+		<script src="%sveltekit.assets%/js/onnx-init.js"></script>
+		<!-- Preload ONNX WASM files -->
+		<link rel="preload" href="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm.wasm" as="fetch" crossorigin="anonymous">
+		<link rel="preload" href="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm-simd.wasm" as="fetch" crossorigin="anonymous">
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

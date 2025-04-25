@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO Direct Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+    <h1>YOLO Direct Model Test</h1>
+    <div id="status">Testing YOLO model loading...</div>
+    <div>
+        <button id="testBtn">Test Model Loading</button>
+        <select id="modelSize">
+            <option value="n">Nano (smallest)</option>
+            <option value="s">Small</option>
+            <option value="m">Medium</option>
+            <option value="l">Large</option>
+            <option value="x">Extra Large</option>
+        </select>
+    </div>
+
+    <script>
+        // Configure ONNX runtime
+        ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4;
+        ort.env.wasm.simd = true;
+        
+        // Use CDN for WASM files
+        ort.env.wasm.wasmPaths = {
+            'ort-wasm.wasm': 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm.wasm',
+            'ort-wasm-simd.wasm': 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm-simd.wasm',
+            'ort-wasm-threaded.wasm': 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm-threaded.wasm',
+            'ort-wasm-simd-threaded.wasm': 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm'
+        };
+
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const statusElement = document.getElementById('status');
+            const modelSize = document.getElementById('modelSize').value;
+            
+            statusElement.textContent = `Testing YOLO model loading for size: ${modelSize}...`;
+            statusElement.style.color = 'black';
+            
+            try {
+                // First check if the model file exists
+                const modelPath = `/mediapipe/yolo11${modelSize}-pose.onnx`;
+                statusElement.textContent += `\nChecking if model file exists: ${modelPath}`;
+                
+                try {
+                    const response = await fetch(modelPath, { method: 'HEAD' });
+                    if (!response.ok) {
+                        throw new Error(`Model file not found: ${modelPath}. Status: ${response.status}`);
+                    }
+                    statusElement.textContent += `\nModel file exists: ${modelPath}`;
+                } catch (fetchError) {
+                    statusElement.textContent += `\nError checking model file: ${fetchError.message}`;
+                    throw new Error(`Error checking model file: ${fetchError.message}`);
+                }
+                
+                // Create ONNX session with the model
+                statusElement.textContent += '\nCreating ONNX session...';
+                const session = await ort.InferenceSession.create(
+                    modelPath,
+                    { 
+                        executionProviders: ['wasm'],
+                        graphOptimizationLevel: 'all'
+                    }
+                );
+                
+                // Get input and output names
+                const inputName = session.inputNames[0];
+                const outputNames = session.outputNames;
+                
+                statusElement.textContent += `\nYOLO model loaded successfully!`;
+                statusElement.textContent += `\nInput name: ${inputName}`;
+                statusElement.textContent += `\nOutput names: ${outputNames.join(', ')}`;
+                
+                statusElement.style.color = 'green';
+                
+            } catch (error) {
+                statusElement.style.color = 'red';
+                statusElement.textContent += `\n\nError loading YOLO model: ${error.message}`;
+                console.error('YOLO model test error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
