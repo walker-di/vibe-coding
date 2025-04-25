@@ -32,7 +32,11 @@ export default function addSVG(canvas: Canvas, svgString: string) {
 
             // Set object properties
             svgObject.set({
-                'name': objectName
+                'name': objectName,
+                'data': {
+                    isSvg: true,
+                    source: 'svg-import'
+                }
             });
 
             // Center the SVG on canvas
@@ -73,5 +77,12 @@ export default function addSVG(canvas: Canvas, svgString: string) {
 
 // Utility function to check if an object is an SVG group
 export function isSVGGroup(obj: any): boolean {
+    // Check for the data.isSvg property first (new method)
+    if (obj && obj.data && obj.data.isSvg === true) {
+        console.log('SVG detected via data.isSvg property');
+        return true;
+    }
+
+    // Fallback to the old method (name-based detection)
     return obj instanceof Group && obj.get('name')?.toString().startsWith('SVG ');
 }

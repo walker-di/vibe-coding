@@ -61,8 +61,10 @@
     "drizzle-orm": "^0.40.0",
     "fabric": "^6.6.2",
     "image-size": "^2.0.2",
+    "jszip": "^3.10.1",
     "ky": "^1.8.1",
     "microsoft-cognitiveservices-speech-sdk": "^1.43.1",
+    "node-fetch": "^2.7.0",
     "openai": "^4.95.0",
     "postcss": "^8.5.3",
     "replicate": "^1.0.1",
@@ -70,6 +72,7 @@
     "svelte-dnd-action": "^0.9.60",
     "svelte-local-storage-store": "^0.6.4",
     "svelte-sonner": "^0.3.28",
+    "uuid": "^11.1.0",
     "zod": "^3.24.2"
   }
 }

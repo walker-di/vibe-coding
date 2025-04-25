@@ -5,6 +5,8 @@
   import VoiceSelector from "$lib/components/story/VoiceSelector.svelte";
   import AutoCreateModal from "$lib/components/story/AutoCreateModal.svelte";
   import AiFillAllModal from "$lib/components/story/AiFillAllModal.svelte";
+  import ExportModal from "$lib/components/story/ExportModal.svelte";
+  import AudioSettingsModal from "$lib/components/story/AudioSettingsModal.svelte";
   import type { SceneWithRelations, Clip } from "$lib/types/story.types";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -15,10 +17,12 @@
     FileText,
     MessageSquare,
     Clock,
-    Sparkles,
     Wand,
     Mic,
-    RefreshCw
+    RefreshCw,
+    FileDown,
+    Sparkles,
+    Volume2
   } from "lucide-svelte";
   import { tick } from "svelte";
   import { FabricImage } from "fabric";
@@ -30,6 +34,9 @@
     creativeId, // We need this for creating new stories
     aspectRatio = "16:9", // Default to 16:9 if not provided
     resolution = null, // Now we'll use the resolution from the story
+    narrationVolume = 1.0, // Default to 100% volume
+    bgmVolume = 0.09, // Default to 9% volume
+    narrationSpeed = 1.1, // Default to 1.1x speed
     onEditScene,
     onDeleteScene,
     onSelectScene,
@@ -42,6 +49,9 @@
     storyId: number;
     aspectRatio?: string;
     resolution?: string | null;
+    narrationVolume?: number;
+    bgmVolume?: number;
+    narrationSpeed?: number;
     onAddScene?: () => void;
     onEditScene: (sceneId: number) => void;
     onDeleteScene: (sceneId: number) => void;
@@ -62,8 +72,15 @@
   let isImageUploadModalOpen = $state(false);
   let isBackgroundImageModalOpen = $state(false);
   let showAiFillAllModal = $state(false);
+  let showExportModal = $state(false);
+  let isExporting = $state(false);
+  let exportProgress = $state(0);
+  let exportType = $state<'zip' | 'individual' | 'unified' | null>(null); // Tracks current export type
+  let exportError = $state<string | null>(null);
   let initialCheckDone = $state(false); // Track if initial check/action is done
   let canvasEditorInstance = $state<CanvasEditor | null>(null);
+  let showAudioSettingsModal = $state(false);
+  let story = $state<any>(null);
 
   function debounce<T extends (...args: any[]) => any>(
     func: T,
@@ -80,6 +97,50 @@
       }
       timeout = setTimeout(later, wait);
     };
+  }
+
+  // Helper function to calculate canvas dimensions based on aspect ratio and resolution
+  function calculateCanvasDimensions(): { width: number; height: number } {
+    // Default dimensions for 16:9 aspect ratio
+    const defaultDimensions = { width: 1920, height: 1080 };
+
+    // If we have a resolution string, parse it
+    if (resolution) {
+      // Extract dimensions from resolution string (e.g., "1920x1080 (16:9 HD)" or "800x600")
+      const match = resolution.match(/^(\d+)\s*x\s*(\d+)/);
+      if (match && match[1] && match[2]) {
+        const width = parseInt(match[1], 10);
+        const height = parseInt(match[2], 10);
+        if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+          return { width, height };
+        }
+      }
+    }
+
+    // If no valid resolution, calculate based on aspect ratio
+    if (aspectRatio) {
+      // Use a standard width and calculate height based on aspect ratio
+      const width = 1920; // Standard HD width
+      let height;
+
+      // Parse the aspect ratio (e.g., "16:9", "4:3", etc.)
+      const parts = aspectRatio.split(':');
+      if (parts.length === 2) {
+        const ratioWidth = parseFloat(parts[0]);
+        const ratioHeight = parseFloat(parts[1]);
+        if (!isNaN(ratioWidth) && !isNaN(ratioHeight) && ratioWidth > 0 && ratioHeight > 0) {
+          height = Math.round(width * (ratioHeight / ratioWidth));
+          return { width, height };
+        }
+      } else if (aspectRatio === "1.91:1") {
+        // Special case for 1.91:1 aspect ratio
+        height = Math.round(width / 1.91);
+        return { width, height };
+      }
+    }
+
+    // Return default dimensions if all else fails
+    return defaultDimensions;
   }
 
   // Handler for when a clip is selected in SceneList
@@ -103,7 +164,19 @@
       voiceName: clip.voiceName || "pt-BR-FranciscaNeural",
     };
     console.log("Clip selected in SceneEditor:", clip.id, clip.orderIndex);
-    canvasEditorInstance?.loadCanvasData(clip.canvas);
+
+    // Get canvas dimensions based on story's aspect ratio and resolution
+    const dimensions = calculateCanvasDimensions();
+    console.log("Using canvas dimensions based on story config:", dimensions);
+
+    // If we have a canvas editor instance, load the canvas data and resize it
+    if (canvasEditorInstance) {
+      // First load the canvas data
+      await canvasEditorInstance.loadCanvasData(clip.canvas);
+
+      // Then resize the canvas to match the story's aspect ratio and resolution
+      canvasEditorInstance.resizeCanvas(dimensions.width, dimensions.height);
+    }
   }
 
   // State for the auto-create modal
@@ -116,12 +189,82 @@
   let creativeContext = $state<any>(null);
   let isLoadingContext = $state(false);
 
+  // Fetch story data
+  async function fetchStoryData() {
+    try {
+      const response = await fetch(`/api/stories/${storyId}`);
+      if (response.ok) {
+        const data = await response.json();
+        story = data.data;
+        console.log("Fetched story data:", story);
+      } else {
+        console.error("Failed to fetch story data:", response.status);
+        // Initialize story with props if fetch fails
+        story = {
+          id: storyId,
+          creativeId,
+          narrationVolume,
+          bgmVolume,
+          narrationSpeed
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching story data:", error);
+      // Initialize story with props if fetch fails
+      story = {
+        id: storyId,
+        creativeId,
+        narrationVolume,
+        bgmVolume,
+        narrationSpeed
+      };
+    }
+  }
+
+  // Handler for saving audio settings
+  async function handleSaveAudioSettings(settings: {
+    narrationVolume: number;
+    bgmVolume: number;
+    narrationSpeed: number;
+  }) {
+    try {
+      const response = await fetch(`/api/stories/${storyId}/audio-settings`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
+      });
+
+      if (response.ok) {
+        const updatedStory = await response.json();
+        story = updatedStory.data;
+        console.log("Updated story with audio settings:", story);
+        // Apply the settings to any currently playing audio
+        applyAudioSettings();
+      } else {
+        console.error("Failed to update story audio settings:", response.status);
+      }
+    } catch (error) {
+      console.error("Error updating story audio settings:", error);
+    }
+  }
+
+  // Apply audio settings to any currently playing audio
+  function applyAudioSettings() {
+    if (narrationAudioElement && story) {
+      console.log('Applying audio settings:', {
+        narrationVolume: story.narrationVolume,
+        narrationSpeed: story.narrationSpeed
+      });
+      narrationAudioElement.volume = story.narrationVolume ?? 1.0;
+      narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.1;
+    }
+  }
+
   // Handler for opening the auto-create modal
   async function openAutoCreateModal() {
     // Reset state
-    storyPrompt = "";
-    isLoadingContext = true;
-    creativeContext = null;
     showAutoCreateModal = true;
 
     // Fetch creative context if we have a creativeId
@@ -475,7 +618,7 @@
         body: JSON.stringify({
           prompt: selectedClip.description,
           clipId: selectedClip.id,
-          aspectRatio: "1:1", // Default to square aspect ratio
+          aspectRatio: aspectRatio || "16:9", // Use the story's aspect ratio
         }),
       });
 
@@ -609,8 +752,11 @@
         body: JSON.stringify({
           clipId: selectedClip.id,
           voiceName: currentVoice || "pt-BR-FranciscaNeural",
+          narrationSpeed: story?.narrationSpeed || 1.0, // Pass the narration speed from story settings
         }),
       });
+
+      console.log('Generating narration with speed:', story?.narrationSpeed || 1.0);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -654,6 +800,26 @@
 
         // Force a refresh of the scene list
         forceSceneRefresh++;
+
+        // Play the generated narration with the correct audio settings
+        if (narrationAudioElement) {
+          narrationAudioElement.src = audioUrlWithTimestamp;
+          narrationAudioElement.load();
+
+          // Apply audio settings before playing
+          if (story) {
+            narrationAudioElement.volume = story.narrationVolume ?? 1.0;
+            narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.0;
+            console.log('Applied audio settings to newly generated narration:', {
+              volume: narrationAudioElement.volume,
+              speed: narrationAudioElement.playbackRate
+            });
+          }
+
+          narrationAudioElement.play().catch((err) => {
+            console.error('Error playing newly generated narration:', err);
+          });
+        }
 
         // Update the clip in the database with the new voice name if needed
         if (currentVoice && currentVoice !== selectedClip.voiceName) {
@@ -970,6 +1136,20 @@
       alert("Failed to duplicate clip. Please try again.");
     }
   }
+
+  // Fetch story data when component mounts
+  $effect(() => {
+    fetchStoryData();
+  });
+
+  // Effect to resize canvas when aspectRatio or resolution changes
+  $effect(() => {
+    if (canvasEditorInstance && (aspectRatio || resolution)) {
+      const dimensions = calculateCanvasDimensions();
+      console.log("Resizing canvas based on story config:", { aspectRatio, resolution, dimensions });
+      canvasEditorInstance.resizeCanvas(dimensions.width, dimensions.height);
+    }
+  });
 
   // Effect to update currentVoice when selectedClip changes
   $effect(() => {
@@ -1341,8 +1521,321 @@
     processCanvasChange(canvasJson);
   }
 
+  // Export functions
+  async function handleExportZip() {
+    if (isExporting || !scenes || scenes.length === 0) return;
+
+    isExporting = true;
+    exportType = 'zip';
+    exportProgress = 0;
+    exportError = null;
+
+    try {
+      // Create a safe name for the storyboard
+      const safeStoryboardName = `storyboard_${storyId}`;
+
+      // Use JSZip library (we'll need to add this to the project)
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      // Track progress
+      let processedClips = 0;
+      const totalClips = scenes.reduce((total: number, scene: SceneWithRelations) => total + (scene.clips?.length || 0), 0);
+
+      // Process each scene and its clips
+      for (const scene of scenes) {
+        if (!scene.clips || scene.clips.length === 0) continue;
+
+        for (const clip of scene.clips) {
+          // Create a folder structure for each clip
+          const clipPrefix = `clip_${clip.id}`;
+
+          // Add canvas data as JSON
+          if (clip.canvas) {
+            zip.file(`${clipPrefix}/canvas.json`, clip.canvas);
+          }
+
+          // Add narration text
+          if (clip.narration) {
+            zip.file(`${clipPrefix}/narration.txt`, clip.narration);
+          }
+
+          // Add description
+          if (clip.description) {
+            zip.file(`${clipPrefix}/description.txt`, clip.description);
+          }
+
+          // Add image if available
+          if (clip.imageUrl) {
+            try {
+              const response = await fetch(clip.imageUrl);
+              if (response.ok) {
+                const blob = await response.blob();
+                zip.file(`${clipPrefix}/image${getFileExtension(clip.imageUrl, blob)}`, blob);
+              }
+            } catch (error) {
+              console.error(`Failed to fetch image for clip ${clip.id}:`, error);
+            }
+          }
+
+          // Add narration audio if available
+          if (clip.narrationAudioUrl) {
+            try {
+              const response = await fetch(clip.narrationAudioUrl);
+              if (response.ok) {
+                const blob = await response.blob();
+                zip.file(`${clipPrefix}/narration${getFileExtension(clip.narrationAudioUrl, blob)}`, blob);
+              }
+            } catch (error) {
+              console.error(`Failed to fetch narration audio for clip ${clip.id}:`, error);
+            }
+          }
+
+          // Update progress
+          processedClips++;
+          exportProgress = processedClips / totalClips;
+        }
+      }
+
+      // Generate the ZIP file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      // Create a download link
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `${safeStoryboardName}_export.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Close the modal
+      showExportModal = false;
+    } catch (error: any) {
+      console.error('Error exporting ZIP:', error);
+      exportError = `Failed to export ZIP: ${error.message || 'Unknown error'}`;
+    } finally {
+      isExporting = false;
+      exportType = null;
+    }
+  }
+
+  async function handleExportIndividualClips() {
+    if (isExporting || !scenes || scenes.length === 0) return;
+
+    isExporting = true;
+    exportType = 'individual';
+    exportProgress = 0;
+    exportError = null;
+
+    try {
+      // Get all clips from all scenes
+      const allClips: Clip[] = [];
+      scenes.forEach((scene: SceneWithRelations) => {
+        if (scene.clips && scene.clips.length > 0) {
+          allClips.push(...scene.clips);
+        }
+      });
+
+      if (allClips.length === 0) {
+        throw new Error('No clips found to export');
+      }
+
+      // Process each clip
+      for (let i = 0; i < allClips.length; i++) {
+        const clip = allClips[i];
+
+        try {
+          // First, ensure the clip has narration audio
+          if (!clip.narrationAudioUrl && clip.narration) {
+            console.log(`Generating narration audio for clip ${clip.id}...`);
+            try {
+              const narrationResponse = await fetch('/api/ai-storyboard/generate-narration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  clipId: clip.id,
+                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural',
+                  narrationSpeed: story?.narrationSpeed || 1.0 // Pass the narration speed from story settings
+                })
+              });
+
+              console.log('Export: Generating narration with speed:', story?.narrationSpeed || 1.0);
+
+              if (narrationResponse.ok) {
+                const narrationResult = await narrationResponse.json();
+                clip.narrationAudioUrl = narrationResult.narrationAudioUrl;
+
+                // Update the clip with the new narration audio URL
+                await fetch(`/api/clips/${clip.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    narrationAudioUrl: clip.narrationAudioUrl
+                  })
+                });
+
+                console.log(`Generated narration audio for clip ${clip.id}`);
+              }
+            } catch (narrationError) {
+              console.error(`Error generating narration for clip ${clip.id}:`, narrationError);
+            }
+          }
+
+          // Call the API to generate a video for this clip
+          console.log(`Exporting clip ${clip.id} (${i+1}/${allClips.length})...`);
+          const response = await fetch(`/api/clips/${clip.id}/export-video`, {
+            method: 'GET'
+          });
+
+          if (!response.ok) {
+            console.error(`Failed to export clip ${clip.id}. Status: ${response.status}`);
+            continue; // Continue with the next clip
+          }
+
+          // Get the video blob
+          const videoBlob = await response.blob();
+
+          // Create a download link
+          const url = URL.createObjectURL(videoBlob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = `clip_${clip.id}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          // Wait a moment before processing the next clip
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.error(`Error exporting clip ${clip.id}:`, error);
+        }
+
+        // Update progress
+        exportProgress = (i + 1) / allClips.length;
+      }
+
+      // Close the modal
+      showExportModal = false;
+    } catch (error: any) {
+      console.error('Error exporting individual clips:', error);
+      exportError = `Failed to export clips: ${error.message || 'Unknown error'}`;
+    } finally {
+      isExporting = false;
+      exportType = null;
+    }
+  }
+
+  async function handleExportUnifiedVideo() {
+    if (isExporting || !scenes || scenes.length === 0) return;
+
+    isExporting = true;
+    exportType = 'unified';
+    exportProgress = 0;
+    exportError = null;
+
+    try {
+      // First, ensure all clips have narration audio
+      for (const scene of scenes) {
+        if (!scene.clips || scene.clips.length === 0) continue;
+
+        for (const clip of scene.clips) {
+          if (!clip.narrationAudioUrl && clip.narration) {
+            console.log(`Generating narration audio for clip ${clip.id}...`);
+            try {
+              const narrationResponse = await fetch('/api/ai-storyboard/generate-narration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  clipId: clip.id,
+                  voiceName: clip.voiceName || 'pt-BR-FranciscaNeural',
+                  narrationSpeed: story?.narrationSpeed || 1.0 // Pass the narration speed from story settings
+                })
+              });
+
+              console.log('Unified Export: Generating narration with speed:', story?.narrationSpeed || 1.0);
+
+              if (narrationResponse.ok) {
+                const narrationResult = await narrationResponse.json();
+                clip.narrationAudioUrl = narrationResult.narrationAudioUrl;
+
+                // Update the clip with the new narration audio URL
+                await fetch(`/api/clips/${clip.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    narrationAudioUrl: clip.narrationAudioUrl
+                  })
+                });
+
+                console.log(`Generated narration audio for clip ${clip.id}`);
+              }
+            } catch (narrationError) {
+              console.error(`Error generating narration for clip ${clip.id}:`, narrationError);
+            }
+          }
+        }
+      }
+
+      // Call the API to generate a unified video
+      console.log(`Exporting unified video for story ${storyId}...`);
+      const response = await fetch(`/api/stories/${storyId}/export-video`, {
+        method: 'GET'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to export unified video. Status: ${response.status}`);
+      }
+
+      // Get the video blob
+      const videoBlob = await response.blob();
+
+      // Create a download link
+      const url = URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `story_${storyId}_unified.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Close the modal
+      showExportModal = false;
+      exportProgress = 1;
+    } catch (error: any) {
+      console.error('Error exporting unified video:', error);
+      exportError = `Failed to export unified video: ${error.message || 'Unknown error'}`;
+    } finally {
+      isExporting = false;
+      exportType = null;
+    }
+  }
+
+  // Helper function to get file extension
+  function getFileExtension(url: string | null, blob: Blob | null): string {
+    if (blob?.type) {
+      const parts = blob.type.split('/');
+      if (parts.length === 2) {
+        if (parts[1] === 'mpeg') return '.mp3';
+        if (parts[1] === 'jpeg') return '.jpg';
+        return `.${parts[1]}`;
+      }
+    }
+    if (url) {
+      const match = url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/);
+      if (match) return `.${match[1]}`;
+    }
+    return '.bin';
+  }
+
   // Function to handle AI fill and narration generation for all clips
-  async function handleAiFillAllClips(options: { fillCanvas: boolean; generateNarration: boolean; generateAudio: boolean }) {
+  async function handleAiFillAllClips(options: { fillCanvas: boolean; generateNarration: boolean; generateAudio: boolean; autoSelectBgm: boolean }) {
     if (isAiFillAllLoading) return;
 
     // Close the modal
@@ -1367,6 +1860,59 @@
         return;
       }
 
+      // If auto-select BGM is enabled, process each scene first
+      if (options.autoSelectBgm) {
+        console.log('Auto-selecting BGM for all scenes...');
+
+        // Create a map to track which scenes have been processed
+        const processedScenes = new Set<number>();
+
+        // Process each scene
+        for (const scene of scenes) {
+          // Skip if already processed
+          if (processedScenes.has(scene.id)) continue;
+
+          console.log(`Auto-selecting BGM for scene ${scene.id}...`);
+
+          try {
+            const response = await fetch(`/api/scenes/${scene.id}/auto-select-bgm`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+              console.error(`Failed to auto-select BGM for scene ${scene.id}. Status: ${response.status}`);
+              continue; // Continue with the next scene
+            }
+
+            const result = await response.json();
+
+            if (result.success && result.data && result.data.selectedBgm) {
+              console.log(`Successfully auto-selected BGM "${result.data.selectedBgm.name}" for scene ${scene.id}`);
+
+              // Update the scene in our local array
+              scenes = scenes.map((s: SceneWithRelations) => {
+                if (s.id === scene.id) {
+                  return {
+                    ...s,
+                    bgmUrl: result.data.selectedBgm.audioUrl,
+                    bgmName: result.data.selectedBgm.name
+                  };
+                }
+                return s;
+              });
+            }
+
+            // Mark this scene as processed
+            processedScenes.add(scene.id);
+
+          } catch (error) {
+            console.error(`Error auto-selecting BGM for scene ${scene.id}:`, error);
+            // Continue with the next scene
+          }
+        }
+      }
+
       // Process each clip one by one
       for (let i = 0; i < allClips.length; i++) {
         const clip = allClips[i];
@@ -1384,11 +1930,21 @@
           if (options.fillCanvas) {
             console.log(`Processing clip ${i+1}/${allClips.length} (ID: ${clip.id}): Running AI Fill...`);
 
+            // Get canvas dimensions based on story's aspect ratio and resolution
+            const dimensions = calculateCanvasDimensions();
+            console.log(`AI Fill All: Using canvas dimensions for clip ${clip.id}:`, dimensions);
+
             const aiFillResponse = await fetch(`/api/clips/${clip.id}/ai-fill`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
+              body: JSON.stringify({
+                aspectRatio: aspectRatio,
+                resolution: resolution,
+                width: dimensions.width,
+                height: dimensions.height
+              })
             });
 
             if (!aiFillResponse.ok) {
@@ -1537,8 +2093,11 @@
                 body: JSON.stringify({
                   clipId: allClips[i].id,
                   voiceName: allClips[i].voiceName || "pt-BR-FranciscaNeural",
+                  narrationSpeed: story?.narrationSpeed || 1.0, // Pass the narration speed from story settings
                 }),
               });
+
+              console.log('AI Fill All: Generating narration with speed:', story?.narrationSpeed || 1.0);
 
               if (!narrationResponse.ok) {
                 console.error(`Failed to generate narration for clip ${allClips[i].id}. Status: ${narrationResponse.status}`);
@@ -1600,7 +2159,16 @@
         }
       }
 
-      alert(`Processing complete! Processed ${allClips.length} clips.`);
+      // Create a detailed success message
+      let successMessage = `Processing complete!\n\nProcessed ${allClips.length} clips`;
+
+      // Add BGM information if that option was selected
+      if (options.autoSelectBgm) {
+        const scenesWithBgm = scenes.filter((scene: SceneWithRelations) => scene.bgmUrl).length;
+        successMessage += `\nAuto-selected BGM for ${scenesWithBgm} scenes`;
+      }
+
+      alert(successMessage);
 
     } catch (error: any) {
       console.error("Error in AI Fill All process:", error);
@@ -1627,11 +2195,21 @@
         isProcessingAiFill,
       );
 
+      // Get canvas dimensions based on story's aspect ratio and resolution
+      const dimensions = calculateCanvasDimensions();
+      console.log("AI Fill: Using canvas dimensions based on story config:", dimensions);
+
       const response = await fetch(`/api/clips/${selectedClip.id}/ai-fill`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          aspectRatio: aspectRatio,
+          resolution: resolution,
+          width: dimensions.width,
+          height: dimensions.height
+        })
       });
 
       if (!response.ok) {
@@ -1853,7 +2431,7 @@
           disabled={!selectedClip || isAiFillLoading}
           title="AI Fill Clip"
         >
-          <Wand class="h-4 w-4 mr-2" />
+          <Sparkles class="h-4 w-4 mr-2" />
           {isAiFillLoading ? "Filling..." : "AI Fill"}
         </Button>
         <Button
@@ -1863,12 +2441,33 @@
           disabled={isAiFillAllLoading}
           title="AI Fill All Clips and Generate Narration"
         >
-          <Wand class="h-4 w-4 mr-2" />
+          <Sparkles class="h-4 w-4 mr-2" />
           {isAiFillAllLoading ?
             currentProcessingClip ?
               `Processing ${currentProcessingClip.index + 1}/${currentProcessingClip.total}...` :
               "Processing..." :
             "AI Fill All"}
+        </Button>
+        <div class="border-t my-2"></div>
+        <Button
+          variant="outline"
+          class="w-full justify-start"
+          onclick={() => showAudioSettingsModal = true}
+          title="Audio Settings"
+        >
+          <Volume2 class="h-4 w-4 mr-2" />
+          Audio Settings
+        </Button>
+        <div class="border-t my-2"></div>
+        <Button
+          variant="outline"
+          class="w-full justify-start bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600"
+          onclick={() => showExportModal = true}
+          disabled={isExporting || scenes.length === 0}
+          title="Export Storyboard"
+        >
+          <FileDown class="h-4 w-4 mr-2" />
+          {isExporting ? "Exporting..." : "Export"}
         </Button>
         {#if isAiFillAllLoading && currentProcessingClip}
           <div class="mt-2 text-xs text-center text-gray-600">
@@ -1999,6 +2598,17 @@
                         // Set the source and load it
                         narrationAudioElement.src = audioUrlWithTimestamp;
                         narrationAudioElement.load();
+
+                        // Apply audio settings before playing
+                        if (story) {
+                          narrationAudioElement.volume = story.narrationVolume ?? 1.0;
+                          narrationAudioElement.playbackRate = story.narrationSpeed ?? 1.0;
+                          console.log('Applied audio settings to narration:', {
+                            volume: narrationAudioElement.volume,
+                            speed: narrationAudioElement.playbackRate
+                          });
+                        }
+
                         narrationAudioElement.play().catch((err: Error) => {
                           console.error('Error playing narration audio:', err);
                         });
@@ -2029,7 +2639,7 @@
                 class="w-full"
                 disabled={isGeneratingImage || !selectedClip?.description}
               >
-                <Wand class="h-4 w-4 mr-2" />
+                <Sparkles class="h-4 w-4 mr-2" />
                 {isGeneratingImage ? "Generating..." : "Generate Image"}
               </Button>
               <Button
@@ -2077,6 +2687,18 @@
     isLoading={isAiFillAllLoading}
     on:close={() => showAiFillAllModal = false}
     on:confirm={event => handleAiFillAllClips(event.detail)}
+  />
+
+  <!-- Export Modal -->
+  <ExportModal
+    bind:open={showExportModal}
+    isLoading={isExporting}
+    exportProgress={exportProgress}
+    bind:exportError={exportError}
+    onClose={() => showExportModal = false}
+    onExportZip={handleExportZip}
+    onExportIndividualClips={handleExportIndividualClips}
+    onExportUnifiedVideo={handleExportUnifiedVideo}
   />
 </div>
 
@@ -2158,4 +2780,12 @@
   isLoading={isAutoCreating}
   on:close={() => showAutoCreateModal = false}
   on:create={e => handleAutoCreateStory(e.detail)}
+/>
+
+<!-- Audio Settings Modal -->
+<AudioSettingsModal
+  open={showAudioSettingsModal}
+  story={story}
+  onClose={() => showAudioSettingsModal = false}
+  onSave={handleSaveAudioSettings}
 />

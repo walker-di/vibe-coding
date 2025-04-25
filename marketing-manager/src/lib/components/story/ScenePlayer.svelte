@@ -11,13 +11,19 @@
     bgmUrl = '',
     bgmName = '',
     autoPlay = false,
-    debug = false
+    debug = false,
+    narrationVolume = 1.0,
+    bgmVolume = 0.09,
+    narrationSpeed = 1.1
   } = $props<{
     clips: Clip[];
     bgmUrl?: string;
     bgmName?: string;
     autoPlay?: boolean;
     debug?: boolean;
+    narrationVolume?: number;
+    bgmVolume?: number;
+    narrationSpeed?: number;
   }>();
 
   let currentClipIndex = $state(0);
@@ -73,7 +79,11 @@
       // Set the source and load it
       narrationAudioElement.src = narrationAudioUrl;
       narrationAudioElement.load();
+
+      // Apply global audio settings with fallbacks in case the database fields don't exist yet
       narrationAudioElement.muted = isNarrationMuted;
+      narrationAudioElement.volume = typeof narrationVolume === 'number' ? narrationVolume : 1.0;
+      narrationAudioElement.playbackRate = typeof narrationSpeed === 'number' ? narrationSpeed : 1.1;
 
       // Play the audio
       const playPromise = narrationAudioElement.play();
@@ -110,6 +120,8 @@
 
   function playScene() {
     if (bgmUrl && bgmAudioElement) {
+      // Apply global BGM volume setting with fallback
+      bgmAudioElement.volume = typeof bgmVolume === 'number' ? bgmVolume : 0.09;
       bgmAudioElement.play();
     }
     isPlaying = true;

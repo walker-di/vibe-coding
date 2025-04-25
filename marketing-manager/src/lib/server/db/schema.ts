@@ -152,6 +152,9 @@ export const stories = sqliteTable('stories', {
   description: text('description'),
   aspectRatio: text('aspect_ratio', { enum: canvasAspectRatios }).default('16:9'), // Added
   resolution: text('resolution'), // Added - Store as text (e.g., "1920x1080", "Custom")
+  narrationVolume: real('narration_volume').default(1.0), // Default to 100% volume
+  bgmVolume: real('bgm_volume').default(0.09), // Default to 9% volume
+  narrationSpeed: real('narration_speed').default(1.1), // Default to 1.1x speed
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 });
@@ -178,6 +181,18 @@ export const clips = sqliteTable('clips', {
   description: text('description'),
   duration: integer('duration'), // Duration in milliseconds
   orderIndex: integer('order_index').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
+});
+
+// BGM Files Table
+export const bgmFiles = sqliteTable('bgm_files', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  description: text('description'),
+  audioUrl: text('audio_url').notNull(),
+  duration: integer('duration'), // Duration in seconds
+  fileSize: integer('file_size'), // Size in bytes
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).default(sql`(unixepoch('now') * 1000)`).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 });

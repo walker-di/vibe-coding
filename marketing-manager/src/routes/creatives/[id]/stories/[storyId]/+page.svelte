@@ -265,6 +265,9 @@
             creativeId={creativeId}
             aspectRatio={story.aspectRatio}
             resolution={story.resolution}
+            narrationVolume={story.narrationVolume}
+            bgmVolume={story.bgmVolume}
+            narrationSpeed={story.narrationSpeed}
             onEditScene={handleEditScene}
             onDeleteScene={handleDeleteScene}
             onSelectScene={handleSelectScene}

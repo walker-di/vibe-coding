@@ -16,6 +16,7 @@
     import TextSelectionMenu from "./TextSelectionMenu.svelte";
     import ShapeStyleMenu from "./ShapeStyleMenu.svelte";
     import ImageReplaceMenu from "./ImageReplaceMenu.svelte";
+    import SvgEditMenu from "./SvgEditMenu.svelte";
 
   // Props
   let {
@@ -258,6 +259,7 @@
     <TextSelectionMenu {canvas} />
     <ShapeStyleMenu {canvas} />
     <ImageReplaceMenu {canvas} />
+    <SvgEditMenu {canvas} />
     {/if}
   </div>
 

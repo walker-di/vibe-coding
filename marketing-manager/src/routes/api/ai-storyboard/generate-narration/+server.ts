@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
 type GenerateNarrationRequestBody = {
   clipId: number;
   voiceName?: string;
+  narrationSpeed?: number;
 };
 
 // This endpoint generates narration audio from the existing narration text in the clip
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async ({ request }) => {
   try {
     // Parse the request body
     const body: GenerateNarrationRequestBody = await request.json();
-    const { clipId, voiceName } = body;
+    const { clipId, voiceName, narrationSpeed } = body;
 
     if (!clipId) {
       throw error(400, 'Missing clipId parameter');
@@ -38,7 +39,7 @@ export const POST: RequestHandler = async ({ request }) => {
     console.log(`Received request to generate audio for narration: ${clip.narration}`);
 
     // Generate audio from the existing narration text
-    const narrationAudioUrl = await generateNarrationAudio(clip.narration, clipId, voiceName);
+    const narrationAudioUrl = await generateNarrationAudio(clip.narration, clipId, voiceName, narrationSpeed);
 
     if (!narrationAudioUrl) {
       throw error(500, 'Failed to generate narration audio');

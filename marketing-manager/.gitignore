@@ -3,6 +3,8 @@ node_modules
 examples
 static/uploads
 static/clip-previews
+static/svg
+static/audio
 static/narration
 static/template-previews
 # Output

@@ -3,8 +3,10 @@
   import { Input } from '$lib/components/ui/input';
   import { Textarea } from '$lib/components/ui/textarea';
   import { Label } from '$lib/components/ui/label';
-  import { ArrowLeft, Save, Music, FileText } from 'lucide-svelte';
+  import { ArrowLeft, Save, Music, FileText, Upload, Sparkles } from 'lucide-svelte';
   import type { Scene } from '$lib/types/story.types';
+  import AddBgmModal from './AddBgmModal.svelte';
+  import { toast } from 'svelte-sonner';
 
   // Props
   let {
@@ -27,7 +29,11 @@
   let description = $state(scene?.description || '');
   let orderIndex = $state(scene?.orderIndex !== undefined ? scene.orderIndex : 0);
   let isSubmitting = $state(false);
+  let isAutoSelectingBgm = $state(false);
   let errors = $state<Record<string, string>>({});
+  let showAudioUploadModal = $state(false);
+  let audioElement = $state<HTMLAudioElement | null>(null);
+  let isPlaying = $state(false);
 
   // Validate form
   function validate(): boolean {
@@ -64,6 +70,51 @@
       console.error('Error submitting scene:', error);
     } finally {
       isSubmitting = false;
+    }
+  }
+
+  // Handle BGM selection from the modal
+  function handleBgmSelected(event: CustomEvent<{ bgmUrl: string; bgmName: string }>) {
+    const { bgmUrl: url, bgmName: name } = event.detail;
+    bgmUrl = url;
+    bgmName = name;
+    showAudioUploadModal = false;
+  }
+
+  // Open the BGM modal with the Generate tab active
+  function handleAutoSelectBgm() {
+    if (!scene?.id) {
+      toast.error('Scene must be saved before auto-selecting BGM');
+      return;
+    }
+
+    // Open the modal
+    showAudioUploadModal = true;
+  }
+
+  // Play/pause audio preview
+  function toggleAudioPreview() {
+    if (!audioElement || !bgmUrl) return;
+
+    if (isPlaying) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      isPlaying = false;
+    } else {
+      // Add a timestamp to prevent browser caching
+      const timestamp = Date.now();
+      const audioUrlWithTimestamp = `${bgmUrl}?t=${timestamp}`;
+
+      audioElement.src = audioUrlWithTimestamp;
+      audioElement.load();
+      audioElement.play()
+        .then(() => {
+          isPlaying = true;
+        })
+        .catch(err => {
+          console.error('Error playing audio:', err);
+          isPlaying = false;
+        });
     }
   }
 </script>
@@ -112,6 +163,33 @@
       </h3>
 
       <div class="space-y-4">
+        <!-- Audio buttons -->
+        <div class="grid grid-cols-2 gap-2">
+          <!-- Upload button -->
+          <Button
+            variant="outline"
+            onclick={() => showAudioUploadModal = true}
+            class="w-full"
+          >
+            <Upload class="h-4 w-4 mr-2" />
+            Upload or Select
+          </Button>
+
+          <!-- Auto-select button -->
+          <Button
+            variant="outline"
+            onclick={handleAutoSelectBgm}
+            disabled={isAutoSelectingBgm || !scene?.id}
+            class="w-full"
+          >
+            <Sparkles class="h-4 w-4 mr-2" />
+            {isAutoSelectingBgm ? 'Selecting...' : 'Auto-Select BGM'}
+          </Button>
+        </div>
+
+        <!-- Or use URL option -->
+        <div class="text-center text-sm text-muted-foreground my-2">- or -</div>
+
         <div class="space-y-2">
           <Label for="bgmUrl">BGM URL</Label>
           <Input
@@ -133,6 +211,24 @@
             <p class="text-xs text-red-500">{errors.bgmName}</p>
           {/if}
         </div>
+
+        <!-- Audio preview -->
+        {#if bgmUrl}
+          <div class="mt-2 p-3 bg-muted rounded-md">
+            <div class="flex items-center justify-between">
+              <div class="font-medium">{bgmName || 'Background Music'}</div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={toggleAudioPreview}
+                class="h-8 px-2"
+              >
+                {isPlaying ? 'Stop' : 'Preview'}
+              </Button>
+            </div>
+            <audio bind:this={audioElement} class="hidden"></audio>
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -143,4 +239,14 @@
       </Button>
     </div>
   </form>
+
+  <!-- BGM Modal -->
+  <AddBgmModal
+    bind:open={showAudioUploadModal}
+    sceneId={scene?.id || null}
+    sceneName={`Scene ${scene?.orderIndex !== undefined ? scene.orderIndex + 1 : ''}`}
+    isLoading={isSubmitting}
+    on:select={handleBgmSelected}
+    on:close={() => showAudioUploadModal = false}
+  />
 </div>

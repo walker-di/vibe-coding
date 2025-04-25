@@ -9,13 +9,15 @@
     accept = 'image/*',
     disabled = false,
     variant = 'outline',
-    size = 'default'
+    size = 'default',
+    uploadEndpoint = '/api/upload/image'
   } = $props<{
     buttonText?: string;
     accept?: string;
     disabled?: boolean;
     variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
     size?: 'default' | 'sm' | 'lg' | 'icon';
+    uploadEndpoint?: string;
   }>();
 
   // State
@@ -52,7 +54,7 @@
       console.log('FormData entries:', [...formData.entries()].map(e => e[0]));
 
       // Send the request
-      const response = await fetch('/api/upload/image', {
+      const response = await fetch(uploadEndpoint, {
         method: 'POST',
         body: formData
       });
@@ -81,12 +83,14 @@
         throw new Error('Invalid response from server');
       }
 
-      if (!data.imageUrl) {
-        throw new Error('No image URL returned from server');
+      // Check for imageUrl (image uploads) or audioUrl (audio uploads)
+      const returnedUrl = data.imageUrl || data.audioUrl;
+      if (!returnedUrl) {
+        throw new Error('No URL returned from server');
       }
 
       // Dispatch success event with the URL
-      dispatch('upload', { url: data.imageUrl, file });
+      dispatch('upload', { url: returnedUrl, file });
     } catch (err: any) {
       console.error('Error uploading file:', err);
       error = err.message || 'Failed to upload file';
