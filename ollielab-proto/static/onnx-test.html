@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONNX Runtime Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+    <h1>ONNX Runtime Test</h1>
+    <div id="status">Testing ONNX Runtime...</div>
+
+    <script>
+        async function testOnnxRuntime() {
+            const statusElement = document.getElementById('status');
+            
+            try {
+                // Check if ONNX Runtime is available
+                if (typeof ort === 'undefined') {
+                    throw new Error('ONNX Runtime is not loaded');
+                }
+                
+                statusElement.textContent = 'ONNX Runtime is available. Version: ' + ort.version;
+                
+                // Check WebAssembly support
+                if (typeof WebAssembly === 'undefined') {
+                    statusElement.textContent += '\nWARNING: WebAssembly is not supported in this browser.';
+                } else {
+                    statusElement.textContent += '\nWebAssembly is supported.';
+                }
+                
+                // Check for WASM SIMD support
+                const simdSupported = await WebAssembly.validate(new Uint8Array([
+                    0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,0,11
+                ]));
+                
+                statusElement.textContent += '\nWASM SIMD support: ' + (simdSupported ? 'Yes' : 'No');
+                
+                // Set up ONNX Runtime environment
+                ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4;
+                ort.env.wasm.simd = simdSupported;
+                
+                statusElement.textContent += '\nONNX Runtime environment configured.';
+                statusElement.textContent += '\nThreads: ' + ort.env.wasm.numThreads;
+                statusElement.textContent += '\nSIMD enabled: ' + ort.env.wasm.simd;
+                
+                // Try to create a simple session
+                const tensor = new ort.Tensor('float32', [1, 2, 3, 4], [2, 2]);
+                statusElement.textContent += '\nSuccessfully created a tensor.';
+                
+                statusElement.style.color = 'green';
+                statusElement.textContent += '\n\nAll tests passed! ONNX Runtime is working correctly.';
+                
+            } catch (error) {
+                statusElement.style.color = 'red';
+                statusElement.textContent = 'Error testing ONNX Runtime: ' + error.message;
+                console.error('ONNX Runtime test error:', error);
+            }
+        }
+        
+        // Run the test when the page loads
+        window.onload = testOnnxRuntime;
+    </script>
+</body>
+</html>

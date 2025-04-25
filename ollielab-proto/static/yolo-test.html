@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO ONNX Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        #canvas {
+            border: 1px solid #ccc;
+            display: block;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        select {
+            padding: 10px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>YOLO ONNX Model Test</h1>
+    
+    <div>
+        <select id="modelSelect">
+            <option value="n">Nano (yolo11n-pose)</option>
+            <option value="s">Small (yolo11s-pose)</option>
+            <option value="m">Medium (yolo11m-pose)</option>
+            <option value="l">Large (yolo11l-pose)</option>
+            <option value="x">Extra Large (yolo11x-pose)</option>
+        </select>
+        <button id="loadButton">Load Model</button>
+        <button id="testButton" disabled>Test Detection</button>
+    </div>
+    
+    <div id="status">Ready to test YOLO models...</div>
+    
+    <video id="video" width="640" height="480" autoplay muted style="display: none;"></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    
+    <script>
+        // YOLO keypoint names for pose models
+        const YOLO_KEYPOINT_NAMES = [
+            "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+            "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+            "left_wrist", "right_wrist", "left_hip", "right_hip",
+            "left_knee", "right_knee", "left_ankle", "right_ankle"
+        ];
+        
+        // Elements
+        const statusElement = document.getElementById('status');
+        const loadButton = document.getElementById('loadButton');
+        const testButton = document.getElementById('testButton');
+        const modelSelect = document.getElementById('modelSelect');
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const ctx = canvasElement.getContext('2d');
+        
+        // Variables
+        let session = null;
+        let inputName = '';
+        let outputNames = [];
+        let mediaStream = null;
+        let modelSize = 'n';
+        
+        // Set up ONNX Runtime environment
+        ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4;
+        ort.env.wasm.simd = true;
+        
+        // Initialize camera
+        async function initCamera() {
+            try {
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                }
+                
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                
+                videoElement.srcObject = mediaStream;
+                await videoElement.play();
+                
+                // Draw video to canvas
+                function drawVideoFrame() {
+                    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                        ctx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                    }
+                    requestAnimationFrame(drawVideoFrame);
+                }
+                
+                drawVideoFrame();
+                
+                return true;
+            } catch (error) {
+                statusElement.textContent = 'Error accessing camera: ' + error.message;
+                return false;
+            }
+        }
+        
+        // Load YOLO model
+        async function loadModel() {
+            statusElement.textContent = `Loading YOLO model: yolo11${modelSize}-pose.onnx...`;
+            loadButton.disabled = true;
+            testButton.disabled = true;
+            
+            try {
+                // Create ONNX session with the model
+                session = await ort.InferenceSession.create(
+                    `/mediapipe/yolo11${modelSize}-pose.onnx`,
+                    { executionProviders: ['wasm'] }
+                );
+                
+                // Get input and output names
+                inputName = session.inputNames[0];
+                outputNames = session.outputNames;
+                
+                statusElement.textContent = `YOLO model loaded successfully.\nInput: ${inputName}\nOutputs: ${outputNames.join(', ')}`;
+                
+                testButton.disabled = false;
+                loadButton.disabled = false;
+                return true;
+            } catch (error) {
+                statusElement.textContent = 'Failed to load YOLO model: ' + error.message;
+                loadButton.disabled = false;
+                return false;
+            }
+        }
+        
+        // Run detection
+        async function runDetection() {
+            if (!session) {
+                statusElement.textContent = 'Model not loaded. Please load the model first.';
+                return;
+            }
+            
+            testButton.disabled = true;
+            statusElement.textContent = 'Running detection...';
+            
+            try {
+                // Create a canvas to get image data
+                const inputWidth = 640;
+                const inputHeight = 640;
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = inputWidth;
+                tempCanvas.height = inputHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // Draw the video frame to the temp canvas (resized to model input dimensions)
+                tempCtx.drawImage(videoElement, 0, 0, inputWidth, inputHeight);
+                
+                // Get image data
+                const imageData = tempCtx.getImageData(0, 0, inputWidth, inputHeight);
+                
+                // Prepare input tensor (normalize pixel values)
+                const input = new Float32Array(inputWidth * inputHeight * 3);
+                
+                // YOLO expects RGB format with values normalized to [0, 1]
+                for (let i = 0; i < imageData.data.length / 4; i++) {
+                    input[i * 3] = imageData.data[i * 4] / 255.0;     // R
+                    input[i * 3 + 1] = imageData.data[i * 4 + 1] / 255.0; // G
+                    input[i * 3 + 2] = imageData.data[i * 4 + 2] / 255.0; // B
+                }
+                
+                // Create tensor
+                const inputTensor = new ort.Tensor('float32', input, [1, 3, inputHeight, inputWidth]);
+                
+                // Run inference
+                const feeds = {};
+                feeds[inputName] = inputTensor;
+                
+                const startTime = performance.now();
+                const results = await session.run(feeds);
+                const endTime = performance.now();
+                
+                // Process results
+                const detections = processResults(results, canvasElement.width, canvasElement.height);
+                
+                // Draw results on canvas
+                drawDetections(detections);
+                
+                statusElement.textContent = `Detection completed in ${(endTime - startTime).toFixed(2)}ms.\nFound ${detections.length} detections.`;
+                testButton.disabled = false;
+            } catch (error) {
+                statusElement.textContent = 'Error during detection: ' + error.message;
+                testButton.disabled = false;
+            }
+        }
+        
+        // Process YOLO results
+        function processResults(results, originalWidth, originalHeight) {
+            const detections = [];
+            
+            try {
+                // Get output data
+                const output = results[outputNames[0]];
+                const data = output.data;
+                const dimensions = output.dims;
+                
+                // YOLO output format: [batch, num_detections, 56]
+                // Where 56 = 4 (bbox) + 1 (confidence) + 1 (class) + 17*3 (keypoints: x,y,conf)
+                const numDetections = dimensions[1];
+                const stride = dimensions[2];
+                
+                statusElement.textContent += `\nOutput shape: [${dimensions.join(', ')}]`;
+                
+                // Process each detection
+                for (let i = 0; i < numDetections; i++) {
+                    const offset = i * stride;
+                    
+                    // Get confidence score (5th element)
+                    const confidence = data[offset + 4];
+                    
+                    // Skip low confidence detections
+                    if (confidence < 0.5) continue;
+                    
+                    // Get class ID and score
+                    const classId = Math.floor(data[offset + 5]);
+                    
+                    // Only process person class (id 0)
+                    if (classId !== 0) continue;
+                    
+                    // Get bounding box coordinates (normalized [0-1])
+                    const x = data[offset];
+                    const y = data[offset + 1];
+                    const width = data[offset + 2];
+                    const height = data[offset + 3];
+                    
+                    // Convert normalized coordinates to pixel coordinates
+                    const boxX = (x - width / 2) * originalWidth;
+                    const boxY = (y - height / 2) * originalHeight;
+                    const boxWidth = width * originalWidth;
+                    const boxHeight = height * originalHeight;
+                    
+                    // Process keypoints
+                    const keypoints = [];
+                    
+                    // Keypoints start at offset + 6
+                    // Each keypoint has 3 values: x, y, confidence
+                    for (let k = 0; k < 17; k++) {
+                        const keypointOffset = offset + 6 + k * 3;
+                        const keypointX = data[keypointOffset] * originalWidth;
+                        const keypointY = data[keypointOffset + 1] * originalHeight;
+                        const keypointConfidence = data[keypointOffset + 2];
+                        
+                        // Only add keypoints with sufficient confidence
+                        if (keypointConfidence > 0.5) {
+                            keypoints.push({
+                                name: YOLO_KEYPOINT_NAMES[k],
+                                x: keypointX,
+                                y: keypointY,
+                                confidence: keypointConfidence
+                            });
+                        }
+                    }
+                    
+                    // Add detection
+                    detections.push({
+                        bbox: [boxX, boxY, boxWidth, boxHeight],
+                        class: "person",
+                        confidence: confidence,
+                        keypoints: keypoints
+                    });
+                }
+                
+            } catch (error) {
+                statusElement.textContent += '\nError processing results: ' + error.message;
+            }
+            
+            return detections;
+        }
+        
+        // Draw detections on canvas
+        function drawDetections(detections) {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Draw video frame
+            ctx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+            
+            // Draw each detection
+            detections.forEach(detection => {
+                const [x, y, width, height] = detection.bbox;
+                
+                // Draw bounding box
+                ctx.strokeStyle = '#FF0000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, width, height);
+                
+                // Draw label
+                ctx.fillStyle = '#FF0000';
+                ctx.font = '16px Arial';
+                ctx.fillText(`Person: ${detection.confidence.toFixed(2)}`, x, y - 5);
+                
+                // Draw keypoints
+                if (detection.keypoints && detection.keypoints.length > 0) {
+                    // Draw each keypoint
+                    detection.keypoints.forEach(keypoint => {
+                        ctx.fillStyle = '#00FFFF';
+                        ctx.beginPath();
+                        ctx.arc(keypoint.x, keypoint.y, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Draw keypoint name
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = '10px Arial';
+                        ctx.fillText(keypoint.name, keypoint.x + 5, keypoint.y - 5);
+                    });
+                    
+                    // Connect keypoints to form a skeleton
+                    ctx.strokeStyle = '#00FFFF';
+                    ctx.lineWidth = 2;
+                    
+                    // Define connections
+                    const connections = [
+                        // Face
+                        ['nose', 'left_eye'], ['nose', 'right_eye'],
+                        ['left_eye', 'left_ear'], ['right_eye', 'right_ear'],
+                        
+                        // Shoulders
+                        ['left_shoulder', 'right_shoulder'],
+                        
+                        // Arms
+                        ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
+                        ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],
+                        
+                        // Torso
+                        ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
+                        ['left_hip', 'right_hip'],
+                        
+                        // Legs
+                        ['left_hip', 'left_knee'], ['left_knee', 'left_ankle'],
+                        ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
+                    ];
+                    
+                    // Draw connections
+                    connections.forEach(([from, to]) => {
+                        const fromPoint = detection.keypoints.find(kp => kp.name === from);
+                        const toPoint = detection.keypoints.find(kp => kp.name === to);
+                        
+                        if (fromPoint && toPoint) {
+                            ctx.beginPath();
+                            ctx.moveTo(fromPoint.x, fromPoint.y);
+                            ctx.lineTo(toPoint.x, toPoint.y);
+                            ctx.stroke();
+                        }
+                    });
+                }
+            });
+        }
+        
+        // Event listeners
+        loadButton.addEventListener('click', async () => {
+            modelSize = modelSelect.value;
+            await loadModel();
+        });
+        
+        testButton.addEventListener('click', async () => {
+            await runDetection();
+        });
+        
+        modelSelect.addEventListener('change', () => {
+            modelSize = modelSelect.value;
+        });
+        
+        // Initialize
+        window.onload = async () => {
+            await initCamera();
+        };
+    </script>
+</body>
+</html>

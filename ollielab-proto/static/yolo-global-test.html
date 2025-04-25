@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO Global Init Test</title>
+    <!-- Load our custom ONNX initialization script -->
+    <script src="/js/onnx-init.js"></script>
+    <!-- Preload WASM files -->
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm.wasm" as="fetch" crossorigin="anonymous">
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort-wasm-simd.wasm" as="fetch" crossorigin="anonymous">
+</head>
+<body>
+    <h1>YOLO Global Initialization Test</h1>
+    <div id="status">Testing YOLO with global initialization...</div>
+    <div>
+        <button id="testBtn">Test Model Loading</button>
+        <select id="modelSize">
+            <option value="n">Nano (smallest)</option>
+            <option value="s">Small</option>
+            <option value="m">Medium</option>
+            <option value="l">Large</option>
+            <option value="x">Extra Large</option>
+        </select>
+    </div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const statusElement = document.getElementById('status');
+            const modelSize = document.getElementById('modelSize').value;
+            
+            statusElement.textContent = `Testing YOLO model loading for size: ${modelSize}...`;
+            statusElement.style.color = 'black';
+            
+            try {
+                // Wait for ONNX runtime to be available
+                if (!window.ort) {
+                    statusElement.textContent += '\nWaiting for ONNX runtime to load...';
+                    await new Promise((resolve) => {
+                        const checkOrt = setInterval(() => {
+                            if (window.ort) {
+                                clearInterval(checkOrt);
+                                resolve();
+                            }
+                        }, 100);
+                        
+                        // Timeout after 10 seconds
+                        setTimeout(() => {
+                            clearInterval(checkOrt);
+                            statusElement.textContent += '\nTimed out waiting for ONNX runtime';
+                            resolve();
+                        }, 10000);
+                    });
+                }
+                
+                // Check if ONNX runtime is available
+                if (!window.ort) {
+                    throw new Error('ONNX runtime not available');
+                }
+                
+                // Make sure ONNX runtime is initialized
+                if (typeof window.initOnnxRuntime === 'function') {
+                    window.initOnnxRuntime();
+                }
+                
+                statusElement.textContent += '\nONNX runtime is available. Version: ' + window.ort.version;
+                
+                // First check if the model file exists
+                const modelPath = `/mediapipe/yolo11${modelSize}-pose.onnx`;
+                statusElement.textContent += `\nChecking if model file exists: ${modelPath}`;
+                
+                try {
+                    const response = await fetch(modelPath, { method: 'HEAD' });
+                    if (!response.ok) {
+                        throw new Error(`Model file not found: ${modelPath}. Status: ${response.status}`);
+                    }
+                    statusElement.textContent += `\nModel file exists: ${modelPath}`;
+                } catch (fetchError) {
+                    statusElement.textContent += `\nError checking model file: ${fetchError.message}`;
+                    throw new Error(`Error checking model file: ${fetchError.message}`);
+                }
+                
+                // Create ONNX session with the model
+                statusElement.textContent += '\nCreating ONNX session...';
+                const session = await window.ort.InferenceSession.create(
+                    modelPath,
+                    { 
+                        executionProviders: ['wasm'],
+                        graphOptimizationLevel: 'all'
+                    }
+                );
+                
+                // Get input and output names
+                const inputName = session.inputNames[0];
+                const outputNames = session.outputNames;
+                
+                statusElement.textContent += `\nYOLO model loaded successfully!`;
+                statusElement.textContent += `\nInput name: ${inputName}`;
+                statusElement.textContent += `\nOutput names: ${outputNames.join(', ')}`;
+                
+                statusElement.style.color = 'green';
+                
+            } catch (error) {
+                statusElement.style.color = 'red';
+                statusElement.textContent += `\n\nError loading YOLO model: ${error.message}`;
+                console.error('YOLO model test error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
