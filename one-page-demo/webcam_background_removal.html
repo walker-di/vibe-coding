@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Configurable Background Removal Demo</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            background-color: #f0f0f0; /* Light gray background to see transparency */
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        #config {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            display: flex; /* Arrange items horizontally */
+            gap: 20px; /* Space between config groups */
+            flex-wrap: wrap; /* Wrap on smaller screens */
+            justify-content: center;
+        }
+        #config label {
+            margin-right: 5px;
+            font-weight: bold;
+        }
+        #config .config-group {
+            display: flex;
+            align-items: center;
+        }
+         #config .config-group label {
+             font-weight: normal; /* Labels inside group are not bold */
+             margin-right: 10px;
+         }
+
+         /* Style the file input to look like a button */
+         .file-input-container {
+             display: inline-block;
+             position: relative;
+             overflow: hidden;
+             margin-left: 10px;
+         }
+
+         .file-input-container input[type=file] {
+             position: absolute;
+             left: 0;
+             top: 0;
+             opacity: 0;
+             cursor: pointer;
+         }
+
+         .file-input-button {
+             display: inline-block;
+             padding: 5px 10px;
+             background-color: #007bff;
+             color: white;
+             border: none;
+             border-radius: 4px;
+             cursor: pointer;
+             font-size: 0.9em;
+         }
+
+         .file-input-button:hover {
+             background-color: #0056b3;
+         }
+
+         #backgroundFileName {
+             margin-left: 10px;
+             font-style: italic;
+             color: #555;
+             max-width: 150px; /* Limit width */
+             overflow: hidden;
+             text-overflow: ellipsis; /* Add ellipsis if filename is too long */
+             white-space: nowrap;
+         }
+         #clearBackgroundButton {
+             margin-left: 5px;
+             padding: 2px 6px;
+             font-size: 0.8em;
+             background-color: #dc3545;
+             color: white;
+             border: none;
+             border-radius: 4px;
+             cursor: pointer;
+             display: none; /* Hide initially */
+         }
+         #clearBackgroundButton:hover {
+              background-color: #c82333;
+         }
+
+
+        #container {
+            position: relative;
+            width: auto; /* Adjust based on video/canvas size */
+            height: auto;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        video, canvas {
+            display: block; /* Remove extra space below elements */
+            max-width: 100%;
+            height: auto;
+        }
+        #videoInput {
+            display: none; /* Hide the raw video feed */
+        }
+        #videoOutput {
+            /* Canvas for processed video */
+        }
+        #controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        #loadingMessage {
+            margin-bottom: 10px;
+            font-style: italic;
+            color: #555;
+            min-height: 1.2em; /* Reserve space to prevent layout shift */
+            text-align: center;
+        }
+        #downloadLink {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #333;
+        }
+        #downloadLink:hover {
+            background-color: #dcdcdc;
+        }
+        button:disabled, select:disabled, .file-input-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Real-time Background Removal</h1>
+
+    <div id="loadingMessage">Loading TensorFlow.js and model...</div>
+
+    <div id="config">
+        <div class="config-group">
+            <label for="modelTypeSelect">Model Type:</label>
+            <select id="modelTypeSelect">
+                <option value="general" selected>General Purpose</option>
+                <option value="landscape">Landscape Optimized</option>
+            </select>
+        </div>
+        <div class="config-group">
+            <label>Background Image:</label>
+             <div class="file-input-container">
+                 <button class="file-input-button">Choose Image</button>
+                 <input type="file" id="backgroundImageInput" accept="image/*">
+             </div>
+             <span id="backgroundFileName">No image selected</span>
+             <button id="clearBackgroundButton">X</button>
+        </div>
+    </div>
+
+
+    <div id="container">
+        <!-- Hidden video element for raw camera feed -->
+        <video id="videoInput" playsinline autoplay muted></video>
+        <!-- Canvas element for processed output -->
+        <canvas id="videoOutput"></canvas>
+    </div>
+
+    <div id="controls">
+        <button id="startButton" disabled>Start Camera</button>
+        <button id="stopButton" disabled>Stop Camera</button>
+        <button id="startRecordingButton" disabled>Start Recording</button>
+        <button id="stopRecordingButton" disabled>Stop Recording</button>
+    </div>
+
+    <a id="downloadLink" style="display: none;">Download Recording</a>
+
+    <!-- TensorFlow.js libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+
+    <!-- *** IMPORTANT: Include the MediaPipe Selfie Segmentation solution FIRST *** -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+
+    <!-- Then include the body-segmentation library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation@latest/dist/body-segmentation.min.js"></script>
+
+
+    <script>
+        const videoInput = document.getElementById('videoInput');
+        const videoOutput = document.getElementById('videoOutput');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const startRecordingButton = document.getElementById('startRecordingButton');
+        const stopRecordingButton = document.getElementById('stopRecordingButton');
+        const downloadLink = document.getElementById('downloadLink');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const modelTypeSelect = document.getElementById('modelTypeSelect');
+        const backgroundImageInput = document.getElementById('backgroundImageInput'); // File input
+        const backgroundFileNameSpan = document.getElementById('backgroundFileName'); // Span for filename
+        const clearBackgroundButton = document.getElementById('clearBackgroundButton'); // Clear button
+        const fileInputButton = document.querySelector('.file-input-button'); // The button styled element
+        const ctx = videoOutput.getContext('2d');
+
+        let stream = null;
+        let model = null; // This will hold the segmenter object
+        let rafId = null; // requestAnimationFrame ID
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isProcessing = false;
+        let isLoadingModel = false; // Flag to prevent multiple loadModel calls at once
+
+        let backgroundImage = null; // Holds the loaded background image object
+
+        // Create a temporary canvas for processing the person cutout
+        let tempCanvas = null;
+        let tempCtx = null;
+
+
+        // --- Model Loading ---
+        async function loadModel() {
+            // Prevent multiple simultaneous model loads
+            if (isLoadingModel) {
+                console.log("Model is already loading or being reloaded. Please wait.");
+                return;
+            }
+            isLoadingModel = true;
+            stopCamera(); // Stop camera before changing/reloading the model
+
+            // Disable relevant controls while loading
+            startButton.disabled = true;
+            modelTypeSelect.disabled = true;
+            backgroundImageInput.disabled = true; // Disable background image input
+            fileInputButton.disabled = true; // Disable the visible button too
+            clearBackgroundButton.disabled = true; // Disable clear button
+            loadingMessage.innerText = 'Loading TensorFlow.js and model...'; // Reset message
+
+            try {
+                // Ensure tf is loaded before using it
+                if (typeof tf === 'undefined') {
+                    throw new Error("TensorFlow.js (tf) not loaded.");
+                }
+                // Check for WebGL backend availability and set it
+                 if (!tf.backend() || tf.getBackend() !== 'webgl') {
+                    console.log('Setting backend to webgl...');
+                    await tf.setBackend('webgl');
+                    console.log('Backend set to', tf.getBackend());
+                 }
+
+                loadingMessage.innerText = 'Loading segmentation model...';
+
+                // Ensure bodySegmentation is loaded before using it
+                 if (typeof bodySegmentation === 'undefined') {
+                    throw new Error("Segmentation model library not loaded (bodySegmentation undefined). Please check CDN link or network.");
+                 }
+                 if (typeof bodySegmentation.createSegmenter !== 'function') {
+                     throw new Error("bodySegmentation.createSegmenter function not found. Library may not be fully loaded or is incorrect version.");
+                 }
+
+                // Check if MediaPipe SelfieSegmentation is available globally (should be if script loaded)
+                 if (typeof SelfieSegmentation === 'undefined') {
+                     throw new Error("MediaPipe Selfie Segmentation library not loaded. Please check CDN link for @mediapipe/selfie_segmentation.");
+                 }
+
+                // Get the selected model type from the dropdown
+                const selectedModelType = modelTypeSelect.value;
+
+                // Load the MediaPipe Selfie Segmentation model using createSegmenter
+                const modelDefinition = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+                const segmenterConfig = {
+                    runtime: 'mediapipe', // Use 'mediapipe' runtime for MediaPipe models
+                    solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation',
+                    modelType: selectedModelType // Use the selected value
+                };
+                console.log('Creating segmenter with config:', segmenterConfig);
+
+                // Dispose of the previous model if it exists
+                if (model && typeof model.dispose === 'function') {
+                     try {
+                        await model.dispose();
+                        console.log("Previous model disposed.");
+                     } catch (disposeError) {
+                        console.warn("Error disposing previous model:", disposeError);
+                        // Continue loading the new model despite dispose error
+                     }
+                }
+
+
+                // Use createSegmenter to get the segmenter instance
+                model = await bodySegmentation.createSegmenter(modelDefinition, segmenterConfig);
+                console.log('Segmenter created:', model);
+
+
+                loadingMessage.innerText = `Model '${selectedModelType}' loaded. Click "Start Camera".`;
+                startButton.disabled = false;
+
+            } catch (error) {
+                model = null; // Ensure model is null on error
+                loadingMessage.innerText = `Error loading model: ${error.message}. Select a different model or check console.`;
+                console.error('Error loading model:', error);
+                startButton.disabled = true; // Keep start button disabled if model load failed
+            } finally {
+                 // Re-enable the dropdown and file input after loading attempt finishes
+                 modelTypeSelect.disabled = false;
+                 backgroundImageInput.disabled = false;
+                 fileInputButton.disabled = false;
+                 // Re-enable clear button only if an image is loaded
+                 if (backgroundImage) {
+                    clearBackgroundButton.disabled = false;
+                 }
+                 isLoadingModel = false;
+            }
+        }
+
+        // --- Camera Access ---
+        async function startCamera() {
+            if (!model) {
+                console.warn("Model is not loaded yet.");
+                loadingMessage.innerText = "Model not loaded. Please wait or check for errors.";
+                return; // Don't start if model isn't ready
+            }
+
+            downloadLink.style.display = 'none'; // Hide previous download link
+            downloadLink.href = ''; // Clear previous blob URL
+
+            // Disable config dropdown and file input while camera is active
+            modelTypeSelect.disabled = true;
+            backgroundImageInput.disabled = true;
+            fileInputButton.disabled = true;
+            clearBackgroundButton.disabled = true;
+
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user'
+                    },
+                    audio: true // Optional: include audio for recording
+                });
+
+                videoInput.srcObject = stream;
+
+                videoInput.onloadedmetadata = () => {
+                    videoInput.play();
+                    videoInput.style.display = 'none'; // Ensure raw video is hidden
+
+                    // Wait for video to be ready before starting processing
+                    videoInput.addEventListener('canplay', () => {
+                         // Set canvas dimensions to match video
+                        videoOutput.width = videoInput.videoWidth;
+                        videoOutput.height = videoInput.videoHeight;
+
+                         // Initialize or resize temporary canvas
+                        if (!tempCanvas) {
+                             tempCanvas = document.createElement('canvas');
+                             tempCtx = tempCanvas.getContext('2d');
+                         }
+                         tempCanvas.width = videoOutput.width;
+                         tempCanvas.height = videoOutput.height;
+                         if (!tempCtx) { // Ensure context is available
+                             tempCtx = tempCanvas.getContext('2d');
+                         }
+
+
+                        // Start processing and recording setup
+                        isProcessing = true;
+                        processFrame(); // Start the processing loop
+
+                        startButton.disabled = true;
+                        stopButton.disabled = false;
+                        startRecordingButton.disabled = false;
+                        stopRecordingButton.disabled = true; // Recording starts only when explicitly clicked
+                        loadingMessage.style.display = 'none'; // Hide message during active use
+
+                    }, { once: true }); // Only run this setup once
+                };
+
+            } catch (error) {
+                loadingMessage.style.display = 'block'; // Show message again on error
+                loadingMessage.innerText = `Error accessing camera: ${error.message}`;
+                console.error('Error accessing camera:', error);
+                startButton.disabled = false; // Allow retrying
+                // Re-enable config on camera error
+                modelTypeSelect.disabled = false;
+                backgroundImageInput.disabled = false;
+                fileInputButton.disabled = false;
+                if (backgroundImage) {
+                    clearBackgroundButton.disabled = false;
+                 }
+            }
+        }
+
+        function stopCamera() {
+             if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+             isProcessing = false; // Stop the processing loop flag
+
+             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                 // Stop recording if ongoing when camera is stopped
+                 console.log("Stopping recording because camera is stopping.");
+                 mediaRecorder.stop();
+             }
+
+
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+             // Clear the canvas
+            ctx.clearRect(0, 0, videoOutput.width, videoOutput.height);
+
+            videoInput.srcObject = null; // Disconnect stream from video element
+
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            startRecordingButton.disabled = true; // Disable recording when camera stops
+            stopRecordingButton.disabled = true;
+
+            loadingMessage.style.display = 'block'; // Show message placeholder
+            // Update message based on whether a model is loaded
+             if (model) {
+                loadingMessage.innerText = `Camera stopped. Click "Start Camera" to restart or change config.`;
+             } else {
+                 loadingMessage.innerText = `Camera stopped. No model loaded. Select a model type.`;
+             }
+
+            // Re-enable config dropdown and file input when camera stops
+            modelTypeSelect.disabled = false;
+            backgroundImageInput.disabled = false;
+            fileInputButton.disabled = false;
+            if (backgroundImage) {
+                clearBackgroundButton.disabled = false;
+             }
+
+             // Dispose temporary canvas context
+             if (tempCtx) {
+                // No explicit dispose for 2D contexts needed, just clear
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+             }
+        }
+
+
+        // --- Video Processing Loop ---
+        async function processFrame() {
+            // Check video readiness (readyState >= 2 means HAVE_CURRENT_DATA or more)
+            // Also check if model is still valid (not disposed during reload attempt)
+            if (!isProcessing || !model || !videoInput.srcObject || videoInput.readyState < 2 || typeof model.segmentPeople !== 'function') {
+                 // Stop loop if processing is no longer needed, resources aren't ready,
+                 // video isn't playing, or model became invalid (e.g., during dispose/reload)
+                 rafId = null;
+                 return;
+            }
+
+            // Ensure temporary canvas exists and matches output canvas size
+            if (!tempCanvas || tempCanvas.width !== videoOutput.width || tempCanvas.height !== videoOutput.height) {
+                 tempCanvas = document.createElement('canvas');
+                 tempCanvas.width = videoOutput.width;
+                 tempCanvas.height = videoOutput.height;
+                 tempCtx = tempCanvas.getContext('2d');
+            } else if (!tempCtx) {
+                tempCtx = tempCanvas.getContext('2d'); // Ensure context is available
+            }
+
+
+            try {
+                // Perform segmentation using the segmentPeople method
+                const segmentationEstimations = await model.segmentPeople(videoInput);
+
+
+                // --- Drawing Logic ---
+                // Use a temporary canvas to create the masked foreground before combining with background.
+
+                // 1. Clear the main output canvas.
+                ctx.clearRect(0, 0, videoOutput.width, videoOutput.height);
+
+                // 2. Draw the background image onto the main output canvas (if one is loaded).
+                if (backgroundImage) {
+                    // Draw image scaled to cover the canvas
+                    const hRatio = videoOutput.width / backgroundImage.width ;
+                    const vRatio = videoOutput.height / backgroundImage.height ;
+                    const ratio = Math.max ( hRatio, vRatio ); // Use max ratio to cover
+                    const centershiftX = ( videoOutput.width - backgroundImage.width * ratio ) / 2;
+                    const centershiftY = ( videoOutput.height - backgroundImage.height * ratio ) / 2;
+                    ctx.drawImage(backgroundImage, 0, 0, backgroundImage.width, backgroundImage.height,
+                                  centershiftX, centershiftY, backgroundImage.width * ratio, backgroundImage.height * ratio);
+                }
+                // If no background image, the main canvas remains transparent after clearing.
+
+
+                // 3. Prepare the temporary canvas with the masked foreground (the person).
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height); // Clear temporary canvas for this frame
+                // Draw the original video frame onto the temporary canvas first.
+                tempCtx.drawImage(videoInput, 0, 0, tempCanvas.width, tempCanvas.height);
+
+
+                if (segmentationEstimations && segmentationEstimations.length > 0) {
+                    const segmentation = segmentationEstimations[0]; // MediaPipe returns one segmentation
+
+                    if (segmentation && segmentation.mask && typeof segmentation.mask.toCanvasImageSource === 'function') {
+                        const mask = await segmentation.mask.toCanvasImageSource();
+
+                        // Use 'destination-in' on the temporary canvas:
+                        // This keeps the destination pixels (the video drawn just above)
+                        // only where the source pixels (the mask) are opaque.
+                        // The mask is drawn on top, acting as a clipping path for the video.
+                        tempCtx.globalCompositeOperation = 'destination-in';
+
+                        // Draw the mask onto the temporary canvas.
+                        tempCtx.drawImage(mask, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                        // Reset the composite operation for subsequent drawings on the temp canvas (if any)
+                        tempCtx.globalCompositeOperation = 'source-over';
+
+                        // 4. Draw the contents of the temporary canvas (the masked person) onto the main canvas.
+                        // Since the temporary canvas is now transparent where the person isn't,
+                        // drawing it onto the main canvas (which has the background) correctly composites them.
+                         ctx.drawImage(tempCanvas, 0, 0, videoOutput.width, videoOutput.height);
+
+                    } else {
+                         console.warn("Segmentation mask or its method not available for this frame. Showing just background.");
+                         // If mask is missing but segmentation object was found, skip drawing the masked person.
+                         // The main canvas will contain just the background (from step 2) or be transparent.
+                    }
+
+                } else {
+                    // If no segmentation found (e.g., no person detected)
+                    // Skip drawing the temporary canvas. The main canvas will contain
+                    // just the background image (from step 2) or be transparent. This is the desired behavior.
+                }
+
+                // --- End Drawing Logic ---
+
+
+            } catch (error) {
+                 console.error("Error processing frame:", error);
+                 // If an error occurs during segmentation, stop the loop
+                 isProcessing = false;
+                 rafId = null;
+                 loadingMessage.style.display = 'block';
+                 loadingMessage.innerText = `Error processing video: ${error.message}`;
+                 stopCamera(); // Attempt to stop camera cleanly
+                 return; // Exit the function early
+            }
+
+
+            // Request the next frame only if still processing
+            if (isProcessing) {
+               rafId = requestAnimationFrame(processFrame);
+            }
+        }
+
+        // --- Recording ---
+        function startRecording() {
+            recordedChunks = []; // Clear previous chunks
+            // Capture stream from the canvas element (the processed video)
+            // Use the current dimensions of the output canvas
+            const canvasStream = videoOutput.captureStream ? videoOutput.captureStream(30) : null; // 30fps capture
+
+            if (!canvasStream) {
+                 console.error("canvas.captureStream is not supported in this browser.");
+                 alert("Video recording is not supported in your browser.");
+                 return;
+            }
+
+            // Combine with audio stream if camera access included audio
+             let streamToRecord = canvasStream;
+            if (stream && stream.getAudioTracks().length > 0) {
+                 const audioTracks = stream.getAudioTracks();
+                 // Create a new MediaStream just for the audio tracks (optional, but clean)
+                 const audioStream = new MediaStream(audioTracks);
+                // Add audio tracks from the audio stream to the canvas stream
+                audioTracks.forEach(track => streamToRecord.addTrack(track));
+            }
+
+
+            // Check if MediaRecorder is available
+            if (typeof MediaRecorder === 'undefined') {
+                 console.error("MediaRecorder is not supported in this browser.");
+                 alert("Video recording is not supported in your browser.");
+                 return;
+            }
+
+            // Check for supported MIME types and codecs
+             const mimeTypes = [
+                'video/webm;codecs=vp9,opus', // VP9 video with Opus audio
+                'video/webm;codecs=vp8,opus', // VP8 video with Opus audio (more compatible)
+                'video/webm', // General webm (codec decided by browser)
+                'video/mp4;codecs=h264,aac', // H.264 video with AAC audio (less compatible on some browsers/OSs)
+                'video/mp4', // General mp4 (codec decided by browser)
+            ];
+
+            let supportedType = null;
+            for (const type of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    supportedType = type;
+                    break;
+                }
+            }
+
+            if (!supportedType) {
+                console.error("No supported video MIME type found for MediaRecorder.");
+                alert("Your browser does not support recording in a compatible format.");
+                return;
+            }
+            console.log(`Using MIME type for recording: ${supportedType}`);
+
+
+            mediaRecorder = new MediaRecorder(streamToRecord, { mimeType: supportedType });
+
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: supportedType }); // Use detected supported type
+                const url = URL.createObjectURL(blob);
+
+                downloadLink.href = url;
+                // Suggest filename based on type
+                let fileExtension = 'webm'; // Default to webm
+                if (supportedType.includes('mp4')) {
+                    fileExtension = 'mp4';
+                }
+                 // You could add more checks here for other types if needed
+
+                downloadLink.download = `background-removed-video.${fileExtension}`;
+                downloadLink.innerText = 'Download Recording';
+                downloadLink.style.display = 'block';
+
+                // Revoke URL after a delay or when clicked to free up memory
+                // Using setTimeout with a small delay after click is a common pattern
+                downloadLink.onclick = () => {
+                     setTimeout(() => { URL.revokeObjectURL(url); }, 100);
+                     // Ensure the link is clickable after showing it
+                     downloadLink.style.pointerEvents = 'auto';
+                 }
+                 // Ensure the download link is initially clickable when shown
+                 downloadLink.style.pointerEvents = 'auto';
+            };
+
+             mediaRecorder.onerror = (event) => {
+                console.error("MediaRecorder error:", event.error);
+                alert("Error during recording: " + event.error.message);
+                startRecordingButton.disabled = false;
+                stopRecordingButton.disabled = true;
+                // Hide download link on error
+                downloadLink.style.display = 'none';
+                downloadLink.href = '';
+                downloadLink.style.pointerEvents = 'none'; // Make link unclickable
+            };
+
+
+            try {
+                mediaRecorder.start(); // Start recording
+                console.log("Recording started");
+                startRecordingButton.disabled = true;
+                stopRecordingButton.disabled = false;
+                downloadLink.style.display = 'none'; // Hide download link while recording
+                downloadLink.href = '';
+                downloadLink.style.pointerEvents = 'none'; // Make link unclickable while recording
+            } catch (error) {
+                 console.error("Error starting MediaRecorder:", error);
+                 alert("Could not start recording: " + error.message);
+                 startRecordingButton.disabled = false;
+                 stopRecordingButton.disabled = true;
+                 downloadLink.style.display = 'none';
+                 downloadLink.href = '';
+                 downloadLink.style.pointerEvents = 'none';
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                 console.log("Recording stopped");
+            }
+            startRecordingButton.disabled = false;
+            stopRecordingButton.disabled = true;
+        }
+
+        // --- Background Image Handling ---
+        backgroundImageInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        backgroundImage = img; // Store the loaded image object
+                        backgroundFileNameSpan.innerText = file.name; // Display filename
+                        clearBackgroundButton.style.display = 'inline-block'; // Show clear button
+                        clearBackgroundButton.disabled = false; // Enable clear button
+                         console.log("Background image loaded:", file.name);
+                         // If camera is already running, the next frame will use the new background
+                         // If not running, the background will appear when camera starts
+                    };
+                    img.onerror = (error) => {
+                         console.error("Error loading image:", error);
+                         alert("Error loading image.");
+                         clearBackgroundImage(); // Clear potentially partial state
+                    }
+                    img.src = e.target.result; // Set the image source from the file data
+                };
+                reader.onerror = (error) => {
+                    console.error("Error reading file:", error);
+                    alert("Error reading image file.");
+                     clearBackgroundImage(); // Clear potentially partial state
+                }
+                reader.readAsDataURL(file); // Read the file as a data URL
+            } else {
+                // If file input is cleared or cancelled
+                clearBackgroundImage();
+            }
+        });
+
+        clearBackgroundButton.addEventListener('click', () => {
+            clearBackgroundImage();
+        });
+
+        function clearBackgroundImage() {
+             backgroundImage = null; // Remove the image reference
+             backgroundImageInput.value = null; // Clear the file input itself
+             backgroundFileNameSpan.innerText = 'No image selected'; // Reset filename display
+             clearBackgroundButton.style.display = 'none'; // Hide clear button
+             clearBackgroundButton.disabled = true; // Disable clear button
+             console.log("Background image cleared.");
+             // If camera is running, the background will become transparent on the next frame
+        }
+
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startCamera);
+        stopButton.addEventListener('click', stopCamera);
+        startRecordingButton.addEventListener('click', startRecording);
+        stopRecordingButton.addEventListener('click', stopRecording);
+
+        // Add event listener for the model type dropdown
+        modelTypeSelect.addEventListener('change', loadModel);
+
+
+        // Stop camera and processing when the page is closed/navigated away
+        window.addEventListener('beforeunload', () => {
+            stopCamera(); // Ensure tracks are stopped and processing loop ends
+             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop(); // Stop recording if ongoing
+            }
+            // Attempt to dispose of the model if it exists
+             if (model && typeof model.dispose === 'function') {
+                model.dispose().catch(e => console.error("Error disposing model on unload:", e));
+             }
+        });
+
+        // --- Initialization ---
+        // Wait for the window to fully load (including external scripts) before loading the model
+        window.onload = () => {
+            loadModel(); // Initial model load based on default dropdown selection
+            // Ensure the clear button is initially hidden
+            clearBackgroundButton.style.display = 'none';
+            clearBackgroundButton.disabled = true;
+        };
+    </script>
+
+</body>
+</html>
