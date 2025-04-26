@@ -1019,159 +1019,197 @@
             }
         }
 
-         function updatePlayer(deltaTime) {
+        let playerBox = new THREE.Box3();
+        let blockBox = new THREE.Box3();
+        const tempV = new THREE.Vector3();
+        function updatePlayer(deltaTime) {
             if (!gameRunning || !controls.isLocked) return;
 
             const speed = PLAYER.SPEED;
+            const playerPos = controls.getObject().position;
+
+             // Store initial position before updates
+             const initialPos = playerPos.clone();
+
+            // Calculate desired movement vector for this frame based on input and camera direction
             const moveDirection = new THREE.Vector3();
             const forward = new THREE.Vector3();
             const right = new THREE.Vector3();
-            const playerPos = controls.getObject().position;
 
             camera.getWorldDirection(forward);
-            forward.y = 0;
+            forward.y = 0; // Keep movement horizontal relative to camera
             forward.normalize();
             right.crossVectors(camera.up, forward).normalize();
 
+            // Calculate the raw, camera-relative movement vector
             moveDirection.addScaledVector(forward, (moveState.forward - moveState.backward) * speed * deltaTime);
             moveDirection.addScaledVector(right, (moveState.right - moveState.left) * speed * deltaTime);
 
-            // Apply horizontal movement initially
-             playerPos.x += moveDirection.x;
-             playerPos.z += moveDirection.z;
+             // --- Correctly get the horizontal movement deltas from the camera-relative moveDirection ---
+            const moveDeltaX = moveDirection.x; // Use the X component of the camera-relative movement
+            const moveDeltaZ = moveDirection.z; // Use the Z component of the camera-relative movement
 
-             // --- Collision Detection & Response (Simplified AABB) ---
-             // Apply gravity
+             // Apply gravity to vertical velocity
             playerVelocity.y += PLAYER.GRAVITY * deltaTime;
-             // Apply vertical velocity
-            playerPos.y += playerVelocity.y * deltaTime;
 
-             const playerHalfWidth = 0.35; // Half width of the player collision box (slightly less than BLOCK.SIZE/2)
-             const playerHeight = PLAYER.HEIGHT; // Full player height
+             // --- Collision Step 1: Vertical (Y) ---
+             // Apply vertical velocity first
+             playerPos.y += playerVelocity.y * deltaTime;
 
-             playerOnGround = false; // Reset ground flag
+             const playerHalfHeight = PLAYER.HEIGHT / 2;
+             const playerHalfWidth = 0.35; // Use the same half width as before
 
-             // Vertical Collision (Y-axis)
-             const playerFeetY = playerPos.y - playerHeight / 2;
-             const playerHeadY = playerPos.y + playerHeight / 2;
+             playerOnGround = false; // Assume not on ground until collision detected
 
-             // Check blocks immediately below player's feet (check 4 corners + center)
-             const feetCheckPoints = [
-                 new THREE.Vector3(playerPos.x, playerFeetY, playerPos.z), // Center
-                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerFeetY, playerPos.z - playerHalfWidth),
-                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerFeetY, playerPos.z - playerHalfWidth),
-                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerFeetY, playerPos.z + playerHalfWidth),
-                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerFeetY, playerPos.z + playerHalfWidth),
-             ];
+             // Determine the range of block coordinates the player's vertical movement *might* intersect
+             // Use the player's position *after* applying vertical velocity
+             const minBlockY_y = Math.floor((playerPos.y - playerHalfHeight) / BLOCK.SIZE);
+             const maxBlockY_y = Math.floor((playerPos.y + playerHalfHeight) / BLOCK.SIZE);
 
-             let landedOnBlock = false;
-             for(const point of feetCheckPoints) {
-                  const blockYBelow = Math.floor(point.y / BLOCK.SIZE);
-                  const blockX = Math.floor(point.x / BLOCK.SIZE);
-                  const blockZ = Math.floor(point.z / BLOCK.SIZE);
-                  if (getBlock(blockX, blockYBelow, blockZ) !== BLOCK.TYPES.AIR) {
-                      const blockTopSurfaceY = (blockYBelow + 1) * BLOCK.SIZE;
-                      // Check if player feet are below or very close to the block's top surface
-                      if (playerFeetY < blockTopSurfaceY + 0.01) {
-                          // Resolve collision: place player on top of the block
-                          playerPos.y = blockTopSurfaceY + playerHeight / 2;
-                          playerVelocity.y = 0; // Stop falling
-                          playerOnGround = true; // Set ground flag
-                          landedOnBlock = true;
-                          break; // Only need to find one collision point hitting ground
+              // Determine the range of block coordinates the player's horizontal footprint covers at the new Y position
+             const minBlockX_y = Math.floor((playerPos.x - playerHalfWidth) / BLOCK.SIZE);
+             const maxBlockX_y = Math.floor((playerPos.x + playerHalfWidth) / BLOCK.SIZE);
+             const minBlockZ_y = Math.floor((playerPos.z - playerHalfWidth) / BLOCK.SIZE);
+             const maxBlockZ_y = Math.floor((playerPos.z + playerHalfWidth) / BLOCK.SIZE);
+
+
+             // Check for collisions with blocks within this potential vertical path
+             for (let x = minBlockX_y; x <= maxBlockX_y; x++) {
+                  for (let y = minBlockY_y; y <= maxBlockY_y; y++) {
+                      for (let z = minBlockZ_y; z <= maxBlockZ_y; z++) {
+                         // Check if the block at (x, y, z) is solid (not AIR) and within world bounds
+                         if (getBlock(x, y, z) !== BLOCK.TYPES.AIR) {
+                             // Calculate the block's bounding box
+                             blockBox.setFromCenterAndSize(
+                                  tempV.set(x * BLOCK.SIZE + BLOCK.SIZE / 2, y * BLOCK.SIZE + BLOCK.SIZE / 2, z * BLOCK.SIZE + BLOCK.SIZE / 2),
+                                  tempV.set(BLOCK.SIZE, BLOCK.SIZE, BLOCK.SIZE)
+                              );
+
+                             // Calculate the player's bounding box *at the current position* (which has the potential new Y)
+                              playerBox.setFromCenterAndSize(
+                                  tempV.set(playerPos.x, playerPos.y, playerPos.z), // Center is at playerPos
+                                  tempV.set(playerHalfWidth * 2, PLAYER.HEIGHT, playerHalfWidth * 2)
+                              );
+
+                             // If player box intersects block box
+                             if (playerBox.intersectsBox(blockBox)) {
+                                 // Resolve vertical collision
+                                 if (playerVelocity.y < 0) { // Falling, hit the top of the block
+                                     playerPos.y = (y + 1) * BLOCK.SIZE + playerHalfHeight; // Snap to top surface
+                                     playerVelocity.y = 0; // Stop falling
+                                     playerOnGround = true; // Player is now on the ground
+                                 } else if (playerVelocity.y > 0) { // Rising, hit the bottom of the block
+                                     playerPos.y = y * BLOCK.SIZE - playerHalfHeight; // Snap to bottom surface
+                                     playerVelocity.y = 0; // Stop rising
+                                 }
+                                  // Important: After resolving Y, the player's Y position is now fixed for horizontal checks.
+                                  // We don't break here because multiple vertical collisions might need resolving (e.g., corner cases)
+                                  // though for simple AABB a single resolution per axis pass is common.
+                             }
+                         }
                       }
                   }
              }
 
-             // Check Ceiling Collision
-             const headCheckPoints = [
-                 new THREE.Vector3(playerPos.x, playerHeadY, playerPos.z), // Center
-                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerHeadY, playerPos.z - playerHalfWidth),
-                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerHeadY, playerPos.z - playerHalfWidth),
-                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerHeadY, playerPos.z + playerHalfWidth),
-                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerHeadY, playerPos.z + playerHalfWidth),
-             ];
-              for(const point of headCheckPoints) {
-                 const blockYAbove = Math.floor(point.y / BLOCK.SIZE);
-                 const blockX = Math.floor(point.x / BLOCK.SIZE);
-                 const blockZ = Math.floor(point.z / BLOCK.SIZE);
-                 if (getBlock(blockX, blockYAbove, blockZ) !== BLOCK.TYPES.AIR) {
-                     const blockBottomSurfaceY = blockYAbove * BLOCK.SIZE;
-                     if (playerHeadY > blockBottomSurfaceY - 0.01) {
-                          playerPos.y = blockBottomSurfaceY - playerHeight / 2; // Push player down
-                          playerVelocity.y = Math.min(0, playerVelocity.y); // Stop upward movement
-                          break; // Only need to find one collision point hitting ceiling
-                     }
-                 }
+             // Prevent falling through the floor at y=0 if there's a block there
+             if (playerPos.y - playerHalfHeight < BLOCK.SIZE && getBlock(Math.floor(playerPos.x/BLOCK.SIZE), 0, Math.floor(playerPos.z/BLOCK.SIZE)) !== BLOCK.TYPES.AIR) {
+                  playerPos.y = BLOCK.SIZE + playerHalfHeight;
+                  playerVelocity.y = 0;
+                  playerOnGround = true;
              }
 
 
-             // Horizontal Collision (X and Z axes)
-             // Check player's bounding box against surrounding grid cells
-             const playerMinX = playerPos.x - playerHalfWidth;
-             const playerMaxX = playerPos.x + playerHalfWidth;
-             const playerMinZ = playerPos.z - playerHalfWidth;
-             const playerMaxZ = playerPos.z + playerHalfWidth;
-             const playerMinY = playerPos.y - playerHeight / 2 + 0.1; // Check slightly above feet for horizontal
-             const playerMaxY = playerPos.y + playerHeight / 2 - 0.1; // Check slightly below head for horizontal
+             // --- Collision Step 2: Horizontal (X then Z independently for sliding) ---
 
-             const checkHorizontalCollisionAndResolve = (pos, axis, delta) => {
-                 if (delta === 0) return; // No movement along this axis
+             // Apply X movement using the correct camera-relative delta
+             playerPos.x += moveDeltaX;
 
-                 const axisIndex = axis === 'x' ? 0 : 2; // 0 for X, 2 for Z
-                 const moveDir = Math.sign(delta);
+              // Determine the range of block coordinates for horizontal checks after applying X movement
+             const minBlockX_x = Math.floor((playerPos.x - playerHalfWidth) / BLOCK.SIZE);
+             const maxBlockX_x = Math.floor((playerPos.x + playerHalfWidth) / BLOCK.SIZE);
 
-                 const checkPosX = axis === 'x' ? (pos.x + delta) : playerPos.x;
-                 const checkPosZ = axis === 'z' ? (pos.z + delta) : playerPos.z;
-
-                 // Determine which grid cells along the movement path need checking
-                 const cellsToCheckX = [Math.floor((checkPosX - playerHalfWidth) / BLOCK.SIZE), Math.floor((checkPosX + playerHalfWidth) / BLOCK.SIZE)];
-                 const cellsToCheckZ = [Math.floor((checkPosZ - playerHalfWidth) / BLOCK.SIZE), Math.floor((checkPosZ + playerHalfWidth) / BLOCK.SIZE)];
-                 const cellsToCheckY = [Math.floor(playerMinY / BLOCK.SIZE), Math.floor(playerMaxY / BLOCK.SIZE)];
+             const minBlockY_x = Math.floor((playerPos.y - playerHalfHeight) / BLOCK.SIZE); // Use the *resolved* Y
+             const maxBlockY_x = Math.floor((playerPos.y + playerHalfHeight) / BLOCK.SIZE);
+             const minBlockZ_x = Math.floor((playerPos.z - playerHalfWidth) / BLOCK.SIZE);
+             const maxBlockZ_x = Math.floor((playerPos.z + playerHalfWidth) / BLOCK.SIZE);
 
 
-                 let collisionFound = false;
-                  // Iterate through the grid cells the player's bounding box *would* overlap after the attempted move
-                 for(let y = cellsToCheckY[0]; y <= cellsToCheckY[1]; y++) {
-                     for(let x = cellsToCheckX[0]; x <= cellsToCheckX[1]; x++) {
-                         for(let z = cellsToCheckZ[0]; z <= cellsToCheckZ[1]; z++) {
-                             if (getBlock(x, y, z) !== BLOCK.TYPES.AIR) {
-                                 collisionFound = true;
-                                 // Resolve collision for the specific axis
-                                 if (axis === 'x') {
-                                      if (moveDir > 0) pos.x = x * BLOCK.SIZE - playerHalfWidth; // Push back from left face
-                                      else pos.x = (x + 1) * BLOCK.SIZE + playerHalfWidth; // Push back from right face
-                                      playerVelocity.x = 0; // Stop horizontal velocity
-                                 } else { // axis === 'z'
-                                       if (moveDir > 0) pos.z = z * BLOCK.SIZE - playerHalfWidth; // Push back from front face
-                                       else pos.z = (z + 1) * BLOCK.SIZE + playerHalfWidth; // Push back from back face
-                                      playerVelocity.z = 0; // Stop horizontal velocity
+             // Check for collisions after applying X movement
+             let collisionX = false;
+             for (let x = minBlockX_x; x <= maxBlockX_x; x++) {
+                  for (let y = minBlockY_x; y <= maxBlockY_x; y++) {
+                      for (let z = minBlockZ_x; z <= maxBlockZ_x; z++) {
+                         if (getBlock(x, y, z) !== BLOCK.TYPES.AIR) {
+                              blockBox.setFromCenterAndSize(
+                                   tempV.set(x * BLOCK.SIZE + BLOCK.SIZE / 2, y * BLOCK.SIZE + BLOCK.SIZE / 2, z * BLOCK.SIZE + BLOCK.SIZE / 2),
+                                   tempV.set(BLOCK.SIZE, BLOCK.SIZE, BLOCK.SIZE)
+                               );
+                              playerBox.setFromCenterAndSize( // Check player box at current (resolved Y, new X, current Z)
+                                   tempV.set(playerPos.x, playerPos.y, playerPos.z),
+                                   tempV.set(playerHalfWidth * 2, PLAYER.HEIGHT, playerHalfWidth * 2)
+                               );
+
+                             if (playerBox.intersectsBox(blockBox)) {
+                                 // Resolve horizontal X collision
+                                 if (moveDeltaX > 0) { // Moving right, hit left face of block
+                                     playerPos.x = x * BLOCK.SIZE - playerHalfWidth; // Snap to left face
+                                 } else if (moveDeltaX < 0) { // Moving left, hit right face of block
+                                     playerPos.x = (x + 1) * BLOCK.SIZE + playerHalfWidth; // Snap to right face
                                  }
-                                 break; // Stop checking other cells once collision found for this move
+                                 collisionX = true;
+                                 // We don't break here to potentially resolve against multiple blocks in X row/column
                              }
                          }
-                         if (collisionFound) break;
-                     }
-                     if (collisionFound) break;
-                 }
-             };
+                      }
+                  }
+             }
 
-             // Apply and resolve horizontal movement independently for X and Z
-             // This provides basic sliding behavior along walls
-             checkHorizontalCollisionAndResolve(playerPos, 'x', moveDirection.x);
-             checkHorizontalCollisionAndResolve(playerPos, 'z', moveDirection.z);
+             // Apply Z movement (based on the potentially adjusted X position) using the correct camera-relative delta
+             playerPos.z += moveDeltaZ;
+
+              // Determine the range of block coordinates for horizontal checks after applying Z movement
+             const minBlockZ_z = Math.floor((playerPos.z - playerHalfWidth) / BLOCK.SIZE);
+             const maxBlockZ_z = Math.floor((playerPos.z + playerHalfWidth) / BLOCK.SIZE);
+
+             const minBlockX_z = Math.floor((playerPos.x - playerHalfWidth) / BLOCK.SIZE); // Use the *potentially adjusted* X
+             const maxBlockX_z = Math.floor((playerPos.x + playerHalfWidth) / BLOCK.SIZE);
+             const minBlockY_z = Math.floor((playerPos.y - playerHalfHeight) / BLOCK.SIZE); // Use the *resolved* Y
+             const maxBlockY_z = Math.floor((playerPos.y + playerHalfHeight) / BLOCK.SIZE);
 
 
-             // Final player position update
+             // Check for collisions after applying Z movement
+              let collisionZ = false;
+              for (let x = minBlockX_z; x <= maxBlockX_z; x++) {
+                   for (let y = minBlockY_z; y <= maxBlockY_z; y++) {
+                       for (let z = minBlockZ_z; z <= maxBlockZ_z; z++) {
+                           if (getBlock(x, y, z) !== BLOCK.TYPES.AIR) {
+                               blockBox.setFromCenterAndSize(
+                                    tempV.set(x * BLOCK.SIZE + BLOCK.SIZE / 2, y * BLOCK.SIZE + BLOCK.SIZE / 2, z * BLOCK.SIZE + BLOCK.SIZE / 2),
+                                    tempV.set(BLOCK.SIZE, BLOCK.SIZE, BLOCK.SIZE)
+                                );
+                               playerBox.setFromCenterAndSize( // Check player box at current (resolved Y, potentially adjusted X, new Z)
+                                    tempV.set(playerPos.x, playerPos.y, playerPos.z),
+                                    tempV.set(playerHalfWidth * 2, PLAYER.HEIGHT, playerHalfWidth * 2)
+                                );
+
+                              if (playerBox.intersectsBox(blockBox)) {
+                                  // Resolve horizontal Z collision
+                                  if (moveDeltaZ > 0) { // Moving forward, hit back face of block
+                                      playerPos.z = z * BLOCK.SIZE - playerHalfWidth; // Snap to back face
+                                  } else if (moveDeltaZ < 0) { // Moving backward, hit front face of block
+                                      playerPos.z = (z + 1) * BLOCK.SIZE + playerHalfWidth; // Snap to front face
+                                  }
+                                   collisionZ = true;
+                                   // We don't break here to potentially resolve against multiple blocks in Z row/column
+                              }
+                           }
+                       }
+                   }
+              }
+
+             // Update controls position after all collision resolution
              controls.getObject().position.copy(playerPos);
-
-
-             // Boundaries - always keep player within world bounds on X/Z
-             playerPos.x = Math.max(playerHalfWidth, Math.min(WORLD.WIDTH * BLOCK.SIZE - playerHalfWidth, playerPos.x));
-             playerPos.z = Math.max(playerHalfWidth, Math.min(WORLD.DEPTH * BLOCK.SIZE - playerHalfWidth, playerPos.z));
-             // Prevent falling through floor/bedrock level
-             playerPos.y = Math.max(playerPos.y, BLOCK.SIZE + playerHeight / 2); // Ensure player is always above the floor level at y=0
-        }
+         }
 
 
         // --- Interaction (Raycasting) ---
