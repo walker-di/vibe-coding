@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser LLM Example (WebLLM)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        #app-container {
+            max-width: 800px;
+            margin: auto;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Include padding in width */
+            min-height: 100px;
+            font-size: 1em;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            white-space: pre-wrap; /* Preserve formatting and wrap text */
+        }
+        #status {
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <h1>Browser LLM Example (WebLLM)</h1>
+
+        <p>Enter your prompt below and click "Generate". The model runs entirely in your browser using WebGPU!</p>
+        <p><small>Note: Initial loading requires downloading model files (several hundred MB) and may take time.</small></p>
+
+        <textarea id="prompt-input" placeholder="Enter your prompt here..."></textarea>
+
+        <button id="generate-button" disabled>Loading Model...</button>
+
+        <div id="status">Status: Initializing...</div>
+
+        <div id="output"></div>
+    </div>
+
+    <!-- Include the WebLLM library -->
+    <!-- You can use a local path if you download it, or a CDN like this -->
+    <script src="https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.41/dist/webllm.min.js"></script>
+
+    <script>
+        const promptInput = document.getElementById('prompt-input');
+        const generateButton = document.getElementById('generate-button');
+        const outputDiv = document.getElementById('output');
+        const statusDiv = document.getElementById('status');
+
+        // Configuration for the model
+        // Using a relatively small Phi-2 model suitable for chat
+        const modelId = 'Phi2-chat-q4f32_1';
+        const appConfig = {
+             model_list: [
+                {
+                    "model_url": "https://huggingface.co/mlc-ai/phi-2-GGUF/resolve/main/",
+                    "model_id": "Phi2-chat-q4f32_1",
+                    "model_lib_url": "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.41/dist/phi2-chat-q4f32_1-webgpu.wasm",
+                    "vram_required_MB": 4368.00,
+                    "low_vram_required_MB": 4368.00,
+                    "tokenizer_files": ["tokenizer.json", "tokenizer.model"]
+                }
+            ],
+            model_lib_map: {
+                 "Phi2-chat-q4f32_1": "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.41/dist/phi2-chat-q4f32_1-webgpu.wasm"
+            },
+             // Configuration options
+            // conv_config: { system: "You are a friendly AI assistant." } // Optional system prompt
+        };
+
+
+        let chat; // Variable to hold the ChatModule instance
+
+        async function initializeModel() {
+            statusDiv.textContent = 'Status: Initializing model...';
+            try {
+                // Create a new ChatModule instance
+                chat = new webllm.ChatModule();
+
+                // Set up a callback to report initialization progress
+                chat.on('init-progress', (report) => {
+                    statusDiv.textContent = `Status: Loading model... ${report.progress.toFixed(2)*100}%`;
+                    console.log("Init Progress:", report);
+                });
+
+                // Load the model
+                await chat.reload(modelId, appConfig);
+
+                statusDiv.textContent = `Status: Model "${modelId}" loaded successfully.`;
+                generateButton.textContent = 'Generate Response';
+                generateButton.disabled = false;
+
+            } catch (error) {
+                statusDiv.textContent = `Status: Error initializing model. See console for details.`;
+                console.error("Initialization error:", error);
+            }
+        }
+
+        async function generateResponse() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                alert("Please enter a prompt.");
+                return;
+            }
+
+            outputDiv.textContent = ''; // Clear previous output
+            statusDiv.textContent = 'Status: Generating...';
+            generateButton.disabled = true;
+            generateButton.textContent = 'Generating...';
+
+            try {
+                // Use a callback to stream the output as it's generated
+                 const generateCallback = (step, message) => {
+                     outputDiv.textContent += message; // Append the generated text
+                 };
+
+                // Generate the response
+                await chat.generate(prompt, {
+                    // You can add generation options here, e.g., temperature, max_tokens
+                    // temperature: 0.7,
+                    // max_gen_len: 200,
+                    callback: generateCallback // Use the streaming callback
+                });
+
+                statusDiv.textContent = 'Status: Generation complete.';
+
+            } catch (error) {
+                 statusDiv.textContent = `Status: Error during generation. See console for details.`;
+                console.error("Generation error:", error);
+                outputDiv.textContent += `\n\n[Error: ${error.message}]`;
+
+            } finally {
+                generateButton.textContent = 'Generate Response';
+                generateButton.disabled = false;
+            }
+        }
+
+        // Add event listener to the button
+        generateButton.addEventListener('click', generateResponse);
+
+        // Initialize the model when the page loads
+        initializeModel();
+
+    </script>
+</body>
+</html>

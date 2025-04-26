@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Pixi.js Recorder</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.10/browser/pixi.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #controls, #overlays, #audioControls {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            border-radius: 5px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        #pixiCanvas {
+            border: 1px solid black;
+            background-color: #333; /* Placeholder background */
+            margin-top: 10px;
+            max-width: 100%; /* Make canvas responsive */
+            height: auto; /* Maintain aspect ratio */
+        }
+        video { /* Hidden video element */
+            display: none;
+        }
+        button {
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+        input[type="text"], input[type="color"], select {
+            padding: 8px;
+        }
+        label {
+            margin-right: 5px;
+        }
+        #downloadLink {
+            display: none;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .recording {
+            background-color: #f44336 !important;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>WebRTC + Pixi.js Recorder</h1>
+
+    <!-- Hidden video element to render the webcam stream -->
+    <video id="webcamVideo" playsinline autoplay muted></video>
+
+    <!-- Canvas for Pixi.js rendering (this is what gets recorded) -->
+    <canvas id="pixiCanvas"></canvas>
+
+    <!-- Recording Controls -->
+    <div id="controls">
+        <button id="startRecBtn">Start Recording</button>
+        <button id="stopRecBtn" disabled>Stop Recording</button>
+    </div>
+
+    <!-- Overlay Controls -->
+    <div id="overlays">
+        <label for="textInput">Text:</label>
+        <input type="text" id="textInput" placeholder="Enter overlay text">
+        <input type="color" id="textColor" value="#FFFF00">
+        <button id="addTextBtn">Add Text</button>
+        <button id="clearTextBtn">Clear Text</button>
+        <hr style="width:100%; border: none; border-top: 1px solid #eee;">
+        <button id="addShapeBtn">Add Shape</button>
+        <button id="clearShapesBtn">Clear Shapes</button>
+    </div>
+
+     <!-- Audio Controls -->
+    <div id="audioControls">
+         <label for="bgmSelect">BGM:</label>
+         <select id="bgmSelect">
+             <option value="">None</option>
+             <option value="bgm1.mp3">Calm BGM</option> <!-- Replace with your actual BGM file -->
+             <option value="bgm2.mp3">Upbeat BGM</option> <!-- Replace with your actual BGM file -->
+         </select>
+         <button id="playSfxBtn">Play SFX</button> <!-- Replace with your actual SFX file -->
+    </div>
+
+    <!-- Download Link -->
+    <a id="downloadLink" download="recording.webm">Download Recording</a>
+
+    <!-- BGM Audio Element -->
+    <audio id="bgmAudio" loop></audio>
+
+    <script>
+        // --- Configuration ---
+        const CANVAS_WIDTH = 640;
+        const CANVAS_HEIGHT = 480;
+        const SFX_SRC = 'sfx.mp3'; // IMPORTANT: Replace with your SFX file URL/path
+        // IMPORTANT: Ensure BGM files in the dropdown exist and are accessible (same server or CORS)
+
+        // --- Global Variables ---
+        let pixiApp;
+        let webcamVideoElement = document.getElementById('webcamVideo');
+        let pixiCanvasElement = document.getElementById('pixiCanvas');
+        let videoSprite;
+        let overlayText = null;
+        let overlayGraphics = null; // For shapes
+
+        let mediaRecorder;
+        let recordedChunks = [];
+        let localStream = null; // Combined stream for recorder
+        let webcamStream = null; // Raw stream from webcam/mic
+
+        // Audio related
+        let audioContext;
+        let micSourceNode;
+        let sfxSourceNode;
+        let bgmSourceNode;
+        let gainNodeMic;
+        let gainNodeSfx;
+        let gainNodeBgm;
+        let destinationNode; // To capture mixed audio
+        let sfxBuffer = null;
+        let bgmAudioElement = document.getElementById('bgmAudio');
+
+
+        // UI Elements
+        const startRecBtn = document.getElementById('startRecBtn');
+        const stopRecBtn = document.getElementById('stopRecBtn');
+        const addTextBtn = document.getElementById('addTextBtn');
+        const clearTextBtn = document.getElementById('clearTextBtn');
+        const textInput = document.getElementById('textInput');
+        const textColorInput = document.getElementById('textColor');
+        const addShapeBtn = document.getElementById('addShapeBtn');
+        const clearShapesBtn = document.getElementById('clearShapesBtn');
+        const playSfxBtn = document.getElementById('playSfxBtn');
+        const bgmSelect = document.getElementById('bgmSelect');
+        const downloadLink = document.getElementById('downloadLink');
+
+        // --- Initialization ---
+        async function init() {
+            try {
+                // 1. Get Webcam/Microphone Access
+                webcamStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+                    audio: true
+                });
+                webcamVideoElement.srcObject = webcamStream;
+                webcamVideoElement.onloadedmetadata = () => {
+                    // Video dimensions might differ slightly from request
+                    console.log(`Actual video dimensions: ${webcamVideoElement.videoWidth}x${webcamVideoElement.videoHeight}`);
+                    // Adjust canvas size if needed, or keep requested size
+                    pixiCanvasElement.width = CANVAS_WIDTH; // Or webcamVideoElement.videoWidth;
+                    pixiCanvasElement.height = CANVAS_HEIGHT; // Or webcamVideoElement.videoHeight;
+
+                    setupPixi();
+                    setupAudio();
+                    setupEventListeners();
+                    console.log("Initialization complete. Ready to record.");
+                };
+
+            } catch (err) {
+                console.error("Error accessing media devices.", err);
+                alert(`Error accessing media devices: ${err.name}\n${err.message}\nPlease ensure you have a webcam/microphone and grant permission.`);
+            }
+        }
+
+        // --- Pixi.js Setup ---
+        function setupPixi() {
+            pixiApp = new PIXI.Application({
+                view: pixiCanvasElement,
+                width: pixiCanvasElement.width,
+                height: pixiCanvasElement.height,
+                backgroundColor: 0x1099bb, // Fallback background
+                resolution: window.devicePixelRatio || 1,
+                autoDensity: true,
+            });
+
+            // Create a sprite for the video
+            const videoTexture = PIXI.Texture.from(webcamVideoElement);
+            videoSprite = new PIXI.Sprite(videoTexture);
+            videoSprite.width = pixiApp.screen.width;
+            videoSprite.height = pixiApp.screen.height;
+            pixiApp.stage.addChild(videoSprite);
+
+             // Container for overlays so they appear above the video
+            const overlayContainer = new PIXI.Container();
+            pixiApp.stage.addChild(overlayContainer);
+
+            // Initialize graphics object for shapes
+            overlayGraphics = new PIXI.Graphics();
+            overlayContainer.addChild(overlayGraphics);
+
+            // Ticker to update video texture and render
+            pixiApp.ticker.add(() => {
+                // IMPORTANT: Update the video texture *before* rendering overlays
+                videoTexture.update();
+                // Pixi automatically renders the stage
+            });
+        }
+
+        // --- Web Audio API Setup ---
+        function setupAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Create destination node to capture mixed audio
+            destinationNode = audioContext.createMediaStreamDestination();
+
+            // 1. Microphone Source
+            if (webcamStream.getAudioTracks().length > 0) {
+                micSourceNode = audioContext.createMediaStreamSource(webcamStream);
+                gainNodeMic = audioContext.createGain();
+                gainNodeMic.gain.value = 1.0; // Adjust mic volume if needed
+                micSourceNode.connect(gainNodeMic).connect(destinationNode);
+                console.log("Microphone connected to audio graph.");
+            } else {
+                 console.warn("No audio track found in webcam stream.");
+            }
+
+            // 2. BGM Source (using HTMLAudioElement for easier control)
+            bgmSourceNode = audioContext.createMediaElementSource(bgmAudioElement);
+            gainNodeBgm = audioContext.createGain();
+            gainNodeBgm.gain.value = 0.5; // Default BGM volume lower
+            bgmSourceNode.connect(gainNodeBgm).connect(destinationNode);
+            // Also connect BGM to main output for preview (optional)
+             bgmSourceNode.connect(gainNodeBgm).connect(audioContext.destination);
+            console.log("BGM element connected.");
+
+
+            // 3. SFX Source (pre-load)
+            gainNodeSfx = audioContext.createGain();
+            gainNodeSfx.gain.value = 0.8; // SFX volume
+            gainNodeSfx.connect(destinationNode);
+            // Also connect SFX to main output for preview
+            gainNodeSfx.connect(audioContext.destination);
+            loadSound(SFX_SRC); // Start loading SFX
+        }
+
+        // --- Audio Loading ---
+        async function loadSound(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status} for ${url}`);
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                sfxBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                console.log("SFX loaded:", url);
+                playSfxBtn.disabled = false; // Enable button once loaded
+            } catch (error) {
+                console.error('Error loading sound:', url, error);
+                playSfxBtn.disabled = true;
+                 playSfxBtn.title = `Could not load ${url}. Check path and CORS policy.`;
+            }
+        }
+
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            startRecBtn.onclick = startRecording;
+            stopRecBtn.onclick = stopRecording;
+            addTextBtn.onclick = addTextOverlay;
+            clearTextBtn.onclick = clearTextOverlay;
+            addShapeBtn.onclick = addShapeOverlay;
+            clearShapesBtn.onclick = clearShapeOverlay;
+            playSfxBtn.onclick = playSfx;
+            bgmSelect.onchange = changeBgm;
+
+             // Disable SFX button initially until loaded
+             playSfxBtn.disabled = true;
+             playSfxBtn.title = "Loading SFX...";
+        }
+
+        // --- Recording Logic ---
+        function startRecording() {
+            if (!webcamStream || !pixiApp || !audioContext) {
+                alert("Initialization not complete or failed.");
+                return;
+            }
+
+            recordedChunks = []; // Reset chunks
+            downloadLink.style.display = 'none'; // Hide previous link
+
+            // 1. Get Video Stream from Canvas
+            const canvasStream = pixiCanvasElement.captureStream(30); // 30 FPS
+            const canvasVideoTrack = canvasStream.getVideoTracks()[0];
+
+            // 2. Get Mixed Audio Stream from Destination Node
+            const mixedAudioTrack = destinationNode.stream.getAudioTracks()[0];
+
+            // 3. Combine Streams
+            // Ensure we have both tracks before proceeding
+            if (!canvasVideoTrack) {
+                 alert("Could not capture video track from canvas.");
+                 return;
+            }
+             if (!mixedAudioTrack) {
+                 console.warn("No mixed audio track available. Recording video only.");
+                 localStream = new MediaStream([canvasVideoTrack]);
+            } else {
+                localStream = new MediaStream([canvasVideoTrack, mixedAudioTrack]);
+            }
+
+
+            // 4. Create MediaRecorder
+             let options = { mimeType: 'video/webm;codecs=vp9,opus' };
+             if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                 console.warn(`${options.mimeType} is not supported, trying default.`);
+                 options = { mimeType: 'video/webm' }; // Fallback
+                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                     console.warn(`${options.mimeType} is not supported either.`);
+                     options = { mimeType: '' }; // Let the browser decide
+                 }
+             }
+
+            try {
+                mediaRecorder = new MediaRecorder(localStream, options);
+            } catch (e) {
+                 console.error("Exception while creating MediaRecorder:", e);
+                 alert(`Error creating MediaRecorder: ${e.message}\nMIME type used: ${options.mimeType}`);
+                 return;
+            }
+
+
+            console.log("Created MediaRecorder with options:", options);
+
+
+            mediaRecorder.ondataavailable = handleDataAvailable;
+            mediaRecorder.onstop = handleStop;
+            mediaRecorder.onerror = (event) => {
+                 console.error("MediaRecorder error:", event.error);
+                 alert(`MediaRecorder error: ${event.error.name}\n${event.error.message}`);
+                 stopRecording(); // Attempt to stop cleanly
+            };
+
+            mediaRecorder.start();
+            console.log("MediaRecorder started", mediaRecorder);
+
+            // Update UI
+            startRecBtn.disabled = true;
+            stopRecBtn.disabled = false;
+            startRecBtn.classList.add('recording');
+            startRecBtn.textContent = 'Recording...';
+
+            // Ensure BGM is playing if selected
+            if (bgmAudioElement.src && bgmAudioElement.paused) {
+                 bgmAudioElement.play().catch(e => console.error("Error auto-playing BGM:", e));
+            }
+        }
+
+        function handleDataAvailable(event) {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+                 console.log("Received data chunk size:", event.data.size);
+            } else {
+                console.log("Received empty data chunk.");
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                mediaRecorder.stop();
+                console.log("MediaRecorder stopping...");
+            } else {
+                 console.log("MediaRecorder not active or already stopped.");
+            }
+
+             // Stop BGM playback when recording stops
+            bgmAudioElement.pause();
+            // bgmAudioElement.currentTime = 0; // Optional: rewind
+
+            // Update UI
+            startRecBtn.disabled = false;
+            stopRecBtn.disabled = true;
+            startRecBtn.classList.remove('recording');
+            startRecBtn.textContent = 'Start Recording';
+        }
+
+        function handleStop() {
+            console.log("MediaRecorder stopped.");
+             if (recordedChunks.length === 0) {
+                 console.warn("No data chunks recorded. Cannot create blob.");
+                 alert("Recording failed or produced no data.");
+                 return;
+             }
+
+            const blob = new Blob(recordedChunks, {
+                type: mediaRecorder.mimeType || 'video/webm' // Use recorded MIME type
+            });
+            const url = URL.createObjectURL(blob);
+            downloadLink.href = url;
+            downloadLink.download = `recording-${Date.now()}.webm`; // Unique filename
+            downloadLink.style.display = 'block';
+            console.log("Recording available for download:", url);
+
+            // Optional: Clean up the combined stream's tracks?
+            // localStream?.getTracks().forEach(track => track.stop());
+            // Be careful with this if you want to record again without refreshing
+        }
+
+        // --- Overlay Functions ---
+        function addTextOverlay() {
+            clearTextOverlay(); // Remove previous text first
+
+            const text = textInput.value || "Default Text";
+            const color = textColorInput.value;
+
+            overlayText = new PIXI.Text(text, {
+                fontFamily: 'Arial',
+                fontSize: 36,
+                fill: color,
+                stroke: '#000000',
+                strokeThickness: 4,
+                align: 'center',
+            });
+            overlayText.anchor.set(0.5); // Center the text
+            overlayText.x = pixiApp.screen.width / 2;
+            overlayText.y = 50; // Position near top-center
+
+             // Add to the overlay container (which is already on top of the video)
+            pixiApp.stage.getChildAt(1).addChild(overlayText); // Assuming container is index 1
+        }
+
+        function clearTextOverlay() {
+            if (overlayText) {
+                pixiApp.stage.getChildAt(1).removeChild(overlayText);
+                overlayText.destroy(); // Clean up Pixi object
+                overlayText = null;
+            }
+        }
+
+         function addShapeOverlay() {
+             // Clear previous shapes for simplicity in this example
+             clearShapeOverlay();
+
+             // Draw a simple semi-transparent red rectangle
+             overlayGraphics.beginFill(0xFF0000, 0.5); // Red, 50% alpha
+             overlayGraphics.drawRect(
+                 pixiApp.screen.width - 160, // x position (top right)
+                 pixiApp.screen.height - 110, // y position (top right)
+                 150, // width
+                 100  // height
+             );
+             overlayGraphics.endFill();
+
+              // Draw a blue circle
+              overlayGraphics.lineStyle(4, 0x0000FF, 1); // Blue outline
+              overlayGraphics.beginFill(0x0000FF, 0.3); // Blue fill, 30% alpha
+              overlayGraphics.drawCircle(80, pixiApp.screen.height - 80, 50); // x, y, radius (bottom left)
+              overlayGraphics.endFill();
+         }
+
+         function clearShapeOverlay() {
+             if (overlayGraphics) {
+                 overlayGraphics.clear(); // Clear drawings within the Graphics object
+             }
+         }
+
+        // --- Audio Playback Functions ---
+        function playSfx() {
+            if (!audioContext || !sfxBuffer) {
+                 console.warn("AudioContext not ready or SFX not loaded.");
+                 return;
+            }
+             if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            // Create a new source node each time for playback
+            const source = audioContext.createBufferSource();
+            source.buffer = sfxBuffer;
+            source.connect(gainNodeSfx); // Connect to the SFX gain node (which goes to destination and output)
+            source.start(0); // Play immediately
+            console.log("Playing SFX");
+        }
+
+        function changeBgm() {
+             const selectedBgm = bgmSelect.value;
+             if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+             if (selectedBgm) {
+                 bgmAudioElement.src = selectedBgm;
+                 bgmAudioElement.load(); // Important to load the new source
+                 // Only play if recorder is active OR if user explicitly starts it later
+                 if (mediaRecorder && mediaRecorder.state === 'recording') {
+                     bgmAudioElement.play().catch(e => console.error("Error playing new BGM:", e));
+                 } else {
+                     // Don't auto-play if not recording, let user control it maybe?
+                      console.log("BGM changed, but not playing as recorder is not active.");
+                 }
+                 console.log("Changed BGM to:", selectedBgm);
+             } else {
+                 bgmAudioElement.pause();
+                 bgmAudioElement.src = ""; // Clear source
+                 console.log("Stopped BGM.");
+             }
+        }
+
+        // --- Start the App ---
+        window.onload = init;
+
+        // --- Cleanup (Optional but good practice) ---
+        window.onbeforeunload = () => {
+             // Stop streams
+             webcamStream?.getTracks().forEach(track => track.stop());
+             localStream?.getTracks().forEach(track => track.stop());
+             // Close audio context
+             audioContext?.close();
+             // Stop Pixi
+             pixiApp?.destroy(false, { children: true, texture: true, baseTexture: true }); // Clean up Pixi resources
+        };
+
+    </script>
+
+</body>
+</html>
