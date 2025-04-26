@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Pixi.js Recorder</title>
+    <title>WebRTC Pixi.js Synthesized Audio Recorder</title>
+    <!-- Use a slightly newer PixiJS version if compatible, or stick with 6.x -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.10/browser/pixi.min.js"></script>
     <style>
         body {
@@ -13,38 +14,119 @@
             align-items: center;
             padding: 20px;
             background-color: #f0f0f0;
+            margin: 0;
         }
-        #controls, #overlays, #audioControls {
-            margin: 15px 0;
-            padding: 10px;
-            border: 1px solid #ccc;
-            background-color: #fff;
-            border-radius: 5px;
+        .container { /* Added container for better structure */
+            max-width: 1200px;
+            width: 95%;
+            margin: 0 auto;
+        }
+        .video-container { /* Use styles from 2nd snippet */
+            position: relative;
+            margin-bottom: 20px;
+            width: 100%; /* Make video container responsive */
+            max-width: 640px; /* Limit max width */
+            margin-left: auto;
+            margin-right: auto;
+            aspect-ratio: 640 / 480; /* Maintain aspect ratio */
+            background-color: #000;
+        }
+        #webcamVideo { /* Hidden video element */
+            display: none;
+        }
+        #pixiCanvas { /* Use styles from 2nd snippet */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 1px solid black;
+            pointer-events: auto; /* Enable pointer events for drag */
+        }
+        .controls, .toolbar { /* Use styles from 2nd snippet */
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+             max-width: 800px; /* Limit control width */
+            margin-left: auto;
+            margin-right: auto;
+        }
+         .toolbar {
+            flex-direction: column; /* Stack toolbar sections */
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .toolbar-section {
+            margin-bottom: 15px;
+            width: 100%;
+        }
+         h1, h2 { /* Use styles from 2nd snippet */
+             text-align: center;
+             color: #333;
+             margin-top: 0;
+         }
+         h2 { font-size: 18px; text-align: left; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px;}
+         button { /* Use styles from 2nd snippet */
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s ease;
+        }
+        button:hover:not(:disabled) {
+            background-color: #3367d6;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .text-controls, .shape-controls, .audio-controls { /* Use styles from 2nd snippet */
+            display: flex;
+            flex-wrap: wrap;
             align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
         }
-        #pixiCanvas {
-            border: 1px solid black;
-            background-color: #333; /* Placeholder background */
-            margin-top: 10px;
-            max-width: 100%; /* Make canvas responsive */
-            height: auto; /* Maintain aspect ratio */
+        input[type="text"], input[type="number"], select { /* Use styles from 2nd snippet */
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
-        video { /* Hidden video element */
-            display: none;
-        }
-        button {
-            padding: 8px 15px;
+         input[type="color"].color-picker { /* Use styles from 2nd snippet */
+            width: 40px;
+            height: 36px; /* Match padding of others */
+            padding: 2px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             cursor: pointer;
         }
-        input[type="text"], input[type="color"], select {
-            padding: 8px;
-        }
-        label {
+        .shape-btn { /* Use styles from 2nd snippet */
+            width: 40px;
+            height: 40px;
             margin-right: 5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0; /* Remove default padding */
+            background-color: #e0e0e0;
+            color: #333;
         }
+         .shape-btn:hover:not(:disabled) { background-color: #bdbdbd; }
+         .shape-preview { font-size: 18px; }
+
+        .sfx-button { /* Use styles from 2nd snippet */
+            background-color: #ff7043;
+            min-width: 100px; /* Ensure consistent width */
+        }
+        .sfx-button:hover:not(:disabled) { background-color: #f4511e; }
+
         #downloadLink {
             display: none;
             margin-top: 15px;
@@ -53,106 +135,152 @@
             color: white;
             text-decoration: none;
             border-radius: 5px;
+            text-align: center;
         }
         .recording {
             background-color: #f44336 !important;
             color: white;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+             0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
+             70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+             100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <h1>WebRTC + Pixi.js Synthesized Audio Recorder</h1>
 
-    <h1>WebRTC + Pixi.js Recorder</h1>
+        <!-- Hidden video element to render the webcam stream -->
+        <video id="webcamVideo" playsinline autoplay muted></video>
 
-    <!-- Hidden video element to render the webcam stream -->
-    <video id="webcamVideo" playsinline autoplay muted></video>
+        <!-- Video Container -->
+        <div class="video-container">
+             <!-- Canvas for Pixi.js rendering (this is what gets recorded) -->
+            <canvas id="pixiCanvas"></canvas>
+        </div>
 
-    <!-- Canvas for Pixi.js rendering (this is what gets recorded) -->
-    <canvas id="pixiCanvas"></canvas>
 
-    <!-- Recording Controls -->
-    <div id="controls">
-        <button id="startRecBtn">Start Recording</button>
-        <button id="stopRecBtn" disabled>Stop Recording</button>
+        <!-- Recording Controls -->
+        <div class="controls">
+            <button id="startCamBtn">Start Camera</button> <!-- Renamed for clarity -->
+            <button id="startRecBtn" disabled>Start Recording</button>
+            <button id="stopRecBtn" disabled>Stop Recording</button>
+            <a id="downloadLink" download="recording.webm">Download Recording</a>
+        </div>
+
+         <!-- Toolbar -->
+        <div class="toolbar">
+            <!-- Text Controls -->
+            <div class="toolbar-section">
+                <h2>Text</h2>
+                <div class="text-controls">
+                    <input type="text" id="textInput" placeholder="Enter text">
+                    <input type="number" id="textSize" min="12" max="72" value="24" placeholder="Size">
+                    <input type="color" id="textColor" class="color-picker" value="#FFFF00"> <!-- Default yellow -->
+                    <button id="addTextBtn">Add Text</button>
+                    <button id="clearGraphicsBtn">Clear All Graphics</button> <!-- Combined clear button -->
+                </div>
+            </div>
+
+             <!-- Shape Controls -->
+            <div class="toolbar-section">
+                <h2>Shapes</h2>
+                <div class="shape-controls">
+                     <button class="shape-btn" data-shape="circle"><span class="shape-preview">⚪</span></button>
+                    <button class="shape-btn" data-shape="rectangle"><span class="shape-preview">▢</span></button>
+                    <button class="shape-btn" data-shape="triangle"><span class="shape-preview">△</span></button>
+                    <button class="shape-btn" data-shape="star"><span class="shape-preview">★</span></button>
+                    <input type="color" id="shapeColor" class="color-picker" value="#ff0000"> <!-- Default red -->
+                    <input type="number" id="shapeSize" min="10" max="200" value="50" placeholder="Size">
+                </div>
+            </div>
+
+             <!-- Audio Controls -->
+            <div class="toolbar-section">
+                <h2>Audio</h2>
+                 <!-- SFX -->
+                <div class="audio-controls">
+                     <label>SFX:</label>
+                     <button class="sfx-button" data-sfx="applause">👏 Applause</button>
+                     <button class="sfx-button" data-sfx="drumroll">🥁 Drumroll</button>
+                     <button class="sfx-button" data-sfx="bell">🔔 Bell</button>
+                     <button class="sfx-button" data-sfx="laugh">😄 Laugh</button>
+                 </div>
+                 <!-- BGM -->
+                 <div class="audio-controls">
+                    <label for="bgmSelect">BGM:</label>
+                    <select id="bgmSelect">
+                        <option value="none">None</option>
+                        <option value="upbeat">Upbeat</option>
+                        <option value="relaxed">Relaxed</option>
+                        <option value="dramatic">Dramatic</option>
+                    </select>
+                    <label for="bgmVolume">Volume:</label>
+                    <input type="range" id="bgmVolume" min="0" max="1" step="0.05" value="0.3"> <!-- Lower default volume -->
+                 </div>
+            </div>
+        </div>
     </div>
-
-    <!-- Overlay Controls -->
-    <div id="overlays">
-        <label for="textInput">Text:</label>
-        <input type="text" id="textInput" placeholder="Enter overlay text">
-        <input type="color" id="textColor" value="#FFFF00">
-        <button id="addTextBtn">Add Text</button>
-        <button id="clearTextBtn">Clear Text</button>
-        <hr style="width:100%; border: none; border-top: 1px solid #eee;">
-        <button id="addShapeBtn">Add Shape</button>
-        <button id="clearShapesBtn">Clear Shapes</button>
-    </div>
-
-     <!-- Audio Controls -->
-    <div id="audioControls">
-         <label for="bgmSelect">BGM:</label>
-         <select id="bgmSelect">
-             <option value="">None</option>
-             <option value="bgm1.mp3">Calm BGM</option> <!-- Replace with your actual BGM file -->
-             <option value="bgm2.mp3">Upbeat BGM</option> <!-- Replace with your actual BGM file -->
-         </select>
-         <button id="playSfxBtn">Play SFX</button> <!-- Replace with your actual SFX file -->
-    </div>
-
-    <!-- Download Link -->
-    <a id="downloadLink" download="recording.webm">Download Recording</a>
-
-    <!-- BGM Audio Element -->
-    <audio id="bgmAudio" loop></audio>
 
     <script>
         // --- Configuration ---
         const CANVAS_WIDTH = 640;
         const CANVAS_HEIGHT = 480;
-        const SFX_SRC = 'sfx.mp3'; // IMPORTANT: Replace with your SFX file URL/path
-        // IMPORTANT: Ensure BGM files in the dropdown exist and are accessible (same server or CORS)
 
         // --- Global Variables ---
         let pixiApp;
         let webcamVideoElement = document.getElementById('webcamVideo');
         let pixiCanvasElement = document.getElementById('pixiCanvas');
         let videoSprite;
-        let overlayText = null;
-        let overlayGraphics = null; // For shapes
+        let graphicsContainer; // Container for all draggable graphics (text, shapes)
 
         let mediaRecorder;
         let recordedChunks = [];
-        let localStream = null; // Combined stream for recorder
+        let combinedStream = null; // Combined stream for recorder
         let webcamStream = null; // Raw stream from webcam/mic
 
         // Audio related
         let audioContext;
         let micSourceNode;
-        let sfxSourceNode;
-        let bgmSourceNode;
-        let gainNodeMic;
-        let gainNodeSfx;
-        let gainNodeBgm;
+        let sfxGainNode; // Single GainNode for all SFX
+        let bgmGainNode; // Single GainNode for all BGM
+        let micGainNode; // GainNode for Mic input
         let destinationNode; // To capture mixed audio
-        let sfxBuffer = null;
-        let bgmAudioElement = document.getElementById('bgmAudio');
-
+        let sfxSounds = {}; // Object to hold SFX generation functions
+        let bgmSounds = {}; // Object to hold BGM generation functions
+        let currentBgmInterval = null; // To store the BGM interval timer
+        let bgmOscillators = []; // To track BGM oscillators for stopping
 
         // UI Elements
+        const startCamBtn = document.getElementById('startCamBtn');
         const startRecBtn = document.getElementById('startRecBtn');
         const stopRecBtn = document.getElementById('stopRecBtn');
-        const addTextBtn = document.getElementById('addTextBtn');
-        const clearTextBtn = document.getElementById('clearTextBtn');
-        const textInput = document.getElementById('textInput');
-        const textColorInput = document.getElementById('textColor');
-        const addShapeBtn = document.getElementById('addShapeBtn');
-        const clearShapesBtn = document.getElementById('clearShapesBtn');
-        const playSfxBtn = document.getElementById('playSfxBtn');
-        const bgmSelect = document.getElementById('bgmSelect');
         const downloadLink = document.getElementById('downloadLink');
+        // Text
+        const addTextBtn = document.getElementById('addTextBtn');
+        const textInput = document.getElementById('textInput');
+        const textSize = document.getElementById('textSize');
+        const textColor = document.getElementById('textColor');
+        // Shapes
+        const shapeButtons = document.querySelectorAll('.shape-btn');
+        const shapeColor = document.getElementById('shapeColor');
+        const shapeSize = document.getElementById('shapeSize');
+        const clearGraphicsBtn = document.getElementById('clearGraphicsBtn');
+        // Audio
+        const sfxButtons = document.querySelectorAll('.sfx-button');
+        const bgmSelect = document.getElementById('bgmSelect');
+        const bgmVolume = document.getElementById('bgmVolume');
+
 
         // --- Initialization ---
-        async function init() {
+        async function initCamera() {
+            if (webcamStream) { // Already initialized
+                 console.log("Camera already initialized.");
+                 return;
+             }
             try {
                 // 1. Get Webcam/Microphone Access
                 webcamStream = await navigator.mediaDevices.getUserMedia({
@@ -160,57 +288,81 @@
                     audio: true
                 });
                 webcamVideoElement.srcObject = webcamStream;
-                webcamVideoElement.onloadedmetadata = () => {
-                    // Video dimensions might differ slightly from request
-                    console.log(`Actual video dimensions: ${webcamVideoElement.videoWidth}x${webcamVideoElement.videoHeight}`);
-                    // Adjust canvas size if needed, or keep requested size
-                    pixiCanvasElement.width = CANVAS_WIDTH; // Or webcamVideoElement.videoWidth;
-                    pixiCanvasElement.height = CANVAS_HEIGHT; // Or webcamVideoElement.videoHeight;
+                await webcamVideoElement.play(); // Ensure video plays for texture updates
 
-                    setupPixi();
+                console.log(`Requested: ${CANVAS_WIDTH}x${CANVAS_HEIGHT}, Got: ${webcamVideoElement.videoWidth}x${webcamVideoElement.videoHeight}`);
+
+                // Use actual video dimensions for Pixi for accuracy
+                const actualWidth = webcamVideoElement.videoWidth || CANVAS_WIDTH;
+                const actualHeight = webcamVideoElement.videoHeight || CANVAS_HEIGHT;
+
+                // Adjust container/canvas aspect ratio if needed
+                const videoContainer = document.querySelector('.video-container');
+                videoContainer.style.aspectRatio = `${actualWidth} / ${actualHeight}`;
+
+
+                if (!pixiApp) {
+                    setupPixi(actualWidth, actualHeight);
+                } else {
+                    // If Pixi already exists, resize it
+                    pixiApp.renderer.resize(actualWidth, actualHeight);
+                    videoSprite.width = actualWidth;
+                    videoSprite.height = actualHeight;
+                }
+
+                if (!audioContext) {
                     setupAudio();
-                    setupEventListeners();
-                    console.log("Initialization complete. Ready to record.");
-                };
+                }
+
+                setupEventListeners(); // Ensure listeners are set up after init
+                startCamBtn.disabled = true;
+                startRecBtn.disabled = false;
+                console.log("Initialization complete. Ready to record.");
+
 
             } catch (err) {
                 console.error("Error accessing media devices.", err);
                 alert(`Error accessing media devices: ${err.name}\n${err.message}\nPlease ensure you have a webcam/microphone and grant permission.`);
+                startCamBtn.disabled = false;
+                startRecBtn.disabled = true;
             }
         }
 
         // --- Pixi.js Setup ---
-        function setupPixi() {
+        function setupPixi(width, height) {
             pixiApp = new PIXI.Application({
                 view: pixiCanvasElement,
-                width: pixiCanvasElement.width,
-                height: pixiCanvasElement.height,
+                width: width,
+                height: height,
                 backgroundColor: 0x1099bb, // Fallback background
                 resolution: window.devicePixelRatio || 1,
                 autoDensity: true,
+                antialias: true, // Smoother graphics
+                transparent: true // Make background transparent
             });
 
             // Create a sprite for the video
             const videoTexture = PIXI.Texture.from(webcamVideoElement);
             videoSprite = new PIXI.Sprite(videoTexture);
-            videoSprite.width = pixiApp.screen.width;
-            videoSprite.height = pixiApp.screen.height;
+            videoSprite.width = width;
+            videoSprite.height = height;
             pixiApp.stage.addChild(videoSprite);
 
-             // Container for overlays so they appear above the video
-            const overlayContainer = new PIXI.Container();
-            pixiApp.stage.addChild(overlayContainer);
+             // Container for overlays (text, shapes) so they appear above the video
+             graphicsContainer = new PIXI.Container();
+             graphicsContainer.interactive = true; // Needed for children drag events
+             pixiApp.stage.addChild(graphicsContainer);
 
-            // Initialize graphics object for shapes
-            overlayGraphics = new PIXI.Graphics();
-            overlayContainer.addChild(overlayGraphics);
 
-            // Ticker to update video texture and render
+            // Ticker to update video texture (important!)
             pixiApp.ticker.add(() => {
-                // IMPORTANT: Update the video texture *before* rendering overlays
-                videoTexture.update();
-                // Pixi automatically renders the stage
+                if (webcamVideoElement.readyState >= webcamVideoElement.HAVE_CURRENT_DATA) {
+                     videoTexture.update();
+                }
             });
+
+             // Add drag listeners to the stage/container IF NEEDED globally
+             // Or handle drag on individual elements as implemented later
         }
 
         // --- Web Audio API Setup ---
@@ -221,113 +373,242 @@
             destinationNode = audioContext.createMediaStreamDestination();
 
             // 1. Microphone Source
-            if (webcamStream.getAudioTracks().length > 0) {
+            if (webcamStream && webcamStream.getAudioTracks().length > 0) {
                 micSourceNode = audioContext.createMediaStreamSource(webcamStream);
-                gainNodeMic = audioContext.createGain();
-                gainNodeMic.gain.value = 1.0; // Adjust mic volume if needed
-                micSourceNode.connect(gainNodeMic).connect(destinationNode);
-                console.log("Microphone connected to audio graph.");
+                micGainNode = audioContext.createGain();
+                micGainNode.gain.value = 1.0; // Adjust mic volume if needed (0 to 1+)
+                micSourceNode.connect(micGainNode);
+                // Connect Mic to destination (for recording) AND output (for live monitoring)
+                micGainNode.connect(destinationNode);
+                micGainNode.connect(audioContext.destination);
+                console.log("Microphone connected.");
             } else {
-                 console.warn("No audio track found in webcam stream.");
+                 console.warn("No audio track found in webcam stream. Mic won't be recorded.");
             }
 
-            // 2. BGM Source (using HTMLAudioElement for easier control)
-            bgmSourceNode = audioContext.createMediaElementSource(bgmAudioElement);
-            gainNodeBgm = audioContext.createGain();
-            gainNodeBgm.gain.value = 0.5; // Default BGM volume lower
-            bgmSourceNode.connect(gainNodeBgm).connect(destinationNode);
-            // Also connect BGM to main output for preview (optional)
-             bgmSourceNode.connect(gainNodeBgm).connect(audioContext.destination);
-            console.log("BGM element connected.");
+            // 2. SFX Setup
+            sfxGainNode = audioContext.createGain();
+            sfxGainNode.gain.value = 0.6; // Default SFX volume
+             // Connect SFX gain to destination (for recording) AND output (for live playback)
+            sfxGainNode.connect(destinationNode);
+            sfxGainNode.connect(audioContext.destination);
+            initSfxSounds(); // Define SFX generation functions
+            console.log("SFX gain node connected.");
 
 
-            // 3. SFX Source (pre-load)
-            gainNodeSfx = audioContext.createGain();
-            gainNodeSfx.gain.value = 0.8; // SFX volume
-            gainNodeSfx.connect(destinationNode);
-            // Also connect SFX to main output for preview
-            gainNodeSfx.connect(audioContext.destination);
-            loadSound(SFX_SRC); // Start loading SFX
+            // 3. BGM Setup
+            bgmGainNode = audioContext.createGain();
+            bgmGainNode.gain.value = parseFloat(bgmVolume.value); // Initial BGM volume from slider
+             // Connect BGM gain to destination (for recording) AND output (for live playback)
+            bgmGainNode.connect(destinationNode);
+            bgmGainNode.connect(audioContext.destination);
+            initBgmSounds(); // Define BGM generation functions
+            console.log("BGM gain node connected.");
         }
 
-        // --- Audio Loading ---
-        async function loadSound(url) {
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status} for ${url}`);
-                }
-                const arrayBuffer = await response.arrayBuffer();
-                sfxBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                console.log("SFX loaded:", url);
-                playSfxBtn.disabled = false; // Enable button once loaded
-            } catch (error) {
-                console.error('Error loading sound:', url, error);
-                playSfxBtn.disabled = true;
-                 playSfxBtn.title = `Could not load ${url}. Check path and CORS policy.`;
-            }
+        // --- Synthesized Audio Generation ---
+
+        function initSfxSounds() {
+             const sfxData = {
+                 applause: [0.3, 0.7, 0.2, 0.4, 0.6, 0.8, 0.4, 0.6, 0.2, 0.4],
+                 drumroll: [0.2, 0.6, 0.2, 0.6, 0.2, 0.6, 0.2, 0.8, 0.9, 1.0],
+                 bell: [1.0, 0.8, 0.6, 0.4, 0.2, 0.1, 0.05, 0],
+                 laugh: [0.3, 0.5, 0.7, 0.5, 0.3, 0.5, 0.7, 0.5, 0.3]
+             };
+
+             Object.keys(sfxData).forEach(name => {
+                 sfxSounds[name] = () => {
+                     if (!audioContext) return;
+                     if (audioContext.state === 'suspended') { audioContext.resume(); }
+                     const now = audioContext.currentTime;
+
+                     const oscillator = audioContext.createOscillator();
+                     const gainNode = audioContext.createGain(); // Use a temporary gain for envelope
+
+                     oscillator.type = name === 'bell' ? 'sine' : (name === 'drumroll' ? 'noise' : 'square'); // Use noise for drumroll
+                     if (oscillator.type !== 'noise') {
+                         oscillator.frequency.value = name === 'bell' ? 880 : (name === 'laugh' ? 440 : 110); // Different base frequencies
+                     }
+
+                     oscillator.connect(gainNode);
+                     // Connect this specific sound's gain node to the MAIN SFX gain node
+                     gainNode.connect(sfxGainNode);
+
+                     oscillator.start(now);
+
+                     // Apply gain envelope
+                     const duration = name === 'drumroll' ? 0.05 : 0.1;
+                     const pattern = sfxData[name];
+                     gainNode.gain.setValueAtTime(0, now); // Start silent
+                     pattern.forEach((value, i) => {
+                         gainNode.gain.linearRampToValueAtTime(value * 0.5, now + (i + 0.5) * duration); // Target volume * 0.5 for headroom
+                     });
+                      gainNode.gain.setValueAtTime(pattern[pattern.length - 1] * 0.5, now + pattern.length * duration); // Hold last value briefly
+                     gainNode.gain.linearRampToValueAtTime(0, now + pattern.length * duration + 0.1); // Fade out
+
+                     oscillator.stop(now + pattern.length * duration + 0.15); // Stop after fade out
+                 };
+             });
+        }
+
+
+        function initBgmSounds() {
+             const bgmPatterns = {
+                 upbeat: { notes: [440, 0, 493.88, 0, 523.25, 587.33, 659.25, 523.25], duration: 0.15, type: 'square' },
+                 relaxed: { notes: [261.63, 0, 329.63, 0, 392, 0, 329.63, 0], duration: 0.4, type: 'sine' },
+                 dramatic: { notes: [130.81, 146.83, 0, 130.81, 0, 98, 123.47, 98], duration: 0.3, type: 'sawtooth' }
+             };
+             // Add '0' for rests/pauses to make patterns more distinct
+
+             Object.keys(bgmPatterns).forEach(name => {
+                 const pattern = bgmPatterns[name];
+                 bgmSounds[name] = () => {
+                     stopCurrentBgm(); // Stop previous BGM first
+                      if (!audioContext) return;
+                     if (audioContext.state === 'suspended') { audioContext.resume(); }
+
+                     let noteIndex = 0;
+                     bgmOscillators = []; // Reset tracked oscillators
+
+                     const playBgmNotes = () => {
+                         const now = audioContext.currentTime;
+                         const noteFrequency = pattern.notes[noteIndex % pattern.notes.length];
+
+                         if (noteFrequency > 0) { // Only play if frequency is not 0 (rest)
+                             const osc = audioContext.createOscillator();
+                             const gain = audioContext.createGain(); // Gain for this note's envelope
+
+                             osc.type = pattern.type;
+                             osc.frequency.setValueAtTime(noteFrequency, now);
+                             gain.gain.setValueAtTime(0, now);
+                             gain.gain.linearRampToValueAtTime(1.0, now + 0.02); // Quick fade in
+                              gain.gain.setValueAtTime(1.0, now + pattern.duration * 0.8); // Hold
+                             gain.gain.linearRampToValueAtTime(0, now + pattern.duration); // Fade out
+
+                             osc.connect(gain);
+                             // Connect note's gain to the MAIN BGM gain node
+                             gain.connect(bgmGainNode);
+
+                             osc.start(now);
+                             osc.stop(now + pattern.duration);
+                             bgmOscillators.push(osc); // Track oscillator
+                         }
+
+                         noteIndex++;
+                     };
+
+                     playBgmNotes(); // Play the first note immediately
+                     currentBgmInterval = setInterval(playBgmNotes, pattern.duration * 1000);
+                     console.log(`Started BGM: ${name}`);
+                 };
+             });
+        }
+
+        function stopCurrentBgm() {
+             if (currentBgmInterval) {
+                 clearInterval(currentBgmInterval);
+                 currentBgmInterval = null;
+                 console.log("Stopped BGM interval.");
+             }
+             // Stop any lingering oscillators from the previous BGM
+             bgmOscillators.forEach(osc => {
+                 try { osc.stop(audioContext.currentTime); } catch(e) { /* Ignore errors if already stopped */ }
+             });
+             bgmOscillators = [];
         }
 
         // --- Event Listeners ---
         function setupEventListeners() {
+            startCamBtn.onclick = initCamera; // Use initCamera now
             startRecBtn.onclick = startRecording;
             stopRecBtn.onclick = stopRecording;
             addTextBtn.onclick = addTextOverlay;
-            clearTextBtn.onclick = clearTextOverlay;
-            addShapeBtn.onclick = addShapeOverlay;
-            clearShapesBtn.onclick = clearShapeOverlay;
-            playSfxBtn.onclick = playSfx;
-            bgmSelect.onchange = changeBgm;
+            clearGraphicsBtn.onclick = clearAllGraphics; // Updated clear button
 
-             // Disable SFX button initially until loaded
-             playSfxBtn.disabled = true;
-             playSfxBtn.title = "Loading SFX...";
+            shapeButtons.forEach(button => {
+                 button.addEventListener('click', addShapeOverlay);
+             });
+
+             sfxButtons.forEach(button => {
+                 button.addEventListener('click', (e) => {
+                     const sfxType = e.currentTarget.getAttribute('data-sfx');
+                     if (sfxSounds[sfxType]) {
+                         sfxSounds[sfxType](); // Play the synthesized sound
+                     }
+                 });
+             });
+
+            bgmSelect.onchange = changeBgm;
+            bgmVolume.oninput = updateBgmVolume; // Use oninput for smoother updates
+
+            // Initial state
+            startRecBtn.disabled = true;
+            stopRecBtn.disabled = true;
+            downloadLink.style.display = 'none';
         }
 
         // --- Recording Logic ---
         function startRecording() {
             if (!webcamStream || !pixiApp || !audioContext) {
-                alert("Initialization not complete or failed.");
+                alert("Initialization not complete or failed. Please start camera first.");
                 return;
             }
+             if (mediaRecorder && mediaRecorder.state === "recording") {
+                 console.warn("Already recording.");
+                 return;
+             }
+             if (audioContext.state === 'suspended') { audioContext.resume(); } // Ensure audio context is running
 
             recordedChunks = []; // Reset chunks
             downloadLink.style.display = 'none'; // Hide previous link
 
             // 1. Get Video Stream from Canvas
+            // Make sure Pixi updates happen before capturing frame
             const canvasStream = pixiCanvasElement.captureStream(30); // 30 FPS
             const canvasVideoTrack = canvasStream.getVideoTracks()[0];
 
             // 2. Get Mixed Audio Stream from Destination Node
-            const mixedAudioTrack = destinationNode.stream.getAudioTracks()[0];
+            const mixedAudioStream = destinationNode.stream;
+            const mixedAudioTrack = mixedAudioStream.getAudioTracks()[0];
 
             // 3. Combine Streams
-            // Ensure we have both tracks before proceeding
             if (!canvasVideoTrack) {
                  alert("Could not capture video track from canvas.");
                  return;
             }
-             if (!mixedAudioTrack) {
-                 console.warn("No mixed audio track available. Recording video only.");
-                 localStream = new MediaStream([canvasVideoTrack]);
+
+            combinedStream = new MediaStream();
+            combinedStream.addTrack(canvasVideoTrack);
+            if (mixedAudioTrack) {
+                 combinedStream.addTrack(mixedAudioTrack);
+                 console.log("Recording with video and mixed audio.");
             } else {
-                localStream = new MediaStream([canvasVideoTrack, mixedAudioTrack]);
+                console.warn("No mixed audio track available (mic/sfx/bgm node likely not setup). Recording video only.");
+                // Optionally prevent recording if audio is expected?
             }
 
 
             // 4. Create MediaRecorder
              let options = { mimeType: 'video/webm;codecs=vp9,opus' };
              if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                 console.warn(`${options.mimeType} is not supported, trying default.`);
-                 options = { mimeType: 'video/webm' }; // Fallback
-                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                     console.warn(`${options.mimeType} is not supported either.`);
-                     options = { mimeType: '' }; // Let the browser decide
-                 }
+                 console.warn(`${options.mimeType} is not supported, trying video/webm;codecs=vp8,opus`);
+                 options = { mimeType: 'video/webm;codecs=vp8,opus' };
+                  if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                     console.warn(`${options.mimeType} is not supported, trying video/webm`);
+                     options = { mimeType: 'video/webm' };
+                     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                         console.error(`video/webm is not supported. Cannot record.`);
+                          alert("Your browser does not support WebM recording.");
+                         return;
+                     }
+                  }
              }
+             // Add audioBitsPerSecond for potentially higher quality audio recording
+             // options.audioBitsPerSecond = 128000; // 128 kbps
+
 
             try {
-                mediaRecorder = new MediaRecorder(localStream, options);
+                mediaRecorder = new MediaRecorder(combinedStream, options);
             } catch (e) {
                  console.error("Exception while creating MediaRecorder:", e);
                  alert(`Error creating MediaRecorder: ${e.message}\nMIME type used: ${options.mimeType}`);
@@ -335,7 +616,7 @@
             }
 
 
-            console.log("Created MediaRecorder with options:", options);
+            console.log("Created MediaRecorder with options:", mediaRecorder.mimeType);
 
 
             mediaRecorder.ondataavailable = handleDataAvailable;
@@ -346,7 +627,7 @@
                  stopRecording(); // Attempt to stop cleanly
             };
 
-            mediaRecorder.start();
+            mediaRecorder.start(1000); // Record in chunks of 1 second
             console.log("MediaRecorder started", mediaRecorder);
 
             // Update UI
@@ -355,174 +636,253 @@
             startRecBtn.classList.add('recording');
             startRecBtn.textContent = 'Recording...';
 
-            // Ensure BGM is playing if selected
-            if (bgmAudioElement.src && bgmAudioElement.paused) {
-                 bgmAudioElement.play().catch(e => console.error("Error auto-playing BGM:", e));
-            }
+            // Ensure BGM starts if selected
+            changeBgm(); // Trigger BGM check/start based on current selection
         }
 
         function handleDataAvailable(event) {
             if (event.data.size > 0) {
                 recordedChunks.push(event.data);
-                 console.log("Received data chunk size:", event.data.size);
-            } else {
-                console.log("Received empty data chunk.");
+                // console.log("Received data chunk size:", event.data.size);
             }
         }
 
         function stopRecording() {
             if (mediaRecorder && mediaRecorder.state !== "inactive") {
-                mediaRecorder.stop();
+                mediaRecorder.stop(); // This triggers the onstop event
                 console.log("MediaRecorder stopping...");
             } else {
                  console.log("MediaRecorder not active or already stopped.");
             }
 
-             // Stop BGM playback when recording stops
-            bgmAudioElement.pause();
-            // bgmAudioElement.currentTime = 0; // Optional: rewind
+            stopCurrentBgm(); // Stop BGM when recording stops
 
             // Update UI
-            startRecBtn.disabled = false;
+            startRecBtn.disabled = false; // Enable start button again
             stopRecBtn.disabled = true;
             startRecBtn.classList.remove('recording');
             startRecBtn.textContent = 'Start Recording';
         }
 
         function handleStop() {
-            console.log("MediaRecorder stopped.");
+            console.log("MediaRecorder stopped. Finalizing recording.");
              if (recordedChunks.length === 0) {
                  console.warn("No data chunks recorded. Cannot create blob.");
-                 alert("Recording failed or produced no data.");
+                 alert("Recording failed or produced no data. Check console for errors.");
                  return;
              }
 
             const blob = new Blob(recordedChunks, {
-                type: mediaRecorder.mimeType || 'video/webm' // Use recorded MIME type
+                type: mediaRecorder.mimeType || 'video/webm'
             });
             const url = URL.createObjectURL(blob);
             downloadLink.href = url;
-            downloadLink.download = `recording-${Date.now()}.webm`; // Unique filename
-            downloadLink.style.display = 'block';
-            console.log("Recording available for download:", url);
+            downloadLink.download = `recording-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.webm`; // Unique filename
+            downloadLink.style.display = 'inline-block'; // Show download link
+            console.log("Recording available for download:", url, `Size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
 
-            // Optional: Clean up the combined stream's tracks?
-            // localStream?.getTracks().forEach(track => track.stop());
-            // Be careful with this if you want to record again without refreshing
+            // Clean up combined stream tracks? (Optional - allows immediate re-recording)
+            // combinedStream?.getTracks().forEach(track => track.stop());
+            // combinedStream = null;
         }
 
         // --- Overlay Functions ---
-        function addTextOverlay() {
-            clearTextOverlay(); // Remove previous text first
 
-            const text = textInput.value || "Default Text";
-            const color = textColorInput.value;
+         // Drag and drop functionality (modified from second snippet)
+         let dragTarget = null;
 
-            overlayText = new PIXI.Text(text, {
-                fontFamily: 'Arial',
-                fontSize: 36,
-                fill: color,
-                stroke: '#000000',
-                strokeThickness: 4,
-                align: 'center',
-            });
-            overlayText.anchor.set(0.5); // Center the text
-            overlayText.x = pixiApp.screen.width / 2;
-            overlayText.y = 50; // Position near top-center
-
-             // Add to the overlay container (which is already on top of the video)
-            pixiApp.stage.getChildAt(1).addChild(overlayText); // Assuming container is index 1
-        }
-
-        function clearTextOverlay() {
-            if (overlayText) {
-                pixiApp.stage.getChildAt(1).removeChild(overlayText);
-                overlayText.destroy(); // Clean up Pixi object
-                overlayText = null;
-            }
-        }
-
-         function addShapeOverlay() {
-             // Clear previous shapes for simplicity in this example
-             clearShapeOverlay();
-
-             // Draw a simple semi-transparent red rectangle
-             overlayGraphics.beginFill(0xFF0000, 0.5); // Red, 50% alpha
-             overlayGraphics.drawRect(
-                 pixiApp.screen.width - 160, // x position (top right)
-                 pixiApp.screen.height - 110, // y position (top right)
-                 150, // width
-                 100  // height
-             );
-             overlayGraphics.endFill();
-
-              // Draw a blue circle
-              overlayGraphics.lineStyle(4, 0x0000FF, 1); // Blue outline
-              overlayGraphics.beginFill(0x0000FF, 0.3); // Blue fill, 30% alpha
-              overlayGraphics.drawCircle(80, pixiApp.screen.height - 80, 50); // x, y, radius (bottom left)
-              overlayGraphics.endFill();
+         function onDragStart(event) {
+             // Store a reference to the data
+             // The reason for this is because of multitouch
+             // we want to track the movement of this particular touch
+             // this.data = event.data; // Pixi v6/7 might use event directly
+             this.alpha = 0.7;
+             this.dragging = true;
+             dragTarget = this; // Keep track of the dragged item
+             // Bring element to top
+             const parent = this.parent;
+             parent.removeChild(this);
+             parent.addChild(this);
+             event.stopPropagation(); // Prevent stage drag if overlapping
          }
 
-         function clearShapeOverlay() {
-             if (overlayGraphics) {
-                 overlayGraphics.clear(); // Clear drawings within the Graphics object
+         function onDragEnd() {
+             if (this.dragging) {
+                 this.alpha = 1;
+                 this.dragging = false;
+                 // set the interaction data to null
+                 // this.data = null; // Pixi v6/7 might use event directly
+                 dragTarget = null;
              }
          }
 
-        // --- Audio Playback Functions ---
-        function playSfx() {
-            if (!audioContext || !sfxBuffer) {
-                 console.warn("AudioContext not ready or SFX not loaded.");
-                 return;
-            }
-             if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
+         function onDragMove(event) {
+             if (this.dragging) {
+                 const newPosition = event.data.getLocalPosition(this.parent);
+                 this.x = newPosition.x;
+                 this.y = newPosition.y;
+             }
+         }
 
-            // Create a new source node each time for playback
-            const source = audioContext.createBufferSource();
-            source.buffer = sfxBuffer;
-            source.connect(gainNodeSfx); // Connect to the SFX gain node (which goes to destination and output)
-            source.start(0); // Play immediately
-            console.log("Playing SFX");
+
+        function addTextOverlay() {
+            if (!pixiApp || !textInput.value.trim()) return;
+
+            const textStyle = new PIXI.TextStyle({
+                 fontFamily: 'Arial',
+                 fontSize: parseInt(textSize.value) || 24,
+                 fill: textColor.value || "#FFFF00",
+                 stroke: '#000000',
+                 strokeThickness: 4,
+                 dropShadow: true,
+                 dropShadowColor: '#000000',
+                 dropShadowBlur: 4,
+                 dropShadowDistance: 2,
+                 wordWrap: true, // Enable word wrap
+                 wordWrapWidth: pixiApp.screen.width * 0.8 // Wrap text if it gets too wide
+            });
+
+            const text = new PIXI.Text(textInput.value, textStyle);
+            text.anchor.set(0.5); // Center the text origin
+            text.x = pixiApp.screen.width / 2;
+            text.y = 60; // Position near top-center
+
+            // Make text draggable
+            text.interactive = true; // Pixi v6/7 use interactive
+            text.buttonMode = true; // Show pointer cursor on hover
+            text.cursor = 'move';
+
+            text
+                .on('pointerdown', onDragStart)
+                .on('pointerup', onDragEnd)
+                .on('pointerupoutside', onDragEnd)
+                .on('pointermove', onDragMove);
+
+            graphicsContainer.addChild(text); // Add to the dedicated container
+            // textInput.value = ''; // Optional: clear input after adding
         }
 
+
+        function addShapeOverlay(event) {
+             if (!pixiApp) return;
+
+             const button = event.currentTarget;
+             const shapeType = button.getAttribute('data-shape');
+             const size = parseInt(shapeSize.value) || 50;
+             const color = parseInt(shapeColor.value.replace('#', '0x')) || 0xff0000;
+
+             let shape = new PIXI.Graphics();
+             shape.beginFill(color, 0.8); // Slightly transparent fill
+             shape.lineStyle(2, 0x000000, 0.8); // Add a subtle black outline
+
+             switch (shapeType) {
+                 case 'circle':
+                     shape.drawCircle(0, 0, size / 2);
+                     break;
+                 case 'rectangle':
+                     shape.drawRect(-size/2, -size/2, size, size);
+                     break;
+                 case 'triangle':
+                     shape.moveTo(0, -size/2);
+                     shape.lineTo(size/2, size/2);
+                     shape.lineTo(-size/2, size/2);
+                     shape.closePath();
+                     break;
+                 case 'star':
+                     const outerRadius = size / 2;
+                     const innerRadius = size / 4;
+                     const points = 5;
+                     shape.drawStar(0, 0, points, outerRadius, innerRadius, 0); // Use Pixi's drawStar
+                     break;
+                 default:
+                     shape = null; // Unknown shape
+             }
+
+             shape.endFill();
+
+             if (shape) {
+                 shape.x = Math.random() * (pixiApp.screen.width * 0.8) + pixiApp.screen.width * 0.1; // Random initial X
+                 shape.y = Math.random() * (pixiApp.screen.height * 0.6) + pixiApp.screen.height * 0.2; // Random initial Y
+
+                 // Make shape draggable
+                 shape.interactive = true;
+                 shape.buttonMode = true;
+                 shape.cursor = 'move';
+
+                 shape
+                     .on('pointerdown', onDragStart)
+                     .on('pointerup', onDragEnd)
+                     .on('pointerupoutside', onDragEnd)
+                     .on('pointermove', onDragMove);
+
+                 graphicsContainer.addChild(shape); // Add to the container
+             }
+        }
+
+        function clearAllGraphics() {
+            if (graphicsContainer) {
+                 // Remove all children from the container
+                 while(graphicsContainer.children.length > 0) {
+                     const child = graphicsContainer.removeChildAt(0);
+                     child.destroy({ children: true }); // Properly destroy the PIXI object and its children
+                 }
+                 console.log("Cleared all text and shapes.");
+            }
+        }
+
+        // --- Audio Control Functions ---
         function changeBgm() {
              const selectedBgm = bgmSelect.value;
-             if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
+             console.log("BGM selection changed to:", selectedBgm);
+             stopCurrentBgm(); // Stop any currently playing BGM first
 
-             if (selectedBgm) {
-                 bgmAudioElement.src = selectedBgm;
-                 bgmAudioElement.load(); // Important to load the new source
-                 // Only play if recorder is active OR if user explicitly starts it later
+             if (selectedBgm !== 'none' && bgmSounds[selectedBgm]) {
+                  if (audioContext.state === 'suspended') { audioContext.resume(); }
+                 // Start the new BGM generation loop IF recording is active
+                 // Or potentially allow preview even when not recording? (User choice)
+                 // For now, let's only auto-play if recording
                  if (mediaRecorder && mediaRecorder.state === 'recording') {
-                     bgmAudioElement.play().catch(e => console.error("Error playing new BGM:", e));
+                     bgmSounds[selectedBgm]();
                  } else {
-                     // Don't auto-play if not recording, let user control it maybe?
-                      console.log("BGM changed, but not playing as recorder is not active.");
+                      console.log("BGM selected, will start playing when recording starts.");
+                      // If you want preview without recording, uncomment the next line:
+                      // bgmSounds[selectedBgm]();
                  }
-                 console.log("Changed BGM to:", selectedBgm);
-             } else {
-                 bgmAudioElement.pause();
-                 bgmAudioElement.src = ""; // Clear source
-                 console.log("Stopped BGM.");
              }
+        }
+
+        function updateBgmVolume() {
+            if (bgmGainNode) {
+                 const volumeValue = parseFloat(bgmVolume.value);
+                 // Use setTargetAtTime for smoother volume changes
+                 bgmGainNode.gain.setTargetAtTime(volumeValue, audioContext.currentTime, 0.015);
+                 // console.log("BGM Volume set to:", volumeValue);
+            }
         }
 
         // --- Start the App ---
-        window.onload = init;
+        // Don't auto-init, wait for user to click "Start Camera"
+         document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners(); // Set up button listeners initially
+            console.log("DOM loaded. Ready for camera start.");
+        });
+
 
         // --- Cleanup (Optional but good practice) ---
         window.onbeforeunload = () => {
              // Stop streams
              webcamStream?.getTracks().forEach(track => track.stop());
-             localStream?.getTracks().forEach(track => track.stop());
+             combinedStream?.getTracks().forEach(track => track.stop());
+             // Stop recording if active
+             if (mediaRecorder && mediaRecorder.state === "recording") {
+                 mediaRecorder.stop();
+             }
+             // Stop BGM
+             stopCurrentBgm();
              // Close audio context
-             audioContext?.close();
+             audioContext?.close().catch(e => console.warn("Error closing AudioContext:", e));
              // Stop Pixi
-             pixiApp?.destroy(false, { children: true, texture: true, baseTexture: true }); // Clean up Pixi resources
+             pixiApp?.destroy(true, { children: true, texture: true, baseTexture: true }); // Full cleanup
         };
 
     </script>
