@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Platformer Builder</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+            color: white;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+            background: rgba(0,0,0,0.6);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 200px;
+        }
+        #ui button, #ui label, #ui select {
+            display: block;
+            margin-bottom: 5px;
+            padding: 6px 10px;
+            min-width: 120px;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+            cursor: pointer;
+            border: 1px solid #555;
+            background-color: #333;
+            color: white;
+        }
+        #ui button:hover {
+            background-color: #555;
+        }
+        #ui label {
+             padding: 3px;
+             margin-bottom: 2px;
+             text-align: left;
+             border: none;
+             background: none;
+             cursor: default;
+        }
+        #ui select {
+            cursor: pointer;
+        }
+        #ui hr {
+            border: none;
+            border-top: 1px solid #444;
+            margin: 8px 0;
+        }
+         #ui h4 {
+             margin-top: 10px;
+             margin-bottom: 5px;
+             text-align: center;
+             font-size: 0.9em;
+             color: #bbb;
+         }
+         #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            pointer-events: none;
+            display: none; /* Managed by setGameMode */
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 0.8em;
+            color: #ccc;
+            text-align: center;
+            background-color: rgba(0,0,0,0.3);
+            padding: 4px;
+            border-radius: 3px;
+        }
+         /* Style for when dragging camera in edit mode */
+         body.dragging {
+            cursor: grabbing !important;
+         }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h4>Mode</h4>
+        <button id="editModeBtn">Edit Mode</button>
+        <button id="playModeBtn">Play Mode</button>
+        <hr>
+        <h4>Players</h4>
+        <button id="addPlayerBtn">Add Player (Max 4)</button>
+        <button id="removePlayerBtn">Remove Player</button>
+        <hr>
+        <h4>Editor Tools (Edit Mode)</h4>
+         <label for="editToolSelect">Tool:</label>
+         <select id="editToolSelect">
+            <option value="add">Add Block</option>
+            <option value="remove">Remove Block</option>
+            <option value="addGoal">Add Goal</option>
+            <option value="addJumpPad">Add Jump Pad</option>
+         </select>
+         <button id="autoGenBtn">Auto Generate Level</button>
+         <button id="clearLevelBtn">Clear Level</button>
+         <hr>
+         <div id="status">Status: Initializing...</div>
+    </div>
+    <div id="viewportContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+     <div id="crosshair"></div>
+
+    <!-- Import Maps for ES Modules -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js",
+            "cannon-es-debugger": "https://unpkg.com/cannon-es-debugger@1.0.0/dist/cannon-es-debugger.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        // --- Import Libraries ---
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+        import CannonDebugger from 'cannon-es-debugger'; // Optional Debugger
+
+        // --- Global Variables & Constants ---
+
+        // Physics
+        let world;
+        let cannonDebugger; // Optional
+        let physicsMaterials = {}; // Store materials { ground, player, slippery, etc. }
+
+        // Graphics
+        let scene, renderer, clock, editorCamera; // <-- Added editorCamera
+        const CAMERA_FAR = 100;
+
+        // Game State
+        let players = []; // { id, mesh, body, camera, controls, viewport }
+        let levelBlocks = []; // { mesh, body, type }
+        let interactiveObjects = []; // { mesh, body?, type, updateFunc?, triggerFunc? }
+        let goalObject = null; // { mesh, body }
+        let gameMode = 'edit'; // 'edit', 'play'
+        let editModeTool = 'add'; // 'add', 'remove', 'addGoal', 'addJumpPad'
+
+        // Controls / Input State
+        const keyMap = {}; // Track pressed keys for all players
+        const editorControls = { // <-- Added editor controls state
+             forward: false, backward: false, left: false, right: false, up: false, down: false,
+             mouseX: 0, mouseY: 0, isDragging: false, speedBoost: false
+        };
+        const EDITOR_MOVE_SPEED = 5.0; // Units per second
+        const EDITOR_LOOK_SENSITIVITY = 0.002;
+
+
+        // Constants
+        const BLOCK_SIZE = 1;
+        const PLAYER_HEIGHT = 1.6;
+        const PLAYER_RADIUS = 0.3;
+        const PLAYER_MASS = 65;
+        const PLAYER_MOVE_FORCE = 800;
+        const PLAYER_JUMP_VELOCITY = 6.5;
+        const PHYSICS_TIMESTEP = 1 / 60;
+        const MAX_SUBSTEPS = 5;
+
+        // UI Elements
+        const crosshairElement = document.getElementById('crosshair');
+        const statusElement = document.getElementById('status');
+
+        // --- Initialization Functions ---
+
+        function initPhysics() {
+            world = new CANNON.World({
+                gravity: new CANNON.Vec3(0, -9.82 * 1.5, 0),
+                allowSleep: true,
+            });
+            world.broadphase = new CANNON.SAPBroadphase(world);
+            world.solver.iterations = 10;
+
+            physicsMaterials.ground = new CANNON.Material("ground");
+            physicsMaterials.player = new CANNON.Material("player");
+
+            const ground_player = new CANNON.ContactMaterial(physicsMaterials.ground, physicsMaterials.player, {
+                friction: 0.1, restitution: 0.1,
+                contactEquationStiffness: 1e8, contactEquationRelaxation: 3,
+            });
+            world.addContactMaterial(ground_player);
+
+            // cannonDebugger = new CannonDebugger(scene, world, { color: 0x00ff00 });
+        }
+
+        function initGraphics() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.Fog(0x87ceeb, CAMERA_FAR * 0.5, CAMERA_FAR);
+
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('gameCanvas'),
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 15, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -15;
+            directionalLight.shadow.camera.right = 15;
+            directionalLight.shadow.camera.top = 15;
+            directionalLight.shadow.camera.bottom = -15;
+            scene.add(directionalLight);
+
+            // Editor Camera
+            editorCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, CAMERA_FAR);
+            editorCamera.position.set(0, 5, 10); // Initial position overlooking origin
+            editorCamera.lookAt(0, 0, 0);
+            scene.add(editorCamera); // Add to scene (though not strictly necessary if never rendered directly without being active)
+
+            clock = new THREE.Clock();
+            window.addEventListener('resize', onWindowResize);
+            onWindowResize(); // Call once initially
+        }
+
+        function onWindowResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            renderer.setSize(width, height);
+
+            // Update editor camera aspect
+            editorCamera.aspect = width / height;
+            editorCamera.updateProjectionMatrix();
+
+            // Update player camera aspects
+            players.forEach(p => {
+                 if (p.viewport.width > 0 && p.viewport.height > 0 && height > 0) {
+                     const aspect = (width * p.viewport.width) / (height * p.viewport.height);
+                     p.camera.aspect = aspect;
+                     p.camera.updateProjectionMatrix();
+                 }
+            });
+        }
+
+        // --- Player, Level, Object Management (Mostly Unchanged) ---
+
+        function calculateViewports(count) {
+             if (count <= 0) return [];
+             if (count === 1) return [{ x: 0, y: 0, width: 1, height: 1 }];
+             if (count === 2) return [{ x: 0, y: 0, width: 0.5, height: 1 }, { x: 0.5, y: 0, width: 0.5, height: 1 }];
+             if (count === 3) return [{ x: 0, y: 0.5, width: 0.5, height: 0.5 }, { x: 0.5, y: 0.5, width: 0.5, height: 0.5 }, { x: 0.25, y: 0, width: 0.5, height: 0.5 }];
+             if (count === 4) return [{ x: 0, y: 0.5, width: 0.5, height: 0.5 }, { x: 0.5, y: 0.5, width: 0.5, height: 0.5 }, { x: 0, y: 0, width: 0.5, height: 0.5 }, { x: 0.5, y: 0, width: 0.5, height: 0.5 }];
+             return calculateViewports(4);
+        }
+
+        function initPlayers(count) {
+            clearPlayers();
+            const viewports = calculateViewports(count);
+            const startPositions = [ new THREE.Vector3(0, 1, 0), new THREE.Vector3(2, 1, 0), new THREE.Vector3(-2, 1, 0), new THREE.Vector3(0, 1, 2)];
+
+            for (let i = 0; i < count; i++) {
+                if (!viewports[i]) continue;
+                const startPos = startPositions[i % startPositions.length];
+                const playerGeo = new THREE.CapsuleGeometry(PLAYER_RADIUS, PLAYER_HEIGHT - 2 * PLAYER_RADIUS, 4, 10);
+                const playerMat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff, flatShading: true });
+                const playerMesh = new THREE.Mesh(playerGeo, playerMat);
+                playerMesh.castShadow = true;
+                playerMesh.position.copy(startPos);
+                scene.add(playerMesh);
+
+                const playerShape = new CANNON.Sphere(PLAYER_RADIUS);
+                const playerBody = new CANNON.Body({
+                    mass: PLAYER_MASS,
+                    position: new CANNON.Vec3(startPos.x, startPos.y + PLAYER_HEIGHT / 2 - PLAYER_RADIUS, startPos.z),
+                    shape: playerShape, material: physicsMaterials.player,
+                    linearDamping: 0.5, fixedRotation: true, allowSleep: false,
+                    collisionFilterGroup: 1, // Assign players to group 1
+                    collisionFilterMask: -1 // Collide with everything
+                });
+                playerBody.addEventListener('collide', (event) => handlePlayerCollision(i, event));
+                world.addBody(playerBody);
+
+                const aspect = (window.innerWidth * viewports[i].width) / (window.innerHeight * viewports[i].height);
+                const camera = new THREE.PerspectiveCamera(75, aspect > 0 ? aspect : 1, 0.1, CAMERA_FAR);
+                camera.position.set(startPos.x, startPos.y + 1.5, startPos.z + 3);
+                camera.lookAt(playerMesh.position);
+                // Don't add player camera to scene directly, renderer uses it from player object
+
+                const controls = { forward: false, backward: false, left: false, right: false, jump: false, canJump: false, mouseX: 0, mouseY: 0 };
+                players.push({ id: i, mesh: playerMesh, body: playerBody, camera: camera, controls: controls, viewport: viewports[i], onGround: false });
+            }
+            updateStatus();
+        }
+
+        function clearPlayers() {
+             players.forEach(p => {
+                scene.remove(p.mesh);
+                if (p.mesh.geometry) p.mesh.geometry.dispose();
+                if (p.mesh.material) p.mesh.material.dispose();
+                world.removeBody(p.body);
+            });
+            players = [];
+            updateStatus();
+        }
+
+        function resetPlayerPositions() { /* ... (unchanged) ... */
+             const startPositions = [ new THREE.Vector3(0, 1, 0), new THREE.Vector3(2, 1, 0), new THREE.Vector3(-2, 1, 0), new THREE.Vector3(0, 1, 2) ];
+            players.forEach((p, i) => {
+                const startPos = startPositions[i % startPositions.length];
+                p.body.position.set(startPos.x, startPos.y + PLAYER_HEIGHT / 2 - PLAYER_RADIUS, startPos.z);
+                p.body.velocity.set(0, 0, 0);
+                p.body.angularVelocity.set(0, 0, 0);
+                p.mesh.position.copy(startPos);
+                p.camera.position.set(startPos.x, startPos.y + 1.5, startPos.z + 3);
+                p.camera.lookAt(p.mesh.position);
+                p.body.wakeUp();
+            });
+        }
+
+        function addBlock(position, type = 'static', color = 0xaaaaaa) { /* ... (unchanged) ... */
+             const MAX_COORD = 50;
+             if (Math.abs(position.x) > MAX_COORD || Math.abs(position.y) > MAX_COORD || Math.abs(position.z) > MAX_COORD) {
+                console.warn("Attempted to place block outside bounds:", position); return null;
+             }
+            const geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            const material = new THREE.MeshStandardMaterial({ color: color });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(position);
+            mesh.receiveShadow = true; mesh.castShadow = true;
+            scene.add(mesh);
+            const shape = new CANNON.Box(new CANNON.Vec3(BLOCK_SIZE / 2, BLOCK_SIZE / 2, BLOCK_SIZE / 2));
+            const body = new CANNON.Body({
+                mass: type === 'static' ? 0 : 5, shape: shape,
+                position: new CANNON.Vec3(position.x, position.y, position.z),
+                material: physicsMaterials.ground
+            });
+            world.addBody(body);
+            const blockData = { mesh, body, type };
+            levelBlocks.push(blockData);
+            return blockData;
+        }
+
+        function removeBlock(targetMesh) { /* ... (unchanged) ... */
+            const index = levelBlocks.findIndex(b => b.mesh === targetMesh);
+            if (index > -1) {
+                const blockToRemove = levelBlocks[index];
+                scene.remove(blockToRemove.mesh);
+                world.removeBody(blockToRemove.body);
+                if (blockToRemove.mesh.geometry) blockToRemove.mesh.geometry.dispose();
+                if (blockToRemove.mesh.material) blockToRemove.mesh.material.dispose();
+                levelBlocks.splice(index, 1);
+                return true;
+            } return false;
+        }
+
+        function clearLevel() { /* ... (unchanged) ... */
+            [...levelBlocks].forEach(block => removeBlock(block.mesh)); levelBlocks = [];
+            interactiveObjects.forEach(obj => {
+                 scene.remove(obj.mesh); if (obj.body) world.removeBody(obj.body);
+                 if (obj.mesh.geometry) obj.mesh.geometry.dispose(); if (obj.mesh.material) obj.mesh.material.dispose();
+            }); interactiveObjects = [];
+            if (goalObject) {
+                scene.remove(goalObject.mesh); if(goalObject.body) world.removeBody(goalObject.body);
+                if (goalObject.mesh.geometry) goalObject.mesh.geometry.dispose(); if (goalObject.mesh.material) goalObject.mesh.material.dispose();
+                goalObject = null;
+            }
+            addBlock(new THREE.Vector3(0, -0.5 * BLOCK_SIZE, 0), 'static', 0x55aa55);
+            resetPlayerPositions();
+        }
+
+        function autoGenerateLevel(params = { size: 15, blocks: 70, heightVariance: 5 }) { /* ... (unchanged) ... */
+            clearLevel();
+            let blocksPlaced = 0; let currentPos = new THREE.Vector3(0, 0, 0);
+            const MAX_ATTEMPTS = params.blocks * 5; let attempts = 0;
+            while (blocksPlaced < params.blocks && attempts < MAX_ATTEMPTS) {
+                attempts++; const nextPos = currentPos.clone();
+                const axis = Math.floor(Math.random() * 3); const direction = (Math.random() < 0.5 ? -1 : 1) * BLOCK_SIZE;
+                if (axis === 0) nextPos.x += direction; else if (axis === 1) nextPos.y += direction; else nextPos.z += direction;
+                nextPos.x = THREE.MathUtils.clamp(nextPos.x, -params.size, params.size); nextPos.y = THREE.MathUtils.clamp(nextPos.y, 0, params.heightVariance); nextPos.z = THREE.MathUtils.clamp(nextPos.z, -params.size, params.size);
+                nextPos.x = Math.round(nextPos.x / BLOCK_SIZE) * BLOCK_SIZE; nextPos.y = Math.round(nextPos.y / BLOCK_SIZE) * BLOCK_SIZE; nextPos.z = Math.round(nextPos.z / BLOCK_SIZE) * BLOCK_SIZE;
+                const exists = levelBlocks.some(b => b.mesh.position.distanceTo(nextPos) < 0.1);
+                if (!exists) { addBlock(nextPos); blocksPlaced++; currentPos = nextPos; }
+                else { if (levelBlocks.length > 1 && Math.random() < 0.2) { const nonBaseBlocks = levelBlocks.filter(b => b.mesh.position.y > -0.5 * BLOCK_SIZE); if (nonBaseBlocks.length > 0) { currentPos.copy(nonBaseBlocks[Math.floor(Math.random() * nonBaseBlocks.length)].mesh.position); } } }
+            } if (attempts >= MAX_ATTEMPTS) { console.warn("AutoGenerateLevel reached max attempts."); }
+            if (levelBlocks.length > 1) { let highestY = -Infinity; let highestBlockPos = null; levelBlocks.forEach(b => { if (b.mesh.position.y >= 0 && b.mesh.position.y > highestY) { highestY = b.mesh.position.y; highestBlockPos = b.mesh.position; } }); if (highestBlockPos) { const goalPos = highestBlockPos.clone(); goalPos.y += BLOCK_SIZE; addGoal(goalPos); } else { addGoal(new THREE.Vector3(params.size * 0.8, 1, 0)); } } else { addGoal(new THREE.Vector3(5, 1, 0)); }
+            console.log(`Auto-generated level with ${blocksPlaced} blocks.`); resetPlayerPositions();
+        }
+
+        function addGoal(position) { /* ... (mostly unchanged) ... */
+             if (goalObject) { scene.remove(goalObject.mesh); if(goalObject.body) world.removeBody(goalObject.body); if (goalObject.mesh.geometry) goalObject.mesh.geometry.dispose(); if (goalObject.mesh.material) goalObject.mesh.material.dispose(); }
+            const geometry = new THREE.IcosahedronGeometry(BLOCK_SIZE * 0.4, 0); const material = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xccaa00, flatShading: true }); const mesh = new THREE.Mesh(geometry, material); mesh.position.copy(position); mesh.castShadow = true; scene.add(mesh);
+            const shape = new CANNON.Sphere(BLOCK_SIZE * 0.5); const body = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(position.x, position.y, position.z), shape: shape, isTrigger: true }); world.addBody(body);
+            goalObject = { mesh, body, type: 'goal', updateFunc: () => { if (goalObject && goalObject.mesh) { goalObject.mesh.rotation.y += 0.01; goalObject.mesh.rotation.x += 0.005; } }, triggerFunc: (collidingBody) => { players.forEach(player => { if (player.body === collidingBody) { console.log(`Player ${player.id} reached the goal!`); statusElement.textContent = `Player ${player.id} Wins! Click Play to restart.`; setGameMode('edit'); } }); } };
+            body.addEventListener('collide', (event) => { if (goalObject && goalObject.triggerFunc) { goalObject.triggerFunc(event.body); } });
+        }
+
+        function addInteractiveObject(position, type) { /* ... (mostly unchanged) ... */
+             const MAX_COORD = 50; if (Math.abs(position.x) > MAX_COORD || Math.abs(position.y) > MAX_COORD || Math.abs(position.z) > MAX_COORD) { console.warn("Attempted to place interactive object outside bounds:", position); return null; }
+            if (type === 'jumpPad') { const padHeight = BLOCK_SIZE * 0.2; const geometry = new THREE.BoxGeometry(BLOCK_SIZE * 0.9, padHeight, BLOCK_SIZE * 0.9); const material = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x005500 }); const mesh = new THREE.Mesh(geometry, material); mesh.position.copy(position); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
+                const shape = new CANNON.Box(new CANNON.Vec3(BLOCK_SIZE * 0.45, padHeight / 2, BLOCK_SIZE * 0.45)); const body = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(mesh.position.x, mesh.position.y, mesh.position.z), shape: shape, isTrigger: true }); world.addBody(body);
+                const jumpPadData = { mesh, body, type, triggerFunc: (collidingBody) => { players.forEach(player => { if (player.body === collidingBody) { const impulse = new CANNON.Vec3(0, PLAYER_JUMP_VELOCITY * PLAYER_MASS * 1.8, 0); player.body.applyImpulse(impulse, player.body.position); player.body.wakeUp(); console.log(`Player ${player.id} hit jump pad!`); } }); } }; interactiveObjects.push(jumpPadData);
+                 body.addEventListener('collide', (event) => { if(interactiveObjects.includes(jumpPadData) && jumpPadData.triggerFunc) { jumpPadData.triggerFunc(event.body); } }); return jumpPadData;
+            } return null;
+        }
+
+        function handlePlayerCollision(playerIndex, event) { /* ... (unchanged - not actively used) ... */ }
+
+
+        // --- Physics Update (Unchanged) ---
+        function updatePhysics(deltaTime) { /* ... (unchanged) ... */
+            world.fixedStep(PHYSICS_TIMESTEP, MAX_SUBSTEPS);
+            levelBlocks.forEach(block => { if (block.body.mass > 0) { block.mesh.position.copy(block.body.position); block.mesh.quaternion.copy(block.body.quaternion); } });
+            players.forEach(player => { player.mesh.position.copy(player.body.position); player.mesh.position.y -= (PLAYER_HEIGHT / 2 - PLAYER_RADIUS); const bodyYaw = new THREE.Euler(); bodyYaw.setFromQuaternion(player.body.quaternion, 'YXZ'); player.mesh.rotation.y = bodyYaw.y; });
+            interactiveObjects.forEach(obj => { if (obj.body && obj.body.mass > 0) { obj.mesh.position.copy(obj.body.position); obj.mesh.quaternion.copy(obj.body.quaternion); } });
+            // if (cannonDebugger) cannonDebugger.update();
+         }
+
+        // --- Player Update Logic (Unchanged) ---
+        const groundCheckRay = new CANNON.Ray();
+        const groundCheckRayOptions = { collisionFilterGroup: 0, collisionFilterMask: -1, skipBackfaces: true }; // Ray itself is group 0
+        const groundCheckResult = new CANNON.RaycastResult();
+        function updatePlayers(deltaTime) { /* ... (unchanged - runs only in play mode) ... */
+             players.forEach((player, index) => {
+                const { body, controls, camera, mesh } = player;
+                // Ground Check
+                const rayStart = body.position; const rayLength = PLAYER_RADIUS + 0.15; const rayEnd = new CANNON.Vec3(body.position.x, body.position.y - rayLength, body.position.z); groundCheckRay.from.copy(rayStart); groundCheckRay.to.copy(rayEnd); groundCheckResult.reset();
+                const originalMask = body.collisionFilterMask; body.collisionFilterMask = ~1; // Don't collide with group 1 (other players) for ground check
+                player.onGround = world.raycastClosest(rayStart, rayEnd, groundCheckRayOptions, groundCheckResult); body.collisionFilterMask = originalMask; // Restore mask
+                // Movement
+                const moveDirection = new THREE.Vector3(); const bodyRotation = new THREE.Quaternion(); bodyRotation.copy(body.quaternion); const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(bodyRotation); const right = new THREE.Vector3(1, 0, 0).applyQuaternion(bodyRotation);
+                if (controls.forward) moveDirection.add(forward); if (controls.backward) moveDirection.sub(forward); if (controls.left) moveDirection.sub(right); if (controls.right) moveDirection.add(right); moveDirection.normalize();
+                if (moveDirection.lengthSq() > 0) { const force = new CANNON.Vec3(moveDirection.x * PLAYER_MOVE_FORCE, 0, moveDirection.z * PLAYER_MOVE_FORCE); body.applyForce(force); }
+                // Jumping
+                if (controls.jump && player.onGround) { body.velocity.y = PLAYER_JUMP_VELOCITY; player.onGround = false; controls.jump = false; }
+                if (!keyMap[' '] && index === 0) controls.jump = false; if (!keyMap['enter'] && index === 1) controls.jump = false; /* Add other keys */
+                // Camera (Player 0 Mouse Look)
+                const cameraSensitivity = 0.002;
+                if (index === 0 && document.pointerLockElement === renderer.domElement) {
+                    const yawDelta = -controls.mouseX * cameraSensitivity; body.quaternion.mult(new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yawDelta), body.quaternion);
+                    const pitchDelta = -controls.mouseY * cameraSensitivity; camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, camera.rotation.x + pitchDelta));
+                    controls.mouseX = 0; controls.mouseY = 0;
+                }
+                // Camera Follow
+                const cameraOffset = new THREE.Vector3(0, PLAYER_HEIGHT * 0.6, 3.0); const worldOffset = cameraOffset.clone().applyQuaternion(mesh.quaternion); const desiredCameraPosition = mesh.position.clone().add(worldOffset); camera.position.lerp(desiredCameraPosition, 0.15);
+                const lookAtTarget = mesh.position.clone().add(new THREE.Vector3(0, PLAYER_HEIGHT * 0.3, 0)); const currentLookAt = new THREE.Vector3(); camera.getWorldDirection(currentLookAt); currentLookAt.multiplyScalar(10).add(camera.position); const targetLookAt = new THREE.Vector3().copy(lookAtTarget); currentLookAt.lerp(targetLookAt, 0.1); camera.lookAt(currentLookAt);
+            });
+        }
+
+        // --- Interactive Object Update (Unchanged) ---
+        function updateInteractiveObjects(deltaTime) { /* ... (unchanged) ... */
+             if (goalObject && goalObject.updateFunc) { goalObject.updateFunc(deltaTime); }
+            interactiveObjects.forEach(obj => { if (obj.updateFunc) { obj.updateFunc(deltaTime); } });
+        }
+
+        // --- Editor Camera Update Logic ---
+        function updateEditorCamera(deltaTime) {
+             const moveSpeed = EDITOR_MOVE_SPEED * (editorControls.speedBoost ? 3 : 1) * deltaTime;
+             const moveDirection = new THREE.Vector3();
+             const right = new THREE.Vector3();
+             const up = new THREE.Vector3(0, 1, 0);
+
+             // Get camera forward/right vectors projected onto XZ plane for panning
+             const forward = new THREE.Vector3();
+             editorCamera.getWorldDirection(forward);
+             right.crossVectors(forward, up).normalize(); // Get right vector
+
+             if (editorControls.forward) moveDirection.add(forward);
+             if (editorControls.backward) moveDirection.sub(forward);
+             if (editorControls.left) moveDirection.sub(right);
+             if (editorControls.right) moveDirection.add(right);
+             // Vertical movement (flying) - use world up/down
+             if (editorControls.up) moveDirection.add(up);
+             if (editorControls.down) moveDirection.sub(up);
+
+             moveDirection.normalize().multiplyScalar(moveSpeed);
+             editorCamera.position.add(moveDirection);
+
+             // Rotation only if dragging
+             if (editorControls.isDragging) {
+                const yawDelta = -editorControls.mouseX * EDITOR_LOOK_SENSITIVITY;
+                const pitchDelta = -editorControls.mouseY * EDITOR_LOOK_SENSITIVITY;
+
+                // Apply Yaw rotation around world Y axis
+                editorCamera.position.sub(editorCamera.position); // Move rotation point to origin temporarily? Easier way: rotate camera quaternion directly.
+                const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawDelta);
+                editorCamera.quaternion.premultiply(yawQuat); // Apply world yaw
+
+                // Apply Pitch rotation around camera's local X axis
+                const pitchQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitchDelta);
+                editorCamera.quaternion.multiply(pitchQuat); // Apply local pitch
+
+
+                // Clamp pitch - More complex with quaternions, easier with Euler but risk gimbal lock
+                // Let's skip clamping for now, or use Euler temporarily
+                // const euler = new THREE.Euler().setFromQuaternion(editorCamera.quaternion, 'YXZ');
+                // euler.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, euler.x));
+                // editorCamera.quaternion.setFromEuler(euler);
+
+                 // Reset mouse movement deltas
+                 editorControls.mouseX = 0;
+                 editorControls.mouseY = 0;
+             }
+        }
+
+
+        // --- UI and Input ---
+
+        function initUI() { /* ... (unchanged) ... */
+            document.getElementById('editModeBtn').onclick = () => setGameMode('edit');
+            document.getElementById('playModeBtn').onclick = () => setGameMode('play');
+            document.getElementById('addPlayerBtn').onclick = () => { if (players.length < 4) { initPlayers(players.length + 1); if(gameMode === 'play') resetPlayerPositions(); onWindowResize(); render(); } };
+            document.getElementById('removePlayerBtn').onclick = () => { if (players.length > 1) { initPlayers(players.length - 1); if(gameMode === 'play') resetPlayerPositions(); onWindowResize(); render(); } };
+            document.getElementById('editToolSelect').onchange = (e) => { editModeTool = e.target.value; updateStatus(); };
+            document.getElementById('autoGenBtn').onclick = () => { if (gameMode === 'edit') { autoGenerateLevel(); } else { alert("Switch to Edit mode first!"); } };
+            document.getElementById('clearLevelBtn').onclick = () => { if (gameMode === 'edit') { if (confirm("Are you sure you want to clear the level? This cannot be undone.")) { clearLevel(); } } else { alert("Switch to Edit mode first!"); } };
+            updateStatus();
+        }
+
+        function setGameMode(newMode) {
+            gameMode = newMode;
+            if (gameMode === 'play') {
+                resetPlayerPositions();
+                 crosshairElement.style.display = 'none';
+                 document.body.style.cursor = 'none'; // Hide cursor on entering play
+                 // Exit pointer lock if it was active from edit mode (unlikely now)
+                if (document.pointerLockElement === renderer.domElement) { document.exitPointerLock(); }
+
+            } else { // edit mode
+                 // Ensure pointer lock is released if switching from play mode
+                if (document.pointerLockElement === renderer.domElement) { document.exitPointerLock(); }
+                 crosshairElement.style.display = 'block'; // Show crosshair for editing
+                 document.body.style.cursor = 'default'; // Show default cursor
+                 // Optional: Position editor camera based on Player 0's last view?
+                 // if (players.length > 0) {
+                 //    editorCamera.position.copy(players[0].camera.position);
+                 //    editorCamera.quaternion.copy(players[0].camera.quaternion);
+                 // }
+            }
+            // Reset editor drag state when changing modes
+            editorControls.isDragging = false;
+            document.body.classList.remove('dragging');
+            updateStatus();
+        }
+
+         function updateStatus() { /* ... (unchanged) ... */
+             let statusText = `Mode: ${gameMode.toUpperCase()} | Players: ${players.length}`;
+             if (gameMode === 'edit') { statusText += ` | Tool: ${editModeTool}`; }
+             statusElement.textContent = statusText;
+        }
+
+        function initInput() {
+             // Player Control Mappings
+            const playerControlMaps = [ { 'w': 'forward', 's': 'backward', 'a': 'left', 'd': 'right', ' ': 'jump' }, { 'arrowup': 'forward', 'arrowdown': 'backward', 'arrowleft': 'left', 'arrowright': 'right', 'enter': 'jump' }, { 'i': 'forward', 'k': 'backward', 'j': 'left', 'l': 'right', 'u': 'jump' }, { 'numpad8': 'forward', 'numpad5': 'backward', 'numpad4': 'left', 'numpad6': 'right', 'numpad0': 'jump' } ];
+             // Editor Control Mappings
+             const editorKeyMap = { 'w': 'forward', 's': 'backward', 'a': 'left', 'd': 'right', 'e': 'up', 'q': 'down', 'shift': 'speedBoost' };
+
+            window.addEventListener('keydown', (event) => {
+                const key = event.key.toLowerCase();
+                if (keyMap[key]) return;
+                keyMap[key] = true;
+
+                if (gameMode === 'play') {
+                    // Player Controls
+                    players.forEach((player, index) => {
+                        if (playerControlMaps[index] && playerControlMaps[index][key]) {
+                            player.controls[playerControlMaps[index][key]] = true;
+                        }
+                    });
+                    if (key === ' ' || key === 'enter') event.preventDefault(); // Prevent scroll/submit
+                } else {
+                    // Editor Controls
+                    if (editorKeyMap[key]) {
+                        editorControls[editorKeyMap[key]] = true;
+                        event.preventDefault(); // Prevent default actions like Shift selection
+                    }
+                }
+            });
+
+            window.addEventListener('keyup', (event) => {
+                const key = event.key.toLowerCase();
+                keyMap[key] = false;
+
+                 if (gameMode === 'play') {
+                    // Player Controls
+                    players.forEach((player, index) => {
+                        if (playerControlMaps[index] && playerControlMaps[index][key]) {
+                            const action = playerControlMaps[index][key];
+                            if (action !== 'jump') { // Jump is handled differently
+                                player.controls[action] = false;
+                            }
+                        }
+                    });
+                 } else {
+                      // Editor Controls
+                      if (editorKeyMap[key]) {
+                          editorControls[editorKeyMap[key]] = false;
+                      }
+                 }
+            });
+
+            // --- Editor Mouse Look (Right-Click Drag) & Play Mode Pointer Lock ---
+            renderer.domElement.addEventListener('mousedown', (event) => {
+                 if (gameMode === 'edit' && event.button === 2) { // Right mouse button
+                     editorControls.isDragging = true;
+                     editorControls.mouseX = 0; // Reset deltas on new drag start
+                     editorControls.mouseY = 0;
+                     document.body.classList.add('dragging'); // Change cursor optional)
+                     event.preventDefault(); // Prevent context menu
+                 } else if (gameMode === 'play' && event.button === 0) { // Left click in play mode
+                     // Request pointer lock for Player 0
+                     if (document.pointerLockElement !== renderer.domElement && players.length > 0) {
+                        renderer.domElement.requestPointerLock().catch(err => console.warn("Pointer lock failed:", err));
+                     }
+                 } else if (gameMode === 'edit' && event.button === 0) {
+                     // Handle left click for placing/removing blocks
+                     handleEditClick(event);
+                 }
+            });
+
+             window.addEventListener('mouseup', (event) => { // Use window to catch mouseup even if outside canvas
+                 if (gameMode === 'edit' && event.button === 2) { // Right mouse button
+                     editorControls.isDragging = false;
+                     document.body.classList.remove('dragging');
+                 }
+             });
+
+            window.addEventListener('mousemove', (event) => {
+                 if (gameMode === 'edit' && editorControls.isDragging) {
+                     // Accumulate mouse movement for editor camera rotation
+                     editorControls.mouseX += event.movementX || 0;
+                     editorControls.mouseY += event.movementY || 0;
+                 } else if (gameMode === 'play' && document.pointerLockElement === renderer.domElement && players.length > 0) {
+                     // Update Player 0 mouse controls when pointer locked
+                     players[0].controls.mouseX += event.movementX || 0;
+                     players[0].controls.mouseY += event.movementY || 0;
+                 }
+            });
+
+            // Handle pointer lock changes (relevant for Play mode)
+             document.addEventListener('pointerlockchange', () => {
+                 if (gameMode === 'play') { // Only relevant in play mode
+                     if (document.pointerLockElement === renderer.domElement) {
+                         console.log('Pointer locked (Play Mode)');
+                         document.body.style.cursor = 'none';
+                     } else {
+                         console.log('Pointer unlocked (Play Mode)');
+                         if (players.length > 0) { players[0].controls.mouseX = 0; players[0].controls.mouseY = 0; }
+                         document.body.style.cursor = 'none'; // Keep cursor hidden even if lock lost
+                     }
+                 }
+             }, false);
+
+             // Prevent context menu globally (as right click is used for camera)
+            window.addEventListener('contextmenu', (event) => {
+                 event.preventDefault();
+            });
+        }
+
+        // --- Placement Logic (Uses editorCamera now) ---
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        function handleEditClick(event) {
+            // Use editorCamera for raycasting
+            if (!editorCamera || gameMode !== 'edit') return;
+
+            const raycaster = new THREE.Raycaster();
+            // Raycast from center of the screen (where the crosshair is)
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), editorCamera);
+
+            const meshesToIntersect = levelBlocks.map(b => b.mesh);
+            const intersects = raycaster.intersectObjects(meshesToIntersect);
+
+            // --- Removal Logic ---
+            if (editModeTool === 'remove') { /* ... (unchanged - uses intersects) ... */
+                if (intersects.length > 0) { const intersectedMesh = intersects[0].object; const blockData = levelBlocks.find(b => b.mesh === intersectedMesh); const isBaseBlock = blockData && blockData.mesh.position.y === -0.5 * BLOCK_SIZE && blockData.mesh.position.x === 0 && blockData.mesh.position.z === 0; if (!isBaseBlock) { removeBlock(intersectedMesh); } else { console.log("Cannot remove the base platform."); } } else { console.log("Remove Tool: Click on a block to remove it."); } return;
+            }
+
+            // --- Placement Logic ---
+            let placementPosition = null;
+            let placedOnExistingBlock = false;
+            let surfaceNormal = null;
+
+            if (intersects.length > 0) { // Clicked existing block
+                placedOnExistingBlock = true;
+                const intersection = intersects[0]; const intersectedMesh = intersection.object; surfaceNormal = intersection.face.normal.clone();
+                const calculatedPos = intersectedMesh.position.clone().add(surfaceNormal.clone().multiplyScalar(BLOCK_SIZE));
+                placementPosition = new THREE.Vector3( Math.round(calculatedPos.x / BLOCK_SIZE) * BLOCK_SIZE, Math.round(calculatedPos.y / BLOCK_SIZE) * BLOCK_SIZE, Math.round(calculatedPos.z / BLOCK_SIZE) * BLOCK_SIZE );
+            } else { // Clicked empty space
+                placedOnExistingBlock = false; const intersectionPoint = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(groundPlane, intersectionPoint)) {
+                     placementPosition = new THREE.Vector3( Math.round(intersectionPoint.x / BLOCK_SIZE) * BLOCK_SIZE, 0, Math.round(intersectionPoint.z / BLOCK_SIZE) * BLOCK_SIZE );
+                     surfaceNormal = new THREE.Vector3(0, 1, 0);
+                     const distanceLimit = CAMERA_FAR * 0.8;
+                     if (editorCamera.position.distanceTo(placementPosition) > distanceLimit) { console.log("Cannot place block: Too far away."); placementPosition = null; }
+                 } else { console.log("Cannot determine placement location in empty space."); placementPosition = null; }
+            }
+
+            // Final Placement Check and Action
+            if (placementPosition) {
+                 const spaceOccupied = levelBlocks.some(b => b.mesh.position.distanceTo(placementPosition) < 0.1) || (goalObject && goalObject.mesh.position.distanceTo(placementPosition) < 0.1) || interactiveObjects.some(io => io.mesh.position.distanceTo(placementPosition) < 0.1);
+                if (!spaceOccupied) {
+                    if (editModeTool === 'add') { addBlock(placementPosition); }
+                    else if (editModeTool === 'addGoal') { const goalYOffset = BLOCK_SIZE * 0.5; addGoal(placementPosition.clone().setY(placementPosition.y + goalYOffset)); }
+                    else if (editModeTool === 'addJumpPad') { if (surfaceNormal && surfaceNormal.dot(new THREE.Vector3(0, 1, 0)) > 0.8) { addInteractiveObject(placementPosition, 'jumpPad'); } else { console.log("Cannot place jump pad here (needs a flat, upward-facing surface)."); } }
+                } else { console.log("Cannot place object: Space occupied at grid center."); }
+            }
+        }
+
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = Math.min(clock.getDelta(), 0.1); // Cap delta time
+
+            // Update logic based on game mode
+            if (gameMode === 'play') {
+                updatePlayers(deltaTime); // Handles player physics and camera follow
+            } else { // 'edit' mode
+                 updateEditorCamera(deltaTime); // Update editor camera position/rotation
+                 // We still run physics/interactive updates so the world doesn't freeze
+            }
+
+            // Update physics and interactive objects regardless of mode
+            updatePhysics(deltaTime);
+            updateInteractiveObjects(deltaTime);
+
+            render(); // Render the scene(s)
+        }
+
+        // --- Rendering Function (Handles Split Screen / Editor View) ---
+        function render() {
+           const canvas = renderer.domElement;
+           const width = canvas.clientWidth;
+           const height = canvas.clientHeight;
+            if (width <= 0 || height <= 0) return;
+
+           if (gameMode === 'edit') {
+               // Render single view using editor camera
+               renderer.setViewport(0, 0, width, height);
+               renderer.setScissor(0, 0, width, height);
+               renderer.setScissorTest(true); // Enable Scissor Test
+               renderer.setClearColor(scene.background);
+               renderer.clear();
+               renderer.render(scene, editorCamera); // <-- Render using editorCamera
+               renderer.setScissorTest(false); // Disable Scissor Test
+
+           } else { // 'play' mode - render split screen
+               renderer.setScissorTest(true);
+               if (players.length === 0) {
+                   // Render default dark background if no players in play mode
+                   renderer.setViewport(0, 0, width, height);
+                   renderer.setScissor(0, 0, width, height);
+                   renderer.setClearColor(0x333333);
+                   renderer.clear();
+               } else {
+                   players.forEach(player => {
+                       const { camera, viewport } = player;
+                       const viewX = Math.floor(width * viewport.x); const viewY = Math.floor(height * viewport.y);
+                       const viewWidth = Math.floor(width * viewport.width); const viewHeight = Math.floor(height * viewport.height);
+                       if (viewWidth <= 0 || viewHeight <= 0) return;
+
+                       renderer.setViewport(viewX, viewY, viewWidth, viewHeight);
+                       renderer.setScissor(viewX, viewY, viewWidth, viewHeight);
+                       renderer.setClearColor(scene.background);
+                       renderer.clear(); // Clear this viewport before rendering
+
+                       camera.aspect = viewWidth / viewHeight; // Ensure aspect is correct
+                       camera.updateProjectionMatrix();
+                       renderer.render(scene, camera); // <-- Render using player camera
+                  });
+               }
+               renderer.setScissorTest(false);
+           }
+        }
+
+
+        // --- Main Execution ---
+        function main() { /* ... (unchanged) ... */
+            console.log("Initializing..."); try { initPhysics(); initGraphics(); initUI(); initPlayers(1); clearLevel(); initInput(); setGameMode('edit'); animate(); console.log("Initialization Complete. Application Running."); } catch (error) { console.error("Initialization failed:", error); statusElement.textContent = "Error during initialization. Check console."; }
+        }
+
+        main(); // Run the application
+
+    </script>
+</body>
+</html>

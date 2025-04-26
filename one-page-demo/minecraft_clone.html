@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Voxel Game - Day/Night & Shadows</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; }
+        canvas { display: block; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            font-size: 14px;
+            z-index: 10;
+            display: none; /* Hidden initially */
+         }
+         #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background-color: white;
+            border: 1px solid black;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 11;
+            display: none; /* Hidden initially */
+        }
+        #blocker {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: none; /* Hidden initially, shown when paused */
+            justify-content: center;
+            align-items: center;
+            z-index: 12;
+         }
+         #blocker div {
+            text-align: center;
+            color: white;
+            font-size: 24px;
+            font-family: sans-serif;
+            cursor: pointer;
+         }
+         /* Configuration Modal */
+        #config-modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.9); /* Slightly darker */
+            color: white;
+            padding: 20px; /* Adjust padding for tabs */
+            border-radius: 10px;
+            font-family: sans-serif;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            box-shadow: 0 0 20px rgba(0,0,0,0.7); /* Stronger shadow */
+            max-height: 90vh;
+             /* Remove overflow-y here, handle it per tab if needed, or the main modal content area */
+             width: 350px; /* Give modal a fixed width or max-width */
+             box-sizing: border-box;
+        }
+        #config-modal h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #777; /* Lighter border */
+            padding-bottom: 10px;
+            align-self: center;
+             width: 100%;
+             text-align: center;
+             box-sizing: border-box;
+        }
+
+        /* Tab Navigation Styles */
+        #tab-navigation {
+            display: flex;
+            justify-content: flex-start; /* Align tabs to the left */
+            margin-bottom: 0; /* No bottom margin */
+            border-bottom: 1px solid #555; /* Separator line */
+            width: 100%; /* Span full width */
+            box-sizing: border-box;
+        }
+
+        .tab-button {
+            padding: 10px 15px;
+            margin: 0 2px -1px 2px; /* Space between buttons, -1px pushes button border into panel border */
+            border: 1px solid #555;
+            border-bottom-color: transparent; /* Hide bottom border when inactive */
+            background-color: #444; /* Inactive background */
+            color: white;
+            cursor: pointer;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            transition: background-color 0.2s;
+            font-size: 14px;
+        }
+
+        .tab-button:hover:not(.active) {
+            background-color: #555; /* Hover effect for inactive */
+        }
+
+        .tab-button.active {
+            background-color: rgba(0, 0, 0, 0.9); /* Match modal background */
+            border-color: #555;
+            border-bottom-color: transparent; /* Make it look like it's part of the content area */
+            font-weight: bold;
+            cursor: default; /* No pointer cursor when active */
+        }
+
+        /* Tab Content Styles */
+        #tab-content {
+            width: 100%;
+            /* Add padding or border here if desired */
+            /* padding: 10px; */
+            /* border: 1px solid #555; */
+            border-top: none; /* Hide top border */
+            /* border-radius: 0 0 10px 10px; */
+            box-sizing: border-box;
+             padding-top: 20px; /* Add space below tabs */
+        }
+
+        .tab-panel {
+            display: none; /* Hidden by default */
+            width: 100%; /* Ensure panels take full width */
+            box-sizing: border-box;
+        }
+
+        .tab-panel.active {
+            display: block; /* Show the active panel */
+        }
+
+         /* Styles for elements INSIDE tab panels */
+         .tab-panel h3 {
+             margin-top: 0; /* Reset h3 margin */
+             margin-bottom: 10px;
+             border-bottom: 1px dashed #666;
+             padding-bottom: 5px;
+             width: 100%;
+             box-sizing: border-box;
+         }
+
+         .tab-panel label {
+             display: block; /* Labels inside panels are blocks */
+             margin-top: 10px;
+             margin-bottom: 5px;
+             font-size: 14px;
+             width: auto; /* Reset width */
+         }
+         .tab-panel input {
+             display: block; /* Inputs inside panels are blocks */
+             width: calc(100% - 16px);
+             margin-bottom: 10px;
+             box-sizing: border-box;
+         }
+          /* Specific styles for number inputs within panels */
+         .tab-panel .number-input-group label {
+              display: inline-block; /* Allow labels inline with numbers */
+              width: auto; /* Auto width */
+              margin-right: 5px;
+              margin-top: 5px;
+              margin-bottom: 5px;
+         }
+          .tab-panel .number-input-group input {
+               display: inline-block; /* Allow number inputs inline */
+               width: 60px; /* Smaller width for numbers */
+               margin-right: 15px;
+               margin-bottom: 5px;
+          }
+
+         .tab-panel small {
+            display: block;
+            font-size: 11px;
+            color: #aaa;
+            margin-top: -5px;
+            margin-bottom: 10px;
+         }
+
+
+        /* Style for the Start Game button */
+        #config-modal > button { /* Target the direct child button */
+             align-self: center;
+             margin-top: 25px; /* Space above the button */
+             width: auto; /* Reset width */
+             padding: 12px 25px;
+         }
+
+          #loading-message {
+             position: absolute;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+             color: white;
+             font-size: 20px;
+             font-family: sans-serif;
+             z-index: 21; /* Above modal */
+             display: none; /* Hidden initially */
+         }
+    </style>
+</head>
+<body>
+    <!-- Configuration Screen -->
+    <div id="config-modal">
+        <h2>Game Configuration</h2>
+
+        <!-- Tab Navigation -->
+        <div id="tab-navigation">
+            <button class="tab-button active" data-tab="world-settings">World</button>
+            <button class="tab-button" data-tab="player-settings">Player</button>
+            <button class="tab-button" data-tab="time-settings">Time</button>
+            <button class="tab-button" data-tab="texture-settings">Texture</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="tab-content">
+            <!-- World Settings Tab -->
+            <div id="world-settings" class="tab-panel active"> <!-- Set initial active panel -->
+                <h3>World Size</h3>
+                 <div class="number-input-group">
+                    <label for="world-width">Width (X):</label>
+                    <input type="number" id="world-width" value="30" min="10" max="60">
+                    <label for="world-depth">Depth (Z):</label>
+                    <input type="number" id="world-depth" value="30" min="10" max="60">
+                    <label for="world-height">Height (Y):</label>
+                    <input type="number" id="world-height" value="15" min="5" max="30">
+                 </div>
+            </div>
+
+            <!-- Player Settings Tab -->
+            <div id="player-settings" class="tab-panel">
+                 <h3>Player Settings</h3>
+                 <label for="player-speed">Speed:</label>
+                 <input type="number" id="player-speed" value="6" min="1" max="25" step="0.5">
+            </div>
+
+            <!-- Time Settings Tab -->
+            <div id="time-settings" class="tab-panel">
+                 <h3>Time Settings</h3>
+                <label for="day-night-speed">Day/Night Speed (0=stop):</label>
+                <input type="number" id="day-night-speed" value="0.01" min="0" max="0.2" step="0.005">
+                 <small>Lower value means slower cycle.</small>
+            </div>
+
+            <!-- Texture Settings Tab -->
+            <div id="texture-settings" class="tab-panel">
+                 <h3>Texture Atlas</h3>
+                 <small>URL or path to the texture atlas image.</small>
+                 <label for="atlas-texture-url">Atlas URL:</label>
+                 <input type="text" id="atlas-texture-url" value="./sprite/gpt_terrain.png">
+                 <small>Ensure the path is correct relative to your HTML file.<br>Example public URL: https://i.imgur.com/Qf4yR1I.png</small> <!-- Added public example -->
+            </div>
+        </div>
+
+        <button id="start-game-button">Start Game</button>
+    </div>
+
+    <!-- Loading Message -->
+    <div id="loading-message">Loading World...</div>
+
+    <!-- Gameplay Elements (initially hidden) -->
+    <div id="blocker">
+        <div>Click to Play</div>
+    </div>
+    <div id="instructions">
+        WASD: Move | SPACE: Jump | Mouse: Look<br>
+        Left Click: Break Block | Right Click: Place Block (Dirt)<br>
+        ESC: Pause / Config
+    </div>
+    <div id="crosshair">+</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // --- Global Variables & Constants ---
+        const BLOCK_TYPES = { AIR: 0, GRASS: 1, DIRT: 2, STONE: 3 }; // Define block types early
+        let BLOCK = { SIZE: 1, TYPES: BLOCK_TYPES }; // Assign types to BLOCK scope
+
+        // --- Configuration (Defaults, will be overridden by UI) ---
+        let WORLD = { WIDTH: 30, HEIGHT: 15, DEPTH: 30, SEA_LEVEL: 5, MAX_BUILD_HEIGHT: 20 }; // Adjusted defaults
+        let PLAYER = { HEIGHT: 1.8, SPEED: 6, JUMP_VELOCITY: 7, GRAVITY: -15 };
+        let RENDER = { REACH_DISTANCE: 5 };
+        let DAY_NIGHT = {
+            SPEED: 0.01, // Adjusted default speed
+            SUN_DISTANCE: 100,
+            SUN_INTENSITY_MAX: 1.2,
+            AMBIENT_INTENSITY_MIN: 0.1,
+            AMBIENT_INTENSITY_MAX: 0.6,
+            DAY_SKY_COLOR: new THREE.Color(0x87CEEB), // Light blue
+            NIGHT_SKY_COLOR: new THREE.Color(0x000033), // Dark blue
+            SUNSET_SKY_COLOR: new THREE.Color(0xFF8C00) // Orange-ish
+        };
+        // Texture Configuration (Now just holds the atlas URL)
+        let TEXTURES = {
+            ATLAS_URL: './sprite/gpt_terrain.png', // Default URL
+            _loaded: {} // Storage for loaded atlas texture object
+        };
+
+        // --- Scene/Game State Variables ---
+        let scene, camera, renderer, controls;
+        let worldData = [];
+        let meshes = {}; // Stores InstancedMeshes { type: mesh }
+        let blockGeometries = {}; // Stores custom BoxGeometries { type: geometry }
+        let highlightMesh;
+        let playerVelocity = new THREE.Vector3();
+        let playerOnGround = false;
+        let clock = new THREE.Clock();
+        let lastPlacedTime = 0;
+        let directionalLight, ambientLight;
+        let timeOfDay = 0.25; // Start at sunrise/morning
+        let gameRunning = false; // Flag to control animation loop logic
+
+        const moveState = { forward: 0, backward: 0, left: 0, right: 0 };
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(0, 0);
+
+        // --- DOM Elements ---
+        const configModal = document.getElementById('config-modal');
+        const startGameButton = document.getElementById('start-game-button');
+        const blocker = document.getElementById('blocker');
+        const instructions = document.getElementById('instructions');
+        const crosshair = document.getElementById('crosshair');
+        const loadingMessage = document.getElementById('loading-message');
+
+        // --- Tab Elements ---
+        const tabNavigation = document.getElementById('tab-navigation');
+        const tabButtons = tabNavigation.querySelectorAll('.tab-button');
+        const tabContent = document.getElementById('tab-content');
+        const tabPanels = tabContent.querySelectorAll('.tab-panel');
+
+
+        // --- Texture Atlas UV Mapping ---
+        // Define UV coordinates for a 4x4 atlas grid (0-indexed, bottom-left is 0,0)
+        const ATLAS_GRID_SIZE = 4;
+        const UV_CELL_SIZE = 1 / ATLAS_GRID_SIZE;
+
+        function getAtlasUVs(col, row) {
+            // Correct mapping for Three.js UVs: (0,0) is bottom-left, (1,1) is top-right.
+            // Image editors often use (0,0) top-left.
+            // Image row 0 -> Texture row 3: (ATLAS_GRID_SIZE - 1 - 0) * UV_CELL_SIZE = 3 * 0.25 = 0.75
+            // Image row 1 -> Texture row 2: (ATLAS_GRID_SIZE - 1 - 1) * UV_CELL_SIZE = 2 * 0.25 = 0.50
+            // etc.
+            const textureRow = ATLAS_GRID_SIZE - 1 - row; // Invert row for texture coordinates
+
+            return {
+                x: col * UV_CELL_SIZE, // U starts from left
+                y: textureRow * UV_CELL_SIZE, // V starts from bottom
+                w: UV_CELL_SIZE, // U width
+                h: UV_CELL_SIZE // V height
+            };
+        }
+
+        // Define UV ranges for each face of each block type
+        // (Based on visual inspection of the provided gpt_terrain.png, assuming 4x4 grid)
+        /*
+        Row 0: Grass Top (0,0), Log Side (1,0), Tree (approx 2,0), Plank (3,0)
+        Row 1: Cobblestone (0,1), Dirt (1,1), Ore Stone (2,1), Chest (3,1)
+        Row 2: Sand (0,2), Crafting Table Top/Side (1,2), Furnace (2,2), Water (3,2)
+        Row 3: Diamond Ore (0,3), Pickaxe (approx 1,3), Grass Side (0,3), Stone (3,3) -> This row seems inconsistent in the image grid. Let's refine based on common block types.
+
+        Let's re-map based on standard block types and the image:
+        Grass Top: 0,0
+        Grass Side: 0,3 (Grass on dirt)
+        Dirt: 1,1
+        Stone: 0,1 (Cobblestone? Image 0,1 looks more like rough stone) Let's use 0,1 for general stone/cobble.
+        Dirt Bottom: 1,1 (same as Dirt)
+
+        */
+        const ATLAS_BLOCK_UVS = {
+            [BLOCK_TYPES.GRASS]: {
+                // Top face
+                top: getAtlasUVs(0, 0), // Image Row 0, Col 0 (Green square)
+                // Bottom face
+                bottom: getAtlasUVs(1, 1), // Image Row 1, Col 1 (Dirt square)
+                // Side faces
+                side: getAtlasUVs(0, 3) // Image Row 3, Col 0 (Grass on dirt square)
+            },
+            [BLOCK_TYPES.DIRT]: {
+                // All faces
+                all: getAtlasUVs(1, 1) // Image Row 1, Col 1 (Dirt square)
+            },
+            [BLOCK_TYPES.STONE]: {
+                // All faces
+                all: getAtlasUVs(0, 1) // Image Row 1, Col 0 (Looks like cobblestone/rough stone)
+            },
+            // Add other block types here as needed using their UV coordinates
+            // Example: Let's pretend there's a smooth stone texture at (3,3)
+            // [BLOCK_TYPES.SMOOTH_STONE]: { all: getAtlasUVs(3, 3) },
+        };
+
+
+        // Helper function to create a BoxGeometry and modify its UVs to use a specific atlas region
+        function createBoxGeometryWithAtlasUVs(tileSize, faceUVRanges) {
+            const geometry = new THREE.BoxGeometry(tileSize, tileSize, tileSize);
+            const uvAttribute = geometry.attributes.uv;
+
+            // Define the order of faces in the BoxGeometry UV buffer: Right, Left, Top, Bottom, Front, Back
+            const faceOrder = ['right', 'left', 'top', 'bottom', 'front', 'back'];
+
+             // Map face names to the correct UV ranges from the input object
+            const faceUVMap = {
+                right: faceUVRanges.side || faceUVRanges.all,
+                left: faceUVRanges.side || faceUVRanges.all,
+                top: faceUVRanges.top || faceUVRanges.all,
+                bottom: faceUVRanges.bottom || faceUVRanges.all,
+                front: faceUVRanges.side || faceUVRanges.all,
+                back: faceUVRanges.side || faceUVRanges.all,
+            };
+
+            // Iterate through the UV buffer, adjusting values for each face (6 vertices per face)
+            for (let i = 0; i < uvAttribute.count; i += 6) {
+                const faceIndex = i / 6; // 0:right, 1:left, 2:top, 3:bottom, 4:front, 5:back
+                const faceName = faceOrder[faceIndex];
+                const uvRange = faceUVMap[faceName];
+
+                if (!uvRange) {
+                     console.warn(`No UV range defined for face "${faceName}" for block type. Using default UVs.`);
+                     continue; // Keep default UVs for this face if range is missing
+                }
+
+                const { x, y, w, h } = uvRange; // Base UV (bottom-left) and size of the texture region
+
+                // Adjust UVs for the 6 vertices of this face
+                for (let j = 0; j < 6; j++) {
+                    const vertexIndex = i + j;
+                    // Get default UV (u, v) for this vertex (range is 0 to 1 across the face)
+                    const u_old = uvAttribute.getX(vertexIndex);
+                    const v_old = uvAttribute.getY(vertexIndex);
+
+                    // Calculate new UV based on the desired region (scale and offset)
+                    // u_new = region_x + u_old * region_width
+                    // v_new = region_y + v_old * region_height
+                    const u_new = x + u_old * w;
+                    const v_new = y + v_old * h;
+
+                    // Set the new UV in the buffer
+                    uvAttribute.setXY(vertexIndex, u_new, v_new);
+                }
+            }
+
+            uvAttribute.needsUpdate = true; // Mark the attribute as needing update
+
+            return geometry;
+        }
+
+
+        // --- Configuration Handling ---
+        function applyConfiguration() {
+            // Read World Size config
+            WORLD.WIDTH = parseInt(document.getElementById('world-width').value) || WORLD.WIDTH;
+            WORLD.HEIGHT = parseInt(document.getElementById('world-height').value) || WORLD.HEIGHT;
+            WORLD.DEPTH = parseInt(document.getElementById('world-depth').value) || WORLD.DEPTH;
+
+            // Read Player Speed config
+            PLAYER.SPEED = parseFloat(document.getElementById('player-speed').value) || PLAYER.SPEED;
+
+            // Read Day/Night Speed config
+            DAY_NIGHT.SPEED = parseFloat(document.getElementById('day-night-speed').value); // Allows 0
+
+            // Read Texture Atlas URL config
+            TEXTURES.ATLAS_URL = document.getElementById('atlas-texture-url').value || TEXTURES.ATLAS_URL;
+
+
+            // Basic validation/clamping
+            WORLD.WIDTH = Math.max(10, Math.min(60, WORLD.WIDTH));
+            WORLD.HEIGHT = Math.max(5, Math.min(30, WORLD.HEIGHT));
+            WORLD.DEPTH = Math.max(10, Math.min(60, WORLD.DEPTH));
+            PLAYER.SPEED = Math.max(1, Math.min(25, PLAYER.SPEED));
+            DAY_NIGHT.SPEED = Math.max(0, Math.min(0.2, DAY_NIGHT.SPEED));
+
+            // Recalculate dependent values
+            WORLD.SEA_LEVEL = Math.floor(WORLD.HEIGHT * 0.3); // Adjusted sea level based on height
+            WORLD.MAX_BUILD_HEIGHT = WORLD.HEIGHT + 5; // Allow building slightly above initial height
+
+             console.log("Configuration Applied:", { WORLD, PLAYER, DAY_NIGHT, TEXTURES });
+        }
+
+        // --- Initialization ---
+        // Made init async because texture loading is async
+        async function init() {
+            console.log("Initializing game...");
+
+            // Show loading message
+            loadingMessage.style.display = 'block';
+
+
+            // Apply config values read from UI
+            applyConfiguration();
+
+            // --- Texture Loading (Load the single atlas texture) ---
+            console.log(`Loading texture atlas from: ${TEXTURES.ATLAS_URL}`);
+            const loader = new THREE.TextureLoader();
+            TEXTURES._loaded = {}; // Clear previous loaded textures
+
+            try {
+                const atlasTexture = await loader.loadAsync(TEXTURES.ATLAS_URL);
+                // Configure texture properties
+                atlasTexture.wrapS = THREE.RepeatWrapping;
+                atlasTexture.wrapT = THREE.RepeatWrapping;
+                atlasTexture.magFilter = THREE.NearestFilter; // Use nearest filter for pixel art
+                atlasTexture.minFilter = THREE.LinearMipmapLinearFilter; // Or NearestMipmapNearestFilter for strict pixel art
+                 // atlasTexture.colorSpace = THREE.SRGBColorSpace; // Assuming sRGB texture - Three.js handles this more automatically now, but good practice
+
+                TEXTURES._loaded.atlas = atlasTexture; // Store the loaded atlas texture
+                console.log("Texture atlas loaded successfully.");
+
+            } catch (error) {
+                console.error(`Failed to load texture atlas from ${TEXTURES.ATLAS_URL}:`, error);
+                TEXTURES._loaded.atlas = null; // Store null if loading failed
+                 alert(`Failed to load texture atlas: ${TEXTURES.ATLAS_URL}\n\nUsing fallback colors for blocks.`);
+            }
+            console.log("Texture atlas loading finished.");
+            // --- End Texture Loading ---
+
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(DAY_NIGHT.DAY_SKY_COLOR); // Initial sky color
+            scene.fog = new THREE.Fog(DAY_NIGHT.DAY_SKY_COLOR, 10, Math.max(WORLD.WIDTH, WORLD.DEPTH) * 1.5);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(WORLD.WIDTH / 2 * BLOCK.SIZE, (WORLD.HEIGHT + PLAYER.HEIGHT) * BLOCK.SIZE, WORLD.DEPTH / 2 * BLOCK.SIZE);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            // Enable Shadows
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            ambientLight = new THREE.AmbientLight(0xffffff, DAY_NIGHT.AMBIENT_INTENSITY_MAX); // Start with reasonable ambient
+            scene.add(ambientLight);
+
+            directionalLight = new THREE.DirectionalLight(0xffffff, DAY_NIGHT.SUN_INTENSITY_MAX);
+            // Initial position high above the world center
+             directionalLight.position.set(
+                 WORLD.WIDTH * BLOCK.SIZE / 2 + DAY_NIGHT.SUN_DISTANCE,
+                 DAY_NIGHT.SUN_DISTANCE,
+                 WORLD.DEPTH * BLOCK.SIZE / 2
+             );
+             directionalLight.target.position.set(WORLD.WIDTH * BLOCK.SIZE / 2, WORLD.SEA_LEVEL * BLOCK.SIZE, WORLD.DEPTH * BLOCK.SIZE / 2); // Target world center
+             scene.add(directionalLight.target);
+             scene.add(directionalLight);
+
+            // Shadow Setup for Directional Light
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048; // Higher res shadows
+            directionalLight.shadow.mapSize.height = 2048;
+            // Adjust shadow camera frustum to roughly cover the world
+            const shadowCamSize = Math.max(WORLD.WIDTH, WORLD.DEPTH) * BLOCK.SIZE * 0.7; // Cover slightly more than the world dims
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = DAY_NIGHT.SUN_DISTANCE * 3;
+            directionalLight.shadow.camera.left = -shadowCamSize;
+            directionalLight.shadow.camera.right = shadowCamSize;
+            directionalLight.shadow.camera.top = shadowCamSize;
+            directionalLight.shadow.camera.bottom = -shadowCamSize;
+             directionalLight.shadow.bias = -0.001; // Adjust if shadow acne occurs
+
+             // Optional: visualize shadow camera (uncomment to see)
+             // const shadowHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
+             // scene.add(shadowHelper);
+
+
+            // Controls (Pointer Lock)
+            controls = new PointerLockControls(camera, document.body);
+            scene.add(controls.getObject());
+
+            blocker.addEventListener('click', () => controls.lock());
+            controls.addEventListener('lock', () => {
+                blocker.style.display = 'none';
+                instructions.style.display = 'block';
+                crosshair.style.display = 'block';
+                gameRunning = true; // Start game logic
+            });
+            controls.addEventListener('unlock', () => {
+                blocker.style.display = 'flex';
+                instructions.style.display = 'none';
+                 crosshair.style.display = 'none';
+                gameRunning = false; // Pause game logic
+            });
+
+            // Input Listeners
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseDown);
+
+            // World Generation (Data & Meshes)
+            generateWorldData();
+            createWorldMeshes(); // This now uses loaded textures and custom UV geometries
+
+            // Interaction Highlight Mesh
+            const highlightGeometry = new THREE.BoxGeometry(BLOCK.SIZE * 1.01, BLOCK.SIZE * 1.01, BLOCK.SIZE * 1.01);
+            const highlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.5 });
+            highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
+            highlightMesh.visible = false;
+            scene.add(highlightMesh);
+
+            // Handle Window Resize
+            window.addEventListener('resize', onWindowResize);
+
+            // Update initial lighting based on starting timeOfDay
+            updateDayNightCycle(0); // Apply initial colors/intensity
+
+             // Hide loading message after init
+             loadingMessage.style.display = 'none';
+
+
+            // Start the game loop (already started via the initial call)
+             // animate();
+             console.log("Initialization complete. Game ready.");
+        }
+
+        // --- World Generation ---
+        function generateWorldData() {
+            console.log("Generating world data...");
+            // Ensure worldData is reset for a new world
+             worldData = new Array(WORLD.WIDTH);
+
+            for (let x = 0; x < WORLD.WIDTH; x++) {
+                worldData[x] = new Array(WORLD.HEIGHT);
+                for (let y = 0; y < WORLD.HEIGHT; y++) {
+                    worldData[x][y] = new Array(WORLD.DEPTH).fill(BLOCK.TYPES.AIR);
+                    for (let z = 0; z < WORLD.DEPTH; z++) {
+                         // Simple terrain height using noise or basic math
+                         let terrainHeight = Math.floor(
+                            WORLD.SEA_LEVEL +
+                             Math.sin(x / 8) * 2 + Math.cos(z / 7) * 2 + // Adjusted amplitude
+                             (Math.random() - 0.5) * 1 // Adjusted random variation
+                         );
+                         terrainHeight = Math.max(1, Math.min(WORLD.HEIGHT - 1, terrainHeight)); // Clamp height
+
+                        if (y < terrainHeight) {
+                             if (y === terrainHeight - 1 && y >= WORLD.SEA_LEVEL -1) {
+                                 worldData[x][y][z] = BLOCK.TYPES.GRASS;
+                             } else if (y > 0) {
+                                worldData[x][y][z] = BLOCK.TYPES.DIRT;
+                             } else {
+                                 worldData[x][y][z] = BLOCK.TYPES.STONE; // Bedrock at y=0
+                             }
+                         } else if (y < WORLD.SEA_LEVEL) {
+                             // Simple water generation (optional, needs different rendering)
+                             // For now, leave empty (air)
+                         }
+                    }
+                }
+            }
+             console.log("World data generated.");
+        }
+        // --- Block Access ---
+        function getBlock(x, y, z) {
+            if (x < 0 || x >= WORLD.WIDTH || y < 0 || y >= WORLD.HEIGHT || z < 0 || z >= WORLD.DEPTH) {
+                return BLOCK.TYPES.AIR;
+            }
+            // Add safety check for potentially undefined inner arrays
+            return worldData[x]?.[y]?.[z] ?? BLOCK.TYPES.AIR;
+        }
+
+        function setBlock(x, y, z, type) {
+            if (x >= 0 && x < WORLD.WIDTH && y >= 0 && y < WORLD.HEIGHT && z >= 0 && z < WORLD.DEPTH) {
+                // Ensure inner array exists
+                 if (!worldData[x]) worldData[x] = [];
+                 if (!worldData[x][y]) worldData[x][y] = [];
+
+                if (worldData[x][y][z] !== type) {
+                    worldData[x][y][z] = type;
+                    updateWorldMesh(x, y, z, type);
+                }
+            }
+        }
+
+
+        // --- World Rendering (InstancedMesh) ---
+        function createWorldMeshes() {
+             console.log("Creating world meshes...");
+
+            // --- Cleanup Previous Meshes and Geometries ---
+            for (const type in meshes) {
+                scene.remove(meshes[type]);
+                // Note: Materials created below are unique per mesh, so we can dispose them safely here
+                if (meshes[type].material) meshes[type].material.dispose();
+            }
+             meshes = {}; // Clear the meshes object
+
+             // Dispose of geometries (created below, one per block type)
+             for(const type in blockGeometries) {
+                 if (blockGeometries[type] && blockGeometries[type].dispose) { // Check dispose exists
+                     blockGeometries[type].dispose();
+                 }
+             }
+             blockGeometries = {}; // Clear geometries object
+
+             // Dispose of loaded texture (the atlas) - this is done in startGameButton cleanup
+             // if (TEXTURES._loaded.atlas && TEXTURES._loaded.atlas.dispose) {
+             //     TEXTURES._loaded.atlas.dispose();
+             // }
+             // TEXTURES._loaded = {}; // Clear loaded textures
+
+
+            // --- Get Texture or Fallback ---
+            const atlasTexture = TEXTURES._loaded.atlas;
+            // Fallback colors (used if atlas fails to load)
+            const fallbackColors = {
+                 [BLOCK_TYPES.GRASS]: 0x559022,
+                 [BLOCK_TYPES.DIRT]: 0x8b4513,
+                 [BLOCK_TYPES.STONE]: 0x808080,
+            };
+
+            // --- Create Geometries with Custom UVs and Materials ---
+            const dummy = new THREE.Object3D();
+
+            // Give InstancedMesh a reasonable initial capacity, ensuring it's at least the initial block count
+            // Count blocks first
+            const counts = {};
+            for (let x = 0; x < WORLD.WIDTH; x++) {
+                for (let y = 0; y < WORLD.HEIGHT; y++) {
+                    for (let z = 0; z < WORLD.DEPTH; z++) {
+                        const type = worldData[x]?.[y]?.[z];
+                        if (type && type !== BLOCK.TYPES.AIR) {
+                            counts[type] = (counts[type] || 0) + 1;
+                        }
+                    }
+                }
+            }
+
+
+            for (const typeKey in BLOCK_TYPES) {
+                const type = BLOCK_TYPES[typeKey];
+                 if (type === BLOCK_TYPES.AIR) continue;
+
+                 const count = counts[type] || 0;
+                 const blockUVs = ATLAS_BLOCK_UVS[type]; // Get the UV definition for this type
+
+                 let geometry;
+                 let material;
+
+                if (atlasTexture && blockUVs) {
+                     // Create geometry with custom UVs from the atlas
+                     geometry = createBoxGeometryWithAtlasUVs(BLOCK.SIZE, blockUVs);
+                     material = new THREE.MeshLambertMaterial({ map: atlasTexture }); // Use atlas texture map
+                 } else {
+                     // Use default geometry and fallback color material
+                     if (!atlasTexture) console.warn("Atlas texture not loaded. Using default geometry and fallback color.");
+                     if (!blockUVs && atlasTexture) console.warn(`No atlas UVs defined for type ${typeKey} (${type}). Using default geometry and atlas texture (might look wrong).`);
+                      geometry = new THREE.BoxGeometry(BLOCK.SIZE, BLOCK.SIZE, BLOCK.SIZE); // Default geometry (0-1 UVs)
+                      material = new THREE.MeshLambertMaterial({ color: fallbackColors[type] || 0x808080 }); // Use fallback color
+                 }
+
+                 blockGeometries[type] = geometry; // Store geometry
+
+
+                 // Create InstancedMesh for this type
+                 const initialCapacity = Math.max(count + 500, 500); // Add some buffer + minimum capacity
+
+                 const mesh = new THREE.InstancedMesh(geometry, material, initialCapacity);
+                 mesh.userData.blockType = type;
+                 mesh.userData.instanceMap = new Map(); // Maps "x,y,z" string to instance index
+                 mesh.count = 0; // Actual number of currently visible/used instances
+
+                 // Enable Shadow Casting & Receiving
+                 mesh.castShadow = true;
+                 mesh.receiveShadow = true;
+
+                 meshes[type] = mesh; // Store mesh by its type ID
+                 scene.add(mesh);
+                 console.log(`Created InstancedMesh for type ${typeKey} (${type}) with capacity ${initialCapacity}`);
+            }
+
+
+             // --- Position Instances based on Initial World Data ---
+             for (let x = 0; x < WORLD.WIDTH; x++) {
+                 for (let y = 0; y < WORLD.HEIGHT; y++) {
+                     for (let z = 0; z < WORLD.DEPTH; z++) {
+                         const type = worldData[x]?.[y]?.[z];
+                         if (type && type !== BLOCK.TYPES.AIR) {
+                             const mesh = meshes[type];
+                             if (!mesh) continue; // Should not happen if mesh creation was successful
+
+                             // Find an available index (either beyond current count or a scaled-down instance)
+                             let instanceIndex = mesh.count; // Default to adding at the end
+
+                             // Check if there's a scaled-down instance we can reuse
+                             const tempMatrix = new THREE.Matrix4();
+                             const tempScale = new THREE.Vector3();
+                             // Iterate up to mesh.count. This includes indices that are mapped (used)
+                             // and indices that were previously used but are now unmapped (scaled-down).
+                             for(let i = 0; i < mesh.count; i++) {
+                                 // Check if this index is NOT currently mapped to any coordinate string in this mesh's map
+                                 // A faster check might involve keeping a separate list of free indices
+                                 let isUsed = false;
+                                 for(const [key, value] of mesh.userData.instanceMap.entries()) {
+                                      if (value === i) { isUsed = true; break; }
+                                  }
+                                  if (!isUsed) {
+                                     // Additionally, verify it's actually scaled down (safety)
+                                     mesh.getMatrixAt(i, tempMatrix);
+                                     tempScale.setFromMatrixScale(tempMatrix);
+                                     if (tempScale.lengthSq() < 1e-6) { // Check if scale is near zero (very close to 0)
+                                         instanceIndex = i; // Found a reusable slot
+                                         break; // Stop searching
+                                     }
+                                  }
+                             }
+
+
+                             if (instanceIndex < mesh.instanceMatrix.count) {
+                                 const coordString = `${x},${y},${z}`;
+                                 dummy.position.set(
+                                     x * BLOCK.SIZE + BLOCK.SIZE / 2,
+                                     y * BLOCK.SIZE + BLOCK.SIZE / 2,
+                                     z * BLOCK.SIZE + BLOCK.SIZE / 2
+                                 );
+                                 dummy.scale.set(1, 1, 1); // Ensure scale is 1 for visible blocks
+                                 dummy.updateMatrix();
+                                 mesh.setMatrixAt(instanceIndex, dummy.matrix);
+                                 mesh.userData.instanceMap.set(coordString, instanceIndex);
+
+                                 // If we used a new index (not a reused one within the current 'count'), increment the count
+                                 // This effectively moves the 'count' boundary forward if we appended.
+                                 if (instanceIndex === mesh.count) {
+                                     mesh.count++;
+                                 }
+                             } else {
+                                  // This case should ideally not happen if initialCapacity is large enough
+                                  // and updateWorldMesh handles adding correctly.
+                                  console.warn(`InstancedMesh for type ${typeKey} capacity reached (${mesh.instanceMatrix.count}). Cannot position initial block at ${coordString}.`);
+                                  // Note: The block data is already set, but it won't be rendered.
+                             }
+                         }
+                     }
+                 }
+             }
+
+            // Update matrix buffer once after positioning all instances
+            for (const type in meshes) {
+                meshes[type].instanceMatrix.needsUpdate = true;
+            }
+            console.log("World meshes created and positioned.");
+        }
+
+
+        // --- Mesh Update (Hide/Show Instances) ---
+        // This function's logic remains largely the same, it just finds the correct
+        // InstancedMesh based on the block type and updates its instance matrix.
+        function updateWorldMesh(x, y, z, newType) {
+            const coordString = `${x},${y},${z}`;
+            const dummy = new THREE.Object3D();
+            let oldType = BLOCK.TYPES.AIR; // Track old type to potentially revert data model
+
+            // 1. Hide previous block instance (if any)
+            // Iterate through all possible block type meshes to find which one currently holds this coordinate
+            for (const typeKey in BLOCK_TYPES) {
+                 const type = BLOCK_TYPES[typeKey];
+                 if (type === BLOCK_TYPES.AIR) continue;
+
+                const mesh = meshes[type]; // Get the InstancedMesh for this type
+                if (mesh && mesh.userData.instanceMap.has(coordString)) {
+                    const instanceIndex = mesh.userData.instanceMap.get(coordString);
+                    // Scale down the instance matrix to effectively hide it
+                    dummy.scale.set(0, 0, 0);
+                    dummy.updateMatrix();
+                    mesh.setMatrixAt(instanceIndex, dummy.matrix);
+                    mesh.instanceMatrix.needsUpdate = true; // Mark buffer for update
+                    // Remove from the map, but don't decrement count
+                    mesh.userData.instanceMap.delete(coordString);
+                    oldType = type; // Store the type that was removed
+                    // We found the old block and hid it, no need to check other meshes
+                    break;
+                }
+            }
+
+            // 2. Show new block instance (if newType is not AIR)
+            if (newType !== BLOCK.TYPES.AIR) {
+                const mesh = meshes[newType]; // Get the InstancedMesh for the new type
+                if (!mesh) {
+                    console.error(`No InstancedMesh found for block type: ${newType}. Cannot place block.`);
+                    // Revert the data model change as mesh update failed
+                    if (oldType !== BLOCK.TYPES.AIR) {
+                         worldData[x][y][z] = oldType;
+                         console.warn(`Reverted block at ${coordString} to type ${oldType}.`);
+                    } else {
+                         worldData[x][y][z] = BLOCK.TYPES.AIR; // Revert to AIR if it was AIR before attempt
+                         console.warn(`Reverted block at ${coordString} to AIR.`);
+                    }
+                    return;
+                }
+
+                // Find an available index (either a scaled-down one or the next in count)
+                 let instanceIndex = -1;
+
+                 // Look for a reusable scaled-down instance within the mesh's current 'count'
+                 const tempMatrix = new THREE.Matrix4();
+                 const tempScale = new THREE.Vector3();
+                 // Iterate up to mesh.instanceMatrix.count (the total capacity)
+                 for(let i = 0; i < mesh.instanceMatrix.count; i++) {
+                     // Check if this index is NOT currently mapped to any coordinate string in this mesh's map
+                     let isUsed = false;
+                     for(const [key, value] of mesh.userData.instanceMap.entries()) {
+                          if (value === i) { isUsed = true; break; }
+                      }
+                      if (!isUsed) {
+                         // Additionally, verify it's actually scaled down (safety check, might be omitted)
+                         mesh.getMatrixAt(i, tempMatrix);
+                         tempScale.setFromMatrixScale(tempMatrix);
+                         if (tempScale.lengthSq() < 1e-6) { // Check if scale is near zero (very close to 0)
+                             instanceIndex = i; // Found a reusable slot
+                             break; // Stop searching
+                         }
+                      }
+                 }
+
+                 // If no reusable instance found, and there is capacity, use the next index
+                 if (instanceIndex === -1 && mesh.count < mesh.instanceMatrix.count) {
+                     instanceIndex = mesh.count;
+                 }
+
+
+                if (instanceIndex !== -1) {
+                    // Position and scale up the instance
+                    dummy.position.set(x * BLOCK.SIZE + BLOCK.SIZE / 2, y * BLOCK.SIZE + BLOCK.SIZE / 2, z * BLOCK.SIZE + BLOCK.SIZE / 2);
+                    dummy.scale.set(1, 1, 1); // Scale up to make it visible
+                    dummy.updateMatrix();
+                    mesh.setMatrixAt(instanceIndex, dummy.matrix);
+                    mesh.instanceMatrix.needsUpdate = true; // Mark buffer for update
+
+                    // Map the coordinate string to the used instance index
+                    mesh.userData.instanceMap.set(coordString, instanceIndex);
+
+                    // If we used a new index (that was previously beyond the 'count'), increment the count
+                    // This ensures 'count' reflects the highest index currently in use + 1,
+                    // or simply increments if we added to the end.
+                     if (instanceIndex >= mesh.count) {
+                         mesh.count = instanceIndex + 1;
+                     }
+                     // Note: The count logic here is slightly different from before.
+                     // A simpler approach is to just find the lowest available slot (scaled-down or after mesh.count-1)
+                     // and always use that, and mesh.count doesn't necessarily need to track the highest index + 1,
+                     // as long as the map correctly tracks coordinate -> index.
+                     // Let's stick to the current logic for now, it seems to aim for reusing slots efficiently.
+
+
+                } else {
+                    // InstancedMesh capacity reached
+                    console.warn(`InstancedMesh for type ${newType} capacity reached (${mesh.instanceMatrix.count}). Cannot place block at ${coordString}.`);
+                    // Revert the data model change
+                    if (oldType !== BLOCK.TYPES.AIR) {
+                         worldData[x][y][z] = oldType;
+                         console.warn(`Reverted block at ${coordString} to type ${oldType}.`);
+                    } else {
+                         worldData[x][y][z] = BLOCK.TYPES.AIR; // Revert to AIR if it was AIR before attempt
+                         console.warn(`Reverted block at ${coordString} to AIR.`);
+                    }
+                }
+            }
+             // If newType was AIR, we only needed step 1 (hiding), which is done.
+        }
+
+        // --- Player Controls and Physics ---
+        // (Keep the player controls, updatePlayer, updateInteraction, onMouseDown, onKeyDown, onKeyUp functions as they were)
+
+         function onKeyDown(event) {
+            if (!gameRunning || !controls.isLocked) {
+                 // Allow ESC to open config even if not running/locked, unless config is already open
+                 if (event.code === 'Escape' && configModal.style.display !== 'flex') {
+                      controls.unlock(); // This triggers the 'unlock' event listener which pauses the game and shows blocker
+                      // The unlock listener handles showing the blocker.
+                      // We could add configModal.style.display = 'flex'; here as well if we want ESC to toggle config directly
+                      // instead of requiring another click on the blocker.
+                 }
+                 return;
+            }
+            switch (event.code) {
+                case 'KeyW': moveState.forward = 1; break;
+                case 'KeyS': moveState.backward = 1; break;
+                case 'KeyA': moveState.left = 1; break;
+                case 'KeyD': moveState.right = 1; break;
+                case 'Space':
+                    if (playerOnGround) {
+                        playerVelocity.y = PLAYER.JUMP_VELOCITY;
+                        playerOnGround = false;
+                    }
+                    break;
+                 case 'Escape':
+                    controls.unlock(); // This triggers the 'unlock' event listener which pauses the game
+                    break;
+            }
+        }
+
+        function onKeyUp(event) {
+             if (!gameRunning || !controls.isLocked) return;
+            switch (event.code) {
+                case 'KeyW': moveState.forward = 0; break;
+                case 'KeyS': moveState.backward = 0; break;
+                case 'KeyA': moveState.left = 0; break;
+                case 'KeyD': moveState.right = 0; break;
+            }
+        }
+
+         function updatePlayer(deltaTime) {
+            if (!gameRunning || !controls.isLocked) return;
+
+            const speed = PLAYER.SPEED;
+            const moveDirection = new THREE.Vector3();
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            const playerPos = controls.getObject().position;
+
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+            right.crossVectors(camera.up, forward).normalize();
+
+            moveDirection.addScaledVector(forward, (moveState.forward - moveState.backward) * speed * deltaTime);
+            moveDirection.addScaledVector(right, (moveState.right - moveState.left) * speed * deltaTime);
+
+            // Apply horizontal movement initially
+             playerPos.x += moveDirection.x;
+             playerPos.z += moveDirection.z;
+
+             // --- Collision Detection & Response (Simplified AABB) ---
+             // Apply gravity
+            playerVelocity.y += PLAYER.GRAVITY * deltaTime;
+             // Apply vertical velocity
+            playerPos.y += playerVelocity.y * deltaTime;
+
+             const playerHalfWidth = 0.35; // Half width of the player collision box (slightly less than BLOCK.SIZE/2)
+             const playerHeight = PLAYER.HEIGHT; // Full player height
+
+             playerOnGround = false; // Reset ground flag
+
+             // Vertical Collision (Y-axis)
+             const playerFeetY = playerPos.y - playerHeight / 2;
+             const playerHeadY = playerPos.y + playerHeight / 2;
+
+             // Check blocks immediately below player's feet (check 4 corners + center)
+             const feetCheckPoints = [
+                 new THREE.Vector3(playerPos.x, playerFeetY, playerPos.z), // Center
+                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerFeetY, playerPos.z - playerHalfWidth),
+                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerFeetY, playerPos.z - playerHalfWidth),
+                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerFeetY, playerPos.z + playerHalfWidth),
+                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerFeetY, playerPos.z + playerHalfWidth),
+             ];
+
+             let landedOnBlock = false;
+             for(const point of feetCheckPoints) {
+                  const blockYBelow = Math.floor(point.y / BLOCK.SIZE);
+                  const blockX = Math.floor(point.x / BLOCK.SIZE);
+                  const blockZ = Math.floor(point.z / BLOCK.SIZE);
+                  if (getBlock(blockX, blockYBelow, blockZ) !== BLOCK.TYPES.AIR) {
+                      const blockTopSurfaceY = (blockYBelow + 1) * BLOCK.SIZE;
+                      // Check if player feet are below or very close to the block's top surface
+                      if (playerFeetY < blockTopSurfaceY + 0.01) {
+                          // Resolve collision: place player on top of the block
+                          playerPos.y = blockTopSurfaceY + playerHeight / 2;
+                          playerVelocity.y = 0; // Stop falling
+                          playerOnGround = true; // Set ground flag
+                          landedOnBlock = true;
+                          break; // Only need to find one collision point hitting ground
+                      }
+                  }
+             }
+
+             // Check Ceiling Collision
+             const headCheckPoints = [
+                 new THREE.Vector3(playerPos.x, playerHeadY, playerPos.z), // Center
+                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerHeadY, playerPos.z - playerHalfWidth),
+                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerHeadY, playerPos.z - playerHalfWidth),
+                 new THREE.Vector3(playerPos.x - playerHalfWidth, playerHeadY, playerPos.z + playerHalfWidth),
+                 new THREE.Vector3(playerPos.x + playerHalfWidth, playerHeadY, playerPos.z + playerHalfWidth),
+             ];
+              for(const point of headCheckPoints) {
+                 const blockYAbove = Math.floor(point.y / BLOCK.SIZE);
+                 const blockX = Math.floor(point.x / BLOCK.SIZE);
+                 const blockZ = Math.floor(point.z / BLOCK.SIZE);
+                 if (getBlock(blockX, blockYAbove, blockZ) !== BLOCK.TYPES.AIR) {
+                     const blockBottomSurfaceY = blockYAbove * BLOCK.SIZE;
+                     if (playerHeadY > blockBottomSurfaceY - 0.01) {
+                          playerPos.y = blockBottomSurfaceY - playerHeight / 2; // Push player down
+                          playerVelocity.y = Math.min(0, playerVelocity.y); // Stop upward movement
+                          break; // Only need to find one collision point hitting ceiling
+                     }
+                 }
+             }
+
+
+             // Horizontal Collision (X and Z axes)
+             // Check player's bounding box against surrounding grid cells
+             const playerMinX = playerPos.x - playerHalfWidth;
+             const playerMaxX = playerPos.x + playerHalfWidth;
+             const playerMinZ = playerPos.z - playerHalfWidth;
+             const playerMaxZ = playerPos.z + playerHalfWidth;
+             const playerMinY = playerPos.y - playerHeight / 2 + 0.1; // Check slightly above feet for horizontal
+             const playerMaxY = playerPos.y + playerHeight / 2 - 0.1; // Check slightly below head for horizontal
+
+             const checkHorizontalCollisionAndResolve = (pos, axis, delta) => {
+                 if (delta === 0) return; // No movement along this axis
+
+                 const axisIndex = axis === 'x' ? 0 : 2; // 0 for X, 2 for Z
+                 const moveDir = Math.sign(delta);
+
+                 const checkPosX = axis === 'x' ? (pos.x + delta) : playerPos.x;
+                 const checkPosZ = axis === 'z' ? (pos.z + delta) : playerPos.z;
+
+                 // Determine which grid cells along the movement path need checking
+                 const cellsToCheckX = [Math.floor((checkPosX - playerHalfWidth) / BLOCK.SIZE), Math.floor((checkPosX + playerHalfWidth) / BLOCK.SIZE)];
+                 const cellsToCheckZ = [Math.floor((checkPosZ - playerHalfWidth) / BLOCK.SIZE), Math.floor((checkPosZ + playerHalfWidth) / BLOCK.SIZE)];
+                 const cellsToCheckY = [Math.floor(playerMinY / BLOCK.SIZE), Math.floor(playerMaxY / BLOCK.SIZE)];
+
+
+                 let collisionFound = false;
+                  // Iterate through the grid cells the player's bounding box *would* overlap after the attempted move
+                 for(let y = cellsToCheckY[0]; y <= cellsToCheckY[1]; y++) {
+                     for(let x = cellsToCheckX[0]; x <= cellsToCheckX[1]; x++) {
+                         for(let z = cellsToCheckZ[0]; z <= cellsToCheckZ[1]; z++) {
+                             if (getBlock(x, y, z) !== BLOCK.TYPES.AIR) {
+                                 collisionFound = true;
+                                 // Resolve collision for the specific axis
+                                 if (axis === 'x') {
+                                      if (moveDir > 0) pos.x = x * BLOCK.SIZE - playerHalfWidth; // Push back from left face
+                                      else pos.x = (x + 1) * BLOCK.SIZE + playerHalfWidth; // Push back from right face
+                                      playerVelocity.x = 0; // Stop horizontal velocity
+                                 } else { // axis === 'z'
+                                       if (moveDir > 0) pos.z = z * BLOCK.SIZE - playerHalfWidth; // Push back from front face
+                                       else pos.z = (z + 1) * BLOCK.SIZE + playerHalfWidth; // Push back from back face
+                                      playerVelocity.z = 0; // Stop horizontal velocity
+                                 }
+                                 break; // Stop checking other cells once collision found for this move
+                             }
+                         }
+                         if (collisionFound) break;
+                     }
+                     if (collisionFound) break;
+                 }
+             };
+
+             // Apply and resolve horizontal movement independently for X and Z
+             // This provides basic sliding behavior along walls
+             checkHorizontalCollisionAndResolve(playerPos, 'x', moveDirection.x);
+             checkHorizontalCollisionAndResolve(playerPos, 'z', moveDirection.z);
+
+
+             // Final player position update
+             controls.getObject().position.copy(playerPos);
+
+
+             // Boundaries - always keep player within world bounds on X/Z
+             playerPos.x = Math.max(playerHalfWidth, Math.min(WORLD.WIDTH * BLOCK.SIZE - playerHalfWidth, playerPos.x));
+             playerPos.z = Math.max(playerHalfWidth, Math.min(WORLD.DEPTH * BLOCK.SIZE - playerHalfWidth, playerPos.z));
+             // Prevent falling through floor/bedrock level
+             playerPos.y = Math.max(playerPos.y, BLOCK.SIZE + playerHeight / 2); // Ensure player is always above the floor level at y=0
+        }
+
+
+        // --- Interaction (Raycasting) ---
+        function updateInteraction() {
+            if (!gameRunning || !controls.isLocked) {
+                 highlightMesh.visible = false;
+                 return;
+             }
+
+            // Raycast from the center of the screen (mouse coordinates are 0,0 for the center)
+            raycaster.setFromCamera(mouse, camera);
+            const blockMeshes = Object.values(meshes).filter(m => m instanceof THREE.InstancedMesh); // Get all active block meshes
+            if (blockMeshes.length === 0) {
+                 highlightMesh.visible = false;
+                 return;
+            }
+
+            // Find the first intersected block within reach
+            const intersects = raycaster.intersectObjects(blockMeshes, false); // Use false for recursive, default is true but not needed for InstancedMesh
+
+            let foundBlock = false;
+            if (intersects.length > 0) {
+                // Find the closest intersection that is on an InstancedMesh and within reach
+                 let closestIntersection = null;
+                 for (const intersection of intersects) {
+                     if (intersection.instanceId !== undefined && intersection.distance < RENDER.REACH_DISTANCE) {
+                         closestIntersection = intersection;
+                         break; // Found the closest valid intersection
+                     }
+                 }
+
+                if (closestIntersection) {
+                    const intersectedMesh = closestIntersection.object;
+                    const instanceId = closestIntersection.instanceId;
+
+                    // Find the block coordinates from the instanceId by searching the mesh's instanceMap
+                    let blockCoords = null;
+                    // This linear search can be slow if you have many instances.
+                    // A more optimized approach would be to store instanceIndex -> coord mapping directly.
+                    for (const [coordString, index] of intersectedMesh.userData.instanceMap.entries()) {
+                        if (index === instanceId) {
+                            const [x, y, z] = coordString.split(',').map(Number);
+                            blockCoords = new THREE.Vector3(x, y, z);
+                            break;
+                        }
+                    }
+
+                    if (blockCoords) {
+                        // Position the highlight mesh at the center of the intersected block
+                        highlightMesh.position.set(
+                            blockCoords.x * BLOCK.SIZE + BLOCK.SIZE / 2,
+                            blockCoords.y * BLOCK.SIZE + BLOCK.SIZE / 2,
+                            blockCoords.z * BLOCK.SIZE + BLOCK.SIZE / 2
+                        );
+                        highlightMesh.visible = true; // Show the highlight
+                        foundBlock = true; // Indicate a block was found within reach
+                    }
+                 }
+            }
+
+            if (!foundBlock) {
+                highlightMesh.visible = false; // Hide highlight if no block is intersected within reach
+            }
+        }
+
+        function onMouseDown(event) {
+            // Allow clicks on the blocker/modal to unlock/start game even if gameRunning is false
+             if (!controls.isLocked && event.target !== blocker.querySelector('div') && event.target !== startGameButton) {
+                 // Ignore clicks that aren't on interactive elements when unlocked
+                 return;
+             }
+
+            if (!gameRunning || !controls.isLocked) return; // Game must be running and locked for block interaction
+
+            const now = performance.now();
+            // Basic rate limiting for placing/breaking
+            if (now - lastPlacedTime < 150) return;
+
+
+            raycaster.setFromCamera(mouse, camera); // Raycast from center of screen
+            const blockMeshes = Object.values(meshes).filter(m => m instanceof THREE.InstancedMesh);
+            if (blockMeshes.length === 0) return;
+
+            const intersects = raycaster.intersectObjects(blockMeshes, false);
+
+            if (intersects.length > 0) {
+                 let closestIntersection = null;
+                 for (const intersection of intersects) {
+                     if (intersection.instanceId !== undefined && intersection.distance < RENDER.REACH_DISTANCE) {
+                         closestIntersection = intersection;
+                         break; // Found the closest valid intersection
+                     }
+                 }
+
+                if (closestIntersection) {
+                    const intersectedMesh = closestIntersection.object;
+                    const instanceId = closestIntersection.instanceId;
+                    const face = closestIntersection.face;
+                    const normal = face.normal.clone(); // Normal in local space of the instance
+
+                    // Find the block coordinates from the instanceId
+                     let blockCoords = null;
+                     for (const [coordString, index] of intersectedMesh.userData.instanceMap.entries()) {
+                         if (index === instanceId) {
+                             const [x, y, z] = coordString.split(',').map(Number);
+                             blockCoords = new THREE.Vector3(x, y, z);
+                             break;
+                         }
+                     }
+
+                    if (!blockCoords) return; // Should not happen if instanceId was valid
+
+                    lastPlacedTime = now; // Update rate limiter time
+
+                    if (event.button === 0) { // Left Click - Break
+                        if (blockCoords.y > 0) { // Don't break bedrock (y=0 block)
+                            setBlock(blockCoords.x, blockCoords.y, blockCoords.z, BLOCK.TYPES.AIR);
+                        }
+                    } else if (event.button === 2) { // Right Click - Place
+                        // Determine placement position based on the face normal
+                         // Transform the local normal to world space
+                         const worldNormal = normal.clone().transformDirection(intersectedMesh.matrixWorld).normalize();
+
+                         const placePos = blockCoords.clone();
+                         // Add the rounded world normal components to get the adjacent block coordinates
+                         placePos.x += Math.round(worldNormal.x);
+                         placePos.y += Math.round(worldNormal.y);
+                         placePos.z += Math.round(worldNormal.z);
+
+
+                         // Boundary and Height Checks
+                         if (placePos.x < 0 || placePos.x >= WORLD.WIDTH ||
+                             placePos.y < 0 || placePos.y >= WORLD.MAX_BUILD_HEIGHT || // Prevent building too high
+                             placePos.z < 0 || placePos.z >= WORLD.DEPTH) {
+                             console.log("Placement out of bounds or too high.");
+                             return; // Out of bounds
+                         }
+
+                         // Collision check with player - prevent placing block inside player
+                         const playerPos = controls.getObject().position;
+                         const playerHeight = PLAYER.HEIGHT;
+                         const playerHalfWidth = 0.35;
+                         const playerBox = new THREE.Box3().setFromCenterAndSize(
+                              new THREE.Vector3(playerPos.x, playerPos.y - playerHeight*0.4, playerPos.z),
+                              new THREE.Vector3(playerHalfWidth * 2, playerHeight * 0.8, playerHalfWidth * 2)
+                         );
+                         const placeBlockBox = new THREE.Box3().setFromCenterAndSize(
+                              new THREE.Vector3(placePos.x * BLOCK.SIZE + BLOCK.SIZE/2, placePos.y * BLOCK.SIZE + BLOCK.SIZE/2, placePos.z * BLOCK.SIZE + BLOCK.SIZE/2),
+                              new THREE.Vector3(BLOCK.SIZE, BLOCK.SIZE, BLOCK.SIZE)
+                         );
+
+                         // Check if the target cell is AIR AND doesn't intersect with the player's box
+                         if (!playerBox.intersectsBox(placeBlockBox) && getBlock(placePos.x, placePos.y, placePos.z) === BLOCK.TYPES.AIR) {
+                             // Place DIRT block (simple inventory - always place dirt for now)
+                             setBlock(placePos.x, placePos.y, placePos.z, BLOCK.TYPES.DIRT); // Could make this selectable later
+                         } else {
+                             console.log("Placement blocked (cell not air or intersects player).");
+                         }
+                    }
+                }
+            }
+             event.preventDefault(); // Prevent context menu on right click
+        }
+
+
+         // --- Day/Night Cycle ---
+         function updateDayNightCycle(deltaTime) {
+             // Only update automatically if game is running AND speed > 0
+             if (!gameRunning && DAY_NIGHT.SPEED === 0) return;
+
+             // If config modal is open, pause time progression
+             if (configModal.style.display.includes('flex')) {
+                  return;
+             }
+
+             timeOfDay = (timeOfDay + deltaTime * DAY_NIGHT.SPEED) % 1; // Cycle between 0 and 1
+
+             // Calculate sun position (simple circular path high above the world center)
+             const sunPosAngle = timeOfDay * Math.PI * 2; // Angle from 0 to 2PI over the day
+             const fixedSunY = DAY_NIGHT.SUN_DISTANCE; // Sun is always high up
+             const sunPosX = Math.cos(sunPosAngle - Math.PI/2) * DAY_NIGHT.SUN_DISTANCE * 0.8; // Rotate in XZ plane, slightly smaller radius
+             const sunPosZ = Math.sin(sunPosAngle - Math.PI/2) * DAY_NIGHT.SUN_DISTANCE * 0.8; // Rotate in XZ plane
+
+             directionalLight.position.set(
+                 WORLD.WIDTH * BLOCK.SIZE / 2 + sunPosX, // Orbit around world center X
+                 fixedSunY,                              // Fixed high Y position
+                 WORLD.DEPTH * BLOCK.SIZE / 2 + sunPosZ  // Orbit around world center Z
+            );
+
+             // The light direction points towards the target (center of the world) - already set in init
+
+             // Calculate intensity based on sun height (more direct approach)
+             // Intensity is highest when sun is highest (noon), lowest when sun is at horizon or below (sunrise/sunset/night)
+             const sunHeightFactor = Math.max(0, (directionalLight.position.y - (WORLD.SEA_LEVEL * BLOCK.SIZE)) / (DAY_NIGHT.SUN_DISTANCE - (WORLD.SEA_LEVEL * BLOCK.SIZE))); // Factor 0 to ~1 based on height above sea level
+
+             // Update light intensities
+             directionalLight.intensity = sunHeightFactor * DAY_NIGHT.SUN_INTENSITY_MAX;
+             ambientLight.intensity = DAY_NIGHT.AMBIENT_INTENSITY_MIN + sunHeightFactor * (DAY_NIGHT.AMBIENT_INTENSITY_MAX - DAY_NIGHT.AMBIENT_INTENSITY_MIN);
+
+             // Update sky color (lerp between night, sunset/sunrise, day)
+             const tempColor = new THREE.Color();
+             let skyColor;
+
+             // Use timeOfDay (0-1) to define transition points
+            const sunriseStart = 0.2;
+            const sunriseEnd = 0.3;
+            const sunsetStart = 0.7;
+            const sunsetEnd = 0.8;
+
+             if (timeOfDay >= sunriseEnd && timeOfDay <= sunsetStart) {
+                 // Daytime
+                 skyColor = DAY_NIGHT.DAY_SKY_COLOR;
+             } else if (timeOfDay > sunsetStart && timeOfDay < sunsetEnd) {
+                 // Sunset transition
+                 const factor = (timeOfDay - sunsetStart) / (sunsetEnd - sunsetStart); // 0 to 1
+                 skyColor = tempColor.lerpColors(DAY_NIGHT.DAY_SKY_COLOR, DAY_NIGHT.SUNSET_SKY_COLOR, factor);
+             } else if (timeOfDay >= sunsetEnd || timeOfDay < sunriseStart) {
+                 // Night time (or wraps around midnight)
+                 skyColor = DAY_NIGHT.NIGHT_SKY_COLOR;
+             } else { // timeOfDay >= sunriseStart && timeOfDay < sunriseEnd
+                 // Sunrise transition
+                 const factor = (timeOfDay - sunriseStart) / (sunriseEnd - sunriseStart); // 0 to 1
+                 skyColor = tempColor.lerpColors(DAY_NIGHT.NIGHT_SKY_COLOR, DAY_NIGHT.SUNSET_SKY_COLOR, factor);
+             }
+
+
+             scene.background = skyColor;
+             scene.fog.color = skyColor;
+         }
+
+
+        // --- Window Resize ---
+        function onWindowResize() {
+            if (!camera || !renderer) return; // Don't run if not initialized
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const deltaTime = clock.getDelta();
+
+            // Only run core game logic updates if gameRunning is true AND controls are locked
+            if (gameRunning && controls.isLocked) {
+                 updatePlayer(deltaTime);
+                 updateInteraction(); // Interaction updates based on camera position
+                 updateDayNightCycle(deltaTime); // Update time cycle
+             } else if (configModal.style.display.includes('flex')) {
+                  // Config modal is open, game is paused - do nothing in the loop
+             } else {
+                  // Game is paused (blocker visible) - do nothing in the loop
+             }
+
+            // Always render regardless of gameRunning or lock state
+            if (renderer && scene && camera) {
+                 renderer.render(scene, camera);
+            }
+        }
+
+        // --- Tab Switching Logic ---
+        function activateTab(tabId) {
+            // Deactivate all buttons and panels
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabPanels.forEach(panel => panel.classList.remove('active'));
+
+            // Activate the selected button and panel
+            const selectedButton = tabNavigation.querySelector(`.tab-button[data-tab="${tabId}"]`);
+            const selectedPanel = document.getElementById(tabId);
+
+            if (selectedButton && selectedPanel) {
+                selectedButton.classList.add('active');
+                selectedPanel.classList.add('active');
+            } else {
+                 console.warn(`Could not find tab button or panel for ID: ${tabId}`);
+            }
+        }
+
+        // Add event listener for tab clicks using delegation on the navigation container
+        tabNavigation.addEventListener('click', (event) => {
+            const clickedButton = event.target.closest('.tab-button');
+            if (clickedButton) {
+                const targetTabId = clickedButton.dataset.tab;
+                activateTab(targetTabId);
+            }
+        });
+
+
+        // --- Start Logic ---
+        startGameButton.addEventListener('click', async () => { // Made the listener async to await init
+            configModal.style.display = 'none'; // Hide config
+             loadingMessage.style.display = 'block'; // Show loading message
+
+             // --- Cleanup previous game state ---
+             // Dispose of meshes and their materials
+             for (const type in meshes) {
+                 if (meshes[type]) {
+                      scene.remove(meshes[type]);
+                      if (meshes[type].material) meshes[type].material.dispose();
+                      // Note: Geometry is shared by type, disposed in blockGeometries loop
+                 }
+             }
+             meshes = {}; // Clear the meshes object
+
+             // Dispose of geometries
+             for(const type in blockGeometries) {
+                 if (blockGeometries[type] && blockGeometries[type].dispose) {
+                     blockGeometries[type].dispose();
+                 }
+             }
+             blockGeometries = {}; // Clear geometries object
+
+             // Dispose of loaded texture (the atlas)
+             if (TEXTURES._loaded.atlas && TEXTURES._loaded.atlas.dispose) {
+                 TEXTURES._loaded.atlas.dispose();
+             }
+             TEXTURES._loaded = {}; // Clear loaded textures
+
+             // Dispose of highlight mesh
+             if(highlightMesh) {
+                 scene.remove(highlightMesh);
+                 if (highlightMesh.geometry) highlightMesh.geometry.dispose();
+                 if (highlightMesh.material) highlightMesh.material.dispose();
+                 highlightMesh = null; // Clear the reference
+             }
+
+             // Reset game state variables for a fresh start
+             worldData = []; // Clear world data array
+             playerVelocity.set(0,0,0);
+             playerOnGround = false;
+             timeOfDay = 0.25; // Reset time to morning
+
+             // Reset scene elements that are added/removed (lights, controls)
+             if (scene && directionalLight) scene.remove(directionalLight);
+             if (scene && ambientLight) scene.remove(ambientLight);
+             if (scene && controls) {
+                  // Controls dispose logic? PointerLockControls doesn't have a specific dispose,
+                  // but removing its object from the scene and removing event listeners
+                  // associated with the document/body might be needed for full cleanup.
+                  // For this example, removing from scene is enough.
+                 scene.remove(controls.getObject());
+                  // Consider removing event listeners if you recreate controls instance:
+                  // document.removeEventListener('keydown', onKeyDown); etc.
+             }
+             // Note: Renderer/Camera disposal/recreation is usually unnecessary unless core parameters change.
+
+
+             // --- Re-initialize the game with new configurations ---
+             await init(); // Await the async init function (recreates scene elements, loads textures, builds world)
+
+             // Hide loading message after init is done
+              loadingMessage.style.display = 'none';
+
+             // Show the 'Click to Play' blocker after init is done
+             blocker.style.display = 'flex';
+             blocker.querySelector('div').textContent = 'Click to Play';
+
+             // Ensure controls are unlocked initially after re-init
+             controls.unlock(); // This handles showing the blocker and pausing gameRunning
+        });
+
+        // Initialize the config modal display on page load
+        configModal.style.display = 'flex';
+        activateTab('world-settings'); // Set the first tab ('world-settings') as active on page load
+
+
+        // Start the animation loop. Game logic runs inside based on flags.
+        // The animate loop starts once and keeps running.
+        animate();
+
+    </script>
+</body>
+</html>
