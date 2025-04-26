@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Pixi.js Recorder V4.1 (MediaPipe + Masking)</title>
+    <!-- PixiJS v6.5.10 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.10/browser/pixi.min.js"></script>
+    <!-- TensorFlow.js libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <!-- MediaPipe Selfie Segmentation -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <!-- Body-segmentation library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation@latest/dist/body-segmentation.min.js"></script>
+
+    <style>
+        /* Base styles */
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            width: 95%;
+            margin: 0 auto;
+        }
+        .video-container {
+            position: relative;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 640px; /* Limit max width */
+            margin-left: auto;
+            margin-right: auto;
+            aspect-ratio: 640 / 480; /* Default aspect ratio */
+            background-color: #cccccc; /* Default light grey background */
+            border: 1px solid #999;
+            overflow: hidden; /* Hide parts of video/bg if they go outside */
+        }
+        #webcamVideo { display: none; } /* Hidden source video */
+        #tempCanvas { display: none; } /* Hidden canvas for processing */
+        #pixiCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: auto; /* Allow interaction */
+            cursor: default; /* Default cursor */
+        }
+        .controls, .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 800px; /* Limit control width */
+            margin-left: auto;
+            margin-right: auto;
+        }
+         .toolbar {
+            flex-direction: column; /* Stack toolbar sections */
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .toolbar-section {
+            margin-bottom: 15px;
+            width: 100%;
+        }
+         h1, h2 {
+             text-align: center;
+             color: #333;
+             margin-top: 0;
+             margin-bottom: 15px;
+         }
+         h2 {
+             font-size: 18px;
+             text-align: left;
+             border-bottom: 1px solid #eee;
+             padding-bottom: 5px;
+             margin-bottom: 10px;
+         }
+         button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s ease;
+        }
+        button:hover:not(:disabled) { background-color: #3367d6; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        /* Control groups styling */
+        .control-group {
+             display: flex;
+             flex-wrap: wrap;
+             align-items: center;
+             gap: 10px;
+             margin-bottom: 10px;
+        }
+         label { margin-right: 5px; font-weight: bold; font-size: 14px; }
+         input[type="text"], input[type="number"], select, input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+         }
+         input[type="color"].color-picker {
+            min-width: 40px; /* Ensure minimum width */
+            height: 36px;
+            padding: 2px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+         }
+         input[type="range"] {
+             cursor: pointer;
+             flex-grow: 1; /* Allow slider to take up space */
+             min-width: 150px;
+         }
+        .shape-btn {
+            width: 40px;
+            height: 40px;
+            margin-right: 5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            background-color: #e0e0e0;
+            color: #333;
+        }
+         .shape-btn:hover:not(:disabled) { background-color: #bdbdbd; }
+         .shape-preview { font-size: 18px; }
+
+        .sfx-button {
+            background-color: #ff7043;
+            min-width: 40px; /* Smaller SFX buttons */
+             padding: 8px; /* Adjust padding */
+             font-size: 18px; /* Make emoji bigger */
+        }
+        .sfx-button:hover:not(:disabled) { background-color: #f4511e; }
+
+        #downloadLink {
+            display: none;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .recording {
+            background-color: #f44336 !important;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+             0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
+             70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+             100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
+        }
+
+        /* Style for file input */
+        input[type="file"] {
+            border: none;
+            padding: 0;
+            flex-grow: 1;
+            min-width: 100px;
+        }
+        input[type="file"]::file-selector-button {
+             background-color: #6c757d;
+             color: white;
+             border: none;
+             padding: 8px 12px;
+             border-radius: 4px;
+             cursor: pointer;
+             margin-right: 10px;
+             transition: background-color 0.2s ease;
+        }
+        input[type="file"]::file-selector-button:hover {
+             background-color: #5a6268;
+        }
+        small { /* Style for hint text */
+             display: block;
+             width: 100%;
+             margin-top: -5px;
+             margin-bottom: 5px;
+             color: #666;
+             font-size: 12px;
+        }
+        #loadingMessage {
+            margin-bottom: 10px;
+            font-style: italic;
+            color: #555;
+            min-height: 1.2em; /* Reserve space */
+            text-align: center;
+            width: 100%; /* Take full width */
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebRTC Pixi.js Recorder V4.1 (MediaPipe + Masking)</h1>
+
+        <!-- Hidden video element for raw webcam stream -->
+        <video id="webcamVideo" playsinline autoplay muted></video>
+        <!-- Hidden canvas for MediaPipe processing -->
+        <canvas id="tempCanvas"></canvas>
+
+        <!-- Loading Message Area -->
+        <div id="loadingMessage">Loading TensorFlow.js and segmentation model...</div>
+
+        <!-- Container for the PixiJS Canvas -->
+        <div class="video-container">
+            <canvas id="pixiCanvas"></canvas>
+        </div>
+
+        <!-- Main Recording Controls -->
+        <div class="controls">
+            <button id="startCamBtn" disabled>Start Camera</button> <!-- Disabled until model loads -->
+            <button id="startRecBtn" disabled>Start Recording</button>
+            <button id="stopRecBtn" disabled>Stop Recording</button>
+            <a id="downloadLink" download="recording.webm">Download Recording</a>
+        </div>
+
+        <!-- Toolbar for editing controls -->
+        <div class="toolbar">
+             <!-- Segmentation Controls -->
+            <div class="toolbar-section">
+                <h2>Segmentation</h2>
+                <div class="control-group">
+                    <label for="modelTypeSelect">Model Type:</label>
+                    <select id="modelTypeSelect" disabled> <!-- Disabled until model loads -->
+                        <option value="general" selected>General Purpose</option>
+                        <option value="landscape">Landscape Optimized</option>
+                    </select>
+                    <small style="margin-left: 15px; margin-top: 0;">Changing model reloads & stops camera.</small>
+                </div>
+            </div>
+
+            <!-- Background Controls -->
+            <div class="toolbar-section">
+                <h2>Background</h2>
+                <div class="control-group">
+                    <label for="bgSelect">Preset:</label>
+                    <select id="bgSelect">
+                        <option value="color">Color</option>
+                        <option value="office.jpg">Office</option>
+                        <option value="space.jpg">Space</option>
+                        <option value="gradient.png">Gradient</option>
+                    </select>
+                    <input type="color" id="bgColorPicker" class="color-picker" value="#cccccc" title="Background Color">
+                     <label for="bgUpload" style="margin-left: auto;">Upload:</label>
+                    <input type="file" id="bgUpload" accept="image/*">
+                </div>
+            </div>
+
+             <!-- Camera View Controls -->
+            <div class="toolbar-section">
+                <h2>Camera View (Foreground)</h2>
+                <div class="control-group">
+                     <label for="cameraScale">Scale:</label>
+                     <input type="range" id="cameraScale" min="0.2" max="2.0" step="0.05" value="1.0">
+                     <span id="cameraScaleValue">1.0x</span>
+
+                     <!-- RESTORED MASK CONTROLS -->
+                     <label for="cameraMaskShape" style="margin-left: 15px;">Mask:</label>
+                     <select id="cameraMaskShape">
+                         <option value="none">None</option>
+                         <option value="circle">Circle</option>
+                         <option value="ellipse">Ellipse</option>
+                         <option value="rounded_rect">Rounded Rect</option>
+                         <option value="star">Star (5 points)</option>
+                     </select>
+                     <!-- END RESTORED MASK CONTROLS -->
+
+                     <button id="resetViewBtn" style="margin-left: auto;">Reset View</button>
+                </div>
+                 <small>Click and drag the camera view (foreground) to reposition it.</small>
+            </div>
+
+            <!-- Text & Shapes Controls -->
+            <div class="toolbar-section">
+                <h2>Text & Shapes</h2>
+                <div class="control-group">
+                    <label>Text:</label>
+                    <input type="text" id="textInput" placeholder="Enter text">
+                    <input type="number" id="textSize" min="12" max="72" value="24" title="Text Size" style="width: 60px;">
+                    <input type="color" id="textColor" class="color-picker" value="#FFFF00" title="Text Color">
+                    <button id="addTextBtn" title="Add Text">Add Text</button>
+                 </div>
+                 <div class="control-group">
+                    <label>Shapes:</label>
+                    <button class="shape-btn" data-shape="circle" title="Circle"><span class="shape-preview">⚪</span></button>
+                    <button class="shape-btn" data-shape="rectangle" title="Rectangle"><span class="shape-preview">▢</span></button>
+                    <button class="shape-btn" data-shape="triangle" title="Triangle"><span class="shape-preview">△</span></button>
+                    <button class="shape-btn" data-shape="star" title="Star"><span class="shape-preview">★</span></button>
+                    <input type="color" id="shapeColor" class="color-picker" value="#ff0000" title="Shape Color">
+                    <input type="number" id="shapeSize" min="10" max="200" value="50" title="Shape Size" style="width: 60px;">
+                     <button id="clearGraphicsBtn" style="margin-left: auto;" title="Clear All Text & Shapes">Clear Graphics</button>
+                 </div>
+                 <small>Click and drag text/shapes to reposition.</small>
+            </div>
+
+            <!-- Audio Controls -->
+            <div class="toolbar-section">
+                <h2>Audio</h2>
+                 <div class="control-group">
+                     <label>SFX:</label>
+                     <button class="sfx-button" data-sfx="applause" title="Applause">👏</button>
+                     <button class="sfx-button" data-sfx="drumroll" title="Drumroll">🥁</button>
+                     <button class="sfx-button" data-sfx="bell" title="Bell">🔔</button>
+                     <button class="sfx-button" data-sfx="laugh" title="Laugh">😄</button>
+                 </div>
+                 <div class="control-group">
+                    <label for="bgmSelect">BGM:</label>
+                    <select id="bgmSelect">
+                        <option value="none">None</option>
+                        <option value="upbeat">Upbeat</option>
+                        <option value="relaxed">Relaxed</option>
+                        <option value="dramatic">Dramatic</option>
+                    </select>
+                    <label for="bgmVolume" style="margin-left: auto;">Vol:</label>
+                    <input type="range" id="bgmVolume" min="0" max="1" step="0.05" value="0.3">
+                 </div>
+            </div>
+        </div> <!-- End Toolbar -->
+    </div> <!-- End Container -->
+
+    <script>
+        // --- Configuration ---
+        const CANVAS_WIDTH = 640;
+        const CANVAS_HEIGHT = 480;
+        const PRESET_BACKGROUNDS = {
+            'office.jpg': 'https://via.placeholder.com/640x480/aabbcc/888888?text=Office+BG', // Replace!
+            'space.jpg': 'https://via.placeholder.com/640x480/000033/ffffff?text=Space+BG',   // Replace!
+            'gradient.png': 'https://via.placeholder.com/640x480/ffccaa/aa66cc?text=Gradient+BG' // Replace!
+        };
+
+        // --- Global Variables ---
+        let pixiApp = null;
+        let webcamVideoElement = document.getElementById('webcamVideo');
+        let pixiCanvasElement = document.getElementById('pixiCanvas');
+        let backgroundSprite = null;
+        let videoSprite = null; // This will now show the MASKED foreground
+        let cameraMaskGraphics = null; // <<< RESTORED: Graphics object for the camera mask
+        let graphicsContainer = null; // Container for text/shapes overlays
+
+        // MediaPipe / TFJS related
+        let segmenter = null;
+        let tempCanvas = document.getElementById('tempCanvas'); // Hidden canvas for processing
+        let tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        let isProcessing = false; // Flag for segmentation loop
+        let isLoadingModel = false; // Flag to prevent multiple model loads
+        let rafId = null; // requestAnimationFrame ID for segmentation loop
+
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let combinedStream = null;
+        let webcamStream = null;
+
+        // Audio related
+        let audioContext = null;
+        let micSourceNode = null, micGainNode = null;
+        let sfxGainNode = null;
+        let bgmGainNode = null;
+        let destinationNode = null; // Captures mixed audio
+        let sfxSounds = {};
+        let bgmSounds = {};
+        let currentBgmInterval = null;
+        let bgmOscillators = [];
+
+        // UI Elements
+        const loadingMessage = document.getElementById('loadingMessage');
+        const startCamBtn = document.getElementById('startCamBtn');
+        const startRecBtn = document.getElementById('startRecBtn');
+        const stopRecBtn = document.getElementById('stopRecBtn');
+        const downloadLink = document.getElementById('downloadLink');
+        // Segmentation
+        const modelTypeSelect = document.getElementById('modelTypeSelect');
+        // Background
+        const bgSelect = document.getElementById('bgSelect');
+        const bgColorPicker = document.getElementById('bgColorPicker');
+        const bgUpload = document.getElementById('bgUpload');
+        // Camera View (Foreground)
+        const cameraScaleSlider = document.getElementById('cameraScale');
+        const cameraScaleValueSpan = document.getElementById('cameraScaleValue');
+        const cameraMaskShapeSelect = document.getElementById('cameraMaskShape'); // <<< RESTORED
+        const resetViewBtn = document.getElementById('resetViewBtn');
+        // Text/Shapes
+        const addTextBtn = document.getElementById('addTextBtn');
+        const textInput = document.getElementById('textInput');
+        const textSize = document.getElementById('textSize');
+        const textColor = document.getElementById('textColor');
+        const shapeButtons = document.querySelectorAll('.shape-btn');
+        const shapeColor = document.getElementById('shapeColor');
+        const shapeSize = document.getElementById('shapeSize');
+        const clearGraphicsBtn = document.getElementById('clearGraphicsBtn');
+        // Audio
+        const sfxButtons = document.querySelectorAll('.sfx-button');
+        const bgmSelect = document.getElementById('bgmSelect');
+        const bgmVolume = document.getElementById('bgmVolume');
+
+        // Drag state
+        let dragTarget = null; // Holds the Pixi object being dragged
+
+        // --- Model Loading ---
+        async function loadModel() {
+            if (isLoadingModel) {
+                console.log("Model is already loading.");
+                return;
+            }
+            isLoadingModel = true;
+            stopCamera(); // Stop camera before changing model
+            startCamBtn.disabled = true;
+            modelTypeSelect.disabled = true;
+            loadingMessage.innerText = 'Loading TFJS & segmentation model...';
+            loadingMessage.style.display = 'block';
+
+            try {
+                // Ensure tf and bodySegmentation are loaded
+                if (typeof tf === 'undefined' || typeof bodySegmentation === 'undefined' || typeof SelfieSegmentation === 'undefined') {
+                    throw new Error("Required libraries (TFJS, BodySegmentation, SelfieSegmentation) not loaded.");
+                }
+                if (typeof bodySegmentation.createSegmenter !== 'function') {
+                     throw new Error("bodySegmentation.createSegmenter function not found.");
+                 }
+
+                // Set TFJS backend
+                if (!tf.backend() || tf.getBackend() !== 'webgl') {
+                    await tf.setBackend('webgl');
+                }
+                await tf.ready(); // Ensure backend is ready
+
+                loadingMessage.innerText = 'Initializing segmentation model...';
+
+                // Dispose previous model if exists
+                if (segmenter && typeof segmenter.dispose === 'function') {
+                    await segmenter.dispose();
+                    segmenter = null;
+                    console.log("Previous segmenter disposed.");
+                }
+
+                const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+                const segmenterConfig = {
+                    runtime: 'mediapipe',
+                    solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation',
+                    modelType: modelTypeSelect.value // 'general' or 'landscape'
+                };
+                console.log('Creating segmenter with config:', segmenterConfig);
+
+                segmenter = await bodySegmentation.createSegmenter(model, segmenterConfig);
+                console.log('Segmenter created successfully.');
+
+                loadingMessage.innerText = `Model '${modelTypeSelect.value}' loaded. Ready to start camera.`;
+                startCamBtn.disabled = false; // Enable start button ONLY after model is loaded
+
+            } catch (err) {
+                console.error("Error loading model:", err);
+                loadingMessage.innerText = `Error loading model: ${err.message}. Check console & reload.`;
+                startCamBtn.disabled = true; // Keep disabled on error
+                segmenter = null; // Ensure segmenter is null on error
+            } finally {
+                isLoadingModel = false;
+                modelTypeSelect.disabled = false; // Re-enable dropdown
+            }
+        }
+
+
+        // --- Initialization ---
+        async function initCamera() {
+             if (!segmenter) {
+                 alert("Segmentation model is not loaded yet. Please wait or check console for errors.");
+                 return;
+             }
+             if (webcamStream) {
+                 console.log("Camera already initialized.");
+                 return;
+             }
+             startCamBtn.disabled = true;
+             startCamBtn.textContent = 'Initializing...';
+             modelTypeSelect.disabled = true; // Disable model selection while camera is on
+             loadingMessage.style.display = 'none'; // Hide message
+
+             try {
+                webcamStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+                    audio: true
+                });
+                webcamVideoElement.srcObject = webcamStream;
+                await webcamVideoElement.play(); // Ensure video starts playing
+
+                const actualWidth = webcamVideoElement.videoWidth || CANVAS_WIDTH;
+                const actualHeight = webcamVideoElement.videoHeight || CANVAS_HEIGHT;
+
+                // Adjust container aspect ratio
+                const videoContainer = document.querySelector('.video-container');
+                videoContainer.style.aspectRatio = `${actualWidth} / ${actualHeight}`;
+
+                // Setup/Resize Pixi
+                if (!pixiApp) {
+                    setupPixi(actualWidth, actualHeight);
+                } else {
+                    pixiApp.renderer.resize(actualWidth, actualHeight);
+                    if (backgroundSprite) { // Ensure backgroundSprite exists before accessing width/height
+                        backgroundSprite.width = actualWidth;
+                        backgroundSprite.height = actualHeight;
+                    }
+                    resetCameraView(); // Reset view on resize
+                }
+
+                // Setup/Resize Temp Canvas for Processing
+                tempCanvas.width = actualWidth;
+                tempCanvas.height = actualHeight;
+                tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+
+                // Ensure videoSprite is visible if previously hidden
+                if (videoSprite) videoSprite.visible = true;
+
+                if (!audioContext) setupAudio();
+                // setupEventListeners(); // Ensure UI listeners are active (called on DOMContentLoaded already)
+
+                startRecBtn.disabled = false;
+                startCamBtn.textContent = 'Camera Active';
+                stopRecBtn.disabled = false; // <<< CORRECTED: Enable stop button
+
+                // Start the segmentation processing loop
+                isProcessing = true;
+                processFrame();
+                console.log("Camera and Segmentation loop started.");
+
+
+             } catch (err) {
+                 console.error("Error accessing media devices.", err);
+                 alert(`Could not access camera/microphone: ${err.name}\n${err.message}`);
+                 startCamBtn.disabled = false; // Re-enable on failure
+                 startCamBtn.textContent = 'Start Camera';
+                 modelTypeSelect.disabled = false; // Re-enable dropdown on failure
+                 loadingMessage.innerText = `Failed to start camera. Please check permissions.`;
+                 loadingMessage.style.display = 'block';
+             }
+        }
+
+        // --- Pixi.js Setup ---
+        function setupPixi(width, height) {
+            pixiApp = new PIXI.Application({
+                view: pixiCanvasElement,
+                width: width,
+                height: height,
+                resolution: window.devicePixelRatio || 1,
+                autoDensity: true,
+                antialias: true,
+                transparent: true
+            });
+
+            // Layer 0: Background
+            backgroundSprite = new PIXI.Sprite();
+            backgroundSprite.width = width; backgroundSprite.height = height;
+            backgroundSprite.anchor.set(0);
+            pixiApp.stage.addChildAt(backgroundSprite, 0);
+            updateBackground();
+
+            // Layer 1: Video Sprite (using tempCanvas as source)
+            const videoTexture = PIXI.Texture.from(tempCanvas);
+            videoSprite = new PIXI.Sprite(videoTexture);
+            videoSprite.width = width;
+            videoSprite.height = height;
+            videoSprite.anchor.set(0); // Position based on top-left
+            videoSprite.x = (width - videoSprite.width) / 2; // Center initially
+            videoSprite.y = (height - videoSprite.height) / 2;
+            videoSprite.visible = false; // Initially hidden until camera starts
+
+            // --- RESTORED MASK INITIALIZATION ---
+            cameraMaskGraphics = new PIXI.Graphics();
+            // Adding the mask graphics as a child of the video sprite ensures it moves/scales with the sprite.
+            videoSprite.addChild(cameraMaskGraphics); // Add mask AS A CHILD
+            videoSprite.mask = null; // Start with no mask applied to the sprite itself
+            // --- END MASK INITIALIZATION ---
+
+
+            // Make video draggable
+            videoSprite.interactive = true;
+            videoSprite.buttonMode = true;
+            videoSprite.cursor = 'move';
+            videoSprite
+                .on('pointerdown', onDragStart)
+                .on('pointerup', onDragEnd)
+                .on('pointerupoutside', onDragEnd)
+                .on('pointermove', onDragMove);
+            pixiApp.stage.addChildAt(videoSprite, 1);
+
+            // Layer 2: Graphics Overlays
+             graphicsContainer = new PIXI.Container();
+             graphicsContainer.interactive = true;
+             pixiApp.stage.addChildAt(graphicsContainer, 2);
+
+            console.log("PixiJS setup complete.");
+            applyCameraMask(); // <<< RESTORED: Apply initial mask state ('none')
+        }
+
+        // --- Segmentation Processing Loop ---
+        async function processFrame() {
+            // Check conditions to continue
+            if (!isProcessing || !segmenter || !webcamVideoElement.srcObject || webcamVideoElement.readyState < 2 || typeof segmenter.segmentPeople !== 'function' || !tempCtx) {
+                rafId = null; // Ensure loop stops if conditions fail
+                console.warn("Stopping segmentation loop due to invalid state.");
+                return;
+            }
+
+            try {
+                // 1. Draw current video frame onto temp canvas
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                tempCtx.drawImage(webcamVideoElement, 0, 0, tempCanvas.width, tempCanvas.height);
+
+                // 2. Perform segmentation
+                const segmentation = await segmenter.segmentPeople(webcamVideoElement);
+
+                // 3. Apply mask if segmentation data exists
+                if (segmentation && segmentation.length > 0) {
+                    const personMask = await segmentation[0].mask.toCanvasImageSource(); // Get the mask
+
+                    if (personMask) {
+                        // Use 'destination-in' to keep only the person pixels from step 1
+                        tempCtx.globalCompositeOperation = 'destination-in';
+                        tempCtx.drawImage(personMask, 0, 0, tempCanvas.width, tempCanvas.height);
+                        // Reset composite operation for subsequent draws
+                        tempCtx.globalCompositeOperation = 'source-over';
+                    } else {
+                        // No mask data, clear the foreground? Or keep full frame as fallback?
+                        // tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height); // Option: Clear foreground
+                        tempCtx.globalCompositeOperation = 'source-over'; // Ensure reset
+                    }
+                } else {
+                    // No people detected, clear the canvas (show transparent foreground)
+                    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height); // Option: Show nothing if no person
+                    tempCtx.globalCompositeOperation = 'source-over'; // Ensure reset
+                }
+
+                // 4. IMPORTANT: Update the Pixi texture
+                if (videoSprite && videoSprite.texture) {
+                    videoSprite.texture.update();
+                }
+
+            } catch (error) {
+                console.error("Error during segmentation frame processing:", error);
+                isProcessing = false; // Stop loop on error
+                 loadingMessage.innerText = `Segmentation Error: ${error.message}. Stopping.`;
+                 loadingMessage.style.display = 'block';
+                 stopCamera(); // Try to stop cleanly
+            }
+
+            // 5. Request the next frame
+            if (isProcessing) {
+                rafId = requestAnimationFrame(processFrame);
+            }
+        }
+
+
+        // --- Web Audio API Setup ---
+        function setupAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            destinationNode = audioContext.createMediaStreamDestination();
+
+            if (webcamStream && webcamStream.getAudioTracks().length > 0) {
+                micSourceNode = audioContext.createMediaStreamSource(webcamStream);
+                micGainNode = audioContext.createGain(); micGainNode.gain.value = 1.0;
+                micSourceNode.connect(micGainNode).connect(destinationNode);
+                micGainNode.connect(audioContext.destination); // Optional live preview
+                console.log("Microphone connected.");
+            } else { console.warn("No microphone audio track."); }
+
+            sfxGainNode = audioContext.createGain(); sfxGainNode.gain.value = 0.6;
+            sfxGainNode.connect(destinationNode); sfxGainNode.connect(audioContext.destination);
+            initSfxSounds();
+
+            bgmGainNode = audioContext.createGain(); bgmGainNode.gain.value = parseFloat(bgmVolume.value);
+            bgmGainNode.connect(destinationNode); bgmGainNode.connect(audioContext.destination);
+            initBgmSounds();
+            console.log("Audio graph setup complete.");
+        }
+        // --- Synthesized Audio Generation (Unchanged) ---
+        function initSfxSounds() {
+             const sfxData = { applause: [0.3, 0.7, 0.2, 0.4, 0.6, 0.8, 0.4, 0.6, 0.2, 0.4], drumroll: [0.2, 0.6, 0.2, 0.6, 0.2, 0.6, 0.2, 0.8, 0.9, 1.0], bell: [1.0, 0.8, 0.6, 0.4, 0.2, 0.1, 0.05, 0], laugh: [0.3, 0.5, 0.7, 0.5, 0.3, 0.5, 0.7, 0.5, 0.3] };
+             Object.keys(sfxData).forEach(name => {
+                 sfxSounds[name] = () => {
+                     if (!audioContext) return;
+                     if (audioContext.state === 'suspended') { audioContext.resume().catch(e => console.error("Audio resume failed", e)); }
+                     const now = audioContext.currentTime;
+                     const osc = audioContext.createOscillator();
+                     const gainNode = audioContext.createGain();
+                     osc.type = name === 'bell' ? 'sine' : (name === 'drumroll' ? 'noise' : 'square');
+                     if (osc.type !== 'noise') { osc.frequency.value = name === 'bell' ? 880 : (name === 'laugh' ? 440 : 110); }
+                     osc.connect(gainNode); gainNode.connect(sfxGainNode); osc.start(now);
+                     const duration = name === 'drumroll' ? 0.05 : 0.1; const pattern = sfxData[name];
+                     gainNode.gain.setValueAtTime(0, now);
+                     pattern.forEach((value, i) => { gainNode.gain.linearRampToValueAtTime(value * 0.5, now + (i + 0.5) * duration); });
+                     gainNode.gain.setValueAtTime(pattern[pattern.length - 1] * 0.5, now + pattern.length * duration);
+                     gainNode.gain.linearRampToValueAtTime(0, now + pattern.length * duration + 0.1);
+                     osc.stop(now + pattern.length * duration + 0.15);
+                 };
+             });
+        }
+        function initBgmSounds() {
+             const bgmPatterns = { upbeat: { notes: [440, 0, 493.88, 0, 523.25, 587.33, 659.25, 523.25], duration: 0.15, type: 'square' }, relaxed: { notes: [261.63, 0, 329.63, 0, 392, 0, 329.63, 0], duration: 0.4, type: 'sine' }, dramatic: { notes: [130.81, 146.83, 0, 130.81, 0, 98, 123.47, 98], duration: 0.3, type: 'sawtooth' } };
+             Object.keys(bgmPatterns).forEach(name => {
+                 const pattern = bgmPatterns[name];
+                 bgmSounds[name] = () => {
+                     stopCurrentBgm();
+                     if (!audioContext) return;
+                     if (audioContext.state === 'suspended') { audioContext.resume().catch(e => console.error("Audio resume failed", e)); }
+                     let noteIndex = 0; bgmOscillators = [];
+                     const playBgmNotes = () => {
+                         if (!currentBgmInterval) return;
+                         const now = audioContext.currentTime;
+                         const noteFrequency = pattern.notes[noteIndex % pattern.notes.length];
+                         if (noteFrequency > 0) {
+                             const osc = audioContext.createOscillator(); const gain = audioContext.createGain();
+                             osc.type = pattern.type; osc.frequency.setValueAtTime(noteFrequency, now);
+                             gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+                             gain.gain.setValueAtTime(1.0, now + pattern.duration * 0.8); gain.gain.linearRampToValueAtTime(0, now + pattern.duration);
+                             osc.connect(gain); gain.connect(bgmGainNode); osc.start(now); osc.stop(now + pattern.duration);
+                             bgmOscillators.push(osc);
+                         }
+                         noteIndex++;
+                     };
+                     playBgmNotes();
+                     currentBgmInterval = setInterval(playBgmNotes, pattern.duration * 1000);
+                     console.log(`Started BGM: ${name}`);
+                 };
+             });
+        }
+        function stopCurrentBgm() {
+             if (currentBgmInterval) { clearInterval(currentBgmInterval); currentBgmInterval = null; console.log("Stopped BGM interval."); }
+             bgmOscillators.forEach(osc => { try { osc.stop(audioContext.currentTime); } catch(e) { /* Ignore */ } });
+             bgmOscillators = [];
+        }
+
+
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+            // Prevent adding listeners multiple times
+            if (startCamBtn.dataset.listenersAttached) return;
+
+            startCamBtn.onclick = initCamera;
+            startRecBtn.onclick = startRecording;
+            stopRecBtn.onclick = stopCamera; // Use the main stop function now
+
+            // Segmentation Controls
+            modelTypeSelect.onchange = loadModel; // Reload model on change
+
+            // Background Controls
+            bgSelect.onchange = updateBackground;
+            bgColorPicker.oninput = updateBackground;
+            bgUpload.onchange = handleBackgroundUpload;
+
+            // Camera View Controls
+            cameraScaleSlider.oninput = handleCameraScaleChange;
+            cameraMaskShapeSelect.onchange = applyCameraMask; // <<< RESTORED
+            resetViewBtn.onclick = resetCameraView;
+
+            // Text/Shape Controls
+            addTextBtn.onclick = addTextOverlay;
+            clearGraphicsBtn.onclick = clearAllGraphics;
+            shapeButtons.forEach(button => button.addEventListener('click', addShapeOverlay));
+
+             // Audio Controls
+             sfxButtons.forEach(button => {
+                 button.addEventListener('click', (e) => {
+                     const sfxType = e.currentTarget.getAttribute('data-sfx');
+                     if (sfxSounds[sfxType]) sfxSounds[sfxType]();
+                 });
+             });
+            bgmSelect.onchange = changeBgm;
+            bgmVolume.oninput = updateBgmVolume;
+
+            startCamBtn.dataset.listenersAttached = 'true'; // Mark as attached
+            console.log("Event listeners attached/updated.");
+        }
+
+        // --- Stop Camera / Cleanup ---
+         function stopCamera() { // Function to handle stopping camera and processing
+            if (rafId) {
+                cancelAnimationFrame(rafId); // Stop the segmentation loop
+                rafId = null;
+            }
+            isProcessing = false; // Set flag to stop loop
+
+            // Stop MediaRecorder if running
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                // Don't call stopRecording() directly here as it updates UI assuming manual stop
+                // Just stop the recorder instance, onstop will handle blob creation if needed
+                mediaRecorder.stop();
+                 console.log("Stopped ongoing recording because camera stopped.");
+                 // Reset recorder state manually
+                 mediaRecorder = null;
+                 recordedChunks = [];
+            }
+
+            // Stop BGM
+            stopCurrentBgm();
+
+            // Stop webcam tracks
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamStream = null;
+            }
+            webcamVideoElement.srcObject = null;
+
+             // Clear temporary canvas
+             if(tempCtx) {
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+             }
+             // Hide the video sprite in Pixi
+             if (videoSprite) {
+                 videoSprite.visible = false; // Hide sprite when camera stops
+                 if(videoSprite.texture) videoSprite.texture.update(); // Update pixi state
+             }
+
+            // Update UI
+            startCamBtn.disabled = !segmenter; // Re-enable only if model is loaded
+            startCamBtn.textContent = 'Start Camera';
+            stopRecBtn.disabled = true;
+            startRecBtn.disabled = true; // Recording can't start if camera is off
+            startRecBtn.classList.remove('recording');
+            startRecBtn.textContent = 'Start Recording';
+            downloadLink.style.display = 'none';
+            modelTypeSelect.disabled = false; // Re-enable model selection
+            loadingMessage.innerText = segmenter ? 'Camera stopped. Ready.' : 'Camera stopped. Model not loaded.';
+            loadingMessage.style.display = 'block';
+
+            console.log("Camera and segmentation stopped.");
+        }
+
+
+        // --- Recording Logic (Captures final Pixi Canvas) ---
+        function startRecording() {
+             if (!webcamStream || !pixiApp || !audioContext || !isProcessing) { // Check if processing active
+                 alert("Please start the camera and wait for it to initialize.");
+                 return;
+             }
+             if (mediaRecorder && mediaRecorder.state === "recording") return;
+
+             if (audioContext.state === 'suspended') { audioContext.resume().catch(e=>console.error("Audio resume failed", e)); }
+
+            recordedChunks = [];
+            downloadLink.style.display = 'none';
+
+            // Capture the final Pixi canvas which includes background, masked video, and overlays
+            const canvasStream = pixiCanvasElement.captureStream(30);
+            const canvasVideoTrack = canvasStream.getVideoTracks()[0];
+
+            // Get mixed audio
+            const mixedAudioStream = destinationNode.stream;
+            const mixedAudioTrack = mixedAudioStream.getAudioTracks()[0];
+
+            if (!canvasVideoTrack) {
+                 alert("Fatal: Could not capture video track from the canvas."); return;
+            }
+            combinedStream = new MediaStream([canvasVideoTrack]); // Start with video track
+            if (mixedAudioTrack) {
+                 combinedStream.addTrack(mixedAudioTrack);
+                 console.log("Recording Pixi canvas video and mixed audio.");
+            } else {
+                console.warn("Recording Pixi canvas video only (no audio track).");
+            }
+
+            let options = { mimeType: 'video/webm;codecs=vp9,opus' };
+             if (!MediaRecorder.isTypeSupported(options.mimeType)) options.mimeType = 'video/webm;codecs=vp8,opus';
+             if (!MediaRecorder.isTypeSupported(options.mimeType)) options.mimeType = 'video/webm';
+             if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                 alert("Sorry, video/webm recording is not supported by this browser."); return;
+             }
+
+            try {
+                mediaRecorder = new MediaRecorder(combinedStream, options);
+            } catch (e) {
+                 alert(`Error setting up recorder: ${e.message}`); return;
+            }
+            console.log("MediaRecorder created with MIME type:", mediaRecorder.mimeType);
+
+            mediaRecorder.ondataavailable = handleDataAvailable;
+            mediaRecorder.onstop = handleStop; // Final actions when recorder stops
+            mediaRecorder.onerror = (event) => {
+                 console.error("MediaRecorder Error:", event.error);
+                 alert(`Recording Error: ${event.error.name}`);
+                 // Reset UI on error
+                 startRecBtn.disabled = false;
+                 stopRecBtn.disabled = true;
+                 startRecBtn.classList.remove('recording');
+                 startRecBtn.textContent = 'Start Recording';
+                 mediaRecorder = null; // Clear recorder instance
+            };
+
+            mediaRecorder.start(1000);
+            console.log("MediaRecorder started.");
+
+            startRecBtn.disabled = true;
+            stopRecBtn.disabled = false; // Enable stop button now
+            startRecBtn.classList.add('recording');
+            startRecBtn.textContent = 'Recording...';
+            changeBgm(); // Start BGM if selected
+        }
+        function handleDataAvailable(event) {
+            if (event.data && event.data.size > 0) { recordedChunks.push(event.data); }
+        }
+        // This function is called when mediaRecorder.stop() finishes
+        function handleStop() {
+            console.log("MediaRecorder stopped. Processing data...");
+            // Update UI - moved from original stopRecording button handler
+            startRecBtn.disabled = false; // Re-enable start
+            stopRecBtn.disabled = true; // Disable stop (already stopped)
+            startRecBtn.classList.remove('recording');
+            startRecBtn.textContent = 'Start Recording';
+
+             if (recordedChunks.length === 0) {
+                 console.warn("No data chunks were recorded. Cannot create video file.");
+                 // alert("Recording failed to capture data. Please check console for errors."); // Optional user alert
+                 return;
+             }
+            // Combine recorded chunks into a single Blob
+            const blob = new Blob(recordedChunks, {
+                type: mediaRecorder?.mimeType || 'video/webm' // Use recorder's mimeType if available
+            });
+            recordedChunks = []; // Clear chunks for next recording
+
+            // Create a downloadable URL for the Blob
+            const url = URL.createObjectURL(blob);
+            downloadLink.href = url;
+            downloadLink.download = `recording-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.webm`;
+            downloadLink.style.display = 'inline-block'; // Show the download link
+            console.log(`Recording ready: ${downloadLink.download}, Size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+
+            // Clean up recorder instance after stopping
+            mediaRecorder = null;
+        }
+
+
+        // --- Drag and Drop Logic (Unchanged) ---
+        function onDragStart(event) {
+            dragTarget = this; this.alpha = 0.7; this.dragging = true;
+            if (this.parent === graphicsContainer && graphicsContainer.children.length > 1) {
+                graphicsContainer.removeChild(this); graphicsContainer.addChild(this);
+            }
+             if (this.parent === videoSprite && videoSprite.children.length > 1) {
+                // If maskGraphics is a child, ensure it stays behind other potential children? (Unlikely scenario here)
+             }
+            event.stopPropagation();
+        }
+        function onDragEnd() {
+             if (this.dragging) { this.alpha = 1; this.dragging = false; dragTarget = null; }
+        }
+        function onDragMove(event) {
+            if (this.dragging && dragTarget === this) {
+                const newPosition = event.data.getLocalPosition(this.parent);
+                // Adjust for anchor (videoSprite anchor is 0,0; text/shapes often 0.5,0.5)
+                this.x = newPosition.x - (this.anchor.x * this.width / (this.scale.x || 1));
+                this.y = newPosition.y - (this.anchor.y * this.height / (this.scale.y || 1));
+
+                // Clamp position
+                const bounds = this.getBounds();
+                const parentWidth = this.parent?.width || pixiApp?.screen?.width || CANVAS_WIDTH; // Safer access
+                const parentHeight = this.parent?.height || pixiApp?.screen?.height || CANVAS_HEIGHT;
+
+                this.x = Math.max(-bounds.width * 0.8, Math.min(this.x, parentWidth - bounds.width * 0.2));
+                this.y = Math.max(-bounds.height * 0.8, Math.min(this.y, parentHeight - bounds.height * 0.2));
+            }
+        }
+
+        // --- Overlay/View Functions ---
+        function addTextOverlay() {
+             if (!pixiApp || !textInput.value.trim()) return;
+             const textStyle = new PIXI.TextStyle({ fontFamily: 'Arial', fontSize: parseInt(textSize.value) || 24, fill: textColor.value || "#FFFF00", stroke: '#000000', strokeThickness: 4, dropShadow: true, dropShadowColor: '#000000', dropShadowBlur: 4, dropShadowDistance: 2, wordWrap: true, wordWrapWidth: pixiApp.screen.width * 0.8 });
+             const text = new PIXI.Text(textInput.value, textStyle);
+             text.anchor.set(0.5); text.x = pixiApp.screen.width / 2; text.y = 60;
+             text.interactive = true; text.buttonMode = true; text.cursor = 'move';
+             text.on('pointerdown', onDragStart).on('pointerup', onDragEnd).on('pointerupoutside', onDragEnd).on('pointermove', onDragMove);
+             graphicsContainer.addChild(text);
+        }
+        function addShapeOverlay(event) {
+             if (!pixiApp) return;
+             const button = event.currentTarget; const shapeType = button.getAttribute('data-shape');
+             const size = parseInt(shapeSize.value) || 50; const color = parseInt(shapeColor.value.replace('#', '0x')) || 0xff0000;
+             let shape = new PIXI.Graphics(); shape.beginFill(color, 0.8); shape.lineStyle(2, 0x000000, 0.8);
+             switch (shapeType) {
+                 case 'circle': shape.drawCircle(0, 0, size / 2); break;
+                 case 'rectangle': shape.drawRect(-size/2, -size/2, size, size); break;
+                 case 'triangle': shape.moveTo(0, -size/2); shape.lineTo(size/2, size/2); shape.lineTo(-size/2, size/2); shape.closePath(); break;
+                 case 'star': shape.drawStar(0, 0, 5, size / 2, size / 4, 0); break; // Relative to anchor 0,0
+                 default: shape = null;
+             }
+             shape.endFill();
+             if (shape) {
+                 // Initial position slightly randomized in center-ish area
+                 shape.x = pixiApp.screen.width / 2 + (Math.random() - 0.5) * 100;
+                 shape.y = pixiApp.screen.height / 2 + (Math.random() - 0.5) * 100;
+                 shape.pivot.set(0); // Ensure pivot is at 0,0 for drawing logic above
+                 shape.interactive = true; shape.buttonMode = true; shape.cursor = 'move';
+                 shape.on('pointerdown', onDragStart).on('pointerup', onDragEnd).on('pointerupoutside', onDragEnd).on('pointermove', onDragMove);
+                 graphicsContainer.addChild(shape);
+             }
+        }
+        function clearAllGraphics() {
+            if (graphicsContainer) {
+                 while(graphicsContainer.children.length > 0) {
+                     const child = graphicsContainer.removeChildAt(0);
+                     child.destroy({ children: true });
+                 }
+                 console.log("Cleared all text & shapes overlays.");
+            }
+        }
+        function handleCameraScaleChange() { // Scales the foreground (videoSprite)
+            if (!videoSprite || !pixiApp) return;
+            const scale = parseFloat(cameraScaleSlider.value);
+            const centerX = videoSprite.x + (videoSprite.width / 2);
+            const centerY = videoSprite.y + (videoSprite.height / 2);
+            videoSprite.scale.set(scale);
+            videoSprite.x = centerX - (videoSprite.width / 2);
+            videoSprite.y = centerY - (videoSprite.height / 2);
+            cameraScaleValueSpan.textContent = `${scale.toFixed(1)}x`;
+            // Clamp position after scaling
+            const bounds = videoSprite.getBounds();
+            const parentWidth = pixiApp.screen.width;
+            const parentHeight = pixiApp.screen.height;
+            videoSprite.x = Math.max(-bounds.width * 0.8, Math.min(videoSprite.x, parentWidth - bounds.width * 0.2));
+            videoSprite.y = Math.max(-bounds.height * 0.8, Math.min(videoSprite.y, parentHeight - bounds.height * 0.2));
+        }
+        function resetCameraView() { // Resets the foreground (videoSprite)
+             if (!videoSprite || !pixiApp) return;
+             cameraScaleSlider.value = 1.0;
+             videoSprite.scale.set(1.0);
+             cameraScaleValueSpan.textContent = `1.0x`;
+             // Reset position - Use ORIGINAL texture dimensions from tempCanvas
+             const originalWidth = videoSprite.texture?.baseTexture?.width || videoSprite.width;
+             const originalHeight = videoSprite.texture?.baseTexture?.height || videoSprite.height;
+             videoSprite.x = (pixiApp.screen.width - originalWidth) / 2;
+             videoSprite.y = (pixiApp.screen.height - originalHeight) / 2;
+
+             // --- RESTORED MASK RESET ---
+             cameraMaskShapeSelect.value = 'none';
+             applyCameraMask(); // Apply the 'none' mask setting
+             // --- END MASK RESET ---
+
+             console.log("Foreground view (scale, position, mask) reset."); // Updated log message
+        }
+
+        // --- RESTORED MASKING FUNCTION ---
+        function applyCameraMask() {
+            if (!videoSprite || !cameraMaskGraphics) {
+                // May happen during initial setup before videoSprite is fully ready
+                // console.warn("Cannot apply mask: Video sprite or mask graphics not ready.");
+                return;
+            }
+            const shape = cameraMaskShapeSelect.value;
+            cameraMaskGraphics.clear(); // Clear previous mask drawing FROM THE GRAPHICS OBJECT
+
+            if (shape === 'none') {
+                videoSprite.mask = null; // Remove the mask FROM THE SPRITE
+                console.log("Camera mask removed.");
+                return;
+            }
+
+            // Get original, unscaled dimensions of the video texture (now from tempCanvas)
+            // Use baseTexture for original size, even if sprite is scaled
+            const texWidth = videoSprite.texture?.baseTexture?.width;
+            const texHeight = videoSprite.texture?.baseTexture?.height;
+
+            if (!texWidth || !texHeight) { // Check if dimensions are valid
+                console.warn("Cannot apply mask: Video texture dimensions unavailable.", videoSprite.texture);
+                videoSprite.mask = null; // Ensure mask is off if dimensions invalid
+                return;
+            }
+
+            // Draw the mask shape onto the cameraMaskGraphics object.
+            // Since cameraMaskGraphics is a CHILD of videoSprite, drawing at 0,0 puts it at the sprite's top-left.
+            // The coordinates are relative to the PARENT (videoSprite).
+            cameraMaskGraphics.beginFill(0xFFFFFF); // Use white or any opaque color
+
+            switch (shape) {
+                case 'circle':
+                    // Draw centered within the texture bounds
+                    cameraMaskGraphics.drawCircle(texWidth / 2, texHeight / 2, Math.min(texWidth, texHeight) / 2);
+                    break;
+                case 'ellipse':
+                    cameraMaskGraphics.drawEllipse(texWidth / 2, texHeight / 2, texWidth / 2, texHeight / 2);
+                    break;
+                case 'rounded_rect':
+                    const cornerRadius = Math.min(texWidth, texHeight) * 0.15; // Adjust corner roundness
+                    // Draw from 0,0 up to texWidth, texHeight (relative to videoSprite)
+                    cameraMaskGraphics.drawRoundedRect(0, 0, texWidth, texHeight, cornerRadius);
+                    break;
+                case 'star':
+                    const outerRadius = Math.min(texWidth, texHeight) / 2;
+                    const innerRadius = outerRadius * 0.5; // Star point depth
+                    // Draw star centered within the texture bounds, rotated to point up (-PI/2)
+                    cameraMaskGraphics.drawStar(texWidth / 2, texHeight / 2, 5, outerRadius, innerRadius, -Math.PI / 2);
+                    break;
+            }
+            cameraMaskGraphics.endFill();
+
+            // Assign the graphics object AS THE MASK for the video sprite
+            videoSprite.mask = cameraMaskGraphics;
+            console.log(`Applied camera mask: ${shape}`);
+        }
+
+        // --- Background Functions (Unchanged) ---
+        function updateBackground() {
+            if (!pixiApp || !backgroundSprite) return;
+            const selection = bgSelect.value;
+            bgColorPicker.style.display = (selection === 'color') ? 'inline-block' : 'none';
+            if (selection === 'color') {
+                const colorValue = PIXI.utils.string2hex(bgColorPicker.value);
+                pixiApp.renderer.backgroundColor = colorValue;
+                pixiApp.renderer.backgroundAlpha = 1;
+                backgroundSprite.texture = PIXI.Texture.EMPTY;
+                console.log("Background set to color:", bgColorPicker.value);
+            } else {
+                pixiApp.renderer.backgroundColor = 0x000000;
+                pixiApp.renderer.backgroundAlpha = 0;
+                const imageUrl = PRESET_BACKGROUNDS[selection];
+                if (imageUrl) {
+                    // Use Pixi's loader cache or load if needed
+                    if (!PIXI.Loader.shared.resources[imageUrl]) {
+                        PIXI.Loader.shared.add(imageUrl);
+                    }
+                    // Ensure loading completes before trying to use
+                     PIXI.Loader.shared.load((loader, resources) => {
+                          const resource = resources[imageUrl];
+                          // Check selection hasn't changed while loading
+                          if (resource && resource.texture && bgSelect.value === selection) {
+                               backgroundSprite.texture = resource.texture;
+                               console.log("Loaded background image:", selection);
+                               adjustBackgroundSize(); // Fit/fill the canvas
+                          } else if (bgSelect.value === selection) { // Handle load error for this specific image
+                              console.error("Failed to load background resource:", imageUrl, resource?.error);
+                               bgSelect.value = 'color'; // Revert to color if load failed
+                               updateBackground();
+                          }
+                    });
+                } else {
+                     console.warn("Preset background URL missing for:", selection);
+                     backgroundSprite.texture = PIXI.Texture.EMPTY; // Clear texture
+                }
+            }
+        }
+        function handleBackgroundUpload(event) {
+             const file = event.target.files[0];
+             if (file && file.type.startsWith('image/')) {
+                 const reader = new FileReader();
+                 reader.onload = (e) => {
+                     const imageUrl = e.target.result;
+                     const texture = PIXI.Texture.from(imageUrl);
+                     pixiApp.renderer.backgroundColor = 0x000000;
+                     pixiApp.renderer.backgroundAlpha = 0;
+                     backgroundSprite.texture = texture;
+                     console.log("Uploaded background image set.");
+                     adjustBackgroundSize();
+                     bgSelect.value = 'color'; bgColorPicker.style.display = 'none';
+                 }
+                 reader.onerror = (e) => { console.error("File reading error:", e); alert("Error reading the selected image file."); }
+                 reader.readAsDataURL(file);
+             } else if (file) { alert("Please select a valid image file (e.g., JPG, PNG, GIF)."); }
+             event.target.value = null; // Clear input
+        }
+        function adjustBackgroundSize() {
+             if (!backgroundSprite || !backgroundSprite.texture || backgroundSprite.texture === PIXI.Texture.EMPTY) return;
+             const tex = backgroundSprite.texture.baseTexture; const canvasWidth = pixiApp.screen.width;
+             const canvasHeight = pixiApp.screen.height; const canvasRatio = canvasWidth / canvasHeight;
+             const bgRatio = tex.width / tex.height;
+             if (canvasRatio > bgRatio) { backgroundSprite.width = canvasWidth; backgroundSprite.height = canvasWidth / bgRatio; }
+             else { backgroundSprite.height = canvasHeight; backgroundSprite.width = canvasHeight * bgRatio; }
+             backgroundSprite.x = (canvasWidth - backgroundSprite.width) / 2; backgroundSprite.y = (canvasHeight - backgroundSprite.height) / 2;
+        }
+
+        // --- Audio Control Functions (Unchanged) ---
+        function changeBgm() {
+             stopCurrentBgm(); const selectedBgm = bgmSelect.value;
+             console.log("BGM selection changed to:", selectedBgm);
+             if (selectedBgm !== 'none' && bgmSounds[selectedBgm]) {
+                  if (audioContext && audioContext.state === 'suspended') { audioContext.resume().catch(e=>console.error("Audio resume failed", e)); }
+                 if (mediaRecorder && mediaRecorder.state === 'recording') { bgmSounds[selectedBgm](); }
+                 else { console.log("BGM selected, will start when recording starts."); }
+             }
+        }
+        function updateBgmVolume() {
+            if (bgmGainNode && audioContext) {
+                 const volumeValue = parseFloat(bgmVolume.value);
+                 bgmGainNode.gain.setTargetAtTime(volumeValue, audioContext.currentTime, 0.02);
+            }
+        }
+
+        // --- Start the Application ---
+         document.addEventListener('DOMContentLoaded', () => {
+             // Setup essential listeners first
+             setupEventListeners();
+             // Initial UI state
+             bgColorPicker.style.display = 'inline-block';
+             startCamBtn.disabled = true; // Keep disabled until model loads
+             modelTypeSelect.disabled = true;
+             loadingMessage.innerText = 'Loading model, please wait...';
+             loadingMessage.style.display = 'block';
+             // Load the model
+             loadModel(); // Start loading the segmentation model immediately
+             console.log("Application initializing, loading segmentation model...");
+         });
+
+        // --- Cleanup ---
+        window.onbeforeunload = () => {
+             console.log("Cleaning up before page unload...");
+             stopCamera(); // Use the combined stop function
+
+             // Explicitly stop streams just in case
+             webcamStream?.getTracks().forEach(track => track.stop());
+             combinedStream?.getTracks().forEach(track => track.stop());
+
+             // Dispose segmenter model
+             if (segmenter && typeof segmenter.dispose === 'function') {
+                 segmenter.dispose().catch(e => console.warn("Error disposing segmenter on unload:", e));
+                 segmenter = null;
+             }
+
+             // Close audio context
+             if(audioContext && audioContext.state !== 'closed') {
+                 audioContext.close().then(() => console.log("AudioContext closed.")).catch(e => console.warn("Error closing AudioContext:", e));
+                 audioContext = null;
+             }
+
+             // Destroy Pixi application
+             if (pixiApp) {
+                 console.log("Destroying Pixi Application...");
+                 pixiApp.destroy(true, { children: true, texture: true, baseTexture: true });
+                 pixiApp = null;
+             }
+        };
+
+    </script>
+
+</body>
+</html>
