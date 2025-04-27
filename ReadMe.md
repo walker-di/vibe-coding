@@ -34,6 +34,7 @@ Os projetos estão organizados em pastas individuais, cada uma contendo:
 |-------------|---------------|
 | <img src="./docs/thumbnails/video-000.png" width="200"/><br /> **Comparando Bolt vs Cline: SetUp do seu #VibeCoding  [Guia 2025] #000**   | [Assistir](https://youtu.be/Hx5XbHXv5C8) |
 | <img src="./docs/thumbnails/video-001.png" width="200"/> <br /> **IA Codando Tetris! #VibeCoding com Svelte e Bootstrap #002** | [Assistir](https://youtu.be/6G-hWS4wBhk) |
+| <img src="./docs/thumbnails/video-003.png" width="200"/> <br /> **Vibe coding com Gemini: App que cria storyboard e video #003** | [Assistir](https://youtu.be/pwv2vh425vY?si=AeiyvUi0nnOlHCr2) |
 
 ## 🛠️ Como Usar
 
