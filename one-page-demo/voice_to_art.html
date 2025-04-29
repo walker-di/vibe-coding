@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio to Image with AI (File Upload)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+            line-height: 1.6;
+        }
+
+        h1,
+        h2 {
+            color: #333;
+        }
+
+        #api-keys-section,
+        #controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+            width: 80%;
+            max-width: 600px;
+            box-sizing: border-box;
+        }
+
+        #api-keys-section label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        #api-keys-section input[type="text"],
+        #api-keys-section input[type="password"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+
+        #api-keys-section button {
+            padding: 8px 15px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-bottom: 20px;
+            font-weight: bold;
+            min-height: 1.5em;
+        }
+
+        #output {
+            border: 1px solid #ccc;
+            padding: 20px;
+            min-height: 100px;
+            width: 80%;
+            max-width: 600px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            word-wrap: break-word;
+        }
+
+        #output img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 20px auto 0;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .warning {
+            color: red;
+            margin-top: 20px;
+            font-weight: bold;
+            text-align: center;
+            max-width: 600px;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        #output p {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #eee;
+        }
+
+        #output p:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Audio to Image with AI (File Upload)</h1>
+
+    <div id="api-keys-section">
+        <h2>API Keys</h2>
+        <p>Enter your API keys below. They will be saved in your browser's local storage.</p>
+        <div>
+            <label for="geminiApiKeyInput">Gemini API Key:</label>
+            <input type="text" id="geminiApiKeyInput" placeholder="Enter your Gemini API Key">
+        </div>
+        <div>
+            <label for="replicateApiKeyInput">Replicate API Key:</label>
+            <input type="text" id="replicateApiKeyInput" placeholder="Enter your Replicate API Key">
+        </div>
+        <div>
+            <label for="replicateModelInput">Replicate Model Version:</label>
+            <input type="text" id="replicateModelInput" placeholder="e.g., stability-ai/stable-diffusion:...">
+            <p><small>Find model versions on the Replicate website.</small></p>
+        </div>
+        <button id="saveKeysButton">Save Keys</button>
+        <button id="clearKeysButton">Clear Keys</button>
+        <p id="keyStatus" style="margin-top: 10px;"></p>
+    </div>
+
+
+    <div id="controls">
+        <button id="recordButton" disabled>Record</button>
+        <button id="stopButton" disabled>Stop</button>
+    </div>
+
+    <p id="status">Loading...</p>
+
+    <div id="output">
+        <!-- Removed Transcription display -->
+        <p>Gemini Response: <span id="geminiResponse"></span></p>
+        <div id="imageResult"></div>
+    </div>
+
+    <p class="warning">
+        WARNING: API keys are stored in your browser's local storage.
+        This is INSECURE for production applications.
+        Anyone with access to your browser can potentially retrieve these keys.
+    </p>
+
+    <script>
+        const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+        const replicateApiKeyInput = document.getElementById('replicateApiKeyInput');
+        const replicateModelInput = document.getElementById('replicateModelInput');
+        const saveKeysButton = document.getElementById('saveKeysButton');
+        const clearKeysButton = document.getElementById('clearKeysButton');
+        const keyStatus = document.getElementById('keyStatus');
+
+        const recordButton = document.getElementById('recordButton');
+        const stopButton = document.getElementById('stopButton');
+        const status = document.getElementById('status');
+        const geminiResponseSpan = document.getElementById('geminiResponse');
+        const imageResultDiv = document.getElementById('imageResult');
+
+        let mediaRecorder;
+        let audioChunks = [];
+
+        // --- Local Storage Key Management ---
+        const LOCAL_STORAGE_GEMINI_KEY = 'audioAiImageGeminiApiKey';
+        const LOCAL_STORAGE_REPLICATE_KEY = 'audioAiImageReplicateApiKey';
+        const LOCAL_STORAGE_REPLICATE_MODEL = 'audioAiImageReplicateModel';
+
+        function loadKeys() {
+            const savedGeminiKey = localStorage.getItem(LOCAL_STORAGE_GEMINI_KEY);
+            const savedReplicateKey = localStorage.getItem(LOCAL_STORAGE_REPLICATE_KEY);
+            const savedReplicateModel = localStorage.getItem(LOCAL_STORAGE_REPLICATE_MODEL);
+
+            if (savedGeminiKey) {
+                geminiApiKeyInput.value = savedGeminiKey;
+            }
+            if (savedReplicateKey) {
+                replicateApiKeyInput.value = savedReplicateKey;
+            }
+            if (savedReplicateModel) {
+                replicateModelInput.value = savedReplicateModel;
+            }
+
+            checkIfReady();
+        }
+
+        function saveKeys() {
+            const geminiKey = geminiApiKeyInput.value.trim();
+            const replicateKey = replicateApiKeyInput.value.trim();
+            const replicateModel = replicateModelInput.value.trim();
+
+            if (!geminiKey || !replicateKey || !replicateModel) {
+                keyStatus.textContent = 'Please enter all keys and the model version.';
+                keyStatus.className = 'error';
+                return;
+            }
+
+            localStorage.setItem(LOCAL_STORAGE_GEMINI_KEY, geminiKey);
+            localStorage.setItem(LOCAL_STORAGE_REPLICATE_KEY, replicateKey);
+            localStorage.setItem(LOCAL_STORAGE_REPLICATE_MODEL, replicateModel);
+
+            keyStatus.textContent = 'API Keys and Model Version saved!';
+            keyStatus.className = 'success';
+            checkIfReady();
+        }
+
+        function clearKeys() {
+            localStorage.removeItem(LOCAL_STORAGE_GEMINI_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_REPLICATE_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_REPLICATE_MODEL);
+            geminiApiKeyInput.value = '';
+            replicateApiKeyInput.value = '';
+            replicateModelInput.value = '';
+            keyStatus.textContent = 'API Keys and Model Version cleared.';
+            keyStatus.className = '';
+            checkIfReady();
+        }
+
+        function getGeminiApiKey() {
+            return geminiApiKeyInput.value.trim();
+        }
+
+        function getReplicateApiKey() {
+            return replicateApiKeyInput.value.trim();
+        }
+
+        function getReplicateModelVersion() {
+            return replicateModelInput.value.trim();
+        }
+
+        // --- Initial Checks and Setup ---
+        let microphoneReady = false;
+        let apiKeysReady = false;
+
+        function checkIfReady() {
+            apiKeysReady = getGeminiApiKey() !== '' && getReplicateApiKey() !== '' && getReplicateModelVersion() !== '';
+
+            if (microphoneReady && apiKeysReady) {
+                recordButton.disabled = false;
+                status.textContent = 'Ready to record';
+            } else {
+                recordButton.disabled = true;
+                if (!microphoneReady) {
+                    status.textContent = 'Waiting for microphone access...';
+                } else if (!apiKeysReady) {
+                    status.textContent = 'Please enter and save API keys/Model Version.';
+                }
+            }
+        }
+
+        // Check for browser compatibility and get microphone
+        if (!navigator.mediaDevices || !window.MediaRecorder) {
+            status.textContent = 'Error: Your browser does not support required features (MediaRecorder).';
+            checkIfReady();
+        } else {
+            navigator.mediaDevices.getUserMedia({
+                    audio: true
+                })
+                .then(stream => {
+                    // Use 'audio/ogg' if supported, otherwise fallback.
+                    // Chrome supports 'audio/webm; codecs=opus' well.
+                    // Need to check browser compatibility for 'audio/ogg'.
+                    // Let's try 'audio/webm; codecs=opus' as a common fallback
+                    const options = { mimeType: 'audio/webm; codecs=opus' };
+                     // Check if 'audio/ogg' is supported and prefer it if it is, matching bash script
+                    if (MediaRecorder.isTypeSupported('audio/ogg')) {
+                        options.mimeType = 'audio/ogg';
+                         console.log('Using audio/ogg for recording.');
+                    } else if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) {
+                        console.log('Using audio/webm; codecs=opus for recording.');
+                    } else {
+                         console.warn('Neither audio/ogg nor audio/webm; codecs=opus supported. Using default mimeType.', MediaRecorder.supportedTypes());
+                         delete options.mimeType; // Use browser default
+                    }
+
+                    mediaRecorder = new MediaRecorder(stream, options);
+
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        console.log('MediaRecorder stopped');
+                        status.textContent = 'Processing...';
+                        // Create a Blob with the *actual* mimeType used for recording
+                        const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                        audioChunks = [];
+                        processRecording(audioBlob); // Pass the audio blob
+                    };
+
+                    microphoneReady = true;
+                    checkIfReady();
+                })
+                .catch(err => {
+                    console.error('Error accessing microphone:', err);
+                    status.textContent = 'Error accessing microphone: ' + err.message;
+                    microphoneReady = false;
+                    checkIfReady();
+                });
+        }
+
+        // --- Button Click Handlers ---
+        recordButton.onclick = () => {
+            if (!microphoneReady || !apiKeysReady) {
+                console.warn("Attempted to record when not ready.");
+                return;
+            }
+
+            if (mediaRecorder) {
+                audioChunks = [];
+                geminiResponseSpan.textContent = '';
+                imageResultDiv.innerHTML = '';
+                imageResultDiv.style.border = 'none';
+                keyStatus.textContent = '';
+
+                try {
+                    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop(); // Stop if already recording
+
+                    mediaRecorder.start();
+                    recordButton.disabled = true;
+                    stopButton.disabled = false;
+                    status.textContent = 'Recording...';
+                } catch (e) {
+                    console.error('Error starting recording:', e);
+                    status.textContent = `Error starting recording: ${e.message}`;
+                    checkIfReady();
+                }
+            }
+        };
+
+        stopButton.onclick = () => {
+            stopRecordingProcess();
+        };
+
+        saveKeysButton.onclick = saveKeys;
+        clearKeysButton.onclick = clearKeys;
+
+        function stopRecordingProcess() {
+            recordButton.disabled = true;
+            stopButton.disabled = true;
+            status.textContent = 'Stopping...';
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+             // processRecording is called by mediaRecorder.onstop
+        }
+
+        async function processRecording(audioBlob) {
+             if (audioBlob.size === 0) {
+                 status.textContent = 'No audio recorded.';
+                 checkIfReady();
+                 return;
+             }
+
+            status.textContent = 'Uploading audio...';
+            try {
+                const fileUri = await uploadAudioToGemini(audioBlob);
+                status.textContent = 'Sending to Gemini...';
+                // Pass the file URI to generateGeminiResponse
+                const geminiText = await generateGeminiResponse(fileUri, audioBlob.type); // Pass mime type too
+                geminiResponseSpan.textContent = geminiText;
+                status.textContent = 'Sending to Replicate...';
+                await generateReplicateImage(geminiText);
+                status.textContent = 'Done!';
+            } catch (error) {
+                console.error('Error processing recording:', error);
+                status.textContent = `Error: ${error.message}`;
+                 geminiResponseSpan.textContent = `Error: ${error.message}`; // Also show error in Gemini response area
+            } finally {
+                checkIfReady();
+            }
+        }
+
+        async function uploadAudioToGemini(audioBlob) {
+            const apiKey = getGeminiApiKey();
+            if (!apiKey) {
+                throw new Error("Gemini API Key is missing.");
+            }
+
+            const uploadEndpoint = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
+            // Give it a simple name, perhaps including a timestamp for uniqueness if needed in a real app
+            const displayName = `recorded_audio_${Date.now()}.${audioBlob.type.split('/')[1]}`;
+            const mimeType = audioBlob.type;
+
+
+            // 1. Initiate Resumable Upload (POST)
+            status.textContent = "Initiating upload...";
+            console.log(`Uploading file: ${displayName} (${mimeType}, ${audioBlob.size} bytes)`);
+
+            const initHeaders = {
+                'X-Goog-Upload-Protocol': 'resumable',
+                'X-Goog-Upload-Command': 'start',
+                'X-Goog-Upload-Header-Content-Length': audioBlob.size,
+                'X-Goog-Upload-Header-Content-Type': mimeType,
+                'Content-Type': 'application/json'
+            };
+
+            const initBody = JSON.stringify({
+                file: {
+                    display_name: displayName
+                }
+            });
+
+            const initResponse = await fetch(uploadEndpoint, {
+                method: 'POST',
+                headers: initHeaders,
+                body: initBody
+            });
+
+            if (!initResponse.ok) {
+                const errorBody = await initResponse.json();
+                console.error('Gemini Upload Init Error:', errorBody);
+                throw new Error(`Gemini Upload Init Error: ${initResponse.status} - ${errorBody.error ? errorBody.error.message : initResponse.statusText}`);
+            }
+
+            const uploadUrl = initResponse.headers.get('X-Goog-Upload-URL');
+            if (!uploadUrl) {
+                throw new Error("Gemini Upload Init Error: Missing X-Goog-Upload-URL header");
+            }
+            console.log('Upload URL received:', uploadUrl);
+
+            // 2. Upload File Data (POST to the uploadUrl)
+            status.textContent = "Uploading audio data...";
+             // Note: Use POST for the upload segment as per Google API documentation for resumable upload commands.
+            const uploadHeaders = {
+                'Content-Length': audioBlob.size,
+                'X-Goog-Upload-Offset': 0, // Start from the beginning
+                'X-Goog-Upload-Command': 'upload, finalize', // Upload all data and finalize
+                'Content-Type': mimeType
+            };
+
+            const uploadResponse = await fetch(uploadUrl, {
+                method: 'POST', // Use POST for uploading the segment
+                headers: uploadHeaders,
+                body: audioBlob // Send the audio blob directly
+            });
+
+             if (!uploadResponse.ok) {
+                 const errorBody = await uploadResponse.json();
+                 console.error('Gemini Upload Error:', errorBody);
+                 throw new Error(`Gemini Upload Error: ${uploadResponse.status} - ${errorBody.error ? errorBody.error.message : uploadResponse.statusText}`);
+             }
+
+            // 3. Get File URI from Finalize Response
+            status.textContent = "Finalizing upload...";
+            const fileInfo = await uploadResponse.json();
+             if (!fileInfo || !fileInfo.file || !fileInfo.file.uri) {
+                 console.warn('Gemini Upload Response Error:', fileInfo);
+                 throw new Error('Gemini Upload Error: Unexpected response format or missing file URI.');
+             }
+            const fileUri = fileInfo.file.uri;
+            console.log('Gemini File URI:', fileUri);
+
+            return fileUri;
+        }
+
+        async function generateGeminiResponse(fileUri, mimeType) {
+            const apiKey = getGeminiApiKey();
+            if (!apiKey) {
+                throw new Error("Gemini API Key is missing.");
+            }
+
+            // --- Using a currently supported model that accepts audio ---
+            // gemini-1.5-flash-latest or gemini-1.5-pro-latest are recommended for audio.
+            // DO NOT use gemini-2.5-flash-preview-04-17 as it's likely deprecated.
+            const model = 'gemini-1.5-flash-latest';
+
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+            // Text Prompt asking it to describe the provided audio for visual concepts
+            const textPrompt = "Describe the content of this audio, focusing on elements that can be translated into visual concepts for an image generation model. Be concise and imaginative. Provide only the description text.";
+
+            const requestBody = JSON.stringify({
+                contents: [{
+                    role: "user",
+                    parts: [{
+                            fileData: {
+                                mimeType: mimeType, // Use the actual mime type of the recorded audio
+                                fileUri: fileUri
+                            }
+                        },
+                        {
+                            text: textPrompt // Include the text prompt
+                        }
+                    ]
+                }],
+                generationConfig: {
+                     // Adjust parameters if needed based on model capabilities
+                    temperature: 0.7,
+                    maxOutputTokens: 200
+                }
+            });
+
+             const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: requestBody
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json();
+                console.error('Gemini API Response Error:', errorBody);
+                 let errorMessage = `Gemini API Error: ${response.status} - ${errorBody.error ? errorBody.error.message : response.statusText}`;
+                 // Check for specific content blocking reasons if available
+                 if (errorBody.promptFeedback && errorBody.promptFeedback.blockReason) {
+                    errorMessage += ` (Blocked: ${errorBody.promptFeedback.blockReason})`;
+                 }
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            console.log('Raw Gemini Response Data:', data); // Log the full response
+
+            if (!data || !data.candidates || data.candidates.length === 0 || !data.candidates[0].content || !data.candidates[0].content.parts || data.candidates[0].content.parts.length === 0) {
+                 console.warn('Gemini response structure unexpected or empty:', data);
+                  // Check if there's a block reason even without candidates
+                 if (data.promptFeedback && data.promptFeedback.blockReason) {
+                     throw new Error(`Gemini response blocked: ${data.promptFeedback.blockReason}`);
+                 }
+                 throw new Error('Gemini response structure unexpected or empty.');
+            }
+
+            const geminiText = data.candidates[0].content.parts[0].text;
+            console.log('Gemini Response Text:', geminiText);
+
+             // Basic cleanup of potential markdown/formatting
+             let cleanedText = geminiText;
+             cleanedText = cleanedText.replace(/```[\s\S]*?```/g, ''); // Remove code blocks
+             cleanedText = cleanedText.replace(/\*\*(.*?)\*\*/g, '$1'); // Remove bold
+             cleanedText = cleanedText.replace(/\*(.*?)\*/g, '$1'); // Remove italics
+             cleanedText = cleanedText.replace(/^- /gm, ''); // Remove list markers
+             cleanedText = cleanedText.trim();
+
+
+            return cleanedText; // Return the cleaned text
+        }
+
+
+        async function generateReplicateImage(prompt) {
+            const apiKey = getReplicateApiKey();
+            const modelVersion = getReplicateModelVersion();
+
+            if (!apiKey) {
+                throw new Error("Replicate API Key is missing.");
+            }
+            if (!modelVersion) {
+                throw new Error("Replicate Model Version is missing.");
+            }
+
+            const initialResponse = await fetch('https://api.replicate.com/v1/predictions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    version: modelVersion,
+                    input: {
+                        prompt: prompt
+                    }
+                })
+            });
+
+            if (!initialResponse.ok) {
+                const errorBody = await initialResponse.json();
+                console.error('Replicate Initial Response Error:', errorBody);
+                throw new Error(`Replicate API Error (Initial): ${initialResponse.status} ${initialResponse.statusText} - ${errorBody.detail || JSON.stringify(errorBody)}`);
+            }
+
+            const prediction = await initialResponse.json();
+            console.log('Replicate Prediction Created:', prediction);
+
+            let result = prediction;
+            while (result.status !== 'succeeded' && result.status !== 'failed' && result.status !== 'canceled') {
+                status.textContent = `Replicate status: ${result.status}...`;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const getResponse = await fetch(result.urls.get, {
+                    headers: {
+                        'Authorization': `Token ${apiKey}`
+                    }
+                });
+
+                if (!getResponse.ok) {
+                    const errorBody = await getResponse.json();
+                    console.error('Replicate Polling Error:', errorBody);
+                    throw new Error(`Replicate API Error (Polling): ${getResponse.status} ${getResponse.statusText} - ${errorBody.detail || JSON.stringify(errorBody)}`);
+                }
+                result = await getResponse.json();
+                console.log('Replicate Polling Result:', result);
+            }
+
+            if (result.status === 'succeeded') {
+                if (result.output && Array.isArray(result.output) && result.output.length > 0) {
+                    const imageUrl = result.output[0];
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = 'Generated Image';
+                    imageResultDiv.innerHTML = '';
+                    imageResultDiv.appendChild(img);
+                    imageResultDiv.style.border = '1px solid #eee';
+                    console.log('Image URL:', imageUrl);
+                    return imageUrl;
+                } else {
+                    console.warn('Replicate succeeded but no output found:', result);
+                    throw new Error('Replicate succeeded but no image output found.');
+                }
+            } else {
+                console.error('Replicate Prediction Failed:', result);
+                throw new Error(`Replicate prediction failed with status: ${result.status}. Error: ${result.error}`);
+            }
+        }
+
+        // --- Initialization ---
+        loadKeys();
+    </script>
+</body>
+
+</html>
