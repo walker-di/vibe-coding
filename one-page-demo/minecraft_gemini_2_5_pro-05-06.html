@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MiniCraft.js - Split-Screen</title>
+  <title>MiniCraft.js - Split-Screen with CPU P2</title>
   <style>
     body {
       margin: 0;
@@ -45,7 +45,6 @@
       font-weight: bold;
     }
 
-    /* Make sure cursor changes for all clickable buttons/elements */
     #instructions p:first-of-type:hover,
     button:hover,
     .block-option:hover {
@@ -62,7 +61,6 @@
       pointer-events: none;
       mix-blend-mode: difference;
       display: none;
-      /* Initially hidden */
     }
 
     .crosshair::before {
@@ -76,14 +74,9 @@
       transform: translateY(-50%);
     }
 
-    #crosshairP1 {
-      /* ID for Player 1's crosshair */
-    }
+    #crosshairP1 {}
 
-    #crosshairP2 {
-      /* ID for Player 2's crosshair */
-    }
-
+    #crosshairP2 {}
 
     #block-selector {
       position: absolute;
@@ -94,10 +87,8 @@
       padding: 10px;
       border-radius: 5px;
       display: flex;
-      /* Changed to flex by default, controlled by JS */
       gap: 10px;
       z-index: 10;
-      /* Ensure it's above viewports */
     }
 
     .block-option {
@@ -143,12 +134,10 @@
       margin-bottom: 10px;
       box-sizing: border-box;
       width: calc(100% - 110px);
-      /* Adjust width based on button */
     }
 
     #save-load-ui select {
       width: 100%;
-      /* Select can be full width */
     }
 
     #save-load-ui button {
@@ -160,7 +149,6 @@
       cursor: pointer;
       transition: background-color 0.2s;
       min-width: 80px;
-      /* Ensure buttons have a decent min width */
       box-sizing: border-box;
     }
 
@@ -174,13 +162,11 @@
       margin-bottom: 10px;
       align-items: center;
       flex-wrap: wrap;
-      /* Allow wrap on small screens */
     }
 
     .save-load-row input[type="text"] {
       flex-grow: 1;
       min-width: 150px;
-      /* Prevent input from becoming too small */
     }
 
     .world-management-row {
@@ -204,7 +190,6 @@
       width: 100%;
     }
 
-    /* Styles for Game Mode Selector */
     #game-mode-selector {
       margin-top: 20px;
       padding: 15px;
@@ -221,7 +206,6 @@
       cursor: pointer;
       transition: background-color 0.2s;
       flex-grow: 1;
-      /* Make buttons share space */
     }
 
     .game-mode-button:hover {
@@ -230,7 +214,6 @@
 
     .game-mode-button.selected {
       background-color: #007bff;
-      /* A highlight color */
       box-shadow: 0 0 8px #007bff;
     }
 
@@ -242,15 +225,11 @@
       border-radius: 4px;
       margin-top: 10px;
       text-align: left;
-      /* Better for list */
     }
 
-
-    /* Styles for Player Status Display (Tag Mode) */
     .player-status-display {
       position: absolute;
       top: 10px;
-      /* left and width will be set by JS per viewport */
       padding: 8px 12px;
       background-color: rgba(0, 0, 0, 0.7);
       color: white;
@@ -259,13 +238,9 @@
       font-weight: bold;
       border-radius: 5px;
       z-index: 100;
-      /* Above crosshairs */
       display: none;
-      /* Hidden initially */
       text-align: center;
-      /* Center text within the display */
       pointer-events: none;
-      /* Prevent interaction */
     }
   </style>
 </head>
@@ -281,10 +256,14 @@
         Block (Creative Mode)<br>Right Click: Remove Block (Creative Mode)<br>1-7: Select Block Type (Creative Mode)
       </p>
       <p>
-        <b>Player 2 (Right Screen):</b><br>
-        IJKL: Move<br>U: Jump / Swim Up<br>H: Descend / Swim Down<br>Arrow Keys: Look Around<br>O: Place Block (Creative
-        Mode)<br>P:
-        Remove Block (Creative Mode)<br>(Block type shared with Player 1, Creative Mode)
+        <b>Player 2 (Right Screen):</b> <input type="checkbox" id="p2CpuToggle" style="vertical-align: middle;"> <label
+          for="p2CpuToggle" style="font-weight:normal;">CPU Controlled</label><br>
+        <span id="p2ControlsParagraph">
+          IJKL: Move<br>U: Jump / Swim Up<br>H: Descend / Swim Down<br>Arrow Keys: Look Around<br>O: Place Block
+          (Creative
+          Mode)<br>P:
+          Remove Block (Creative Mode)<br>(Block type shared with Player 1, Creative Mode)
+        </span>
       </p>
 
       <div id="game-mode-selector">
@@ -326,7 +305,6 @@
   <div id="crosshairP2" class="crosshair"></div>
   <div id="block-selector"></div>
 
-  <!-- Player Status Displays for Tag Mode -->
   <div id="player1Status" class="player-status-display"></div>
   <div id="player2Status" class="player-status-display"></div>
 
@@ -345,11 +323,160 @@
     import * as THREE from 'three';
     import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
+    // --- NN & CPU P2 Variables ---
+    let player2NN;
+    let p2IsCPU = false;
+    const P2_BEST_NN_KEY = 'minisplit_p2_best_nn_data_v2'; // Increment version if structure changes
+    const P2_BEST_FITNESS_KEY = 'minisplit_p2_best_nn_fitness_v2';
+    let bestP2NNSavedData = null;
+    let bestP2NNFitness = -Infinity;
+
+    // NN Configuration (tune these)
+    const NN_INPUT_NODES = 7; // dx, dz, distToP1, isP2It, p2CanJump, p2IsInWater, p2VerticalSpeedNormalized
+    const NN_HIDDEN_NODES = 10;
+    const NN_OUTPUT_NODES = 7;  // F, B, L, R, Jump/DownAction, LookH (-1 to 1), LookV (-1 to 1)
+    const NN_MUTATION_RATE = 0.1;
+    const NN_MUTATION_AMOUNT = 0.2;
+
+    class NeuralNetwork {
+      constructor(inputNodes, hiddenNodes, outputNodes) {
+        this.inputNodes = inputNodes;
+        this.hiddenNodes = hiddenNodes;
+        this.outputNodes = outputNodes;
+
+        this.weights_ih = NeuralNetwork.randomMatrix(hiddenNodes, inputNodes);
+        this.weights_ho = NeuralNetwork.randomMatrix(outputNodes, hiddenNodes);
+        this.bias_h = NeuralNetwork.randomMatrix(hiddenNodes, 1);
+        this.bias_o = NeuralNetwork.randomMatrix(outputNodes, 1);
+      }
+
+      static randomMatrix(rows, cols) {
+        let matrix = [];
+        for (let i = 0; i < rows; i++) {
+          matrix[i] = [];
+          for (let j = 0; j < cols; j++) {
+            matrix[i][j] = Math.random() * 2 - 1;
+          }
+        }
+        return matrix;
+      }
+
+      static tanh(x) { return Math.tanh(x); }
+
+      static multiply(matrixA, vectorB_or_matrixB) {
+        const aRows = matrixA.length;
+        const aCols = matrixA[0].length;
+        let matrixB = vectorB_or_matrixB;
+        if (!Array.isArray(vectorB_or_matrixB[0])) {
+          matrixB = vectorB_or_matrixB.map(val => [val]);
+        }
+        const bRows = matrixB.length;
+        const bCols = matrixB[0].length;
+
+        if (aCols !== bRows) {
+          console.error("NN Matrix multiplication: Columns of A must match rows of B.", matrixA, matrixB);
+          return null;
+        }
+        let result = new Array(aRows).fill(0).map(() => new Array(bCols).fill(0));
+        for (let i = 0; i < aRows; i++) {
+          for (let j = 0; j < bCols; j++) {
+            let sum = 0;
+            for (let k = 0; k < aCols; k++) {
+              sum += matrixA[i][k] * matrixB[k][j];
+            }
+            result[i][j] = sum;
+          }
+        }
+        return bCols === 1 ? result.map(row => row[0]) : result;
+      }
+
+      static add(vectorA, vectorB) {
+        if (vectorA.length !== vectorB.length) {
+          console.error("NN Vector addition: Mismatched lengths.", vectorA, vectorB); return null;
+        }
+        return vectorA.map((val, i) => val + vectorB[i]);
+      }
+
+      static map(vector, func) {
+        return vector.map(func);
+      }
+
+      feedForward(inputArray) {
+        let hidden_pre_bias = NeuralNetwork.multiply(this.weights_ih, inputArray);
+        let hidden_biased = NeuralNetwork.add(hidden_pre_bias, this.bias_h.map(r => r[0]));
+        let hidden_activated = NeuralNetwork.map(hidden_biased, NeuralNetwork.tanh);
+
+        let output_pre_bias = NeuralNetwork.multiply(this.weights_ho, hidden_activated);
+        let output_biased = NeuralNetwork.add(output_pre_bias, this.bias_o.map(r => r[0]));
+        let output_activated = NeuralNetwork.map(output_biased, NeuralNetwork.tanh);
+        return output_activated;
+      }
+
+      getWeights() {
+        let weights = [];
+        this.weights_ih.forEach(row => weights.push(...row));
+        this.weights_ho.forEach(row => weights.push(...row));
+        this.bias_h.forEach(row => weights.push(...row));
+        this.bias_o.forEach(row => weights.push(...row));
+        return weights;
+      }
+
+      setWeights(weightsArray) {
+        let offset = 0;
+        const read = (matrix) => matrix.map(row => row.map(() => weightsArray[offset++]));
+        this.weights_ih = read(this.weights_ih);
+        this.weights_ho = read(this.weights_ho);
+        this.bias_h = read(this.bias_h);
+        this.bias_o = read(this.bias_o);
+        if (offset !== weightsArray.length) {
+          console.warn("NN setWeights: Mismatch between weightsArray length and network structure size.", offset, weightsArray.length);
+        }
+      }
+
+      mutate(rate, amount) {
+        let weights = this.getWeights();
+        for (let i = 0; i < weights.length; i++) {
+          if (Math.random() < rate) {
+            weights[i] += (Math.random() * 2 - 1) * amount;
+          }
+        }
+        this.setWeights(weights);
+      }
+
+      serialize() {
+        return JSON.stringify({
+          inputNodes: this.inputNodes, hiddenNodes: this.hiddenNodes, outputNodes: this.outputNodes,
+          weights_ih: this.weights_ih, weights_ho: this.weights_ho,
+          bias_h: this.bias_h, bias_o: this.bias_o
+        });
+      }
+
+      static deserialize(jsonString) {
+        try {
+          const data = JSON.parse(jsonString);
+          if (!data.weights_ih || !data.bias_h ||
+            data.inputNodes === undefined || data.hiddenNodes === undefined || data.outputNodes === undefined) {
+            console.error("NN Deserialization error: Invalid data structure.", data);
+            return null;
+          }
+          const nn = new NeuralNetwork(data.inputNodes, data.hiddenNodes, data.outputNodes);
+          nn.weights_ih = data.weights_ih; nn.weights_ho = data.weights_ho;
+          nn.bias_h = data.bias_h; nn.bias_o = data.bias_o;
+          return nn;
+        } catch (e) {
+          console.error("NN Deserialization error:", e, "String was:", jsonString);
+          return null;
+        }
+      }
+    }
+    // --- End NN & CPU P2 Variables ---
+
+
     let scene, renderer, world;
     let worldObjects = [];
 
     const NUM_PLAYERS = 2;
-    const players = []; // Array to hold player data
+    const players = [];
 
     const timeStep = 1 / 60;
     let playerMaterial, groundMaterial, playerGroundContactMaterial;
@@ -388,147 +515,73 @@
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
-    // Tag Game Variables
-    let gameMode = 'creative'; // 'creative' or 'tag'
-    let itPlayerId = -1; // Player ID of who is "It"
-    let tagCooldown = 0; // Cooldown in seconds after a tag
-    const TAG_COOLDOWN_DURATION = 3; // 3 seconds
+    let gameMode = 'creative';
+    let itPlayerId = -1;
+    let tagCooldown = 0;
+    const TAG_COOLDOWN_DURATION = 3;
     let tagGameActive = false;
 
 
-    function openDB() {
-      return new Promise((resolve, reject) => {
-        if (db) {
-          resolve(db);
-          return;
+    function openDB() { /* ... (existing code) ... */ return new Promise((resolve, reject) => { if (db) { resolve(db); return; } const request = indexedDB.open(DB_NAME, DB_VERSION); request.onerror = (event) => reject("IndexedDB error: " + event.target.errorCode); request.onsuccess = (event) => { db = event.target.result; resolve(db); }; request.onupgradeneeded = (event) => { event.target.result.createObjectStore(STORE_NAME, { keyPath: 'name' }); }; }); }
+    async function saveWorldDB(worldName, worldData) { /* ... (existing code) ... */ const currentDb = await openDB(); return new Promise((resolve, reject) => { const transaction = currentDb.transaction([STORE_NAME], 'readwrite'); const store = transaction.objectStore(STORE_NAME); const request = store.put({ name: worldName, data: worldData }); request.onsuccess = () => resolve(); request.onerror = (event) => reject("Save error: " + event.target.error); }); }
+    async function loadWorldDB(worldName) { /* ... (existing code) ... */ const currentDb = await openDB(); return new Promise((resolve, reject) => { const transaction = currentDb.transaction([STORE_NAME], 'readonly'); const store = transaction.objectStore(STORE_NAME); const request = store.get(worldName); request.onsuccess = (event) => resolve(event.target.result ? event.target.result.data : null); request.onerror = (event) => reject("Load error: " + event.target.error); }); }
+    async function getAllWorldNamesDB() { /* ... (existing code) ... */ const currentDb = await openDB(); return new Promise((resolve, reject) => { const transaction = currentDb.transaction([STORE_NAME], 'readonly'); const store = transaction.objectStore(STORE_NAME); const request = store.getAllKeys(); request.onsuccess = (event) => resolve(event.target.result); request.onerror = (event) => reject("Error fetching world names: " + event.target.error); }); }
+    async function deleteWorldDB(worldName) { /* ... (existing code) ... */ const currentDb = await openDB(); return new Promise((resolve, reject) => { const transaction = currentDb.transaction([STORE_NAME], 'readwrite'); const store = transaction.objectStore(STORE_NAME); const request = store.delete(worldName); request.onsuccess = () => resolve(); request.onerror = (event) => reject("Delete error: " + event.target.error); }); }
+
+    init();
+
+    function createTexture(color, text = null, isFluid = false) { /* ... (existing code) ... */ const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64; const context = canvas.getContext('2d'); context.fillStyle = color; context.fillRect(0, 0, 64, 64); if (!isFluid) { context.strokeStyle = 'rgba(0,0,0,0.2)'; context.lineWidth = 2; context.strokeRect(1, 1, 62, 62); } if (text) { context.fillStyle = isFluid ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)'; context.font = '10px Arial'; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(text, 32, 32); } const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter; return texture; }
+    function initMaterials() { /* ... (existing code) ... */ const grassTopTexture = createTexture('#6A994E'); const grassSideTexture = createTexture('#A7C957'); const dirtTexture = createTexture('#8C6A48'); const stoneTexture = createTexture('#808080'); const woodTexture = createTexture('#A0522D'); const waterTexture = createTexture('rgba(50, 100, 200, 0.6)', null, true); const lavaTexture = createTexture('#FF6000', null, true); const glowstoneTexture = createTexture('#FFEE88', 'GLOW'); blockMaterials[blockTypes.GRASS] = [grassSideTexture, grassSideTexture, grassTopTexture, dirtTexture, grassSideTexture, grassSideTexture].map(texture => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0.1 })); blockMaterials[blockTypes.DIRT] = new THREE.MeshStandardMaterial({ map: dirtTexture, roughness: 0.9, metalness: 0 }); blockMaterials[blockTypes.STONE] = new THREE.MeshStandardMaterial({ map: stoneTexture, roughness: 0.7, metalness: 0.2 }); blockMaterials[blockTypes.WOOD] = new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.8, metalness: 0.1 }); blockMaterials[blockTypes.WATER] = new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.6, roughness: 0.2, metalness: 0.0, side: THREE.DoubleSide }); blockMaterials[blockTypes.LAVA] = new THREE.MeshStandardMaterial({ map: lavaTexture, roughness: 0.8, metalness: 0.2, emissive: new THREE.Color(0xdd4400), emissiveIntensity: 0.8, side: THREE.DoubleSide }); blockMaterials[blockTypes.GLOWSTONE] = new THREE.MeshStandardMaterial({ map: glowstoneTexture, roughness: 0.9, metalness: 0.1, emissive: new THREE.Color(0xffffaa), emissiveIntensity: 0.9 }); }
+    function createPlayerDirectionIndicatorMesh() { /* ... (existing code) ... */ const length = 0.5; const baseWidth = 0.3; const prismHeight = 0.1; const shape = new THREE.Shape(); shape.moveTo(length, 0); shape.lineTo(0, baseWidth / 2); shape.lineTo(0, -baseWidth / 2); shape.closePath(); const extrudeSettings = { depth: prismHeight, bevelEnabled: false }; const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings); geometry.rotateX(Math.PI / 2); geometry.rotateY(-Math.PI / 2); geometry.translate(0, prismHeight / 2, 0); const material = new THREE.MeshStandardMaterial({ color: 0xffA500, emissive: 0xcc8400, roughness: 0.7, metalness: 0.2, }); const mesh = new THREE.Mesh(geometry, material); mesh.castShadow = true; return mesh; }
+
+    function initPlayer2CPU() {
+      if (!players[1]) {
+        console.error("Player 2 object not found for CPU initialization.");
+        return;
+      }
+
+      const savedNNJson = localStorage.getItem(P2_BEST_NN_KEY);
+      bestP2NNFitness = parseFloat(localStorage.getItem(P2_BEST_FITNESS_KEY)) || -Infinity;
+
+      let loadedFromStorage = false;
+      if (savedNNJson) {
+        let tempNN = NeuralNetwork.deserialize(savedNNJson);
+        if (tempNN && tempNN.inputNodes === NN_INPUT_NODES &&
+          tempNN.hiddenNodes === NN_HIDDEN_NODES &&
+          tempNN.outputNodes === NN_OUTPUT_NODES) {
+          player2NN = tempNN;
+          bestP2NNSavedData = savedNNJson;
+          console.log("Loaded P2 Best NN from localStorage. Fitness:", bestP2NNFitness);
+          loadedFromStorage = true;
+        } else {
+          console.warn("Saved P2 NN structure mismatch or invalid. Creating new.");
+          if (tempNN) console.log(`Saved: ${tempNN.inputNodes}i ${tempNN.hiddenNodes}h ${tempNN.outputNodes}o. Required: ${NN_INPUT_NODES}i ${NN_HIDDEN_NODES}h ${NN_OUTPUT_NODES}o`);
         }
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onerror = (event) => reject("IndexedDB error: " + event.target.errorCode);
-        request.onsuccess = (event) => {
-          db = event.target.result;
-          resolve(db);
-        };
-        request.onupgradeneeded = (event) => {
-          event.target.result.createObjectStore(STORE_NAME, { keyPath: 'name' });
-        };
-      });
-    }
-    async function saveWorldDB(worldName, worldData) {
-      const currentDb = await openDB();
-      return new Promise((resolve, reject) => {
-        const transaction = currentDb.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.put({ name: worldName, data: worldData });
-        request.onsuccess = () => resolve();
-        request.onerror = (event) => reject("Save error: " + event.target.error);
-      });
-    }
-    async function loadWorldDB(worldName) {
-      const currentDb = await openDB();
-      return new Promise((resolve, reject) => {
-        const transaction = currentDb.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(worldName);
-        request.onsuccess = (event) => resolve(event.target.result ? event.target.result.data : null);
-        request.onerror = (event) => reject("Load error: " + event.target.error);
-      });
-    }
-    async function getAllWorldNamesDB() {
-      const currentDb = await openDB();
-      return new Promise((resolve, reject) => {
-        const transaction = currentDb.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.getAllKeys();
-        request.onsuccess = (event) => resolve(event.target.result);
-        request.onerror = (event) => reject("Error fetching world names: " + event.target.error);
-      });
-    }
-    async function deleteWorldDB(worldName) {
-      const currentDb = await openDB();
-      return new Promise((resolve, reject) => {
-        const transaction = currentDb.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.delete(worldName);
-        request.onsuccess = () => resolve();
-        request.onerror = (event) => reject("Delete error: " + event.target.error);
-      });
-    }
-
-    init(); // Start the engine
-
-    //----------------------------------------------------------------
-    // TEXTURES and MATERIALS
-    //----------------------------------------------------------------
-    function createTexture(color, text = null, isFluid = false) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 64; canvas.height = 64;
-      const context = canvas.getContext('2d');
-      context.fillStyle = color;
-      context.fillRect(0, 0, 64, 64);
-      if (!isFluid) {
-        context.strokeStyle = 'rgba(0,0,0,0.2)'; context.lineWidth = 2;
-        context.strokeRect(1, 1, 62, 62);
       }
-      if (text) {
-        context.fillStyle = isFluid ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
-        context.font = '10px Arial'; context.textAlign = 'center';
-        context.textBaseline = 'middle'; context.fillText(text, 32, 32);
+
+      if (!loadedFromStorage) {
+        player2NN = new NeuralNetwork(NN_INPUT_NODES, NN_HIDDEN_NODES, NN_OUTPUT_NODES);
+        bestP2NNSavedData = player2NN.serialize();
+        bestP2NNFitness = -Infinity;
+        localStorage.setItem(P2_BEST_NN_KEY, bestP2NNSavedData);
+        localStorage.setItem(P2_BEST_FITNESS_KEY, bestP2NNFitness.toString());
+        console.log("Created new P2 NN and set as initial best.");
       }
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter;
-      return texture;
+
+      if (loadedFromStorage) {
+        let candidateNN = NeuralNetwork.deserialize(bestP2NNSavedData);
+        if (candidateNN) {
+          candidateNN.mutate(NN_MUTATION_RATE, NN_MUTATION_AMOUNT);
+          player2NN = candidateNN;
+          console.log("Created a mutated candidate NN for this session.");
+        } else {
+          console.error("Failed to deserialize for mutation. Using unmutated best or new.");
+        }
+      }
+      players[1].fitnessScore = 0;
     }
 
-    function initMaterials() {
-      const grassTopTexture = createTexture('#6A994E');
-      const grassSideTexture = createTexture('#A7C957');
-      const dirtTexture = createTexture('#8C6A48');
-      const stoneTexture = createTexture('#808080');
-      const woodTexture = createTexture('#A0522D');
-      const waterTexture = createTexture('rgba(50, 100, 200, 0.6)', null, true);
-      const lavaTexture = createTexture('#FF6000', null, true);
-      const glowstoneTexture = createTexture('#FFEE88', 'GLOW');
 
-      blockMaterials[blockTypes.GRASS] = [
-        grassSideTexture, grassSideTexture, grassTopTexture, dirtTexture, grassSideTexture, grassSideTexture
-      ].map(texture => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0.1 }));
-      blockMaterials[blockTypes.DIRT] = new THREE.MeshStandardMaterial({ map: dirtTexture, roughness: 0.9, metalness: 0 });
-      blockMaterials[blockTypes.STONE] = new THREE.MeshStandardMaterial({ map: stoneTexture, roughness: 0.7, metalness: 0.2 });
-      blockMaterials[blockTypes.WOOD] = new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.8, metalness: 0.1 });
-      blockMaterials[blockTypes.WATER] = new THREE.MeshStandardMaterial({
-        map: waterTexture, transparent: true, opacity: 0.6, roughness: 0.2, metalness: 0.0, side: THREE.DoubleSide
-      });
-      blockMaterials[blockTypes.LAVA] = new THREE.MeshStandardMaterial({
-        map: lavaTexture, roughness: 0.8, metalness: 0.2,
-        emissive: new THREE.Color(0xdd4400), emissiveIntensity: 0.8, side: THREE.DoubleSide
-      });
-      blockMaterials[blockTypes.GLOWSTONE] = new THREE.MeshStandardMaterial({
-        map: glowstoneTexture, roughness: 0.9, metalness: 0.1,
-        emissive: new THREE.Color(0xffffaa), emissiveIntensity: 0.9
-      });
-    }
-    //----------------------------------------------------------------
-    // PLAYER SETUP
-    //----------------------------------------------------------------
-    function createPlayerDirectionIndicatorMesh() {
-      const length = 0.5; const baseWidth = 0.3; const prismHeight = 0.1;
-      const shape = new THREE.Shape();
-      shape.moveTo(length, 0); shape.lineTo(0, baseWidth / 2); shape.lineTo(0, -baseWidth / 2); shape.closePath();
-      const extrudeSettings = { depth: prismHeight, bevelEnabled: false };
-      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      geometry.rotateX(Math.PI / 2); geometry.rotateY(-Math.PI / 2); geometry.translate(0, prismHeight / 2, 0); // Center geometry base
-      const material = new THREE.MeshStandardMaterial({
-        color: 0xffA500, emissive: 0xcc8400, roughness: 0.7, metalness: 0.2,
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      return mesh;
-    }
-
-    //----------------------------------------------------------------
-    // INITIALIZATION
-    //----------------------------------------------------------------
     async function init() {
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87CEEB);
@@ -580,6 +633,7 @@
 
           canJump: false, isInWater: false, waterContactCount: 0,
           targetYaw: 0, targetPitch: 0, currentYaw: 0, currentPitch: 0,
+          fitnessScore: 0, // Added for P2 CPU
         };
 
         player.camera.position.y = playerHeight * 0.4;
@@ -594,12 +648,12 @@
         }
         scene.add(player.yawObject);
         scene.add(player.directionIndicator);
-        player.directionIndicator.visible = false; // Initially hidden
+        player.directionIndicator.visible = false;
 
         const playerShape = new CANNON.Box(new CANNON.Vec3(playerRadius, playerHeight / 2, playerRadius));
         const initialPlayerPos = new THREE.Vector3(
-          worldSize.width / 4 + (i * blockSize * 5) - (blockSize * 2.5 * (NUM_PLAYERS - 1) / 2), // Use the more spread out spawn
-          worldSize.height + 2, // Spawn high enough
+          worldSize.width / 4 + (i * blockSize * 5) - (blockSize * 2.5 * (NUM_PLAYERS - 1) / 2),
+          worldSize.height + 2,
           worldSize.depth / 4
         );
         player.body = new CANNON.Body({
@@ -608,57 +662,18 @@
         });
         world.addBody(player.body);
         player.yawObject.position.copy(player.body.position);
+        player.body.userData = { playerId: i };
 
-        player.body.userData = { playerId: i }; // Important for collision checks
-
-        // --- Player Collision Listeners ---
-        player.body.addEventListener("collide", (event) => {
-          const contact = event.contact; const upAxis = new CANNON.Vec3(0, 1, 0);
-          let contactNormal = new CANNON.Vec3();
-          if (contact.bi.id === player.body.id) contact.ni.negate(contactNormal);
-          else contactNormal.copy(contact.ni);
-
-          // Ground contact for jumping
-          if (contactNormal.dot(upAxis) > 0.5) {
-            const otherBody = (contact.bi.id === player.body.id) ? contact.bj : contact.bi;
-            if (otherBody.mass === 0 && otherBody.collisionResponse !== 0 && (!otherBody.userData || otherBody.userData.playerId === undefined)) {
-              if (!player.isInWater) player.canJump = true;
-            }
-          }
-
-          // Tagging logic on collision
-          if (tagGameActive && tagCooldown <= 0 && NUM_PLAYERS >= 2) {
-            const thisPlayerBody = player.body;
-            const otherBodyInCollision = (event.bodyA.id === thisPlayerBody.id) ? event.bodyB : event.bodyA;
-            if (otherBodyInCollision.userData && typeof otherBodyInCollision.userData.playerId !== 'undefined') {
-              const thisPlayer = players[thisPlayerBody.userData.playerId];
-              const otherPlayer = players[otherBodyInCollision.userData.playerId];
-              if (thisPlayer && otherPlayer && thisPlayer.id !== otherPlayer.id) {
-                if (thisPlayer.isIt && !otherPlayer.isIt) switchItPlayer(thisPlayer.id, otherPlayer.id);
-                else if (!thisPlayer.isIt && otherPlayer.isIt) switchItPlayer(otherPlayer.id, thisPlayer.id);
-              }
-            }
-          }
-        });
-        player.body.addEventListener("beginContact", (event) => {
-          const otherBody = event.bodyA.id === player.body.id ? event.bodyB : event.bodyA;
-          if (otherBody.collisionResponse === 0 && otherBody.userData) {
-            if (otherBody.userData.blockType === blockTypes.WATER) enterWater(player);
-            else if (otherBody.userData.blockType === blockTypes.LAVA) enterLava(player);
-          }
-        });
-        player.body.addEventListener("endContact", (event) => {
-          const otherBody = event.bodyA.id === player.body.id ? event.bodyB : event.bodyA;
-          if (otherBody.collisionResponse === 0 && otherBody.userData) {
-            if (otherBody.userData.blockType === blockTypes.WATER) exitWater(player);
-          }
-        });
-        // --- End Player Collision Listeners ---
-
-        players.push(player);
+        player.body.addEventListener("collide", (event) => { /* ... (existing collision code) ... */ const contact = event.contact; const upAxis = new CANNON.Vec3(0, 1, 0); let contactNormal = new CANNON.Vec3(); if (contact.bi.id === player.body.id) contact.ni.negate(contactNormal); else contactNormal.copy(contact.ni); if (contactNormal.dot(upAxis) > 0.5) { const otherBody = (contact.bi.id === player.body.id) ? contact.bj : contact.bi; if (otherBody.mass === 0 && otherBody.collisionResponse !== 0 && (!otherBody.userData || otherBody.userData.playerId === undefined)) { if (!player.isInWater) player.canJump = true; } } if (tagGameActive && tagCooldown <= 0 && NUM_PLAYERS >= 2) { const thisPlayerBody = player.body; const otherBodyInCollision = (event.bodyA.id === thisPlayerBody.id) ? event.bodyB : event.bodyA; if (otherBodyInCollision.userData && typeof otherBodyInCollision.userData.playerId !== 'undefined') { const thisPlayer = players[thisPlayerBody.userData.playerId]; const otherPlayer = players[otherBodyInCollision.userData.playerId]; if (thisPlayer && otherPlayer && thisPlayer.id !== otherPlayer.id) { if (thisPlayer.isIt && !otherPlayer.isIt) switchItPlayer(thisPlayer.id, otherPlayer.id); else if (!thisPlayer.isIt && otherPlayer.isIt) switchItPlayer(otherPlayer.id, thisPlayer.id); } } } });
+        player.body.addEventListener("beginContact", (event) => { /* ... (existing contact code) ... */ const otherBody = event.bodyA.id === player.body.id ? event.bodyB : event.bodyA; if (otherBody.collisionResponse === 0 && otherBody.userData) { if (otherBody.userData.blockType === blockTypes.WATER) enterWater(player); else if (otherBody.userData.blockType === blockTypes.LAVA) enterLava(player); } });
+        player.body.addEventListener("endContact", (event) => { /* ... (existing contact code) ... */ const otherBody = event.bodyA.id === player.body.id ? event.bodyB : event.bodyA; if (otherBody.collisionResponse === 0 && otherBody.userData) { if (otherBody.userData.blockType === blockTypes.WATER) exitWater(player); } });
+        players.push(player); // Ensure player is added to array
       }
 
-      // --- Initial Ground ---
+      if (players.length > 1) {
+        initPlayer2CPU(); // Initialize CPU P2 settings and NN
+      }
+
       const groundGeo = new THREE.PlaneGeometry(worldSize.width * blockSize * 2, worldSize.depth * blockSize * 2);
       const groundMat = new THREE.MeshStandardMaterial({ color: 0x607D3B, side: THREE.DoubleSide, roughness: 1, metalness: 0 });
       initialGroundMesh = new THREE.Mesh(groundGeo, groundMat);
@@ -674,397 +689,36 @@
       });
       initialGroundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
       world.addBody(initialGroundBody);
-      // --- End Initial Ground ---
 
       setupUIAndEventListeners();
       setupBlockSelector();
-      updateGameModeUI(); // Set initial UI state based on default gameMode
+      updateGameModeUI();
 
-      clearWorld(); // Clear any test blocks
-      if (initialGroundMesh) initialGroundMesh.visible = true; // Ensure base ground is visible
-      resetPlayersToSpawn(); // Set initial player positions
-      generateWorld();      // Generate procedural world
-      animate();            // Start the loop
+      clearWorld();
+      if (initialGroundMesh) initialGroundMesh.visible = true;
+      resetPlayersToSpawn();
+      generateWorld();
+      animate();
     }
 
-    //----------------------------------------------------------------
-    // PLAYER STATE / RESPAWN / ENVIRONMENT INTERACTION
-    //----------------------------------------------------------------
+    function resetPlayersToSpawn(playerToReset = null) { /* ... (existing code) ... */ const playersToUpdate = playerToReset ? [playerToReset] : players; playersToUpdate.forEach((player, iOriginal) => { const playerIndex = player.id; const spawnPos = new THREE.Vector3(worldSize.width / 4 + (playerIndex * blockSize * 5) - (blockSize * 2.5 * (NUM_PLAYERS - 1) / 2), worldSize.height + 3, worldSize.depth / 4); player.body.position.copy(spawnPos); player.body.velocity.set(0, 0, 0); player.body.angularVelocity.set(0, 0, 0); player.body.quaternion.set(0, 0, 0, 1); player.yawObject.position.copy(player.body.position); player.yawObject.quaternion.set(0, 0, 0, 1); player.pitchObject.quaternion.set(0, 0, 0, 1); player.currentYaw = 0; player.currentPitch = 0; player.targetYaw = 0; player.targetPitch = 0; player.isInWater = false; player.waterContactCount = 0; player.canJump = false; player.isIt = false; }); if (!playerToReset) { if (!players.some(p => p.isInWater)) { world.gravity.set(0, originalGravityY, 0); } players.forEach(p => p.body.linearDamping = originalPlayerDamping); } else { playerToReset.body.linearDamping = originalPlayerDamping; if (!players.some(p => p.isInWater)) world.gravity.set(0, originalGravityY, 0); } }
+    function enterWater(player) { /* ... (existing code) ... */ player.waterContactCount++; if (!player.isInWater && player.waterContactCount > 0) { player.isInWater = true; world.gravity.set(0, originalGravityY * waterProperties.gravityFactor, 0); player.body.linearDamping = waterProperties.damping; } }
+    function exitWater(player) { /* ... (existing code) ... */ player.waterContactCount--; if (player.isInWater && player.waterContactCount <= 0) { player.isInWater = false; player.waterContactCount = 0; const anyPlayerInWater = players.some(p => p.isInWater); if (!anyPlayerInWater) { world.gravity.set(0, originalGravityY, 0); } player.body.linearDamping = originalPlayerDamping; } }
+    function enterLava(player) { /* ... (existing code) ... */ console.warn(`Player ${player.id} entered lava. Respawning.`); if (player.isInWater) { exitWater(player); } const wasIt = player.isIt; resetPlayersToSpawn(player); if (tagGameActive && wasIt && NUM_PLAYERS > 1) { let newItCandidateId = (player.id + 1) % NUM_PLAYERS; switchItPlayer(player.id, newItCandidateId, true); console.log(`Player ${player.id} fell in lava while "IT". Player ${newItCandidateId + 1} is now IT.`); } }
+    function generateWorld() { /* ... (existing code) ... */ const boxGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize); for (let x = 0; x < worldSize.width; x++) { for (let z = 0; z < worldSize.depth; z++) { const groundLevel = Math.floor(worldSize.height / 3); const height = groundLevel + Math.floor(Math.random() * 3); for (let y = 0; y < height; y++) { let material; let blockType; if (y === height - 1 && y >= groundLevel) { material = blockMaterials[blockTypes.GRASS]; blockType = blockTypes.GRASS; } else if (y < height - 1 && y >= groundLevel - 2) { material = blockMaterials[blockTypes.DIRT]; blockType = blockTypes.DIRT; } else { material = blockMaterials[blockTypes.STONE]; blockType = blockTypes.STONE; } const blockPos = new THREE.Vector3(x * blockSize - (worldSize.width * blockSize / 2) + blockSize / 2, y * blockSize + blockSize / 2, z * blockSize - (worldSize.depth * blockSize / 2) + blockSize / 2); addBlockInternal(blockPos, blockType, material, boxGeometry); } } } if (initialGroundMesh) initialGroundMesh.visible = false; }
+    function addBlockInternal(position, type, material, geometry) { /* ... (existing code) ... */ const blockMesh = new THREE.Mesh(geometry, material); blockMesh.position.copy(position); blockMesh.castShadow = true; blockMesh.receiveShadow = true; blockMesh.userData.blockType = type; scene.add(blockMesh); worldObjects.push(blockMesh); const blockShape = new CANNON.Box(new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2)); const blockBody = new CANNON.Body({ mass: 0, shape: blockShape, position: new CANNON.Vec3(blockMesh.position.x, blockMesh.position.y, blockMesh.position.z), material: groundMaterial }); if (type === blockTypes.WATER || type === blockTypes.LAVA) { blockBody.collisionResponse = 0; blockBody.userData = { blockType: type }; } if (type === blockTypes.GLOWSTONE || type === blockTypes.LAVA) { const light = new THREE.PointLight(0xffffff, 0, 8); light.position.copy(blockMesh.position); if (type === blockTypes.GLOWSTONE) { light.color.setHex(0xffffdd); light.intensity = 0.7; light.distance = 7; } else { light.color.setHex(0xff7700); light.intensity = 0.6; light.distance = 6; } scene.add(light); blockMesh.userData.light = light; } world.addBody(blockBody); blockMesh.userData.cannonBody = blockBody; return blockMesh; }
+    function removeBlockByMesh(blockMesh) { /* ... (existing code) ... */ if (!blockMesh || !blockMesh.userData) return; if (blockMesh.userData.light) { scene.remove(blockMesh.userData.light); blockMesh.userData.light.dispose(); blockMesh.userData.light = null; } if (blockMesh.userData.cannonBody) { world.removeBody(blockMesh.userData.cannonBody); blockMesh.userData.cannonBody = null; } scene.remove(blockMesh); const index = worldObjects.indexOf(blockMesh); if (index > -1) worldObjects.splice(index, 1); if (blockMesh.geometry) blockMesh.geometry.dispose(); if (blockMesh.material) { const material = blockMesh.material; if (Array.isArray(material)) { material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); } else { if (material.map) material.map.dispose(); material.dispose(); } } }
+    function setupBlockSelector() { /* ... (existing code) ... */ const selectorDiv = document.getElementById('block-selector'); selectorDiv.innerHTML = ''; Object.keys(blockTypes).forEach((key) => { const type = blockTypes[key]; const option = document.createElement('div'); option.classList.add('block-option'); option.textContent = key.substring(0, 4).toUpperCase(); option.style.backgroundColor = getBlockColor(type); if (type === blockTypes.WATER || type === blockTypes.LAVA || type === blockTypes.GLOWSTONE) { option.style.color = (type === blockTypes.GLOWSTONE) ? 'black' : 'white'; } option.title = key; option.dataset.blockType = type; if (type === currentBlockType) option.classList.add('selected'); option.addEventListener('click', () => { currentBlockType = type; updateBlockSelectorUI(); }); selectorDiv.appendChild(option); }); }
+    function getBlockColor(type) { /* ... (existing code) ... */ switch (type) { case blockTypes.GRASS: return '#6A994E'; case blockTypes.DIRT: return '#8C6A48'; case blockTypes.STONE: return '#808080'; case blockTypes.WOOD: return '#A0522D'; case blockTypes.WATER: return 'rgba(50, 100, 200, 0.8)'; case blockTypes.LAVA: return '#FF6000'; case blockTypes.GLOWSTONE: return '#FFEE88'; default: return '#FFFFFF'; } }
+    function updateBlockSelectorUI() { /* ... (existing code) ... */ document.querySelectorAll('.block-option').forEach(opt => { opt.classList.toggle('selected', opt.dataset.blockType === currentBlockType); }); }
+    function onWindowResize() { /* ... (existing code) ... */ players.forEach(player => { player.camera.aspect = (window.innerWidth / NUM_PLAYERS) / window.innerHeight; player.camera.updateProjectionMatrix(); }); renderer.setSize(window.innerWidth, window.innerHeight); updateCrosshairPositions(); if (tagGameActive) { players.forEach(player => updatePlayerTagVisuals(player, true)); } }
+    function updateCrosshairPositions() { /* ... (existing code) ... */ players.forEach((player, i) => { if (player.crosshairElement) { const viewportWidth = window.innerWidth / NUM_PLAYERS; const viewportX = i * viewportWidth; player.crosshairElement.style.left = `${viewportX + viewportWidth / 2}px`; player.crosshairElement.style.top = `${window.innerHeight / 2}px`; } }); }
+    function onKeyDown(event) { /* ... (existing code, with P2 CPU check implicitly handled by p2IsCPU in animate) ... */ if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") { return; } switch (event.code) { case 'KeyW': players[0].moveForward = true; break; case 'KeyA': players[0].moveLeft = true; break; case 'KeyS': players[0].moveBackward = true; break; case 'KeyD': players[0].moveRight = true; break; case 'Space': players[0].moveUpAction = true; break; case 'ShiftLeft': players[0].moveDownAction = true; break; } if (gameMode === 'creative') { switch (event.code) { case 'Digit1': currentBlockType = blockTypes.GRASS; updateBlockSelectorUI(); break; case 'Digit2': currentBlockType = blockTypes.DIRT; updateBlockSelectorUI(); break; case 'Digit3': currentBlockType = blockTypes.STONE; updateBlockSelectorUI(); break; case 'Digit4': currentBlockType = blockTypes.WOOD; updateBlockSelectorUI(); break; case 'Digit5': currentBlockType = blockTypes.WATER; updateBlockSelectorUI(); break; case 'Digit6': currentBlockType = blockTypes.LAVA; updateBlockSelectorUI(); break; case 'Digit7': currentBlockType = blockTypes.GLOWSTONE; updateBlockSelectorUI(); break; } } if (!p2IsCPU && players.length > 1) { switch (event.code) { case 'KeyI': players[1].moveForward = true; break; case 'KeyJ': players[1].moveLeft = true; break; case 'KeyK': players[1].moveBackward = true; break; case 'KeyL': players[1].moveRight = true; break; case 'KeyU': players[1].moveUpAction = true; break; case 'KeyH': players[1].moveDownAction = true; break; case 'ArrowUp': players[1].lookUp = true; break; case 'ArrowDown': players[1].lookDown = true; break; case 'ArrowLeft': players[1].lookLeft = true; break; case 'ArrowRight': players[1].lookRight = true; break; case 'KeyO': if (gameMode === 'creative') players[1].actionPlace = true; break; case 'KeyP': if (gameMode === 'creative') players[1].actionRemove = true; break; } } }
+    function onKeyUp(event) { /* ... (existing code, with P2 CPU check implicitly handled by p2IsCPU in animate) ... */ if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") { return; } switch (event.code) { case 'KeyW': players[0].moveForward = false; break; case 'KeyA': players[0].moveLeft = false; break; case 'KeyS': players[0].moveBackward = false; break; case 'KeyD': players[0].moveRight = false; break; case 'ShiftLeft': players[0].moveDownAction = false; break; case 'Space': players[0].moveUpAction = false; break; } if (!p2IsCPU && players.length > 1) { switch (event.code) { case 'KeyI': players[1].moveForward = false; break; case 'KeyJ': players[1].moveLeft = false; break; case 'KeyK': players[1].moveBackward = false; break; case 'KeyL': players[1].moveRight = false; break; case 'KeyU': players[1].moveUpAction = false; break; case 'KeyH': players[1].moveDownAction = false; break; case 'ArrowUp': players[1].lookUp = false; break; case 'ArrowDown': players[1].lookDown = false; break; case 'ArrowLeft': players[1].lookLeft = false; break; case 'ArrowRight': players[1].lookRight = false; break; case 'KeyO': players[1].actionPlace = false; break; case 'KeyP': players[1].actionRemove = false; break; } } }
+    function onMouseDown(event) { /* ... (existing code) ... */ if (gameMode === 'tag') return; const player = players[0]; if (!player.controls || !player.controls.isLocked) return; handleBlockInteraction(player, event.button); }
+    function handlePlayerKeyboardActions(player) { /* ... (existing code) ... */ if (gameMode === 'tag') return; if (player.actionPlace) { handleBlockInteraction(player, 0); player.actionPlace = false; } if (player.actionRemove) { handleBlockInteraction(player, 2); player.actionRemove = false; } }
+    function handleBlockInteraction(player, mouseButton) { /* ... (existing code) ... */ if (gameMode === 'tag') return; raycaster.setFromCamera(pointer, player.camera); const intersects = raycaster.intersectObjects(worldObjects, false); if (intersects.length > 0) { const intersect = intersects[0]; if (mouseButton === 2 || mouseButton === 1) { if (intersect.object.userData.blockType && intersect.object.userData.cannonBody) { removeBlockByMesh(intersect.object); } } else if (mouseButton === 0) { const placementPosition = new THREE.Vector3(); placementPosition.copy(intersect.object.position).addScaledVector(intersect.face.normal, blockSize); const newBlockHalfExtents = new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2); const newBlockAABB = new CANNON.AABB({ lowerBound: new CANNON.Vec3(placementPosition.x - newBlockHalfExtents.x, placementPosition.y - newBlockHalfExtents.y, placementPosition.z - newBlockHalfExtents.z), upperBound: new CANNON.Vec3(placementPosition.x + newBlockHalfExtents.x, placementPosition.y + newBlockHalfExtents.y, placementPosition.z + newBlockHalfExtents.z) }); let collisionWithPlayer = false; for (const p of players) { p.body.computeAABB(); if (newBlockAABB.overlaps(p.body.aabb)) { collisionWithPlayer = true; break; } } if (collisionWithPlayer) { return; } if (!worldObjects.some(obj => obj.position.distanceTo(placementPosition) < 0.1)) { const newBlockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize); const newBlockMaterial = blockMaterials[currentBlockType] || blockMaterials[blockTypes.STONE]; addBlockInternal(placementPosition, currentBlockType, newBlockMaterial, newBlockGeometry); } } } }
 
-    function resetPlayersToSpawn(playerToReset = null) {
-      // If a specific player is passed, reset only them; otherwise, reset all
-      const playersToUpdate = playerToReset ? [playerToReset] : players;
-
-      playersToUpdate.forEach((player, iOriginal) => {
-        // Use the player's actual ID for consistent spawn points
-        const playerIndex = player.id;
-        const spawnPos = new THREE.Vector3(
-          worldSize.width / 4 + (playerIndex * blockSize * 5) - (blockSize * 2.5 * (NUM_PLAYERS - 1) / 2),
-          worldSize.height + 3, // Spawn high enough to avoid instant ground collision issues
-          worldSize.depth / 4
-        );
-        player.body.position.copy(spawnPos);
-        player.body.velocity.set(0, 0, 0);
-        player.body.angularVelocity.set(0, 0, 0);
-        player.body.quaternion.set(0, 0, 0, 1); // Reset body rotation
-
-        player.yawObject.position.copy(player.body.position);
-        player.yawObject.quaternion.set(0, 0, 0, 1);
-        player.pitchObject.quaternion.set(0, 0, 0, 1);
-        player.currentYaw = 0; player.currentPitch = 0; player.targetYaw = 0; player.targetPitch = 0;
-
-        player.isInWater = false; player.waterContactCount = 0; player.canJump = false;
-        player.isIt = false; // Always reset 'It' status on spawn
-      });
-
-      // Only adjust global physics/damping if resetting ALL players
-      if (!playerToReset) {
-        if (!players.some(p => p.isInWater)) { world.gravity.set(0, originalGravityY, 0); }
-        players.forEach(p => p.body.linearDamping = originalPlayerDamping);
-      }
-      else { // If resetting only one player
-        playerToReset.body.linearDamping = originalPlayerDamping;
-        // Ensure gravity resets if no one is in water anymore
-        if (!players.some(p => p.isInWater)) world.gravity.set(0, originalGravityY, 0);
-      }
-    }
-
-    function enterWater(player) {
-      player.waterContactCount++;
-      if (!player.isInWater && player.waterContactCount > 0) {
-        player.isInWater = true;
-        world.gravity.set(0, originalGravityY * waterProperties.gravityFactor, 0);
-        player.body.linearDamping = waterProperties.damping;
-      }
-    }
-    function exitWater(player) {
-      player.waterContactCount--;
-      if (player.isInWater && player.waterContactCount <= 0) {
-        player.isInWater = false; player.waterContactCount = 0;
-        const anyPlayerInWater = players.some(p => p.isInWater);
-        if (!anyPlayerInWater) { // Reset gravity ONLY if NO players are in water
-          world.gravity.set(0, originalGravityY, 0);
-        }
-        player.body.linearDamping = originalPlayerDamping; // Reset this player's damping
-      }
-    }
-
-    function enterLava(player) {
-      console.warn(`Player ${player.id} entered lava. Respawning.`);
-      if (player.isInWater) { exitWater(player); } // Exit water state before respawn
-
-      const wasIt = player.isIt; // Check if they were IT *before* respawning
-
-      resetPlayersToSpawn(player); // Respawn only this player (also sets player.isIt to false)
-
-      // If in tag mode, and this player was "IT", reassign "IT" status
-      if (tagGameActive && wasIt && NUM_PLAYERS > 1) {
-        let newItCandidateId = (player.id + 1) % NUM_PLAYERS; // Simplistic: next player
-        switchItPlayer(player.id, newItCandidateId, true); // Pass true to indicate it's a forced switch (no tag needed)
-        console.log(`Player ${player.id} fell in lava while "IT". Player ${newItCandidateId + 1} is now IT.`);
-      }
-    }
-
-    //----------------------------------------------------------------
-    // WORLD GENERATION AND BLOCK MANAGEMENT
-    //----------------------------------------------------------------
-    function generateWorld() {
-      const boxGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-      for (let x = 0; x < worldSize.width; x++) {
-        for (let z = 0; z < worldSize.depth; z++) {
-          const groundLevel = Math.floor(worldSize.height / 3);
-          const height = groundLevel + Math.floor(Math.random() * 3);
-          for (let y = 0; y < height; y++) {
-            let material; let blockType;
-            if (y === height - 1 && y >= groundLevel) { material = blockMaterials[blockTypes.GRASS]; blockType = blockTypes.GRASS; }
-            else if (y < height - 1 && y >= groundLevel - 2) { material = blockMaterials[blockTypes.DIRT]; blockType = blockTypes.DIRT; }
-            else { material = blockMaterials[blockTypes.STONE]; blockType = blockTypes.STONE; }
-
-            const blockPos = new THREE.Vector3(
-              x * blockSize - (worldSize.width * blockSize / 2) + blockSize / 2,
-              y * blockSize + blockSize / 2,
-              z * blockSize - (worldSize.depth * blockSize / 2) + blockSize / 2
-            );
-            addBlockInternal(blockPos, blockType, material, boxGeometry);
-          }
-        }
-      }
-      if (initialGroundMesh) initialGroundMesh.visible = false; // Hide the infinite plane if blocks are generated
-    }
-
-    function addBlockInternal(position, type, material, geometry) {
-      const blockMesh = new THREE.Mesh(geometry, material);
-      blockMesh.position.copy(position);
-      blockMesh.castShadow = true;
-      blockMesh.receiveShadow = true;
-      blockMesh.userData.blockType = type;
-      scene.add(blockMesh);
-      worldObjects.push(blockMesh);
-
-      const blockShape = new CANNON.Box(new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2));
-      const blockBody = new CANNON.Body({
-        mass: 0, shape: blockShape,
-        position: new CANNON.Vec3(blockMesh.position.x, blockMesh.position.y, blockMesh.position.z),
-        material: groundMaterial
-      });
-
-      if (type === blockTypes.WATER || type === blockTypes.LAVA) {
-        blockBody.collisionResponse = 0; // No physical collision, but triggers events
-        blockBody.userData = { blockType: type }; // Needed for contact events
-      }
-      if (type === blockTypes.GLOWSTONE || type === blockTypes.LAVA) {
-        const light = new THREE.PointLight(0xffffff, 0, 8);
-        light.position.copy(blockMesh.position);
-        if (type === blockTypes.GLOWSTONE) { light.color.setHex(0xffffdd); light.intensity = 0.7; light.distance = 7; }
-        else { light.color.setHex(0xff7700); light.intensity = 0.6; light.distance = 6; }
-        scene.add(light);
-        blockMesh.userData.light = light; // Store reference to remove it later
-      }
-      world.addBody(blockBody);
-      blockMesh.userData.cannonBody = blockBody; // Store reference to remove it later
-      return blockMesh;
-    }
-
-    function removeBlockByMesh(blockMesh) {
-      if (!blockMesh || !blockMesh.userData) return; // Safety check
-
-      if (blockMesh.userData.light) {
-        scene.remove(blockMesh.userData.light);
-        blockMesh.userData.light.dispose(); // Dispose light resources
-        blockMesh.userData.light = null;
-      }
-      if (blockMesh.userData.cannonBody) {
-        world.removeBody(blockMesh.userData.cannonBody);
-        blockMesh.userData.cannonBody = null;
-      }
-      scene.remove(blockMesh);
-      const index = worldObjects.indexOf(blockMesh);
-      if (index > -1) worldObjects.splice(index, 1);
-
-      // Dispose geometry and material to free memory
-      if (blockMesh.geometry) blockMesh.geometry.dispose();
-      if (blockMesh.material) {
-        const material = blockMesh.material;
-        if (Array.isArray(material)) {
-          material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
-        } else { if (material.map) material.map.dispose(); material.dispose(); }
-      }
-    }
-
-
-    //----------------------------------------------------------------
-    // UI and EVENT LISTENERS
-    //----------------------------------------------------------------
-
-    function setupBlockSelector() {
-      const selectorDiv = document.getElementById('block-selector');
-      selectorDiv.innerHTML = ''; // Clear previous options
-      Object.keys(blockTypes).forEach((key) => {
-        const type = blockTypes[key];
-        const option = document.createElement('div');
-        option.classList.add('block-option');
-        option.textContent = key.substring(0, 4).toUpperCase();
-        option.style.backgroundColor = getBlockColor(type);
-        if (type === blockTypes.WATER || type === blockTypes.LAVA || type === blockTypes.GLOWSTONE) {
-          option.style.color = (type === blockTypes.GLOWSTONE) ? 'black' : 'white';
-        }
-        option.title = key; option.dataset.blockType = type;
-        if (type === currentBlockType) option.classList.add('selected');
-        option.addEventListener('click', () => { currentBlockType = type; updateBlockSelectorUI(); });
-        selectorDiv.appendChild(option);
-      });
-    }
-    function getBlockColor(type) {
-      switch (type) {
-        case blockTypes.GRASS: return '#6A994E'; case blockTypes.DIRT: return '#8C6A48';
-        case blockTypes.STONE: return '#808080'; case blockTypes.WOOD: return '#A0522D';
-        case blockTypes.WATER: return 'rgba(50, 100, 200, 0.8)'; case blockTypes.LAVA: return '#FF6000';
-        case blockTypes.GLOWSTONE: return '#FFEE88'; default: return '#FFFFFF';
-      }
-    }
-    function updateBlockSelectorUI() {
-      document.querySelectorAll('.block-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.dataset.blockType === currentBlockType);
-      });
-    }
-
-    function onWindowResize() {
-      players.forEach(player => {
-        player.camera.aspect = (window.innerWidth / NUM_PLAYERS) / window.innerHeight;
-        player.camera.updateProjectionMatrix();
-      });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      updateCrosshairPositions();
-      // Update tag status display positions if tag game is active
-      if (tagGameActive) {
-        players.forEach(player => updatePlayerTagVisuals(player, true)); // Pass true for resize
-      }
-    }
-    function updateCrosshairPositions() {
-      players.forEach((player, i) => {
-        if (player.crosshairElement) {
-          const viewportWidth = window.innerWidth / NUM_PLAYERS;
-          const viewportX = i * viewportWidth;
-          player.crosshairElement.style.left = `${viewportX + viewportWidth / 2}px`;
-          player.crosshairElement.style.top = `${window.innerHeight / 2}px`;
-        }
-      });
-    }
-
-
-    function onKeyDown(event) {
-      // Prevent key input if focused on text input/select, unless it's an essential game key maybe (e.g. Esc)
-      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
-        return;
-      }
-
-      switch (event.code) {
-        case 'KeyW': players[0].moveForward = true; break;
-        case 'KeyA': players[0].moveLeft = true; break;
-        case 'KeyS': players[0].moveBackward = true; break;
-        case 'KeyD': players[0].moveRight = true; break;
-        case 'Space': players[0].moveUpAction = true; break;
-        case 'ShiftLeft': players[0].moveDownAction = true; break;
-      }
-      // Block selection only in creative mode
-      if (gameMode === 'creative') {
-        switch (event.code) {
-          case 'Digit1': currentBlockType = blockTypes.GRASS; updateBlockSelectorUI(); break;
-          case 'Digit2': currentBlockType = blockTypes.DIRT; updateBlockSelectorUI(); break;
-          case 'Digit3': currentBlockType = blockTypes.STONE; updateBlockSelectorUI(); break;
-          case 'Digit4': currentBlockType = blockTypes.WOOD; updateBlockSelectorUI(); break;
-          case 'Digit5': currentBlockType = blockTypes.WATER; updateBlockSelectorUI(); break;
-          case 'Digit6': currentBlockType = blockTypes.LAVA; updateBlockSelectorUI(); break;
-          case 'Digit7': currentBlockType = blockTypes.GLOWSTONE; updateBlockSelectorUI(); break;
-        }
-      }
-
-      // Player 2 Controls
-      switch (event.code) {
-        case 'KeyI': players[1].moveForward = true; break;
-        case 'KeyJ': players[1].moveLeft = true; break;
-        case 'KeyK': players[1].moveBackward = true; break;
-        case 'KeyL': players[1].moveRight = true; break;
-        case 'KeyU': players[1].moveUpAction = true; break;
-        case 'KeyH': players[1].moveDownAction = true; break;
-        case 'ArrowUp': players[1].lookUp = true; break;
-        case 'ArrowDown': players[1].lookDown = true; break;
-        case 'ArrowLeft': players[1].lookLeft = true; break;
-        case 'ArrowRight': players[1].lookRight = true; break;
-        case 'KeyO': if (gameMode === 'creative') players[1].actionPlace = true; break; // Creative only
-        case 'KeyP': if (gameMode === 'creative') players[1].actionRemove = true; break; // Creative only
-      }
-    }
-
-    function onKeyUp(event) {
-      // Check active element again in case focus changed
-      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
-        return;
-      }
-      switch (event.code) {
-        case 'KeyW': players[0].moveForward = false; break;
-        case 'KeyA': players[0].moveLeft = false; break;
-        case 'KeyS': players[0].moveBackward = false; break;
-        case 'KeyD': players[0].moveRight = false; break;
-        case 'ShiftLeft': players[0].moveDownAction = false; break;
-        case 'Space': players[0].moveUpAction = false; break;
-      }
-      switch (event.code) {
-        case 'KeyI': players[1].moveForward = false; break;
-        case 'KeyJ': players[1].moveLeft = false; break;
-        case 'KeyK': players[1].moveBackward = false; break;
-        case 'KeyL': players[1].moveRight = false; break;
-        case 'KeyU': players[1].moveUpAction = false; break;
-        case 'KeyH': players[1].moveDownAction = false; break;
-        case 'ArrowUp': players[1].lookUp = false; break;
-        case 'ArrowDown': players[1].lookDown = false; break;
-        case 'ArrowLeft': players[1].lookLeft = false; break;
-        case 'ArrowRight': players[1].lookRight = false; break;
-        case 'KeyO': players[1].actionPlace = false; break; // Always set to false on keyup
-        case 'KeyP': players[1].actionRemove = false; break; // Always set to false on keyup
-      }
-    }
-
-    function onMouseDown(event) {
-      if (gameMode === 'tag') return; // No block interaction in tag mode
-
-      const player = players[0];
-      if (!player.controls || !player.controls.isLocked) return; // Only when locked and has controls
-      handleBlockInteraction(player, event.button); // event.button: 0=Left, 1=Middle, 2=Right
-    }
-
-    //----------------------------------------------------------------
-    // GAME ACTIONS (Placing/Removing blocks)
-    //----------------------------------------------------------------
-
-    function handlePlayerKeyboardActions(player) {
-      // Only allow in creative mode
-      if (gameMode === 'tag') return;
-
-      if (player.actionPlace) {
-        handleBlockInteraction(player, 0); // 0 for Left-click (Place)
-        player.actionPlace = false; // Consume the action
-      }
-      if (player.actionRemove) {
-        handleBlockInteraction(player, 2); // 2 for Right-click (Remove)
-        player.actionRemove = false; // Consume the action
-      }
-    }
-
-    function handleBlockInteraction(player, mouseButton) {
-      if (gameMode === 'tag') return; // Double check
-
-      raycaster.setFromCamera(pointer, player.camera); // Use shared 'pointer' {x:0, y:0} for center screen
-      const intersects = raycaster.intersectObjects(worldObjects, false); // Check against world blocks
-
-      if (intersects.length > 0) {
-        const intersect = intersects[0];
-        // Right-click or middle-click (button 2 or 1) to remove
-        if (mouseButton === 2 || mouseButton === 1) {
-          if (intersect.object.userData.blockType && intersect.object.userData.cannonBody) {
-            removeBlockByMesh(intersect.object);
-          }
-        }
-        // Left-click (button 0) to place
-        else if (mouseButton === 0) {
-          const placementPosition = new THREE.Vector3();
-          // Calculate position *just* outside the clicked face
-          placementPosition.copy(intersect.object.position).addScaledVector(intersect.face.normal, blockSize);
-
-          // Check for collision with players before placing
-          const newBlockHalfExtents = new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2);
-          const newBlockAABB = new CANNON.AABB({
-            lowerBound: new CANNON.Vec3(placementPosition.x - newBlockHalfExtents.x, placementPosition.y - newBlockHalfExtents.y, placementPosition.z - newBlockHalfExtents.z),
-            upperBound: new CANNON.Vec3(placementPosition.x + newBlockHalfExtents.x, placementPosition.y + newBlockHalfExtents.y, placementPosition.z + newBlockHalfExtents.z)
-          });
-
-          let collisionWithPlayer = false;
-          for (const p of players) {
-            p.body.computeAABB(); // Ensure AABB is up-to-date
-            if (newBlockAABB.overlaps(p.body.aabb)) {
-              collisionWithPlayer = true;
-              break;
-            }
-          }
-          if (collisionWithPlayer) {
-            // console.log("Cannot place block: intersects a player.");
-            return; // Stop placement
-          }
-
-          // Check if a block already exists at the target position
-          if (!worldObjects.some(obj => obj.position.distanceTo(placementPosition) < 0.1)) {
-            const newBlockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-            const newBlockMaterial = blockMaterials[currentBlockType] || blockMaterials[blockTypes.STONE]; // Fallback
-            addBlockInternal(placementPosition, currentBlockType, newBlockMaterial, newBlockGeometry);
-          }
-        }
-      }
-    }
-
-
-    //----------------------------------------------------------------
-    // ANIMATION LOOP
-    //----------------------------------------------------------------
     const FWD = new THREE.Vector3(0, 0, -1);
     const RIGHT = new THREE.Vector3(1, 0, 0);
     const tempForwardVector = new THREE.Vector3();
@@ -1076,13 +730,11 @@
       const delta = (time - lastTime) / 1000;
       lastTime = time;
 
-      if (world) world.step(timeStep, delta, 3); // Physics step
+      if (world) world.step(timeStep, delta, 3);
 
-      // Update Tag Cooldown
       if (tagGameActive && tagCooldown > 0) {
         tagCooldown -= delta;
         if (tagCooldown < 0) tagCooldown = 0;
-        // Update status display if cooldown is active (for the "IT" player)
         if (itPlayerId !== -1 && players[itPlayerId] && players[itPlayerId].isIt) {
           updatePlayerTagVisuals(players[itPlayerId]);
         }
@@ -1094,300 +746,199 @@
         const playerBody = player.body;
         const playerViewObject = player.yawObject;
 
-        // --- NaN CHECK ---
         if (isNaN(playerBody.position.x) || isNaN(playerBody.position.y) || isNaN(playerBody.position.z)) {
           console.error(`Player ${player.id} body position is NaN! Respawning.`);
-          enterLava(player); // Force a respawn via lava logic
-          return; // Skip further processing for this player this frame
+          enterLava(player);
+          return;
         }
-        // --- END NaN CHECK ---
 
-        // Player 2 keyboard look (only when P1 is locked/game active)
-        if (index === 1 && P1_controlsLocked) {
-          const lookSpeed = Math.PI * 0.5 * delta; // Adjust speed as needed
+        // --- Player 2 CPU Logic ---
+        if (index === 1 && p2IsCPU && P1_controlsLocked && player2NN && players[0] && players[1]) {
+          const p1 = players[0];
+          const p2 = player; // Current player is p2
+
+          const p1Pos = p1.body.position;
+          const p2Pos = p2.body.position;
+
+          const vecToP1World = new THREE.Vector3().subVectors(p1Pos, p2Pos);
+          const distToP1 = vecToP1World.length();
+
+          const MAX_RELEVANT_DIST = 50;
+          const MAX_SPEED_APPROX = playerSpeed * 1.5;
+
+          const p2InverseYaw = p2.yawObject.quaternion.clone().invert();
+          const localVecToP1 = vecToP1World.clone().applyQuaternion(p2InverseYaw);
+
+          const inputs = [
+            localVecToP1.x / MAX_RELEVANT_DIST,
+            -localVecToP1.z / MAX_RELEVANT_DIST, // Positive for forward target
+            THREE.MathUtils.clamp(distToP1 / MAX_RELEVANT_DIST, 0, 1),
+            (gameMode === 'tag' && p2.isIt) ? 1 : 0,
+            p2.canJump ? 1 : 0,
+            p2.isInWater ? 1 : 0,
+            THREE.MathUtils.clamp(p2.body.velocity.y / MAX_SPEED_APPROX, -1, 1)
+          ];
+
+          const outputs = player2NN.feedForward(inputs);
+
+          const actionThreshold = 0.2;
+          p2.moveForward = outputs[0] > actionThreshold;
+          p2.moveBackward = outputs[1] > actionThreshold;
+          p2.moveLeft = outputs[2] > actionThreshold;
+          p2.moveRight = outputs[3] > actionThreshold;
+
+          if (outputs[4] > 0.5) {
+            p2.moveUpAction = true; p2.moveDownAction = false;
+          } else if (outputs[4] < -0.5) {
+            p2.moveUpAction = false; p2.moveDownAction = true;
+          } else {
+            p2.moveUpAction = false; p2.moveDownAction = false;
+          }
+
+          const lookSensitivity = 0.05 * Math.PI;
+          const lookThreshold = 0.1;
+          if (Math.abs(outputs[5]) > lookThreshold) {
+            p2.targetYaw -= outputs[5] * lookSensitivity;
+          }
+          if (Math.abs(outputs[6]) > lookThreshold) {
+            p2.targetPitch -= outputs[6] * lookSensitivity;
+            p2.targetPitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, p2.targetPitch));
+          }
+
+          // --- Fitness Calculation for P2 CPU ---
+          if (P1_controlsLocked) { // Only accumulate fitness if game is actively being played
+            let frameFitness = 0;
+            if (gameMode === 'tag') {
+              const idealChaseDistance = playerRadius * 2 + blockSize * 0.5;
+              const idealEvadeDistance = 15;
+
+              if (p2.isIt) {
+                frameFitness += (MAX_RELEVANT_DIST - Math.min(distToP1, MAX_RELEVANT_DIST)) * 0.01;
+                if (distToP1 < idealChaseDistance + blockSize) frameFitness += 0.1;
+                if (distToP1 < idealChaseDistance) frameFitness += 0.5; // Reward for successful tag potential
+              } else {
+                if (distToP1 > idealChaseDistance + blockSize) {
+                  frameFitness += Math.min(distToP1, idealEvadeDistance) * 0.02;
+                } else {
+                  frameFitness -= 0.1; // Penalty for being too close when not "It"
+                }
+              }
+              if (p2.isInWater && !p1.isInWater && p2.isIt) frameFitness -= 0.01;
+              if (p2.body.position.y < 0) frameFitness -= 0.05;
+            } else { // Creative mode fitness
+              if (p2.body.velocity.lengthSq() > 0.1) frameFitness += 0.001;
+              if (distToP1 < MAX_RELEVANT_DIST) {
+                frameFitness += (MAX_RELEVANT_DIST - distToP1) * 0.0005;
+              }
+            }
+            p2.fitnessScore += frameFitness * delta;
+          }
+        } // --- End Player 2 CPU Logic ---
+        else if (index === 1 && !p2IsCPU && P1_controlsLocked) { // Player 2 Human controls
+          const lookSpeed = Math.PI * 0.5 * delta;
           if (player.lookLeft) player.targetYaw += lookSpeed;
           if (player.lookRight) player.targetYaw -= lookSpeed;
           if (player.lookUp) player.targetPitch += lookSpeed;
           if (player.lookDown) player.targetPitch -= lookSpeed;
+          player.targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.targetPitch));
+        }
 
-          player.targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.targetPitch)); // Clamp pitch
-
-          // Smooth interpolation for look
+        // Smooth look interpolation for P2 (human or CPU controlled by targetYaw/Pitch)
+        if (index === 1) {
           player.currentYaw = THREE.MathUtils.lerp(player.currentYaw, player.targetYaw, 0.2);
           player.currentPitch = THREE.MathUtils.lerp(player.currentPitch, player.targetPitch, 0.2);
-
           playerViewObject.rotation.y = player.currentYaw;
           player.pitchObject.rotation.x = player.currentPitch;
         }
 
-        // Movement logic (only when P1 is locked/game active)
-        if (P1_controlsLocked) {
-          let currentSpeed = playerSpeed;
-          let targetVelocityY = playerBody.velocity.y; // Preserve existing Y velocity unless changed
 
-          // Apply water physics or jump/descend logic
+        // Movement logic (applies to both humans and CPU based on action flags)
+        if (P1_controlsLocked || (index === 1 && p2IsCPU && P1_controlsLocked)) {
+          let currentSpeed = playerSpeed;
+          let targetVelocityY = playerBody.velocity.y;
+
           if (player.isInWater) {
             currentSpeed *= waterProperties.speedFactor;
             if (player.moveUpAction) targetVelocityY = waterProperties.swimUpVelocity;
             else if (player.moveDownAction) targetVelocityY = waterProperties.swimDownVelocity;
           } else {
             if (player.moveUpAction && player.canJump) { targetVelocityY = jumpVelocity; player.canJump = false; }
-            else if (player.moveDownAction) { targetVelocityY = -playerSpeed; player.canJump = false; } // Move down force
+            else if (player.moveDownAction) { targetVelocityY = -playerSpeed; player.canJump = false; }
           }
-          playerBody.velocity.y = targetVelocityY; // Apply Y velocity change
+          playerBody.velocity.y = targetVelocityY;
 
-          // Calculate movement direction based on input and view
           const direction = new THREE.Vector3();
           direction.x = Number(player.moveRight) - Number(player.moveLeft);
           direction.z = Number(player.moveForward) - Number(player.moveBackward);
 
-          playerBody.velocity.x = 0; // Reset horizontal velocity before applying new one
+          playerBody.velocity.x = 0;
           playerBody.velocity.z = 0;
 
           if (direction.x !== 0 || direction.z !== 0) {
-            // Get forward and right vectors relative to the player's view
             FWD.set(0, 0, -1).applyQuaternion(playerViewObject.quaternion);
             RIGHT.set(1, 0, 0).applyQuaternion(playerViewObject.quaternion);
             const moveDir = new THREE.Vector3(
-              RIGHT.x * direction.x + FWD.x * direction.z, 0, // Ignore Y component for horizontal move
+              RIGHT.x * direction.x + FWD.x * direction.z, 0,
               RIGHT.z * direction.x + FWD.z * direction.z
             ).normalize();
             playerBody.velocity.x = moveDir.x * currentSpeed;
             playerBody.velocity.z = moveDir.z * currentSpeed;
           }
 
-          // Handle P2's keyboard-based actions (place/remove)
-          if (index === 1) {
+          if (index === 1 && !p2IsCPU) { // P2 Human keyboard actions
             handlePlayerKeyboardActions(player);
           }
-        } // End if(P1_controlsLocked)
+        }
 
-        // Sync visual object to physics body
         playerViewObject.position.copy(playerBody.position);
 
-        // Update direction indicator
         const indicator = player.directionIndicator;
         if (indicator) {
           indicator.position.copy(playerBody.position);
-          indicator.position.y = playerBody.position.y - (playerHeight / 2) - 0.1; // Position below feet
-
+          indicator.position.y = playerBody.position.y - (playerHeight / 2) - 0.1;
           playerViewObject.getWorldDirection(tempForwardVector);
-          tempForwardVector.y = 0; // Project onto horizontal plane
-          tempForwardVector.normalize();
-          if (tempForwardVector.lengthSq() > 0.001) { // Avoid issues if vector is zero
+          tempForwardVector.y = 0; tempForwardVector.normalize();
+          if (tempForwardVector.lengthSq() > 0.001) {
             tempLookAtTarget.copy(indicator.position).add(tempForwardVector);
             indicator.lookAt(tempLookAtTarget);
           }
         }
 
-        // Check for falling out of the world
         if (playerBody.position.y < -30) {
-          enterLava(player); // Use lava logic to respawn
+          enterLava(player);
         }
-      }); // End forEach player
+      });
 
-      // --- Render ---
       renderer.clear();
       players.forEach((player, i) => {
-        if (!P1_controlsLocked && i > 0) { /* Skip P2 render if game not started/locked */ }
-        else {
+        if (!P1_controlsLocked && i > 0 && !p2IsCPU) { /* Skip P2 human render if game not started */ }
+        else if (!P1_controlsLocked && i > 0 && p2IsCPU) { /* Allow P2 CPU render even if P1 not locked for observation */
           const viewportWidth = window.innerWidth / NUM_PLAYERS;
           const viewportX = i * viewportWidth;
           renderer.setViewport(viewportX, 0, viewportWidth, window.innerHeight);
           renderer.setScissor(viewportX, 0, viewportWidth, window.innerHeight);
-          if (player.camera) renderer.render(scene, player.camera); // Ensure camera exists
+          if (player.camera) renderer.render(scene, player.camera);
         }
-      });
-      // --- End Render ---
-
-    } // End animate()
-
-
-    //----------------------------------------------------------------
-    // WORLD STATE MANAGEMENT (Clear, Save, Load)
-    //----------------------------------------------------------------
-
-    function clearWorld() {
-      // Safely iterate and remove all blocks
-      [...worldObjects].forEach(obj => removeBlockByMesh(obj));
-      worldObjects = []; // Ensure array is empty
-
-      // Reset player states related to the world
-      players.forEach(player => {
-        player.isInWater = false;
-        player.waterContactCount = 0;
-        player.canJump = false;
-      });
-      // Reset gravity if no one is in water
-      if (!players.some(p => p.isInWater)) {
-        world.gravity.set(0, originalGravityY, 0);
-      }
-      if (initialGroundMesh) initialGroundMesh.visible = true; // Show the base plane again
-    }
-
-    function getCurrentWorldData() {
-      const blocksData = worldObjects.map(obj => ({
-        x: obj.position.x, y: obj.position.y, z: obj.position.z,
-        type: obj.userData.blockType
-      }));
-
-      const p1YawObject = players[0].yawObject;
-      const playerData = {
-        position: { x: players[0].body.position.x, y: players[0].body.position.y, z: players[0].body.position.z },
-        quaternion: { x: p1YawObject.quaternion.x, y: p1YawObject.quaternion.y, z: p1YawObject.quaternion.z, w: p1YawObject.quaternion.w }
-      };
-      return { blocks: blocksData, player: playerData };
-    }
-
-    function addBlockFromData(blockData) {
-      const { x, y, z, type } = blockData;
-      const position = new THREE.Vector3(x, y, z);
-      const material = blockMaterials[type] || blockMaterials[blockTypes.STONE];
-      const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-      addBlockInternal(position, type, material, geometry);
-    }
-
-    async function loadWorldFromSaveData(worldData) {
-      clearWorld(); // Clear existing blocks and reset states
-
-      worldData.blocks.forEach(blockData => addBlockFromData(blockData));
-
-      resetPlayersToSpawn(); // Reset players to default spawn positions/states
-
-      // Optionally restore P1 position if saved
-      if (worldData.player && worldData.player.position) {
-        const p1Data = worldData.player;
-        players[0].body.position.set(p1Data.position.x, p1Data.position.y, p1Data.position.z);
-        if (p1Data.quaternion) {
-          players[0].yawObject.quaternion.set(p1Data.quaternion.x, p1Data.quaternion.y, p1Data.quaternion.z, p1Data.quaternion.w);
-        }
-        players[0].yawObject.position.copy(players[0].body.position); // Sync view object
-      }
-
-      if (initialGroundMesh) initialGroundMesh.visible = false; // Hide base plane if loading a world
-      console.log("World loaded from data.");
-    }
-
-    //----------------------------------------------------------------
-    // TAG GAME LOGIC
-    //----------------------------------------------------------------
-
-    function updateGameModeUI() {
-      document.getElementById('creativeModeButton').classList.toggle('selected', gameMode === 'creative');
-      document.getElementById('tagModeButton').classList.toggle('selected', gameMode === 'tag');
-      document.getElementById('tagInstructions').style.display = gameMode === 'tag' ? 'block' : 'none';
-
-      const P1_controlsLocked = players.length > 0 && players[0].controls && players[0].controls.isLocked;
-      // Block selector only visible in creative AND when game is running
-      document.getElementById('block-selector').style.display = (gameMode === 'creative' && P1_controlsLocked) ? 'flex' : 'none';
-    }
-
-    function startTagGame() {
-      if (gameMode !== 'tag' || NUM_PLAYERS < 2) {
-        tagGameActive = false;
-        return;
-      }
-      console.log("Starting Tag Game...");
-      tagGameActive = true;
-      itPlayerId = Math.floor(Math.random() * NUM_PLAYERS);
-      tagCooldown = TAG_COOLDOWN_DURATION / 2; // Start with a short grace period
-
-      players.forEach((player, i) => {
-        player.isIt = (i === itPlayerId);
-        updatePlayerTagVisuals(player); // Update visuals for all players
-      });
-      console.log(`Tag game started. Player ${itPlayerId + 1} is IT.`);
-    }
-
-    function endTagGame() {
-      if (!tagGameActive) return; // Don't do anything if not active
-      console.log("Ending Tag Game...");
-      tagGameActive = false;
-      itPlayerId = -1;
-      tagCooldown = 0;
-      players.forEach(player => {
-        player.isIt = false;
-        updatePlayerTagVisuals(player); // Resets visuals and hides status for all
-      });
-      console.log("Tag game ended or paused.");
-    }
-
-    function resetTagGameElements() { // Called when switching to creative or full world reset/load
-      endTagGame();
-    }
-
-    function updatePlayerTagVisuals(player, isResize = false) {
-      if (!player) return; // Safety check
-
-      if (player.directionIndicator) {
-
-        // --- FORCED DEBUGGING SECTION (Uncomment to test basic visibility) ---
-        /*
-        console.log("DEBUG: Forcing indicator visuals for player", player.id)
-        player.directionIndicator.material.color.setHex(0x00ff00); // Bright green
-        player.directionIndicator.material.emissive.setHex(0x00ff00);
-        player.directionIndicator.scale.set(2, 2, 2); // Make it big
-        player.directionIndicator.visible = true; // Force visible
-        return; // Skip rest of logic when debugging
-        */
-        // --- END FORCED DEBUGGING SECTION ---
-
-        // --- Regular Logic (Comment out the debug section above to use this) ---
-        if (tagGameActive && player.isIt) {
-          player.directionIndicator.material.color.setHex(0xff0000); // Red for "It"
-          player.directionIndicator.material.emissive.setHex(0xdd0000);
-          player.directionIndicator.scale.set(1.5, 1.5, 1.5);
-        } else if (tagGameActive && !player.isIt) {
-          player.directionIndicator.material.color.setHex(0x00ff00); // Green for Runner
-          player.directionIndicator.material.emissive.setHex(0x00dd00);
-          player.directionIndicator.scale.set(1.2, 1.2, 1.2);
-        } else { // Not tag game or creative mode
-          player.directionIndicator.material.color.setHex(0xffA500); // Original color
-          player.directionIndicator.material.emissive.setHex(0xcc8400);
-          player.directionIndicator.scale.set(1, 1, 1);
-        }
-        // --- End Regular Logic ---
-      }
-
-      if (player.tagStatusElement) {
-        const P1_controlsLocked = players.length > 0 && players[0].controls && players[0].controls.isLocked;
-        if (tagGameActive && P1_controlsLocked) {
-          player.tagStatusElement.textContent = player.isIt ? "YOU ARE IT!" : "RUN!";
-          if (tagCooldown > 0 && player.isIt) { // Only show cooldown to the one who is IT
-            player.tagStatusElement.textContent += ` (CD: ${tagCooldown.toFixed(1)}s)`;
-          }
-          player.tagStatusElement.style.display = 'block';
-          // Position/size update, also on resize
+        else { // P1 or P2 when P1 is locked
           const viewportWidth = window.innerWidth / NUM_PLAYERS;
-          const viewportX = player.id * viewportWidth;
-          player.tagStatusElement.style.left = `${viewportX}px`;
-          player.tagStatusElement.style.width = `${viewportWidth}px`;
-        } else {
-          player.tagStatusElement.textContent = '';
-          player.tagStatusElement.style.display = 'none';
+          const viewportX = i * viewportWidth;
+          renderer.setViewport(viewportX, 0, viewportWidth, window.innerHeight);
+          renderer.setScissor(viewportX, 0, viewportWidth, window.innerHeight);
+          if (player.camera) renderer.render(scene, player.camera);
         }
-      }
+      });
     }
 
-    // forced = true means the switch happens without a physical tag (e.g., lava death)
-    function switchItPlayer(oldItPlayerId, newItPlayerId, forced = false) {
-      if (!tagGameActive && !forced) return; // Allow forced switch even if game not active momentarily
-      if (oldItPlayerId === newItPlayerId) return; // Can't tag yourself
-
-      if (players[oldItPlayerId]) players[oldItPlayerId].isIt = false;
-      if (players[newItPlayerId]) players[newItPlayerId].isIt = true;
-      itPlayerId = newItPlayerId;
-      tagCooldown = TAG_COOLDOWN_DURATION; // Reset cooldown on any switch
-
-      // Update visuals for both involved players
-      if (players[oldItPlayerId]) updatePlayerTagVisuals(players[oldItPlayerId]);
-      if (players[newItPlayerId]) updatePlayerTagVisuals(players[newItPlayerId]);
-
-      console.log(`Tag! Player ${newItPlayerId + 1} is now IT. Cooldown: ${tagCooldown}s`);
-    }
-    //----------------------------------------------------------------
-    // MAIN UI SETUP
-    //----------------------------------------------------------------
+    function clearWorld() { /* ... (existing code) ... */[...worldObjects].forEach(obj => removeBlockByMesh(obj)); worldObjects = []; players.forEach(player => { player.isInWater = false; player.waterContactCount = 0; player.canJump = false; }); if (!players.some(p => p.isInWater)) { world.gravity.set(0, originalGravityY, 0); } if (initialGroundMesh) initialGroundMesh.visible = true; }
+    function getCurrentWorldData() { /* ... (existing code) ... */ const blocksData = worldObjects.map(obj => ({ x: obj.position.x, y: obj.position.y, z: obj.position.z, type: obj.userData.blockType })); const p1YawObject = players[0].yawObject; const playerData = { position: { x: players[0].body.position.x, y: players[0].body.position.y, z: players[0].body.position.z }, quaternion: { x: p1YawObject.quaternion.x, y: p1YawObject.quaternion.y, z: p1YawObject.quaternion.z, w: p1YawObject.quaternion.w } }; return { blocks: blocksData, player: playerData }; }
+    function addBlockFromData(blockData) { /* ... (existing code) ... */ const { x, y, z, type } = blockData; const position = new THREE.Vector3(x, y, z); const material = blockMaterials[type] || blockMaterials[blockTypes.STONE]; const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize); addBlockInternal(position, type, material, geometry); }
+    async function loadWorldFromSaveData(worldData) { /* ... (existing code) ... */ clearWorld(); worldData.blocks.forEach(blockData => addBlockFromData(blockData)); resetPlayersToSpawn(); if (worldData.player && worldData.player.position) { const p1Data = worldData.player; players[0].body.position.set(p1Data.position.x, p1Data.position.y, p1Data.position.z); if (p1Data.quaternion) { players[0].yawObject.quaternion.set(p1Data.quaternion.x, p1Data.quaternion.y, p1Data.quaternion.z, p1Data.quaternion.w); } players[0].yawObject.position.copy(players[0].body.position); } if (initialGroundMesh) initialGroundMesh.visible = false; console.log("World loaded from data."); }
+    function updateGameModeUI() { /* ... (existing code) ... */ document.getElementById('creativeModeButton').classList.toggle('selected', gameMode === 'creative'); document.getElementById('tagModeButton').classList.toggle('selected', gameMode === 'tag'); document.getElementById('tagInstructions').style.display = gameMode === 'tag' ? 'block' : 'none'; const P1_controlsLocked = players.length > 0 && players[0].controls && players[0].controls.isLocked; document.getElementById('block-selector').style.display = (gameMode === 'creative' && P1_controlsLocked) ? 'flex' : 'none'; }
+    function startTagGame() { /* ... (existing code) ... */ if (gameMode !== 'tag' || NUM_PLAYERS < 2) { tagGameActive = false; return; } console.log("Starting Tag Game..."); tagGameActive = true; itPlayerId = Math.floor(Math.random() * NUM_PLAYERS); tagCooldown = TAG_COOLDOWN_DURATION / 2; players.forEach((player, i) => { player.isIt = (i === itPlayerId); updatePlayerTagVisuals(player); }); console.log(`Tag game started. Player ${itPlayerId + 1} is IT.`); }
+    function endTagGame() { /* ... (existing code) ... */ if (!tagGameActive) return; console.log("Ending Tag Game..."); tagGameActive = false; itPlayerId = -1; tagCooldown = 0; players.forEach(player => { player.isIt = false; updatePlayerTagVisuals(player); }); console.log("Tag game ended or paused."); }
+    function resetTagGameElements() { /* ... (existing code) ... */ endTagGame(); }
+    function updatePlayerTagVisuals(player, isResize = false) { /* ... (existing code) ... */ if (!player) return; if (player.directionIndicator) { if (tagGameActive && player.isIt) { player.directionIndicator.material.color.setHex(0xff0000); player.directionIndicator.material.emissive.setHex(0xdd0000); player.directionIndicator.scale.set(1.5, 1.5, 1.5); } else if (tagGameActive && !player.isIt) { player.directionIndicator.material.color.setHex(0x00ff00); player.directionIndicator.material.emissive.setHex(0x00dd00); player.directionIndicator.scale.set(1.2, 1.2, 1.2); } else { player.directionIndicator.material.color.setHex(0xffA500); player.directionIndicator.material.emissive.setHex(0xcc8400); player.directionIndicator.scale.set(1, 1, 1); } } if (player.tagStatusElement) { const P1_controlsLocked = players.length > 0 && players[0].controls && players[0].controls.isLocked; if (tagGameActive && P1_controlsLocked) { player.tagStatusElement.textContent = player.isIt ? "YOU ARE IT!" : "RUN!"; if (tagCooldown > 0 && player.isIt) { player.tagStatusElement.textContent += ` (CD: ${tagCooldown.toFixed(1)}s)`; } player.tagStatusElement.style.display = 'block'; const viewportWidth = window.innerWidth / NUM_PLAYERS; const viewportX = player.id * viewportWidth; player.tagStatusElement.style.left = `${viewportX}px`; player.tagStatusElement.style.width = `${viewportWidth}px`; } else { player.tagStatusElement.textContent = ''; player.tagStatusElement.style.display = 'none'; } } }
+    function switchItPlayer(oldItPlayerId, newItPlayerId, forced = false) { /* ... (existing code) ... */ if (!tagGameActive && !forced) return; if (oldItPlayerId === newItPlayerId) return; if (players[oldItPlayerId]) players[oldItPlayerId].isIt = false; if (players[newItPlayerId]) players[newItPlayerId].isIt = true; itPlayerId = newItPlayerId; tagCooldown = TAG_COOLDOWN_DURATION; if (players[oldItPlayerId]) updatePlayerTagVisuals(players[oldItPlayerId]); if (players[newItPlayerId]) updatePlayerTagVisuals(players[newItPlayerId]); console.log(`Tag! Player ${newItPlayerId + 1} is now IT. Cooldown: ${tagCooldown}s`); }
 
     function setupUIAndEventListeners() {
       const blocker = document.getElementById('blocker');
@@ -1395,77 +946,109 @@
       const playButton = document.getElementById('playButton');
       const saveLoadUIDiv = document.getElementById('save-load-ui');
 
+      const p2CpuToggle = document.getElementById('p2CpuToggle');
+      const p2ControlsSpan = document.getElementById('p2ControlsParagraph');
+
+      p2CpuToggle.addEventListener('change', () => {
+        p2IsCPU = p2CpuToggle.checked;
+        if (p2IsCPU) {
+          if (!player2NN || (players.length <= 1 && NUM_PLAYERS > 1)) { // Check if P2 obj exists if NUM_PLAYERS expects it
+            if (players.length > 1 && players[1]) { // ensure players[1] object exists
+              initPlayer2CPU();
+            } else if (NUM_PLAYERS > 1) { // We expect a P2 but it's not there
+              alert("Player 2 is required for CPU mode but not fully initialized. This is unexpected. Try refreshing.");
+              p2IsCPU = false;
+              p2CpuToggle.checked = false;
+              return;
+            }
+          }
+          p2ControlsSpan.style.opacity = 0.5;
+          p2ControlsSpan.innerHTML = "CPU is navigating using its Neural Network.<br>Controls below are N/A for CPU.";
+          console.log("Player 2 is now CPU controlled.");
+        } else {
+          p2ControlsSpan.style.opacity = 1.0;
+          p2ControlsSpan.innerHTML = `IJKL: Move<br>U: Jump / Swim Up<br>H: Descend / Swim Down<br>Arrow Keys: Look Around<br>O: Place Block (Creative Mode)<br>P: Remove Block (Creative Mode)<br>(Block type shared with Player 1, Creative Mode)`;
+          console.log("Player 2 is now Human controlled.");
+        }
+        // Optional: localStorage.setItem('p2IsCPUEnabled', p2IsCPU.toString());
+      });
+      // Optional: const savedP2IsCPU = localStorage.getItem('p2IsCPUEnabled') === 'true'; if (savedP2IsCPU) { p2CpuToggle.checked = true; p2CpuToggle.dispatchEvent(new Event('change')); }
+
+
       playButton.addEventListener('click', () => {
         if (players.length > 0 && players[0].controls) players[0].controls.lock();
       });
 
-      // Ensure controls exist before adding listeners
       if (players.length > 0 && players[0].controls) {
-
         players[0].controls.addEventListener('lock', () => {
-          console.log("Controls Locked");
           instructionsDiv.style.display = 'none';
           blocker.style.display = 'none';
-          saveLoadUIDiv.style.display = 'none'; // Hide save/load when playing
-
-          if (gameMode === 'tag') {
-            startTagGame();
-          } else {
-            endTagGame(); // Ensure tag elements are off if starting in creative
-          }
-          updateGameModeUI(); // Controls block selector visibility based on mode + lock state
-
+          saveLoadUIDiv.style.display = 'none';
+          if (gameMode === 'tag') startTagGame(); else endTagGame();
+          updateGameModeUI();
           players.forEach(p => {
-            if (p.directionIndicator) p.directionIndicator.visible = true; // SHOW indicators
-            if (p.crosshairElement) p.crosshairElement.style.display = 'block'; // SHOW crosshairs
-            updatePlayerTagVisuals(p); // Update tag visuals (shows/hides status text, sets indicator colors)
+            if (p.directionIndicator) p.directionIndicator.visible = true;
+            if (p.crosshairElement) p.crosshairElement.style.display = 'block';
+            updatePlayerTagVisuals(p);
           });
-          updateCrosshairPositions(); // Set crosshair positions
+          updateCrosshairPositions();
+
+          if (p2IsCPU && players.length > 1 && players[1]) {
+            players[1].fitnessScore = 0; // Reset fitness at start of play session
+            console.log("P2 CPU session started. Fitness reset.");
+            if (!player2NN) initPlayer2CPU(); // Ensure NN is ready
+          }
         });
 
         players[0].controls.addEventListener('unlock', () => {
-          console.log("Controls Unlocked");
           blocker.style.display = 'flex';
           instructionsDiv.style.display = '';
-          saveLoadUIDiv.style.display = 'block'; // Always show save/load when unlocked
-
-          endTagGame(); // ALWAYS end any active tag game when unlocking/pausing
-          updateGameModeUI(); // Update UI state (will hide block selector as game is not locked)
-
+          saveLoadUIDiv.style.display = 'block';
+          endTagGame();
+          updateGameModeUI();
           players.forEach(p => {
-            if (p.directionIndicator) p.directionIndicator.visible = false; // HIDE indicators
-            if (p.crosshairElement) p.crosshairElement.style.display = 'none'; // HIDE crosshairs
-            // updatePlayerTagVisuals is called by endTagGame, ensuring status text is hidden etc
+            if (p.directionIndicator) p.directionIndicator.visible = false;
+            if (p.crosshairElement) p.crosshairElement.style.display = 'none';
           });
-          populateWorldList(); // Refresh world list
+          populateWorldList();
+
+          if (p2IsCPU && player2NN && players.length > 1 && players[1] && bestP2NNSavedData) {
+            const currentSessionFitness = players[1].fitnessScore;
+            console.log(`P2 CPU session fitness: ${currentSessionFitness}, Best known: ${bestP2NNFitness}`);
+
+            if (currentSessionFitness > bestP2NNFitness) {
+              console.log("New best P2 NN found! Saving...");
+              bestP2NNFitness = currentSessionFitness;
+              bestP2NNSavedData = player2NN.serialize(); // player2NN holds the (mutated) NN that just played
+              localStorage.setItem(P2_BEST_NN_KEY, bestP2NNSavedData);
+              localStorage.setItem(P2_BEST_FITNESS_KEY, bestP2NNFitness.toString());
+            }
+
+            // Prepare for next session: load the (potentially updated) best NN and mutate it
+            let nextSessionCandidate = NeuralNetwork.deserialize(bestP2NNSavedData);
+            if (nextSessionCandidate) {
+              nextSessionCandidate.mutate(NN_MUTATION_RATE, NN_MUTATION_AMOUNT);
+              player2NN = nextSessionCandidate; // This is the NN for the *next* session
+              console.log("Prepared mutated P2 NN for next session based on current champion.");
+            } else {
+              console.error("Failed to deserialize best NN on unlock. Creating new for next session.");
+              player2NN = new NeuralNetwork(NN_INPUT_NODES, NN_HIDDEN_NODES, NN_OUTPUT_NODES);
+            }
+            players[1].fitnessScore = 0; // Reset for display or next internal count
+          }
         });
-      } // end if controls exist
+      }
 
       document.addEventListener('keydown', onKeyDown);
       document.addEventListener('keyup', onKeyUp);
       window.addEventListener('resize', onWindowResize);
       document.addEventListener('mousedown', onMouseDown);
 
-      // --- Game Mode Buttons ---
       const creativeModeButton = document.getElementById('creativeModeButton');
       const tagModeButton = document.getElementById('tagModeButton');
-      creativeModeButton.addEventListener('click', () => {
-        gameMode = 'creative';
-        updateGameModeUI();
-        resetTagGameElements(); // Clear any tag state immediately
-      });
-      tagModeButton.addEventListener('click', () => {
-        if (NUM_PLAYERS < 2) {
-          alert("Tag mode requires at least 2 players.");
-          return;
-        }
-        gameMode = 'tag';
-        updateGameModeUI();
-      });
-      // --- End Game Mode Buttons ---
+      creativeModeButton.addEventListener('click', () => { gameMode = 'creative'; updateGameModeUI(); resetTagGameElements(); });
+      tagModeButton.addEventListener('click', () => { if (NUM_PLAYERS < 2) { alert("Tag mode requires at least 2 players."); return; } gameMode = 'tag'; updateGameModeUI(); });
 
-
-      // --- Save/Load/New World Buttons ---
       const worldNameInput = document.getElementById('worldNameInput');
       const saveWorldButton = document.getElementById('saveWorldButton');
       const worldListSelect = document.getElementById('worldListSelect');
@@ -1473,81 +1056,13 @@
       const deleteWorldButton = document.getElementById('deleteWorldButton');
       const newWorldButton = document.getElementById('newWorldButton');
 
-      saveWorldButton.addEventListener('click', async () => {
-        const worldName = worldNameInput.value.trim();
-        if (!worldName) { alert("Please enter a world name."); return; }
-        try {
-          const worldData = getCurrentWorldData();
-          await saveWorldDB(worldName, worldData);
-          alert(`World "${worldName}" saved!`);
-          worldNameInput.value = ''; populateWorldList();
-        } catch (error) { console.error("Error saving world:", error); alert(`Failed to save world: ${error.message || error}`); }
-      });
-
-      loadWorldButton.addEventListener('click', async () => {
-        const worldName = worldListSelect.value;
-        if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) {
-          alert("Please select a valid world to load."); return;
-        }
-        if (!confirm(`Load world "${worldName}"? Current unsaved progress will be lost.`)) return;
-        resetTagGameElements(); // Reset tag game state BEFORE loading
-        try {
-          const worldData = await loadWorldDB(worldName);
-          if (worldData) {
-            await loadWorldFromSaveData(worldData);
-            alert(`World "${worldName}" loaded. Click "Click to play" to continue.`);
-            if (initialGroundMesh) initialGroundMesh.visible = false; // Ensure base plane is hidden
-          } else { alert(`World "${worldName}" not found or data is corrupt.`); }
-        } catch (error) { console.error("Error loading world:", error); alert(`Failed to load world: ${error.message || error}`); }
-      });
-
-      deleteWorldButton.addEventListener('click', async () => {
-        const worldName = worldListSelect.value;
-        if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) {
-          alert("Please select a valid world to delete."); return;
-        }
-        if (confirm(`Are you sure you want to delete world "${worldName}"? This cannot be undone.`)) {
-          try {
-            await deleteWorldDB(worldName);
-            alert(`World "${worldName}" deleted.`); populateWorldList();
-          } catch (error) { console.error("Error deleting world:", error); alert(`Failed to delete world: ${error.message || error}`); }
-        }
-      });
-
-      newWorldButton.addEventListener('click', () => {
-        if (!confirm("Create a new procedural world? Current unsaved progress will be lost.")) return;
-        resetTagGameElements(); // Reset tag game state BEFORE new world
-        clearWorld();
-        if (initialGroundMesh) initialGroundMesh.visible = false; // Hide base plane
-        resetPlayersToSpawn();
-        generateWorld();
-        alert("New procedural world created. Click 'Click to play' to continue.");
-      });
-      // --- End Save/Load/New World Buttons ---
-
-    } // End setupUIAndEventListeners
-
-    async function populateWorldList() {
-      const worldListSelect = document.getElementById('worldListSelect');
-      try {
-        const names = await getAllWorldNamesDB();
-        worldListSelect.innerHTML = ''; // Clear existing options
-        if (names.length === 0) {
-          const option = document.createElement('option');
-          option.textContent = "No saved worlds"; option.disabled = true;
-          worldListSelect.appendChild(option);
-        } else {
-          names.forEach(name => {
-            const option = document.createElement('option');
-            option.value = name; option.textContent = name;
-            worldListSelect.appendChild(option);
-          });
-        }
-      } catch (error) {
-        console.error("Error populating world list:", error);
-        worldListSelect.innerHTML = `<option disabled>Error: ${error.message || error}</option>`;
-      }
+      saveWorldButton.addEventListener('click', async () => { /* ... (existing code) ... */ const worldName = worldNameInput.value.trim(); if (!worldName) { alert("Please enter a world name."); return; } try { const worldData = getCurrentWorldData(); await saveWorldDB(worldName, worldData); alert(`World "${worldName}" saved!`); worldNameInput.value = ''; populateWorldList(); } catch (error) { console.error("Error saving world:", error); alert(`Failed to save world: ${error.message || error}`); } });
+      loadWorldButton.addEventListener('click', async () => { /* ... (existing code) ... */ const worldName = worldListSelect.value; if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) { alert("Please select a valid world to load."); return; } if (!confirm(`Load world "${worldName}"? Current unsaved progress will be lost.`)) return; resetTagGameElements(); try { const worldData = await loadWorldDB(worldName); if (worldData) { await loadWorldFromSaveData(worldData); alert(`World "${worldName}" loaded. Click "Click to play" to continue.`); if (initialGroundMesh) initialGroundMesh.visible = false; } else { alert(`World "${worldName}" not found or data is corrupt.`); } } catch (error) { console.error("Error loading world:", error); alert(`Failed to load world: ${error.message || error}`); } });
+      deleteWorldButton.addEventListener('click', async () => { /* ... (existing code) ... */ const worldName = worldListSelect.value; if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) { alert("Please select a valid world to delete."); return; } if (confirm(`Are you sure you want to delete world "${worldName}"? This cannot be undone.`)) { try { await deleteWorldDB(worldName); alert(`World "${worldName}" deleted.`); populateWorldList(); } catch (error) { console.error("Error deleting world:", error); alert(`Failed to delete world: ${error.message || error}`); } } });
+      newWorldButton.addEventListener('click', () => { /* ... (existing code) ... */ if (!confirm("Create a new procedural world? Current unsaved progress will be lost.")) return; resetTagGameElements(); clearWorld(); if (initialGroundMesh) initialGroundMesh.visible = false; resetPlayersToSpawn(); generateWorld(); alert("New procedural world created. Click 'Click to play' to continue."); });
     }
+
+    async function populateWorldList() { /* ... (existing code) ... */ const worldListSelect = document.getElementById('worldListSelect'); try { const names = await getAllWorldNamesDB(); worldListSelect.innerHTML = ''; if (names.length === 0) { const option = document.createElement('option'); option.textContent = "No saved worlds"; option.disabled = true; worldListSelect.appendChild(option); } else { names.forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; worldListSelect.appendChild(option); }); } } catch (error) { console.error("Error populating world list:", error); worldListSelect.innerHTML = `<option disabled>Error: ${error.message || error}</option>`; } }
 
   </script>
 </body>
