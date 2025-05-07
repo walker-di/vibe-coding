@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MiniCraft.js with Cannon.js</title>
+  <title>MiniCraft.js with Cannon.js - Advanced Blocks</title>
   <style>
     body {
       margin: 0;
@@ -85,6 +85,8 @@
       font-weight: bold;
       color: white;
       user-select: none;
+      font-size: 10px;
+      /* smaller font for more chars */
     }
 
     .block-option.selected {
@@ -99,9 +101,9 @@
     <div id="instructions">
       <h1>MiniCraft.js</h1>
       <p>Click to play</p>
-      <p>WASD: Move<br>Space: Jump<br>Shift: Descend (Creative Fly)<br>Mouse: Look<br>Left Click: Place Block<br>Right
-        Click: Remove
-        Block<br>1-4: Select Block Type</p>
+      <p>WASD: Move<br>Space: Jump / Swim Up<br>Shift: Descend / Swim Down<br>Mouse: Look<br>Left Click: Place
+        Block<br>Right
+        Click: Remove Block<br>1-7: Select Block Type</p>
     </div>
   </div>
   <div id="crosshair"></div>
@@ -138,15 +140,15 @@
     let moveBackward = false;
     let moveLeft = false;
     let moveRight = false;
-    let moveUpAction = false; // For triggering jump in animate loop
-    let moveDown = false; // Descend (like creative mode fly)
+    let moveUpAction = false; // For triggering jump/swim_up in animate loop
+    let moveDown = false; // Descend / swim_down
 
     // Player physical properties
     const playerHeight = 1.8;
     const playerRadius = 0.4; // Used for width/depth of the player's physics box
     const playerSpeed = 5.0;
     const jumpVelocity = 7.0; // Adjusted for Cannon's gravity
-    const gravity = 20.0; // Matches Cannon's default somewhat, but we set explicitly
+    const initialGravity = 20.0; // Matches Cannon's default somewhat, but we set explicitly
     let canJump = false;
 
     const raycaster = new THREE.Raycaster();
@@ -156,29 +158,48 @@
       GRASS: 'grass',
       DIRT: 'dirt',
       STONE: 'stone',
-      WOOD: 'wood'
+      WOOD: 'wood',
+      WATER: 'water',
+      LAVA: 'lava',
+      GLOWSTONE: 'glowstone'
     };
     let currentBlockType = blockTypes.GRASS;
     const blockMaterials = {}; // Three.js materials
 
     let lastTime = performance.now();
 
+    // Fluid interaction variables
+    let isInWater = false;
+    let waterContactCount = 0;
+    const originalGravityY = -initialGravity; // Store the original gravity's Y component
+    const waterProperties = {
+      gravityFactor: 0.3, // Player feels lighter in water
+      speedFactor: 0.5,   // Player moves slower
+      damping: 0.9,      // Increased damping for water
+      swimUpVelocity: 4.0,
+      swimDownVelocity: -4.0
+    };
+    const originalPlayerDamping = 0.3; // Store original player damping
+
+
     init();
     animate();
 
-    function createTexture(color, text = null) {
+    function createTexture(color, text = null, isFluid = false) {
       const canvas = document.createElement('canvas');
       canvas.width = 64;
       canvas.height = 64;
       const context = canvas.getContext('2d');
       context.fillStyle = color;
       context.fillRect(0, 0, 64, 64);
-      context.strokeStyle = 'rgba(0,0,0,0.2)';
-      context.lineWidth = 2;
-      context.strokeRect(1, 1, 62, 62);
+      if (!isFluid) { // Don't draw border for fluids, looks better when tiled
+        context.strokeStyle = 'rgba(0,0,0,0.2)';
+        context.lineWidth = 2;
+        context.strokeRect(1, 1, 62, 62);
+      }
       if (text) {
-        context.fillStyle = 'rgba(0,0,0,0.5)';
-        context.font = '12px Arial';
+        context.fillStyle = isFluid ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)';
+        context.font = '10px Arial';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         context.fillText(text, 32, 32);
@@ -197,12 +218,40 @@
       const stoneTexture = createTexture('#808080');
       const woodTexture = createTexture('#A0522D');
 
+      const waterTexture = createTexture('rgba(50, 100, 200, 0.6)', null, true);
+      const lavaTexture = createTexture('#FF6000', null, true);
+      const glowstoneTexture = createTexture('#FFEE88', 'GLOW');
+
       blockMaterials[blockTypes.GRASS] = [
         grassSideTexture, grassSideTexture, grassTopTexture, dirtTexture, grassSideTexture, grassSideTexture
       ].map(texture => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0.1 }));
       blockMaterials[blockTypes.DIRT] = new THREE.MeshStandardMaterial({ map: dirtTexture, roughness: 0.9, metalness: 0 });
       blockMaterials[blockTypes.STONE] = new THREE.MeshStandardMaterial({ map: stoneTexture, roughness: 0.7, metalness: 0.2 });
       blockMaterials[blockTypes.WOOD] = new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.8, metalness: 0.1 });
+
+      blockMaterials[blockTypes.WATER] = new THREE.MeshStandardMaterial({
+        map: waterTexture,
+        transparent: true,
+        opacity: 0.6,
+        roughness: 0.2,
+        metalness: 0.0,
+        side: THREE.DoubleSide // Render inside of water blocks if player is inside
+      });
+      blockMaterials[blockTypes.LAVA] = new THREE.MeshStandardMaterial({
+        map: lavaTexture,
+        roughness: 0.8,
+        metalness: 0.2,
+        emissive: new THREE.Color(0xdd4400),
+        emissiveIntensity: 0.8,
+        side: THREE.DoubleSide
+      });
+      blockMaterials[blockTypes.GLOWSTONE] = new THREE.MeshStandardMaterial({
+        map: glowstoneTexture,
+        roughness: 0.9,
+        metalness: 0.1,
+        emissive: new THREE.Color(0xffffaa),
+        emissiveIntensity: 0.9
+      });
     }
 
     function init() {
@@ -212,7 +261,6 @@
       scene.fog = new THREE.Fog(0x87CEEB, 10, 75);
 
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      // Initial camera position will be synced with playerBody later
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -221,9 +269,9 @@
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       document.body.appendChild(renderer.domElement);
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
       scene.add(ambientLight);
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
       directionalLight.position.set(50, 80, 30);
       directionalLight.castShadow = true;
       directionalLight.shadow.mapSize.width = 2048;
@@ -237,37 +285,35 @@
       directionalLight.shadow.camera.bottom = -shadowCamSize;
       scene.add(directionalLight);
 
-      initMaterials(); // Initialize Three.js block materials
+      initMaterials();
 
       // --- Cannon.js Physics Setup ---
       world = new CANNON.World();
-      world.gravity.set(0, -gravity, 0);
-      world.broadphase = new CANNON.NaiveBroadphase(); // Efficient for many static objects
+      world.gravity.set(0, -initialGravity, 0);
+      world.broadphase = new CANNON.NaiveBroadphase();
 
-      // Define materials for Cannon.js
       playerMaterial = new CANNON.Material("playerMaterial");
-      groundMaterial = new CANNON.Material("groundMaterial");
+      groundMaterial = new CANNON.Material("groundMaterial"); // Used for all static blocks
 
       playerGroundContactMaterial = new CANNON.ContactMaterial(
         playerMaterial,
         groundMaterial,
         {
-          friction: 0.0, // Low friction for Minecraft-like movement against blocks
-          restitution: 0.0 // No bounce
+          friction: 0.0,
+          restitution: 0.0
         }
       );
       world.addContactMaterial(playerGroundContactMaterial);
 
-      // Create Player Physics Body
       const playerShape = new CANNON.Box(new CANNON.Vec3(playerRadius, playerHeight / 2, playerRadius));
       const initialPlayerPos = new THREE.Vector3(worldSize.width / 4, worldSize.height + 2, worldSize.depth / 4);
       playerBody = new CANNON.Body({
-        mass: 70, // kg
+        mass: 70,
         position: new CANNON.Vec3(initialPlayerPos.x, initialPlayerPos.y, initialPlayerPos.z),
         shape: playerShape,
         material: playerMaterial,
-        fixedRotation: true, // Prevents player from tipping over
-        linearDamping: 0.3 // Helps player come to a stop naturally
+        fixedRotation: true,
+        linearDamping: originalPlayerDamping
       });
       world.addBody(playerBody);
 
@@ -276,29 +322,48 @@
         const upAxis = new CANNON.Vec3(0, 1, 0);
         let contactNormal = new CANNON.Vec3();
 
-        // Check which body is the player and get the contact normal relative to the player
         if (contact.bi.id === playerBody.id) {
-          contact.ni.negate(contactNormal); // Normal of contact point on player body
+          contact.ni.negate(contactNormal);
         } else {
-          contactNormal.copy(contact.ni); // Normal of contact point on other body (points away from other body)
+          contactNormal.copy(contact.ni);
         }
 
-        // Check if the collision is with a surface below the player
-        // (contact normal is pointing upwards relative to the player)
-        if (contactNormal.dot(upAxis) > 0.5) { // 0.5 is a threshold, >0 means some upward component
+        if (contactNormal.dot(upAxis) > 0.5) {
           const otherBody = (contact.bi.id === playerBody.id) ? contact.bj : contact.bi;
-          if (otherBody.mass === 0) { // Check if colliding with a static object (ground/block)
-            canJump = true;
+          if (otherBody.mass === 0 && otherBody.collisionResponse !== 0) { // Solid static object
+            if (!isInWater) {
+              canJump = true;
+            }
+          }
+        }
+      });
+
+      playerBody.addEventListener("beginContact", function (event) {
+        const otherBody = event.bodyA.id === playerBody.id ? event.bodyB : event.bodyA;
+        if (otherBody.collisionResponse === 0 && otherBody.userData) { // Is it a sensor?
+          if (otherBody.userData.blockType === blockTypes.WATER) {
+            enterWater();
+          } else if (otherBody.userData.blockType === blockTypes.LAVA) {
+            enterLava();
+          }
+        }
+      });
+
+      playerBody.addEventListener("endContact", function (event) {
+        const otherBody = event.bodyA.id === playerBody.id ? event.bodyB : event.bodyA;
+        if (otherBody.collisionResponse === 0 && otherBody.userData) {
+          if (otherBody.userData.blockType === blockTypes.WATER) {
+            exitWater();
           }
         }
       });
 
 
-      generateWorld(); // Generates Three.js meshes AND Cannon.js bodies
+      generateWorld();
 
       // --- Controls ---
       controls = new PointerLockControls(camera, document.body);
-      camera.position.set(0, 0.7, 0); // Eye height relative to playerBody's center (0.7 makes eyes at ~1.6m for 1.8m height)
+      camera.position.set(0, 0.7, 0); // Eye height relative to playerBody's center
       controls.getObject().position.copy(playerBody.position); // Initial sync
       scene.add(controls.getObject());
 
@@ -322,6 +387,38 @@
 
       setupBlockSelector();
     }
+
+    function enterWater() {
+      waterContactCount++;
+      if (!isInWater && waterContactCount > 0) {
+        isInWater = true;
+        world.gravity.set(0, originalGravityY * waterProperties.gravityFactor, 0);
+        playerBody.linearDamping = waterProperties.damping;
+        console.log("Entered water");
+      }
+    }
+
+    function exitWater() {
+      waterContactCount--;
+      if (isInWater && waterContactCount <= 0) {
+        isInWater = false;
+        waterContactCount = 0; // Ensure it's not negative
+        world.gravity.set(0, originalGravityY, 0);
+        playerBody.linearDamping = originalPlayerDamping;
+        console.log("Exited water");
+      }
+    }
+
+    function enterLava() {
+      console.log("Player touched LAVA!");
+      playerBody.position.set(worldSize.width / 4, worldSize.height + 10, worldSize.depth / 4);
+      playerBody.velocity.set(0, 0, 0);
+      if (isInWater) { // If somehow was in water too
+        waterContactCount = 0; // Reset counter
+        exitWater(); // Call exitWater to reset gravity and damping
+      }
+    }
+
 
     function generateWorld() {
       const boxGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
@@ -396,8 +493,11 @@
         const type = blockTypes[key];
         const option = document.createElement('div');
         option.classList.add('block-option');
-        option.textContent = key.substring(0, 1);
+        option.textContent = key.substring(0, 4).toUpperCase(); // Show more letters
         option.style.backgroundColor = getBlockColor(type);
+        if (type === blockTypes.WATER || type === blockTypes.LAVA || type === blockTypes.GLOWSTONE) {
+          option.style.color = (type === blockTypes.GLOWSTONE) ? 'black' : 'white'; // Ensure visibility
+        }
         option.title = key;
         option.dataset.blockType = type;
         if (type === currentBlockType) {
@@ -411,12 +511,15 @@
       });
     }
 
-    function getBlockColor(type) {
+    function getBlockColor(type) { // Used for selector background
       switch (type) {
         case blockTypes.GRASS: return '#6A994E';
         case blockTypes.DIRT: return '#8C6A48';
         case blockTypes.STONE: return '#808080';
         case blockTypes.WOOD: return '#A0522D';
+        case blockTypes.WATER: return 'rgba(50, 100, 200, 0.8)';
+        case blockTypes.LAVA: return '#FF6000';
+        case blockTypes.GLOWSTONE: return '#FFEE88';
         default: return '#FFFFFF';
       }
     }
@@ -439,12 +542,15 @@
         case 'KeyA': moveLeft = true; break;
         case 'KeyS': moveBackward = true; break;
         case 'KeyD': moveRight = true; break;
-        case 'Space': if (canJump) moveUpAction = true; break;
+        case 'Space': moveUpAction = true; break;
         case 'ShiftLeft': moveDown = true; break;
         case 'Digit1': currentBlockType = blockTypes.GRASS; updateBlockSelectorUI(); break;
         case 'Digit2': currentBlockType = blockTypes.DIRT; updateBlockSelectorUI(); break;
         case 'Digit3': currentBlockType = blockTypes.STONE; updateBlockSelectorUI(); break;
         case 'Digit4': currentBlockType = blockTypes.WOOD; updateBlockSelectorUI(); break;
+        case 'Digit5': currentBlockType = blockTypes.WATER; updateBlockSelectorUI(); break;
+        case 'Digit6': currentBlockType = blockTypes.LAVA; updateBlockSelectorUI(); break;
+        case 'Digit7': currentBlockType = blockTypes.GLOWSTONE; updateBlockSelectorUI(); break;
       }
     }
 
@@ -455,6 +561,7 @@
         case 'KeyS': moveBackward = false; break;
         case 'KeyD': moveRight = false; break;
         case 'ShiftLeft': moveDown = false; break;
+        case 'Space': moveUpAction = false; break; // Reset flag on key up
       }
     }
 
@@ -463,21 +570,34 @@
 
       pointer.set(0, 0); // Raycast from center of camera
       raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObjects(worldObjects, false);
+      const intersects = raycaster.intersectObjects(worldObjects, false); // false for non-recursive
 
       if (intersects.length > 0) {
         const intersect = intersects[0];
         if (event.button === 2 || event.ctrlKey) { // Right click or Ctrl+LeftClick to remove
           if (intersect.object.userData.blockType && intersect.object.userData.cannonBody) {
+            // Remove light source if any
+            if (intersect.object.userData.light) {
+              scene.remove(intersect.object.userData.light);
+              intersect.object.userData.light = null; // Clear reference
+            }
+
             world.removeBody(intersect.object.userData.cannonBody);
             scene.remove(intersect.object);
             worldObjects.splice(worldObjects.indexOf(intersect.object), 1);
+
+            // Dispose Three.js resources
             if (intersect.object.geometry) intersect.object.geometry.dispose();
             if (intersect.object.material) {
-              if (Array.isArray(intersect.object.material)) {
-                intersect.object.material.forEach(m => m.dispose());
+              const material = intersect.object.material;
+              if (Array.isArray(material)) {
+                material.forEach(m => {
+                  if (m.map) m.map.dispose();
+                  m.dispose();
+                });
               } else {
-                intersect.object.material.dispose();
+                if (material.map) material.map.dispose();
+                material.dispose();
               }
             }
           }
@@ -485,14 +605,13 @@
           const placementPosition = new THREE.Vector3();
           placementPosition.copy(intersect.object.position).addScaledVector(intersect.face.normal, blockSize);
 
-          // Check for player collision with new block
           const newBlockHalfExtents = new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2);
           const newBlockAABB = new CANNON.AABB({
             lowerBound: new CANNON.Vec3(placementPosition.x - newBlockHalfExtents.x, placementPosition.y - newBlockHalfExtents.y, placementPosition.z - newBlockHalfExtents.z),
             upperBound: new CANNON.Vec3(placementPosition.x + newBlockHalfExtents.x, placementPosition.y + newBlockHalfExtents.y, placementPosition.z + newBlockHalfExtents.z)
           });
 
-          playerBody.computeAABB(); // Ensure player's AABB is up-to-date
+          playerBody.computeAABB();
           if (newBlockAABB.overlaps(playerBody.aabb)) {
             console.log("Cannot place block: intersects player.");
             return;
@@ -502,6 +621,8 @@
           if (!blockExists) {
             const newBlockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
             const newBlockMaterial = blockMaterials[currentBlockType] || blockMaterials[blockTypes.STONE];
+            // For materials like water/lava with DoubleSide or unique emissive, cloning is good.
+            // For standard blocks, it might not be necessary if they don't change instance properties.
             const newBlockMesh = new THREE.Mesh(newBlockGeometry, newBlockMaterial);
             newBlockMesh.position.copy(placementPosition);
             newBlockMesh.castShadow = true;
@@ -510,7 +631,6 @@
             scene.add(newBlockMesh);
             worldObjects.push(newBlockMesh);
 
-            // Add Cannon.js body for the new block
             const newBlockShape = new CANNON.Box(newBlockHalfExtents);
             const newBlockBody = new CANNON.Body({
               mass: 0,
@@ -518,6 +638,29 @@
               position: new CANNON.Vec3(newBlockMesh.position.x, newBlockMesh.position.y, newBlockMesh.position.z),
               material: groundMaterial
             });
+
+            // Fluid / Sensor logic
+            if (currentBlockType === blockTypes.WATER || currentBlockType === blockTypes.LAVA) {
+              newBlockBody.collisionResponse = 0; // Make it a sensor
+              newBlockBody.userData = { blockType: currentBlockType }; // Store type for sensor logic
+            }
+            // Light source logic
+            if (currentBlockType === blockTypes.GLOWSTONE || currentBlockType === blockTypes.LAVA) {
+              const light = new THREE.PointLight(0xffffff, 0, 8);
+              light.position.copy(newBlockMesh.position);
+              if (currentBlockType === blockTypes.GLOWSTONE) {
+                light.color.setHex(0xffffdd);
+                light.intensity = 0.7;
+                light.distance = 7;
+              } else { // LAVA
+                light.color.setHex(0xff7700);
+                light.intensity = 0.6;
+                light.distance = 6;
+              }
+              scene.add(light);
+              newBlockMesh.userData.light = light;
+            }
+
             world.addBody(newBlockBody);
             newBlockMesh.userData.cannonBody = newBlockBody;
           }
@@ -544,47 +687,62 @@
       if (controls.isLocked) {
         const playerObject = controls.getObject(); // This is the THREE.Object3D for the player (camera parent)
 
-        // Get current velocity from playerBody to preserve Y velocity from gravity/jump
-        const currentVelocity = new CANNON.Vec3(playerBody.velocity.x, playerBody.velocity.y, playerBody.velocity.z);
+        let currentSpeed = playerSpeed;
+        let targetVelocityY = playerBody.velocity.y; // Start with current Y velocity (affected by gravity from world.step)
 
-        // Calculate FWD and RIGHT vectors based on playerObject's (camera parent's) orientation
-        FWD.set(0, 0, -1).applyQuaternion(playerObject.quaternion);
-        RIGHT.set(1, 0, 0).applyQuaternion(playerObject.quaternion);
+        if (isInWater) {
+          currentSpeed *= waterProperties.speedFactor;
+          if (moveUpAction) { // Swimming up
+            targetVelocityY = waterProperties.swimUpVelocity;
+          } else if (moveDown) { // Swimming down
+            targetVelocityY = waterProperties.swimDownVelocity;
+          }
+          // if neither, targetVelocityY remains (gravity & damping will act via world.step)
+        } else { // Not in water
+          if (moveUpAction && canJump) {
+            targetVelocityY = jumpVelocity;
+            canJump = false; // Consume jump
+          } else if (moveDown) { // Creative fly down
+            targetVelocityY = -playerSpeed;
+            canJump = false; // Cannot jump while actively flying down
+          }
+        }
 
-        // Reset XZ velocity before applying new input, Y velocity is preserved for gravity/jump
-        playerBody.velocity.x = 0;
-        playerBody.velocity.z = 0;
+        // If moveUpAction was intended for jump/swim and conditions met, it's been used.
+        // If it was pressed but conditions (isInWater or canJump) weren't met, it will remain true.
+        // We reset moveUpAction on keyup. So here, if it was true and led to an action,
+        // it should ideally be reset. Let's ensure it's consumed if it caused a Y velocity change.
+        if (moveUpAction && ((isInWater) || (!isInWater && canJump))) {
+          // If we just set targetVelocityY due to moveUpAction
+          // No need to explicitly set moveUpAction = false here, as keyup handles it.
+          // The problem is if space is HELD, moveUpAction stays true.
+          // For jump, this is fine (one impulse). For swim, continuous force would be better.
+          // Current setup: press space = one burst of upward velocity for swim.
+        }
+
+
+        playerBody.velocity.y = targetVelocityY;
 
         // Horizontal movement
         direction.x = Number(moveRight) - Number(moveLeft);
         direction.z = Number(moveForward) - Number(moveBackward);
-        // No normalization needed here as we sum scaled basis vectors
+
+        // Reset XZ velocity before applying new input
+        playerBody.velocity.x = 0;
+        playerBody.velocity.z = 0;
 
         if (direction.x !== 0 || direction.z !== 0) {
-          // Project onto XZ plane and normalize to ensure consistent speed
+          FWD.set(0, 0, -1).applyQuaternion(playerObject.quaternion);
+          RIGHT.set(1, 0, 0).applyQuaternion(playerObject.quaternion);
+
           const moveDir = new THREE.Vector3(
             RIGHT.x * direction.x + FWD.x * direction.z,
             0, // Movement is planar
             RIGHT.z * direction.x + FWD.z * direction.z
           ).normalize();
 
-          playerBody.velocity.x = moveDir.x * playerSpeed;
-          playerBody.velocity.z = moveDir.z * playerSpeed;
-        }
-
-        // Apply Y velocity from previous step (gravity, etc.)
-        playerBody.velocity.y = currentVelocity.y;
-
-
-        // Vertical movement (Jump/Fly)
-        if (moveUpAction && canJump) {
-          playerBody.velocity.y = jumpVelocity;
-          canJump = false;
-          moveUpAction = false;
-        }
-        if (moveDown) { // Creative fly down
-          playerBody.velocity.y = -playerSpeed;
-          canJump = false; // Cannot jump while actively flying down
+          playerBody.velocity.x = moveDir.x * currentSpeed;
+          playerBody.velocity.z = moveDir.z * currentSpeed;
         }
 
         // Sync Three.js player object to Cannon.js body position
@@ -595,6 +753,7 @@
           playerBody.position.set(worldSize.width / 4, worldSize.height + 10, worldSize.depth / 4);
           playerBody.velocity.set(0, 0, 0);
           canJump = false; // Reset jump state
+          if (isInWater) { waterContactCount = 0; exitWater(); } // Reset water state if falling out
         }
       }
 
