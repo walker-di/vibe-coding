@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MiniCraft.js - Player World Indicator</title>
+  <title>MiniCraft.js - Split-Screen</title>
   <style>
     body {
       margin: 0;
@@ -28,7 +28,8 @@
 
     #instructions {
       width: 80%;
-      max-width: 500px;
+      max-width: 600px;
+      /* Slightly wider for more instructions */
       padding: 20px;
       font-family: Arial, sans-serif;
       font-size: 16px;
@@ -36,6 +37,8 @@
       color: white;
       background-color: rgba(50, 50, 50, 0.8);
       border-radius: 10px;
+      max-height: 90vh;
+      overflow-y: auto;
     }
 
     #instructions p:first-of-type {
@@ -43,20 +46,20 @@
       font-weight: bold;
     }
 
-
-    #crosshair {
+    .crosshair {
+      /* Changed to class for multiple crosshairs */
       position: absolute;
-      top: 50%;
-      left: 50%;
       width: 2px;
       height: 10px;
       background-color: white;
       transform: translate(-50%, -50%);
       pointer-events: none;
       mix-blend-mode: difference;
+      display: none;
+      /* Initially hidden, shown by JS */
     }
 
-    #crosshair::before {
+    .crosshair::before {
       content: '';
       position: absolute;
       top: 50%;
@@ -66,6 +69,17 @@
       background-color: white;
       transform: translateY(-50%);
     }
+
+    #crosshairP1 {
+      /* ID for Player 1's crosshair */
+      /* Positioned by JS based on viewport */
+    }
+
+    #crosshairP2 {
+      /* ID for Player 2's crosshair */
+      /* Positioned by JS based on viewport */
+    }
+
 
     #block-selector {
       position: absolute;
@@ -77,6 +91,8 @@
       border-radius: 5px;
       display: flex;
       gap: 10px;
+      z-index: 10;
+      /* Ensure it's above viewports */
     }
 
     .block-option {
@@ -174,11 +190,18 @@
 <body>
   <div id="blocker">
     <div id="instructions">
-      <h1>MiniCraft.js</h1>
+      <h1>MiniCraft.js - Split Screen</h1>
       <p id="playButton">Click to play</p>
-      <p>WASD: Move<br>Space: Jump / Swim Up<br>Shift: Descend / Swim Down<br>Mouse: Look<br>Left Click: Place
-        Block<br>Right
-        Click: Remove Block<br>1-7: Select Block Type</p>
+      <p>
+        <b>Player 1 (Left Screen):</b><br>
+        WASD: Move<br>Space: Jump / Swim Up<br>Shift: Descend / Swim Down<br>Mouse: Look<br>Left Click: Place
+        Block<br>Right Click: Remove Block<br>1-7: Select Block Type
+      </p>
+      <p>
+        <b>Player 2 (Right Screen):</b><br>
+        IJKL: Move<br>U: Jump / Swim Up<br>H: Descend / Swim Down<br>Arrow Keys: Look Around<br>O: Place Block<br>P:
+        Remove Block<br>(Block type shared with Player 1)
+      </p>
 
       <div id="save-load-ui" style="display: none;">
         <h3>Save Current World</h3>
@@ -199,7 +222,8 @@
       </div>
     </div>
   </div>
-  <div id="crosshair"></div>
+  <div id="crosshairP1" class="crosshair"></div>
+  <div id="crosshairP2" class="crosshair"></div>
   <div id="block-selector"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
@@ -216,42 +240,33 @@
     import * as THREE from 'three';
     import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-    let scene, camera, renderer, controls;
+    let scene, renderer, world;
     let worldObjects = [];
-    let playerDirectionIndicatorMesh;
 
-    let world;
-    let playerBody;
+    const NUM_PLAYERS = 2;
+    const players = []; // Array to hold player data
+
     const timeStep = 1 / 60;
     let playerMaterial, groundMaterial, playerGroundContactMaterial;
 
     const worldSize = { width: 20, depth: 20, height: 10 };
     const blockSize = 1;
 
-    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-    let moveUpAction = false, moveDown = false;
-
-    const playerHeight = 1.8; // Total height of player collision box
+    const playerHeight = 1.8;
     const playerRadius = 0.4;
     const playerSpeed = 5.0;
     const jumpVelocity = 7.0;
     const initialGravity = 20.0;
-    let canJump = false;
-
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
 
     const blockTypes = {
       GRASS: 'grass', DIRT: 'dirt', STONE: 'stone', WOOD: 'wood',
       WATER: 'water', LAVA: 'lava', GLOWSTONE: 'glowstone'
     };
-    let currentBlockType = blockTypes.GRASS;
+    let currentBlockType = blockTypes.GRASS; // Shared block type for now
     const blockMaterials = {};
 
     let lastTime = performance.now();
 
-    let isInWater = false;
-    let waterContactCount = 0;
     const originalGravityY = -initialGravity;
     const waterProperties = {
       gravityFactor: 0.3, speedFactor: 0.5, damping: 0.9,
@@ -264,6 +279,11 @@
     const DB_VERSION = 1;
     const STORE_NAME = 'worlds';
     let initialGroundMesh, initialGroundBody;
+
+    // Raycaster for block interaction - will be reused per player
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2(); // For P1 mouse input
+
 
     function openDB() {
       return new Promise((resolve, reject) => {
@@ -282,7 +302,6 @@
         };
       });
     }
-
     async function saveWorldDB(worldName, worldData) {
       const currentDb = await openDB();
       return new Promise((resolve, reject) => {
@@ -293,7 +312,6 @@
         request.onerror = (event) => reject("Save error: " + event.target.error);
       });
     }
-
     async function loadWorldDB(worldName) {
       const currentDb = await openDB();
       return new Promise((resolve, reject) => {
@@ -304,7 +322,6 @@
         request.onerror = (event) => reject("Load error: " + event.target.error);
       });
     }
-
     async function getAllWorldNamesDB() {
       const currentDb = await openDB();
       return new Promise((resolve, reject) => {
@@ -315,7 +332,6 @@
         request.onerror = (event) => reject("Error fetching world names: " + event.target.error);
       });
     }
-
     async function deleteWorldDB(worldName) {
       const currentDb = await openDB();
       return new Promise((resolve, reject) => {
@@ -349,7 +365,6 @@
       texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter;
       return texture;
     }
-
     function initMaterials() {
       const grassTopTexture = createTexture('#6A994E');
       const grassSideTexture = createTexture('#A7C957');
@@ -380,37 +395,29 @@
     }
 
     function createPlayerDirectionIndicatorMesh() {
-      const length = 0.5; // How long the prism points forward
-      const baseWidth = 0.3; // Width of the triangular base at the back
-      const prismHeight = 0.1; // Thickness/height of the prism off the ground
+      const length = 0.5;
+      const baseWidth = 0.3;
+      const prismHeight = 0.1;
 
       const shape = new THREE.Shape();
-      // Create triangle in XY plane. It will be extruded along Z.
-      // Tip of the triangle (pointing part) along +X. Base along Y axis.
-      shape.moveTo(length, 0);          // Tip
-      shape.lineTo(0, baseWidth / 2);   // Back-top corner (in 2D shape)
-      shape.lineTo(0, -baseWidth / 2);  // Back-bottom corner (in 2D shape)
+      shape.moveTo(length, 0);
+      shape.lineTo(0, baseWidth / 2);
+      shape.lineTo(0, -baseWidth / 2);
       shape.closePath();
 
       const extrudeSettings = {
-        depth: prismHeight, // Extrusion depth gives the prism its thickness
+        depth: prismHeight,
         bevelEnabled: false
       };
 
       const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-
-      // Geometry transformation to make it suitable for lookAt():
-      // 1. Rotate so the shape's XY plane becomes the world XZ plane (prism lies flat).
-      //    The extrusion depth (original Z) becomes the prism's height (world Y).
       geometry.rotateX(Math.PI / 2);
-      // 2. Rotate so the shape's +X direction (pointing tip) aligns with the mesh's local +Z.
       geometry.rotateY(-Math.PI / 2);
-      // 3. Translate so the bottom of the prism is at Y=0 in its local coordinates.
       geometry.translate(0, prismHeight / 2, 0);
 
       const material = new THREE.MeshStandardMaterial({
-        color: 0xffA500, // Orange
-        emissive: 0xcc8400, // Darker orange emissive
+        color: 0xffA500,
+        emissive: 0xcc8400,
         roughness: 0.7,
         metalness: 0.2,
       });
@@ -420,24 +427,17 @@
       return mesh;
     }
 
-
     async function init() {
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87CEEB);
       scene.fog = new THREE.Fog(0x87CEEB, 10, 75);
-
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      // Set camera's local Y position for eye height relative to playerBody's center
-      // playerBody.position is its center. playerHeight is total height.
-      // Eyes are approx. 0.4 * playerHeight above the center.
-      camera.position.y = playerHeight * 0.4;
-
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.setScissorTest(true);
       document.body.appendChild(renderer.domElement);
 
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -452,6 +452,7 @@
       directionalLight.shadow.camera.top = shadowCamSize; directionalLight.shadow.camera.bottom = -shadowCamSize;
       scene.add(directionalLight);
 
+
       initMaterials();
       await openDB();
 
@@ -464,39 +465,92 @@
       playerGroundContactMaterial = new CANNON.ContactMaterial(playerMaterial, groundMaterial, { friction: 0.0, restitution: 0.0 });
       world.addContactMaterial(playerGroundContactMaterial);
 
-      const playerShape = new CANNON.Box(new CANNON.Vec3(playerRadius, playerHeight / 2, playerRadius));
-      const initialPlayerPos = new THREE.Vector3(worldSize.width / 4, worldSize.height + 2, worldSize.depth / 4);
-      playerBody = new CANNON.Body({
-        mass: 70, position: new CANNON.Vec3(initialPlayerPos.x, initialPlayerPos.y, initialPlayerPos.z),
-        shape: playerShape, material: playerMaterial, fixedRotation: true, linearDamping: originalPlayerDamping
-      });
-      world.addBody(playerBody);
+      // Initialize players
+      for (let i = 0; i < NUM_PLAYERS; i++) {
+        const player = {
+          id: i,
+          camera: new THREE.PerspectiveCamera(75, (window.innerWidth / NUM_PLAYERS) / window.innerHeight, 0.1, 1000),
+          body: null,
+          controls: null,
+          yawObject: null, // Will be set based on player type
+          pitchObject: new THREE.Object3D(),
+          directionIndicator: createPlayerDirectionIndicatorMesh(),
+          crosshairElement: document.getElementById(i === 0 ? 'crosshairP1' : 'crosshairP2'),
 
-      playerBody.addEventListener("collide", function (event) {
-        const contact = event.contact; const upAxis = new CANNON.Vec3(0, 1, 0);
-        let contactNormal = new CANNON.Vec3();
-        if (contact.bi.id === playerBody.id) contact.ni.negate(contactNormal);
-        else contactNormal.copy(contact.ni);
-        if (contactNormal.dot(upAxis) > 0.5) {
-          const otherBody = (contact.bi.id === playerBody.id) ? contact.bj : contact.bi;
-          if (otherBody.mass === 0 && otherBody.collisionResponse !== 0) {
-            if (!isInWater) canJump = true;
+          moveForward: false, moveBackward: false, moveLeft: false, moveRight: false,
+          moveUpAction: false, moveDownAction: false,
+          lookLeft: false, lookRight: false, lookUp: false, lookDown: false,
+          actionPlace: false, actionRemove: false,
+
+          canJump: false,
+          isInWater: false,
+          waterContactCount: 0,
+
+          targetYaw: 0,
+          targetPitch: 0,
+          currentYaw: 0,
+          currentPitch: 0,
+        };
+
+        player.camera.position.y = playerHeight * 0.4;
+        player.pitchObject.add(player.camera); // Camera is child of pitch object
+
+        if (i === 0) { // Player 1 uses PointerLockControls
+          player.controls = new PointerLockControls(player.camera, document.body); // PointerLockControls now owns camera
+          player.yawObject = player.controls.getObject(); // This IS the yawObject
+        } else { // Player 2 uses keyboard look
+          player.yawObject = new THREE.Object3D();
+          player.yawObject.add(player.pitchObject); // Pitch is child of yaw for P2
+        }
+
+        scene.add(player.yawObject); // Add player's root view object (yawObject) to scene
+        scene.add(player.directionIndicator);
+        player.directionIndicator.visible = false;
+
+        const playerShape = new CANNON.Box(new CANNON.Vec3(playerRadius, playerHeight / 2, playerRadius));
+        const initialPlayerPos = new THREE.Vector3(
+          worldSize.width / 4 + (i * blockSize * 3) - (blockSize * 1.5 * (NUM_PLAYERS - 1) / 2),
+          worldSize.height + 2,
+          worldSize.depth / 4
+        );
+        player.body = new CANNON.Body({
+          mass: 70, position: new CANNON.Vec3(initialPlayerPos.x, initialPlayerPos.y, initialPlayerPos.z),
+          shape: playerShape, material: playerMaterial, fixedRotation: true, linearDamping: originalPlayerDamping
+        });
+        world.addBody(player.body);
+        player.yawObject.position.copy(player.body.position); // Initial sync of yawObject position
+
+        player.body.userData = { playerId: i };
+
+        player.body.addEventListener("collide", (event) => {
+          const contact = event.contact; const upAxis = new CANNON.Vec3(0, 1, 0);
+          let contactNormal = new CANNON.Vec3();
+          if (contact.bi.id === player.body.id) contact.ni.negate(contactNormal);
+          else contactNormal.copy(contact.ni);
+
+          if (contactNormal.dot(upAxis) > 0.5) {
+            const otherBody = (contact.bi.id === player.body.id) ? contact.bj : contact.bi;
+            if (otherBody.mass === 0 && otherBody.collisionResponse !== 0 && (!otherBody.userData || otherBody.userData.playerId === undefined)) {
+              if (!player.isInWater) player.canJump = true;
+            }
           }
-        }
-      });
-      playerBody.addEventListener("beginContact", function (event) {
-        const otherBody = event.bodyA.id === playerBody.id ? event.bodyB : event.bodyA;
-        if (otherBody.collisionResponse === 0 && otherBody.userData) {
-          if (otherBody.userData.blockType === blockTypes.WATER) enterWater();
-          else if (otherBody.userData.blockType === blockTypes.LAVA) enterLava();
-        }
-      });
-      playerBody.addEventListener("endContact", function (event) {
-        const otherBody = event.bodyA.id === playerBody.id ? event.bodyB : event.bodyA;
-        if (otherBody.collisionResponse === 0 && otherBody.userData) {
-          if (otherBody.userData.blockType === blockTypes.WATER) exitWater();
-        }
-      });
+        });
+        player.body.addEventListener("beginContact", (event) => {
+          const otherBody = event.bodyA.id === player.body.id ? event.bodyB : event.bodyA;
+          if (otherBody.collisionResponse === 0 && otherBody.userData) {
+            if (otherBody.userData.blockType === blockTypes.WATER) enterWater(player);
+            else if (otherBody.userData.blockType === blockTypes.LAVA) enterLava(player);
+          }
+        });
+        player.body.addEventListener("endContact", (event) => {
+          const otherBody = event.bodyA.id === player.body.id ? event.bodyB : event.bodyA;
+          if (otherBody.collisionResponse === 0 && otherBody.userData) {
+            if (otherBody.userData.blockType === blockTypes.WATER) exitWater(player);
+          }
+        });
+
+        players.push(player);
+      }
 
       const groundGeo = new THREE.PlaneGeometry(worldSize.width * blockSize * 2, worldSize.depth * blockSize * 2);
       const groundMat = new THREE.MeshStandardMaterial({ color: 0x607D3B, side: THREE.DoubleSide, roughness: 1, metalness: 0 });
@@ -514,53 +568,86 @@
       initialGroundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
       world.addBody(initialGroundBody);
 
-      controls = new PointerLockControls(camera, document.body);
-      const playerCamObject = controls.getObject(); // This is the yawObject
-      playerCamObject.position.copy(playerBody.position); // Initial sync
-      scene.add(playerCamObject);
-
-
-      playerDirectionIndicatorMesh = createPlayerDirectionIndicatorMesh();
-      scene.add(playerDirectionIndicatorMesh); // Add to scene, not camera object
-      playerDirectionIndicatorMesh.visible = false; // Initially hidden
-
       setupUIAndEventListeners();
       setupBlockSelector();
 
       clearWorld();
       if (initialGroundMesh) initialGroundMesh.visible = true;
 
-      playerBody.position.set(worldSize.width / 4, worldSize.height + 2, worldSize.depth / 4);
-      playerBody.velocity.set(0, 0, 0); playerBody.angularVelocity.set(0, 0, 0);
-
-      playerCamObject.quaternion.set(0, 0, 0, 1);
-      playerCamObject.position.copy(playerBody.position);
-
+      resetPlayersToSpawn();
       generateWorld();
-
       animate();
     }
 
-    function enterWater() {
-      waterContactCount++;
-      if (!isInWater && waterContactCount > 0) {
-        isInWater = true;
-        world.gravity.set(0, originalGravityY * waterProperties.gravityFactor, 0);
-        playerBody.linearDamping = waterProperties.damping;
-      }
-    }
-    function exitWater() {
-      waterContactCount--;
-      if (isInWater && waterContactCount <= 0) {
-        isInWater = false; waterContactCount = 0;
+    function resetPlayersToSpawn() {
+      players.forEach((player, i) => {
+        const spawnPos = new THREE.Vector3(
+          worldSize.width / 4 + (i * blockSize * 4) - (blockSize * 2 * (NUM_PLAYERS - 1) / 2),
+          worldSize.height + 2,
+          worldSize.depth / 4
+        );
+        player.body.position.copy(spawnPos);
+        player.body.velocity.set(0, 0, 0);
+        player.body.angularVelocity.set(0, 0, 0);
+
+        player.yawObject.position.copy(player.body.position);
+        player.yawObject.quaternion.set(0, 0, 0, 1);
+        player.pitchObject.quaternion.set(0, 0, 0, 1); // Reset pitch object's rotation
+        player.currentYaw = 0;
+        player.currentPitch = 0;
+        player.targetYaw = 0;
+        player.targetPitch = 0;
+
+        // For P1, ensure PointerLockControls internal rotations are also reset if possible
+        // This is often tricky as PointerLockControls manages its own state.
+        // A simpler approach is to rely on the next mouse move to "snap" it.
+        // Or, if controls.reset() or similar existed, call it.
+        if (player.controls && typeof player.controls.reset === 'function') { // Hypothetical reset
+          // player.controls.reset(); 
+        } else if (player.id === 0 && player.controls) {
+          // For PointerLockControls, the camera is part of its hierarchy.
+          // We've reset player.yawObject.quaternion. Player 1's camera rotation
+          // will be updated by PointerLockControls on the next mouse move or lock event.
+        }
+
+
+        player.isInWater = false;
+        player.waterContactCount = 0;
+        player.canJump = false;
         world.gravity.set(0, originalGravityY, 0);
-        playerBody.linearDamping = originalPlayerDamping;
+        player.body.linearDamping = originalPlayerDamping;
+      });
+    }
+
+
+    function enterWater(player) {
+      player.waterContactCount++;
+      if (!player.isInWater && player.waterContactCount > 0) {
+        player.isInWater = true;
+        world.gravity.set(0, originalGravityY * waterProperties.gravityFactor, 0);
+        player.body.linearDamping = waterProperties.damping;
       }
     }
-    function enterLava() {
-      playerBody.position.set(worldSize.width / 4, worldSize.height + 10, worldSize.depth / 4);
-      playerBody.velocity.set(0, 0, 0);
-      if (isInWater) { waterContactCount = 0; exitWater(); }
+    function exitWater(player) {
+      player.waterContactCount--;
+      if (player.isInWater && player.waterContactCount <= 0) {
+        player.isInWater = false; player.waterContactCount = 0;
+        const anyPlayerInWater = players.some(p => p.isInWater);
+        if (!anyPlayerInWater) {
+          world.gravity.set(0, originalGravityY, 0);
+        }
+        player.body.linearDamping = originalPlayerDamping;
+      }
+    }
+    function enterLava(player) {
+      const spawnPos = new THREE.Vector3(
+        worldSize.width / 4 + (player.id * blockSize * 4) - (blockSize * 2 * (NUM_PLAYERS - 1) / 2),
+        worldSize.height + 10,
+        worldSize.depth / 4
+      );
+      player.body.position.copy(spawnPos);
+      player.body.velocity.set(0, 0, 0);
+      if (player.isInWater) { exitWater(player); }
     }
 
     function generateWorld() {
@@ -652,20 +739,40 @@
     }
 
     function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
+      players.forEach(player => {
+        player.camera.aspect = (window.innerWidth / NUM_PLAYERS) / window.innerHeight;
+        player.camera.updateProjectionMatrix();
+      });
       renderer.setSize(window.innerWidth, window.innerHeight);
+      updateCrosshairPositions();
     }
+
+    function updateCrosshairPositions() {
+      players.forEach((player, i) => {
+        if (player.crosshairElement) {
+          const viewportWidth = window.innerWidth / NUM_PLAYERS;
+          const viewportX = i * viewportWidth;
+          player.crosshairElement.style.left = `${viewportX + viewportWidth / 2}px`;
+          player.crosshairElement.style.top = `${window.innerHeight / 2}px`;
+        }
+      });
+    }
+
+
     function onKeyDown(event) {
-      if (controls && !controls.isLocked && event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
+      if (players[0].controls && !players[0].controls.isLocked && event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
         if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
           return;
         }
       }
+
       switch (event.code) {
-        case 'KeyW': moveForward = true; break; case 'KeyA': moveLeft = true; break;
-        case 'KeyS': moveBackward = true; break; case 'KeyD': moveRight = true; break;
-        case 'Space': moveUpAction = true; break; case 'ShiftLeft': moveDown = true; break;
+        case 'KeyW': players[0].moveForward = true; break;
+        case 'KeyA': players[0].moveLeft = true; break;
+        case 'KeyS': players[0].moveBackward = true; break;
+        case 'KeyD': players[0].moveRight = true; break;
+        case 'Space': players[0].moveUpAction = true; break;
+        case 'ShiftLeft': players[0].moveDownAction = true; break;
         case 'Digit1': currentBlockType = blockTypes.GRASS; updateBlockSelectorUI(); break;
         case 'Digit2': currentBlockType = blockTypes.DIRT; updateBlockSelectorUI(); break;
         case 'Digit3': currentBlockType = blockTypes.STONE; updateBlockSelectorUI(); break;
@@ -674,26 +781,76 @@
         case 'Digit6': currentBlockType = blockTypes.LAVA; updateBlockSelectorUI(); break;
         case 'Digit7': currentBlockType = blockTypes.GLOWSTONE; updateBlockSelectorUI(); break;
       }
+
+      switch (event.code) {
+        case 'KeyI': players[1].moveForward = true; break;
+        case 'KeyJ': players[1].moveLeft = true; break;
+        case 'KeyK': players[1].moveBackward = true; break;
+        case 'KeyL': players[1].moveRight = true; break;
+        case 'KeyU': players[1].moveUpAction = true; break;
+        case 'KeyH': players[1].moveDownAction = true; break;
+        case 'ArrowUp': players[1].lookUp = true; break;
+        case 'ArrowDown': players[1].lookDown = true; break;
+        case 'ArrowLeft': players[1].lookLeft = true; break;
+        case 'ArrowRight': players[1].lookRight = true; break;
+        case 'KeyO': players[1].actionPlace = true; break;
+        case 'KeyP': players[1].actionRemove = true; break;
+      }
     }
     function onKeyUp(event) {
       switch (event.code) {
-        case 'KeyW': moveForward = false; break; case 'KeyA': moveLeft = false; break;
-        case 'KeyS': moveBackward = false; break; case 'KeyD': moveRight = false; break;
-        case 'ShiftLeft': moveDown = false; break; case 'Space': moveUpAction = false; break;
+        case 'KeyW': players[0].moveForward = false; break;
+        case 'KeyA': players[0].moveLeft = false; break;
+        case 'KeyS': players[0].moveBackward = false; break;
+        case 'KeyD': players[0].moveRight = false; break;
+        case 'ShiftLeft': players[0].moveDownAction = false; break;
+        case 'Space': players[0].moveUpAction = false; break;
+      }
+      switch (event.code) {
+        case 'KeyI': players[1].moveForward = false; break;
+        case 'KeyJ': players[1].moveLeft = false; break;
+        case 'KeyK': players[1].moveBackward = false; break;
+        case 'KeyL': players[1].moveRight = false; break;
+        case 'KeyU': players[1].moveUpAction = false; break;
+        case 'KeyH': players[1].moveDownAction = false; break;
+        case 'ArrowUp': players[1].lookUp = false; break;
+        case 'ArrowDown': players[1].lookDown = false; break;
+        case 'ArrowLeft': players[1].lookLeft = false; break;
+        case 'ArrowRight': players[1].lookRight = false; break;
+        case 'KeyO': players[1].actionPlace = false; break;
+        case 'KeyP': players[1].actionRemove = false; break;
       }
     }
+
     function onMouseDown(event) {
-      if (!controls || !controls.isLocked) return;
-      pointer.set(0, 0); raycaster.setFromCamera(pointer, camera);
+      const player = players[0];
+      if (!player.controls || !player.controls.isLocked) return;
+
+      handleBlockInteraction(player, event.button);
+    }
+
+    function handlePlayerKeyboardActions(player) {
+      if (player.actionPlace) {
+        handleBlockInteraction(player, 0);
+        player.actionPlace = false;
+      }
+      if (player.actionRemove) {
+        handleBlockInteraction(player, 2);
+        player.actionRemove = false;
+      }
+    }
+
+    function handleBlockInteraction(player, mouseButton) {
+      raycaster.setFromCamera(pointer, player.camera);
       const intersects = raycaster.intersectObjects(worldObjects, false);
 
       if (intersects.length > 0) {
         const intersect = intersects[0];
-        if (event.button === 2 || event.ctrlKey) {
+        if (mouseButton === 2 || mouseButton === 1) {
           if (intersect.object.userData.blockType && intersect.object.userData.cannonBody) {
             removeBlockByMesh(intersect.object);
           }
-        } else if (event.button === 0) {
+        } else if (mouseButton === 0) {
           const placementPosition = new THREE.Vector3();
           placementPosition.copy(intersect.object.position).addScaledVector(intersect.face.normal, blockSize);
 
@@ -702,10 +859,19 @@
             lowerBound: new CANNON.Vec3(placementPosition.x - newBlockHalfExtents.x, placementPosition.y - newBlockHalfExtents.y, placementPosition.z - newBlockHalfExtents.z),
             upperBound: new CANNON.Vec3(placementPosition.x + newBlockHalfExtents.x, placementPosition.y + newBlockHalfExtents.y, placementPosition.z + newBlockHalfExtents.z)
           });
-          playerBody.computeAABB();
-          if (newBlockAABB.overlaps(playerBody.aabb)) {
-            console.log("Cannot place block: intersects player."); return;
+
+          let collisionWithPlayer = false;
+          for (const p of players) {
+            p.body.computeAABB();
+            if (newBlockAABB.overlaps(p.body.aabb)) {
+              collisionWithPlayer = true;
+              break;
+            }
           }
+          if (collisionWithPlayer) {
+            console.log("Cannot place block: intersects a player."); return;
+          }
+
           if (!worldObjects.some(obj => obj.position.distanceTo(placementPosition) < 0.1)) {
             const newBlockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
             const newBlockMaterial = blockMaterials[currentBlockType] || blockMaterials[blockTypes.STONE];
@@ -714,6 +880,7 @@
         }
       }
     }
+
 
     function removeBlockByMesh(blockMesh) {
       if (blockMesh.userData.light) {
@@ -738,9 +905,10 @@
     }
 
 
-    const direction = new THREE.Vector3(); const FWD = new THREE.Vector3(0, 0, -1); const RIGHT = new THREE.Vector3(1, 0, 0);
-    const tempForwardVector = new THREE.Vector3(); // For player indicator rotation
-    const tempLookAtTarget = new THREE.Vector3();  // For player indicator rotation
+    const FWD = new THREE.Vector3(0, 0, -1);
+    const RIGHT = new THREE.Vector3(1, 0, 0);
+    const tempForwardVector = new THREE.Vector3();
+    const tempLookAtTarget = new THREE.Vector3();
 
     function animate() {
       requestAnimationFrame(animate);
@@ -748,70 +916,113 @@
 
       if (world) world.step(timeStep, delta, 3);
 
-      if (controls && controls.isLocked) {
-        const playerCamObject = controls.getObject(); // This is the yawObject from PointerLockControls
-        let currentSpeed = playerSpeed; let targetVelocityY = playerBody.velocity.y;
+      const P1_controlsLocked = players[0].controls && players[0].controls.isLocked;
 
-        if (isInWater) {
-          currentSpeed *= waterProperties.speedFactor;
-          if (moveUpAction) targetVelocityY = waterProperties.swimUpVelocity;
-          else if (moveDown) targetVelocityY = waterProperties.swimDownVelocity;
-        } else {
-          if (moveUpAction && canJump) { targetVelocityY = jumpVelocity; canJump = false; }
-          else if (moveDown) { targetVelocityY = -playerSpeed; canJump = false; } // Allow moving down if Shift is pressed
-        }
-        playerBody.velocity.y = targetVelocityY;
+      players.forEach((player, index) => {
+        const playerBody = player.body;
+        const playerViewObject = player.yawObject;
 
-        direction.x = Number(moveRight) - Number(moveLeft);
-        direction.z = Number(moveForward) - Number(moveBackward);
-        playerBody.velocity.x = 0; playerBody.velocity.z = 0;
+        if (index === 1 && P1_controlsLocked) {
+          const lookSpeed = Math.PI * 0.5 * delta;
+          if (player.lookLeft) player.targetYaw += lookSpeed;
+          if (player.lookRight) player.targetYaw -= lookSpeed;
+          if (player.lookUp) player.targetPitch += lookSpeed;
+          if (player.lookDown) player.targetPitch -= lookSpeed;
 
-        if (direction.x !== 0 || direction.z !== 0) {
-          FWD.set(0, 0, -1).applyQuaternion(playerCamObject.quaternion); // Use yawObject's quaternion for horizontal movement
-          RIGHT.set(1, 0, 0).applyQuaternion(playerCamObject.quaternion);
-          const moveDir = new THREE.Vector3(
-            RIGHT.x * direction.x + FWD.x * direction.z, 0, // Movement is strictly horizontal
-            RIGHT.z * direction.x + FWD.z * direction.z
-          ).normalize();
-          playerBody.velocity.x = moveDir.x * currentSpeed;
-          playerBody.velocity.z = moveDir.z * currentSpeed;
+          player.targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.targetPitch));
+
+          player.currentYaw = THREE.MathUtils.lerp(player.currentYaw, player.targetYaw, 0.2);
+          player.currentPitch = THREE.MathUtils.lerp(player.currentPitch, player.targetPitch, 0.2);
+
+          playerViewObject.rotation.y = player.currentYaw;
+          player.pitchObject.rotation.x = player.currentPitch;
         }
 
-        playerCamObject.position.copy(playerBody.position); // Sync yawObject's position with physics body
 
-        // Update player direction indicator
-        if (playerDirectionIndicatorMesh) {
-          playerDirectionIndicatorMesh.position.copy(playerBody.position);
-          // playerBody.position is center of player. playerHeight is total height.
-          // Place indicator at player's "feet"
-          playerDirectionIndicatorMesh.position.y = playerBody.position.y - (playerHeight / 2);
+        if (P1_controlsLocked) {
+          let currentSpeed = playerSpeed; let targetVelocityY = playerBody.velocity.y;
 
-          playerCamObject.getWorldDirection(tempForwardVector); // Get camera's (yawObject's) forward vector
-          tempForwardVector.y = 0; // Project onto XZ plane for horizontal direction
-          tempForwardVector.normalize();
+          if (player.isInWater) {
+            currentSpeed *= waterProperties.speedFactor;
+            if (player.moveUpAction) targetVelocityY = waterProperties.swimUpVelocity;
+            else if (player.moveDownAction) targetVelocityY = waterProperties.swimDownVelocity;
+          } else {
+            if (player.moveUpAction && player.canJump) { targetVelocityY = jumpVelocity; player.canJump = false; }
+            else if (player.moveDownAction) { targetVelocityY = -playerSpeed; player.canJump = false; }
+          }
+          playerBody.velocity.y = targetVelocityY;
 
-          if (tempForwardVector.lengthSq() > 0.001) { // Avoid issues if looking straight up/down
-            tempLookAtTarget.copy(playerDirectionIndicatorMesh.position).add(tempForwardVector);
-            playerDirectionIndicatorMesh.lookAt(tempLookAtTarget);
+          const direction = new THREE.Vector3();
+          direction.x = Number(player.moveRight) - Number(player.moveLeft);
+          direction.z = Number(player.moveForward) - Number(player.moveBackward);
+
+          playerBody.velocity.x = 0; playerBody.velocity.z = 0;
+
+          if (direction.x !== 0 || direction.z !== 0) {
+            FWD.set(0, 0, -1).applyQuaternion(playerViewObject.quaternion);
+            RIGHT.set(1, 0, 0).applyQuaternion(playerViewObject.quaternion);
+            const moveDir = new THREE.Vector3(
+              RIGHT.x * direction.x + FWD.x * direction.z, 0,
+              RIGHT.z * direction.x + FWD.z * direction.z
+            ).normalize();
+            playerBody.velocity.x = moveDir.x * currentSpeed;
+            playerBody.velocity.z = moveDir.z * currentSpeed;
+          }
+
+          if (index === 1) {
+            handlePlayerKeyboardActions(player);
           }
         }
 
+        playerViewObject.position.copy(playerBody.position);
+
+        const indicator = player.directionIndicator;
+        if (indicator) {
+          indicator.position.copy(playerBody.position);
+          indicator.position.y = playerBody.position.y - (playerHeight / 2);
+
+          playerViewObject.getWorldDirection(tempForwardVector);
+          tempForwardVector.y = 0; tempForwardVector.normalize();
+          if (tempForwardVector.lengthSq() > 0.001) {
+            tempLookAtTarget.copy(indicator.position).add(tempForwardVector);
+            indicator.lookAt(tempLookAtTarget);
+          }
+        }
 
         if (playerBody.position.y < -30) {
-          playerBody.position.set(worldSize.width / 4, worldSize.height + 10, worldSize.depth / 4);
-          playerBody.velocity.set(0, 0, 0); canJump = false;
-          if (isInWater) { waterContactCount = 0; exitWater(); }
+          enterLava(player);
         }
-      }
-      renderer.render(scene, camera);
+      });
+
+      renderer.clear();
+
+      players.forEach((player, i) => {
+        const P1_controlsLocked = players[0].controls && players[0].controls.isLocked;
+        if (!P1_controlsLocked && i > 0) {
+          // Skip P2 render if game not started
+        } else {
+          const viewportWidth = window.innerWidth / NUM_PLAYERS;
+          const viewportX = i * viewportWidth;
+
+          renderer.setViewport(viewportX, 0, viewportWidth, window.innerHeight);
+          renderer.setScissor(viewportX, 0, viewportWidth, window.innerHeight);
+          renderer.render(scene, player.camera);
+        }
+      });
     }
 
     function clearWorld() {
       [...worldObjects].forEach(obj => removeBlockByMesh(obj));
       worldObjects = [];
 
-      if (isInWater) { waterContactCount = 0; exitWater(); }
-      canJump = false;
+      players.forEach(player => {
+        player.isInWater = false;
+        player.waterContactCount = 0;
+        player.canJump = false;
+      });
+      if (!players.some(p => p.isInWater)) {
+        world.gravity.set(0, originalGravityY, 0);
+      }
     }
 
     function getCurrentWorldData() {
@@ -819,10 +1030,11 @@
         x: obj.position.x, y: obj.position.y, z: obj.position.z,
         type: obj.userData.blockType
       }));
-      const playerObject = controls.getObject();
+
+      const p1YawObject = players[0].yawObject;
       const playerData = {
-        position: { x: playerBody.position.x, y: playerBody.position.y, z: playerBody.position.z },
-        quaternion: { x: playerObject.quaternion.x, y: playerObject.quaternion.y, z: playerObject.quaternion.z, w: playerObject.quaternion.w }
+        position: { x: players[0].body.position.x, y: players[0].body.position.y, z: players[0].body.position.z },
+        quaternion: { x: p1YawObject.quaternion.x, y: p1YawObject.quaternion.y, z: p1YawObject.quaternion.z, w: p1YawObject.quaternion.w }
       };
       return { blocks: blocksData, player: playerData };
     }
@@ -838,62 +1050,62 @@
     async function loadWorldFromSaveData(worldData) {
       clearWorld();
 
-      const playerPos = worldData.player.position;
-      playerBody.position.set(playerPos.x, playerPos.y, playerPos.z);
-      playerBody.velocity.set(0, 0, 0); playerBody.angularVelocity.set(0, 0, 0);
-
-      const playerCamObject = controls.getObject();
-      if (worldData.player.quaternion) {
-        playerCamObject.quaternion.set(
-          worldData.player.quaternion.x, worldData.player.quaternion.y,
-          worldData.player.quaternion.z, worldData.player.quaternion.w
-        );
-      } else { playerCamObject.quaternion.set(0, 0, 0, 1); }
-      playerCamObject.position.copy(playerBody.position); // Sync after loading
-
       worldData.blocks.forEach(blockData => addBlockFromData(blockData));
 
-      canJump = false; isInWater = false; waterContactCount = 0;
-      world.gravity.set(0, originalGravityY, 0);
-      playerBody.linearDamping = originalPlayerDamping;
+      resetPlayersToSpawn();
+
+      if (worldData.player && worldData.player.position) {
+        const p1Data = worldData.player;
+        players[0].body.position.set(p1Data.position.x, p1Data.position.y, p1Data.position.z);
+        if (p1Data.quaternion) {
+          players[0].yawObject.quaternion.set(p1Data.quaternion.x, p1Data.quaternion.y, p1Data.quaternion.z, p1Data.quaternion.w);
+        }
+        players[0].yawObject.position.copy(players[0].body.position);
+      }
 
       if (initialGroundMesh) initialGroundMesh.visible = false;
-
-      console.log("World loaded from data.");
+      console.log("World loaded from data. Players reset to spawn points (P1 may use saved pos).");
     }
 
     function setupUIAndEventListeners() {
       const blocker = document.getElementById('blocker');
-      const instructions = document.getElementById('instructions');
+      const instructionsDiv = document.getElementById('instructions');
       const playButton = document.getElementById('playButton');
 
       playButton.addEventListener('click', () => {
-        if (controls) controls.lock();
+        if (players[0].controls) players[0].controls.lock();
       });
 
-      if (controls) {
-        controls.addEventListener('lock', () => {
-          instructions.style.display = 'none';
+      const saveLoadUIDiv = document.getElementById('save-load-ui');
+
+      if (players[0].controls) {
+        players[0].controls.addEventListener('lock', () => {
+          instructionsDiv.style.display = 'none';
           blocker.style.display = 'none';
           saveLoadUIDiv.style.display = 'none';
-          if (playerDirectionIndicatorMesh) playerDirectionIndicatorMesh.visible = true;
+          players.forEach(p => {
+            if (p.directionIndicator) p.directionIndicator.visible = true;
+            if (p.crosshairElement) p.crosshairElement.style.display = 'block';
+          });
+          updateCrosshairPositions();
         });
-        controls.addEventListener('unlock', () => {
+        players[0].controls.addEventListener('unlock', () => {
           blocker.style.display = 'flex';
-          instructions.style.display = '';
+          instructionsDiv.style.display = '';
           saveLoadUIDiv.style.display = 'block';
-          if (playerDirectionIndicatorMesh) playerDirectionIndicatorMesh.visible = false;
+          players.forEach(p => {
+            if (p.directionIndicator) p.directionIndicator.visible = false;
+            if (p.crosshairElement) p.crosshairElement.style.display = 'none';
+          });
           populateWorldList();
         });
       }
-
 
       document.addEventListener('keydown', onKeyDown);
       document.addEventListener('keyup', onKeyUp);
       window.addEventListener('resize', onWindowResize);
       document.addEventListener('mousedown', onMouseDown);
 
-      const saveLoadUIDiv = document.getElementById('save-load-ui');
       const worldNameInput = document.getElementById('worldNameInput');
       const saveWorldButton = document.getElementById('saveWorldButton');
       const worldListSelect = document.getElementById('worldListSelect');
@@ -911,7 +1123,6 @@
           worldNameInput.value = ''; populateWorldList();
         } catch (error) { console.error("Error saving world:", error); alert(`Failed to save world: ${error.message || error}`); }
       });
-
       loadWorldButton.addEventListener('click', async () => {
         const worldName = worldListSelect.value;
         if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) {
@@ -926,7 +1137,6 @@
           } else { alert(`World "${worldName}" not found or data is corrupt.`); }
         } catch (error) { console.error("Error loading world:", error); alert(`Failed to load world: ${error.message || error}`); }
       });
-
       deleteWorldButton.addEventListener('click', async () => {
         const worldName = worldListSelect.value;
         if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) {
@@ -939,18 +1149,11 @@
           } catch (error) { console.error("Error deleting world:", error); alert(`Failed to delete world: ${error.message || error}`); }
         }
       });
-
       newWorldButton.addEventListener('click', () => {
         if (!confirm("Create a new procedural world? Current unsaved progress will be lost.")) return;
         clearWorld();
         if (initialGroundMesh) initialGroundMesh.visible = true;
-
-        playerBody.position.set(worldSize.width / 4, worldSize.height + 2, worldSize.depth / 4);
-        playerBody.velocity.set(0, 0, 0); playerBody.angularVelocity.set(0, 0, 0);
-        const camObj = controls.getObject();
-        camObj.quaternion.set(0, 0, 0, 1);
-        camObj.position.copy(playerBody.position);
-
+        resetPlayersToSpawn();
         generateWorld();
         alert("New procedural world created. Click 'Click to play' to continue.");
       });
