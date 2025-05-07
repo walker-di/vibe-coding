@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MiniCraft.js</title>
+  <title>MiniCraft.js with Cannon.js</title>
   <style>
     body {
       margin: 0;
@@ -44,7 +44,6 @@
       top: 50%;
       left: 50%;
       width: 2px;
-      /* Thinner crosshair */
       height: 10px;
       background-color: white;
       transform: translate(-50%, -50%);
@@ -53,12 +52,10 @@
     }
 
     #crosshair::before {
-      /* Horizontal part of crosshair */
       content: '';
       position: absolute;
       top: 50%;
       left: -4px;
-      /* (10px - 2px) / 2 */
       width: 10px;
       height: 2px;
       background-color: white;
@@ -88,7 +85,6 @@
       font-weight: bold;
       color: white;
       user-select: none;
-      /* Prevent text selection */
     }
 
     .block-option.selected {
@@ -103,13 +99,15 @@
     <div id="instructions">
       <h1>MiniCraft.js</h1>
       <p>Click to play</p>
-      <p>WASD: Move<br>Space: Jump<br>Shift: Descend<br>Mouse: Look<br>Left Click: Place Block<br>Right Click: Remove
+      <p>WASD: Move<br>Space: Jump<br>Shift: Descend (Creative Fly)<br>Mouse: Look<br>Left Click: Place Block<br>Right
+        Click: Remove
         Block<br>1-4: Select Block Type</p>
     </div>
   </div>
   <div id="crosshair"></div>
   <div id="block-selector"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script type="importmap">
     {
         "imports": {
@@ -124,7 +122,15 @@
     import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
     let scene, camera, renderer, controls;
-    let worldObjects = []; // To keep track of breakable/placeable blocks
+    let worldObjects = []; // To keep track of Three.js breakable/placeable blocks
+
+    // Cannon.js specific variables
+    let world; // Cannon.js physics world
+    let playerBody; // Cannon.js body for the player
+    const timeStep = 1 / 60; // Physics simulation step (60 FPS)
+    let playerMaterial, groundMaterial, playerGroundContactMaterial;
+
+
     const worldSize = { width: 20, depth: 20, height: 10 };
     const blockSize = 1;
 
@@ -132,18 +138,19 @@
     let moveBackward = false;
     let moveLeft = false;
     let moveRight = false;
-    let moveUp = false; // Jump
+    let moveUpAction = false; // For triggering jump in animate loop
     let moveDown = false; // Descend (like creative mode fly)
 
-    const velocity = new THREE.Vector3();
-    const direction = new THREE.Vector3();
+    // Player physical properties
+    const playerHeight = 1.8;
+    const playerRadius = 0.4; // Used for width/depth of the player's physics box
     const playerSpeed = 5.0;
-    const jumpVelocity = 8.0;
-    const gravity = 20.0;
+    const jumpVelocity = 7.0; // Adjusted for Cannon's gravity
+    const gravity = 20.0; // Matches Cannon's default somewhat, but we set explicitly
     let canJump = false;
 
     const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
+    const pointer = new THREE.Vector2(); // For mouse picking, center of screen
 
     const blockTypes = {
       GRASS: 'grass',
@@ -152,14 +159,12 @@
       WOOD: 'wood'
     };
     let currentBlockType = blockTypes.GRASS;
-    const blockMaterials = {};
+    const blockMaterials = {}; // Three.js materials
 
-    // --- CRITICAL INITIALIZATION FOR ANIMATION LOOP ---
     let lastTime = performance.now();
-    // --- END CRITICAL INITIALIZATION ---
 
     init();
-    animate(); // Start the animation loop
+    animate();
 
     function createTexture(color, text = null) {
       const canvas = document.createElement('canvas');
@@ -170,7 +175,7 @@
       context.fillRect(0, 0, 64, 64);
       context.strokeStyle = 'rgba(0,0,0,0.2)';
       context.lineWidth = 2;
-      context.strokeRect(1, 1, 62, 62); // Add a subtle border, inset slightly
+      context.strokeRect(1, 1, 62, 62);
       if (text) {
         context.fillStyle = 'rgba(0,0,0,0.5)';
         context.font = '12px Arial';
@@ -179,8 +184,8 @@
         context.fillText(text, 32, 32);
       }
       const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace; // Important for colors with MeshStandardMaterial
-      texture.magFilter = THREE.NearestFilter;   // Pixelated look
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.magFilter = THREE.NearestFilter;
       texture.minFilter = THREE.NearestFilter;
       return texture;
     }
@@ -193,38 +198,35 @@
       const woodTexture = createTexture('#A0522D');
 
       blockMaterials[blockTypes.GRASS] = [
-        grassSideTexture, grassSideTexture, // left, right
-        grassTopTexture, dirtTexture,      // top, bottom
-        grassSideTexture, grassSideTexture  // front, back
+        grassSideTexture, grassSideTexture, grassTopTexture, dirtTexture, grassSideTexture, grassSideTexture
       ].map(texture => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0.1 }));
-
       blockMaterials[blockTypes.DIRT] = new THREE.MeshStandardMaterial({ map: dirtTexture, roughness: 0.9, metalness: 0 });
       blockMaterials[blockTypes.STONE] = new THREE.MeshStandardMaterial({ map: stoneTexture, roughness: 0.7, metalness: 0.2 });
       blockMaterials[blockTypes.WOOD] = new THREE.MeshStandardMaterial({ map: woodTexture, roughness: 0.8, metalness: 0.1 });
     }
 
     function init() {
+      // --- Three.js Scene Setup ---
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87CEEB);
-      scene.fog = new THREE.Fog(0x87CEEB, 10, 75); // Start fog a bit further
+      scene.fog = new THREE.Fog(0x87CEEB, 10, 75);
 
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(worldSize.width / 4, worldSize.height + 2, worldSize.depth / 4);
+      // Initial camera position will be synced with playerBody later
 
-      renderer = new THREE.WebGLRenderer({ antialias: true }); // Antialias can be true for smoother lines
+      renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       document.body.appendChild(renderer.domElement);
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // Slightly brighter ambient
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
       scene.add(ambientLight);
-
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Slightly stronger directional
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
       directionalLight.position.set(50, 80, 30);
       directionalLight.castShadow = true;
-      directionalLight.shadow.mapSize.width = 2048; // Higher res shadow map
+      directionalLight.shadow.mapSize.width = 2048;
       directionalLight.shadow.mapSize.height = 2048;
       directionalLight.shadow.camera.near = 0.5;
       directionalLight.shadow.camera.far = 200;
@@ -234,17 +236,75 @@
       directionalLight.shadow.camera.top = shadowCamSize;
       directionalLight.shadow.camera.bottom = -shadowCamSize;
       scene.add(directionalLight);
-      // const helper = new THREE.CameraHelper( directionalLight.shadow.camera );
-      // scene.add( helper );
+
+      initMaterials(); // Initialize Three.js block materials
+
+      // --- Cannon.js Physics Setup ---
+      world = new CANNON.World();
+      world.gravity.set(0, -gravity, 0);
+      world.broadphase = new CANNON.NaiveBroadphase(); // Efficient for many static objects
+
+      // Define materials for Cannon.js
+      playerMaterial = new CANNON.Material("playerMaterial");
+      groundMaterial = new CANNON.Material("groundMaterial");
+
+      playerGroundContactMaterial = new CANNON.ContactMaterial(
+        playerMaterial,
+        groundMaterial,
+        {
+          friction: 0.0, // Low friction for Minecraft-like movement against blocks
+          restitution: 0.0 // No bounce
+        }
+      );
+      world.addContactMaterial(playerGroundContactMaterial);
+
+      // Create Player Physics Body
+      const playerShape = new CANNON.Box(new CANNON.Vec3(playerRadius, playerHeight / 2, playerRadius));
+      const initialPlayerPos = new THREE.Vector3(worldSize.width / 4, worldSize.height + 2, worldSize.depth / 4);
+      playerBody = new CANNON.Body({
+        mass: 70, // kg
+        position: new CANNON.Vec3(initialPlayerPos.x, initialPlayerPos.y, initialPlayerPos.z),
+        shape: playerShape,
+        material: playerMaterial,
+        fixedRotation: true, // Prevents player from tipping over
+        linearDamping: 0.3 // Helps player come to a stop naturally
+      });
+      world.addBody(playerBody);
+
+      playerBody.addEventListener("collide", function (event) {
+        const contact = event.contact;
+        const upAxis = new CANNON.Vec3(0, 1, 0);
+        let contactNormal = new CANNON.Vec3();
+
+        // Check which body is the player and get the contact normal relative to the player
+        if (contact.bi.id === playerBody.id) {
+          contact.ni.negate(contactNormal); // Normal of contact point on player body
+        } else {
+          contactNormal.copy(contact.ni); // Normal of contact point on other body (points away from other body)
+        }
+
+        // Check if the collision is with a surface below the player
+        // (contact normal is pointing upwards relative to the player)
+        if (contactNormal.dot(upAxis) > 0.5) { // 0.5 is a threshold, >0 means some upward component
+          const otherBody = (contact.bi.id === playerBody.id) ? contact.bj : contact.bi;
+          if (otherBody.mass === 0) { // Check if colliding with a static object (ground/block)
+            canJump = true;
+          }
+        }
+      });
 
 
-      initMaterials();
-      generateWorld();
+      generateWorld(); // Generates Three.js meshes AND Cannon.js bodies
 
+      // --- Controls ---
       controls = new PointerLockControls(camera, document.body);
+      camera.position.set(0, 0.7, 0); // Eye height relative to playerBody's center (0.7 makes eyes at ~1.6m for 1.8m height)
+      controls.getObject().position.copy(playerBody.position); // Initial sync
+      scene.add(controls.getObject());
+
+
       const blocker = document.getElementById('blocker');
       const instructions = document.getElementById('instructions');
-
       instructions.addEventListener('click', () => controls.lock());
       controls.addEventListener('lock', () => {
         instructions.style.display = 'none';
@@ -254,7 +314,6 @@
         blocker.style.display = 'flex';
         instructions.style.display = '';
       });
-      scene.add(controls.getObject());
 
       document.addEventListener('keydown', onKeyDown);
       document.addEventListener('keyup', onKeyUp);
@@ -280,44 +339,66 @@
             } else if (y < height - 1 && y >= groundLevel - 2) {
               material = blockMaterials[blockTypes.DIRT];
               blockType = blockTypes.DIRT;
-            }
-            else {
+            } else {
               material = blockMaterials[blockTypes.STONE];
               blockType = blockTypes.STONE;
             }
-            const block = new THREE.Mesh(boxGeometry, material);
-            block.position.set(
+            const blockMesh = new THREE.Mesh(boxGeometry, material);
+            blockMesh.position.set(
               x * blockSize - (worldSize.width * blockSize / 2) + blockSize / 2,
               y * blockSize + blockSize / 2,
               z * blockSize - (worldSize.depth * blockSize / 2) + blockSize / 2
             );
-            block.castShadow = true;
-            block.receiveShadow = true;
-            block.userData.blockType = blockType;
-            scene.add(block);
-            worldObjects.push(block);
+            blockMesh.castShadow = true;
+            blockMesh.receiveShadow = true;
+            blockMesh.userData.blockType = blockType;
+            scene.add(blockMesh);
+            worldObjects.push(blockMesh);
+
+            // Create Cannon.js body for the block
+            const blockShape = new CANNON.Box(new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2));
+            const blockBody = new CANNON.Body({
+              mass: 0, // Static
+              shape: blockShape,
+              position: new CANNON.Vec3(blockMesh.position.x, blockMesh.position.y, blockMesh.position.z),
+              material: groundMaterial
+            });
+            world.addBody(blockBody);
+            blockMesh.userData.cannonBody = blockBody; // Link Three.js mesh to Cannon.js body
           }
         }
       }
 
+      // Ground plane (visual)
       const groundGeo = new THREE.PlaneGeometry(worldSize.width * blockSize * 1.5, worldSize.depth * blockSize * 1.5);
-      const groundMat = new THREE.MeshStandardMaterial({ color: 0x778899, side: THREE.DoubleSide, roughness: 1, metalness: 0 }); // LightSlateGray
-      const ground = new THREE.Mesh(groundGeo, groundMat);
-      ground.rotation.x = -Math.PI / 2;
-      ground.position.y = -blockSize / 2; // Ensure it's slightly below 0-level blocks
-      ground.receiveShadow = true;
-      scene.add(ground);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x778899, side: THREE.DoubleSide, roughness: 1, metalness: 0 });
+      const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+      groundMesh.rotation.x = -Math.PI / 2;
+      groundMesh.position.y = -blockSize / 2;
+      groundMesh.receiveShadow = true;
+      scene.add(groundMesh);
+
+      // Cannon.js ground plane (physics)
+      const groundPlaneShape = new CANNON.Plane();
+      const groundPlaneBody = new CANNON.Body({
+        mass: 0, // Static
+        shape: groundPlaneShape,
+        material: groundMaterial,
+        position: new CANNON.Vec3(0, groundMesh.position.y, 0) // Match visual ground plane position
+      });
+      groundPlaneBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2); // Rotate to be horizontal
+      world.addBody(groundPlaneBody);
     }
 
     function setupBlockSelector() {
       const selectorDiv = document.getElementById('block-selector');
-      Object.keys(blockTypes).forEach((key, index) => {
+      Object.keys(blockTypes).forEach((key) => {
         const type = blockTypes[key];
         const option = document.createElement('div');
         option.classList.add('block-option');
         option.textContent = key.substring(0, 1);
         option.style.backgroundColor = getBlockColor(type);
-        option.title = key; // Tooltip for block name
+        option.title = key;
         option.dataset.blockType = type;
         if (type === currentBlockType) {
           option.classList.add('selected');
@@ -358,7 +439,7 @@
         case 'KeyA': moveLeft = true; break;
         case 'KeyS': moveBackward = true; break;
         case 'KeyD': moveRight = true; break;
-        case 'Space': if (canJump) velocity.y = jumpVelocity; canJump = false; break;
+        case 'Space': if (canJump) moveUpAction = true; break;
         case 'ShiftLeft': moveDown = true; break;
         case 'Digit1': currentBlockType = blockTypes.GRASS; updateBlockSelectorUI(); break;
         case 'Digit2': currentBlockType = blockTypes.DIRT; updateBlockSelectorUI(); break;
@@ -382,12 +463,13 @@
 
       pointer.set(0, 0); // Raycast from center of camera
       raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObjects(worldObjects, false); // Don't check descendants
+      const intersects = raycaster.intersectObjects(worldObjects, false);
 
       if (intersects.length > 0) {
         const intersect = intersects[0];
         if (event.button === 2 || event.ctrlKey) { // Right click or Ctrl+LeftClick to remove
-          if (intersect.object.userData.blockType) { // Ensure it's one of our blocks
+          if (intersect.object.userData.blockType && intersect.object.userData.cannonBody) {
+            world.removeBody(intersect.object.userData.cannonBody);
             scene.remove(intersect.object);
             worldObjects.splice(worldObjects.indexOf(intersect.object), 1);
             if (intersect.object.geometry) intersect.object.geometry.dispose();
@@ -403,140 +485,120 @@
           const placementPosition = new THREE.Vector3();
           placementPosition.copy(intersect.object.position).addScaledVector(intersect.face.normal, blockSize);
 
-          const playerHeadPos = controls.getObject().position.clone().add(new THREE.Vector3(0, 0.15, 0)); // Approx head
-          const playerFeetPos = controls.getObject().position.clone().add(new THREE.Vector3(0, -1.65, 0)); // Approx feet
+          // Check for player collision with new block
+          const newBlockHalfExtents = new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2);
+          const newBlockAABB = new CANNON.AABB({
+            lowerBound: new CANNON.Vec3(placementPosition.x - newBlockHalfExtents.x, placementPosition.y - newBlockHalfExtents.y, placementPosition.z - newBlockHalfExtents.z),
+            upperBound: new CANNON.Vec3(placementPosition.x + newBlockHalfExtents.x, placementPosition.y + newBlockHalfExtents.y, placementPosition.z + newBlockHalfExtents.z)
+          });
 
-          const newBlockBox = new THREE.Box3().setFromCenterAndSize(
-            placementPosition,
-            new THREE.Vector3(blockSize, blockSize, blockSize)
-          );
-          // Check if player head or feet would be inside the new block
-          if (newBlockBox.containsPoint(playerHeadPos) || newBlockBox.containsPoint(playerFeetPos)) {
-            return; // Don't place block if player is intersecting
+          playerBody.computeAABB(); // Ensure player's AABB is up-to-date
+          if (newBlockAABB.overlaps(playerBody.aabb)) {
+            console.log("Cannot place block: intersects player.");
+            return;
           }
 
           let blockExists = worldObjects.some(obj => obj.position.distanceTo(placementPosition) < 0.1);
           if (!blockExists) {
             const newBlockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
             const newBlockMaterial = blockMaterials[currentBlockType] || blockMaterials[blockTypes.STONE];
-            const newBlock = new THREE.Mesh(newBlockGeometry, newBlockMaterial);
-            newBlock.position.copy(placementPosition);
-            newBlock.castShadow = true;
-            newBlock.receiveShadow = true;
-            newBlock.userData.blockType = currentBlockType;
-            scene.add(newBlock);
-            worldObjects.push(newBlock);
+            const newBlockMesh = new THREE.Mesh(newBlockGeometry, newBlockMaterial);
+            newBlockMesh.position.copy(placementPosition);
+            newBlockMesh.castShadow = true;
+            newBlockMesh.receiveShadow = true;
+            newBlockMesh.userData.blockType = currentBlockType;
+            scene.add(newBlockMesh);
+            worldObjects.push(newBlockMesh);
+
+            // Add Cannon.js body for the new block
+            const newBlockShape = new CANNON.Box(newBlockHalfExtents);
+            const newBlockBody = new CANNON.Body({
+              mass: 0,
+              shape: newBlockShape,
+              position: new CANNON.Vec3(newBlockMesh.position.x, newBlockMesh.position.y, newBlockMesh.position.z),
+              material: groundMaterial
+            });
+            world.addBody(newBlockBody);
+            newBlockMesh.userData.cannonBody = newBlockBody;
           }
         }
       }
     }
 
-    const playerHeight = 1.8;
-    const playerRadius = 0.4;
+    const direction = new THREE.Vector3(); // For movement calculation
+    const FWD = new THREE.Vector3(0, 0, -1);
+    const RIGHT = new THREE.Vector3(1, 0, 0);
 
     function animate() {
       requestAnimationFrame(animate);
 
       const time = performance.now();
       const delta = (time - lastTime) / 1000;
+      lastTime = time;
+
+      // Step the physics world
+      if (world) {
+        world.step(timeStep, delta, 3); // fixed timestep, time since last frame, max sub-steps
+      }
 
       if (controls.isLocked) {
-        const player = controls.getObject();
-        const prevPosition = player.position.clone();
+        const playerObject = controls.getObject(); // This is the THREE.Object3D for the player (camera parent)
 
-        // Apply gravity
-        if (!canJump && !moveDown) { // Don't apply gravity if actively flying down
-          velocity.y -= gravity * delta;
-        }
+        // Get current velocity from playerBody to preserve Y velocity from gravity/jump
+        const currentVelocity = new CANNON.Vec3(playerBody.velocity.x, playerBody.velocity.y, playerBody.velocity.z);
 
-        // Movement input
+        // Calculate FWD and RIGHT vectors based on playerObject's (camera parent's) orientation
+        FWD.set(0, 0, -1).applyQuaternion(playerObject.quaternion);
+        RIGHT.set(1, 0, 0).applyQuaternion(playerObject.quaternion);
+
+        // Reset XZ velocity before applying new input, Y velocity is preserved for gravity/jump
+        playerBody.velocity.x = 0;
+        playerBody.velocity.z = 0;
+
+        // Horizontal movement
+        direction.x = Number(moveRight) - Number(moveLeft);
         direction.z = Number(moveForward) - Number(moveBackward);
-        direction.x = Number(moveLeft) - Number(moveRight);
-        direction.normalize(); // Ensure consistent speed diagonally
+        // No normalization needed here as we sum scaled basis vectors
 
-        if (moveForward || moveBackward) velocity.z = -direction.z * playerSpeed; else velocity.z = 0;
-        if (moveLeft || moveRight) velocity.x = direction.x * playerSpeed; else velocity.x = 0;
-        if (moveDown) velocity.y = -playerSpeed; // Creative fly down
-        // Jump velocity is applied on keydown
+        if (direction.x !== 0 || direction.z !== 0) {
+          // Project onto XZ plane and normalize to ensure consistent speed
+          const moveDir = new THREE.Vector3(
+            RIGHT.x * direction.x + FWD.x * direction.z,
+            0, // Movement is planar
+            RIGHT.z * direction.x + FWD.z * direction.z
+          ).normalize();
 
-
-        // Apply XZ movement based on camera direction
-        player.translateX(velocity.x * delta);
-        player.translateZ(velocity.z * delta);
-
-        // Apply Y movement
-        player.position.y += velocity.y * delta;
-
-        // Collision detection
-        let onGround = false;
-        const playerFeetY = player.position.y - playerHeight / 2;
-        const playerHeadY = player.position.y + playerHeight / 2;
-
-        for (const block of worldObjects) {
-          const blockBox = new THREE.Box3().setFromObject(block);
-
-          // Broad phase check (simple distance)
-          if (player.position.distanceTo(block.position) > blockSize * 2) continue;
-
-          // Y-axis collision
-          if (player.position.x > blockBox.min.x - playerRadius && player.position.x < blockBox.max.x + playerRadius &&
-            player.position.z > blockBox.min.z - playerRadius && player.position.z < blockBox.max.z + playerRadius) {
-
-            // Landing on block
-            if (velocity.y <= 0 && playerFeetY < blockBox.max.y && prevPosition.y - playerHeight / 2 >= blockBox.max.y) {
-              player.position.y = blockBox.max.y + playerHeight / 2;
-              velocity.y = 0;
-              onGround = true;
-              canJump = true;
-            }
-            // Hitting head on block
-            if (velocity.y > 0 && playerHeadY > blockBox.min.y && prevPosition.y + playerHeight / 2 <= blockBox.min.y) {
-              player.position.y = blockBox.min.y - playerHeight / 2;
-              velocity.y = 0;
-            }
-          }
+          playerBody.velocity.x = moveDir.x * playerSpeed;
+          playerBody.velocity.z = moveDir.z * playerSpeed;
         }
 
-        // XZ-axis collision (simple push-out)
-        for (const block of worldObjects) {
-          const blockBox = new THREE.Box3().setFromObject(block);
-          const playerBox = new THREE.Box3(
-            new THREE.Vector3(player.position.x - playerRadius, player.position.y - playerHeight / 2, player.position.z - playerRadius),
-            new THREE.Vector3(player.position.x + playerRadius, player.position.y + playerHeight / 2, player.position.z + playerRadius)
-          );
+        // Apply Y velocity from previous step (gravity, etc.)
+        playerBody.velocity.y = currentVelocity.y;
 
-          if (playerBox.intersectsBox(blockBox)) {
-            const overlapX = Math.min(playerBox.max.x, blockBox.max.x) - Math.max(playerBox.min.x, blockBox.min.x);
-            const overlapZ = Math.min(playerBox.max.z, blockBox.max.z) - Math.max(playerBox.min.z, blockBox.min.z);
-            const overlapY = Math.min(playerBox.max.y, blockBox.max.y) - Math.max(playerBox.min.y, blockBox.min.y);
 
-            // Check if collision is primarily on Y (already handled mostly)
-            if (overlapY < overlapX && overlapY < overlapZ) {
-              // This case should be less frequent if Y collision above works well
-            } else if (overlapX < overlapZ) { // Resolve X
-              if (player.position.x < block.position.x) player.position.x = blockBox.min.x - playerRadius;
-              else player.position.x = blockBox.max.x + playerRadius;
-              velocity.x = 0;
-            } else { // Resolve Z
-              if (player.position.z < block.position.z) player.position.z = blockBox.min.z - playerRadius;
-              else player.position.z = blockBox.max.z + playerRadius;
-              velocity.z = 0;
-            }
-          }
+        // Vertical movement (Jump/Fly)
+        if (moveUpAction && canJump) {
+          playerBody.velocity.y = jumpVelocity;
+          canJump = false;
+          moveUpAction = false;
         }
-        if (onGround) canJump = true;
+        if (moveDown) { // Creative fly down
+          playerBody.velocity.y = -playerSpeed;
+          canJump = false; // Cannot jump while actively flying down
+        }
 
+        // Sync Three.js player object to Cannon.js body position
+        playerObject.position.copy(playerBody.position);
 
         // Fall off world
-        if (player.position.y < -30) {
-          player.position.set(worldSize.width / 4, worldSize.height + 5, worldSize.depth / 4);
-          velocity.set(0, 0, 0);
-          canJump = false;
+        if (playerBody.position.y < -30) {
+          playerBody.position.set(worldSize.width / 4, worldSize.height + 10, worldSize.depth / 4);
+          playerBody.velocity.set(0, 0, 0);
+          canJump = false; // Reset jump state
         }
       }
 
       renderer.render(scene, camera);
-      lastTime = time;
     }
 
   </script>
