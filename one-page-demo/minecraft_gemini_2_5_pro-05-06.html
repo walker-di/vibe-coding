@@ -29,7 +29,6 @@
     #instructions {
       width: 80%;
       max-width: 600px;
-      /* Slightly wider for more instructions */
       padding: 20px;
       font-family: Arial, sans-serif;
       font-size: 16px;
@@ -46,8 +45,15 @@
       font-weight: bold;
     }
 
+    /* Make sure cursor changes for all clickable buttons/elements */
+    #instructions p:first-of-type:hover,
+    button:hover,
+    .block-option:hover {
+      opacity: 0.9;
+    }
+
+
     .crosshair {
-      /* Changed to class for multiple crosshairs */
       position: absolute;
       width: 2px;
       height: 10px;
@@ -56,7 +62,7 @@
       pointer-events: none;
       mix-blend-mode: difference;
       display: none;
-      /* Initially hidden, shown by JS */
+      /* Initially hidden */
     }
 
     .crosshair::before {
@@ -72,12 +78,10 @@
 
     #crosshairP1 {
       /* ID for Player 1's crosshair */
-      /* Positioned by JS based on viewport */
     }
 
     #crosshairP2 {
       /* ID for Player 2's crosshair */
-      /* Positioned by JS based on viewport */
     }
 
 
@@ -90,6 +94,7 @@
       padding: 10px;
       border-radius: 5px;
       display: flex;
+      /* Changed to flex by default, controlled by JS */
       gap: 10px;
       z-index: 10;
       /* Ensure it's above viewports */
@@ -137,6 +142,13 @@
       color: white;
       margin-bottom: 10px;
       box-sizing: border-box;
+      width: calc(100% - 110px);
+      /* Adjust width based on button */
+    }
+
+    #save-load-ui select {
+      width: 100%;
+      /* Select can be full width */
     }
 
     #save-load-ui button {
@@ -147,6 +159,9 @@
       border-radius: 4px;
       cursor: pointer;
       transition: background-color 0.2s;
+      min-width: 80px;
+      /* Ensure buttons have a decent min width */
+      box-sizing: border-box;
     }
 
     #save-load-ui button:hover {
@@ -158,10 +173,14 @@
       gap: 10px;
       margin-bottom: 10px;
       align-items: center;
+      flex-wrap: wrap;
+      /* Allow wrap on small screens */
     }
 
     .save-load-row input[type="text"] {
       flex-grow: 1;
+      min-width: 150px;
+      /* Prevent input from becoming too small */
     }
 
     .world-management-row {
@@ -184,6 +203,70 @@
     .world-management-buttons button {
       width: 100%;
     }
+
+    /* Styles for Game Mode Selector */
+    #game-mode-selector {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+    }
+
+    .game-mode-button {
+      padding: 10px 15px;
+      background-color: #555;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      flex-grow: 1;
+      /* Make buttons share space */
+    }
+
+    .game-mode-button:hover {
+      background-color: #777;
+    }
+
+    .game-mode-button.selected {
+      background-color: #007bff;
+      /* A highlight color */
+      box-shadow: 0 0 8px #007bff;
+    }
+
+    #tagInstructions {
+      font-size: 0.9em;
+      color: #eee;
+      background-color: rgba(0, 0, 0, 0.3);
+      padding: 8px;
+      border-radius: 4px;
+      margin-top: 10px;
+      text-align: left;
+      /* Better for list */
+    }
+
+
+    /* Styles for Player Status Display (Tag Mode) */
+    .player-status-display {
+      position: absolute;
+      top: 10px;
+      /* left and width will be set by JS per viewport */
+      padding: 8px 12px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 5px;
+      z-index: 100;
+      /* Above crosshairs */
+      display: none;
+      /* Hidden initially */
+      text-align: center;
+      /* Center text within the display */
+      pointer-events: none;
+      /* Prevent interaction */
+    }
   </style>
 </head>
 
@@ -195,13 +278,29 @@
       <p>
         <b>Player 1 (Left Screen):</b><br>
         WASD: Move<br>Space: Jump / Swim Up<br>Shift: Descend / Swim Down<br>Mouse: Look<br>Left Click: Place
-        Block<br>Right Click: Remove Block<br>1-7: Select Block Type
+        Block (Creative Mode)<br>Right Click: Remove Block (Creative Mode)<br>1-7: Select Block Type (Creative Mode)
       </p>
       <p>
         <b>Player 2 (Right Screen):</b><br>
-        IJKL: Move<br>U: Jump / Swim Up<br>H: Descend / Swim Down<br>Arrow Keys: Look Around<br>O: Place Block<br>P:
-        Remove Block<br>(Block type shared with Player 1)
+        IJKL: Move<br>U: Jump / Swim Up<br>H: Descend / Swim Down<br>Arrow Keys: Look Around<br>O: Place Block (Creative
+        Mode)<br>P:
+        Remove Block (Creative Mode)<br>(Block type shared with Player 1, Creative Mode)
       </p>
+
+      <div id="game-mode-selector">
+        <h3>Select Game Mode:</h3>
+        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 10px;">
+          <button id="creativeModeButton" class="game-mode-button selected">Creative Mode</button>
+          <button id="tagModeButton" class="game-mode-button">Tag Mode</button>
+        </div>
+        <div id="tagInstructions" style="display: none;">
+          <b>Tag Mode Rules:</b><br>
+          One player is "IT" (indicator is <span style="color:red; font-weight:bold;">RED</span>). Try to tag the other
+          player (indicator <span style="color:lightgreen; font-weight:bold;">GREEN</span>)!<br>
+          When tagged, roles switch! There's a short cooldown after each tag.<br>
+          Block placement/removal is disabled in Tag Mode.
+        </div>
+      </div>
 
       <div id="save-load-ui" style="display: none;">
         <h3>Save Current World</h3>
@@ -218,13 +317,19 @@
             <button id="deleteWorldButton">Delete</button>
           </div>
         </div>
-        <button id="newWorldButton" style="width: 100%;">Create New Procedural World</button>
+        <button id="newWorldButton" style="width: 100%; margin-top: 10px;">Create New Procedural World</button>
       </div>
     </div>
   </div>
+
   <div id="crosshairP1" class="crosshair"></div>
   <div id="crosshairP2" class="crosshair"></div>
   <div id="block-selector"></div>
+
+  <!-- Player Status Displays for Tag Mode -->
+  <div id="player1Status" class="player-status-display"></div>
+  <div id="player2Status" class="player-status-display"></div>
+
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
   <script type="importmap">
@@ -262,7 +367,7 @@
       GRASS: 'grass', DIRT: 'dirt', STONE: 'stone', WOOD: 'wood',
       WATER: 'water', LAVA: 'lava', GLOWSTONE: 'glowstone'
     };
-    let currentBlockType = blockTypes.GRASS; // Shared block type for now
+    let currentBlockType = blockTypes.GRASS;
     const blockMaterials = {};
 
     let lastTime = performance.now();
@@ -280,9 +385,15 @@
     const STORE_NAME = 'worlds';
     let initialGroundMesh, initialGroundBody;
 
-    // Raycaster for block interaction - will be reused per player
     const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2(); // For P1 mouse input
+    const pointer = new THREE.Vector2();
+
+    // Tag Game Variables
+    let gameMode = 'creative'; // 'creative' or 'tag'
+    let itPlayerId = -1; // Player ID of who is "It"
+    let tagCooldown = 0; // Cooldown in seconds after a tag
+    const TAG_COOLDOWN_DURATION = 3; // 3 seconds
+    let tagGameActive = false;
 
 
     function openDB() {
@@ -343,8 +454,11 @@
       });
     }
 
-    init();
+    init(); // Start the engine
 
+    //----------------------------------------------------------------
+    // TEXTURES and MATERIALS
+    //----------------------------------------------------------------
     function createTexture(color, text = null, isFluid = false) {
       const canvas = document.createElement('canvas');
       canvas.width = 64; canvas.height = 64;
@@ -365,6 +479,7 @@
       texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter;
       return texture;
     }
+
     function initMaterials() {
       const grassTopTexture = createTexture('#6A994E');
       const grassSideTexture = createTexture('#A7C957');
@@ -393,40 +508,27 @@
         emissive: new THREE.Color(0xffffaa), emissiveIntensity: 0.9
       });
     }
-
+    //----------------------------------------------------------------
+    // PLAYER SETUP
+    //----------------------------------------------------------------
     function createPlayerDirectionIndicatorMesh() {
-      const length = 0.5;
-      const baseWidth = 0.3;
-      const prismHeight = 0.1;
-
+      const length = 0.5; const baseWidth = 0.3; const prismHeight = 0.1;
       const shape = new THREE.Shape();
-      shape.moveTo(length, 0);
-      shape.lineTo(0, baseWidth / 2);
-      shape.lineTo(0, -baseWidth / 2);
-      shape.closePath();
-
-      const extrudeSettings = {
-        depth: prismHeight,
-        bevelEnabled: false
-      };
-
+      shape.moveTo(length, 0); shape.lineTo(0, baseWidth / 2); shape.lineTo(0, -baseWidth / 2); shape.closePath();
+      const extrudeSettings = { depth: prismHeight, bevelEnabled: false };
       const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-      geometry.rotateX(Math.PI / 2);
-      geometry.rotateY(-Math.PI / 2);
-      geometry.translate(0, prismHeight / 2, 0);
-
+      geometry.rotateX(Math.PI / 2); geometry.rotateY(-Math.PI / 2); geometry.translate(0, prismHeight / 2, 0); // Center geometry base
       const material = new THREE.MeshStandardMaterial({
-        color: 0xffA500,
-        emissive: 0xcc8400,
-        roughness: 0.7,
-        metalness: 0.2,
+        color: 0xffA500, emissive: 0xcc8400, roughness: 0.7, metalness: 0.2,
       });
-
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       return mesh;
     }
 
+    //----------------------------------------------------------------
+    // INITIALIZATION
+    //----------------------------------------------------------------
     async function init() {
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87CEEB);
@@ -435,23 +537,19 @@
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.setScissorTest(true);
       document.body.appendChild(renderer.domElement);
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambientLight);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
       const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(50, 80, 30);
-      directionalLight.castShadow = true;
+      directionalLight.position.set(50, 80, 30); directionalLight.castShadow = true;
       directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048;
       directionalLight.shadow.camera.near = 0.5; directionalLight.shadow.camera.far = 200;
       const shadowCamSize = 30;
       directionalLight.shadow.camera.left = -shadowCamSize; directionalLight.shadow.camera.right = shadowCamSize;
       directionalLight.shadow.camera.top = shadowCamSize; directionalLight.shadow.camera.bottom = -shadowCamSize;
       scene.add(directionalLight);
-
 
       initMaterials();
       await openDB();
@@ -465,52 +563,43 @@
       playerGroundContactMaterial = new CANNON.ContactMaterial(playerMaterial, groundMaterial, { friction: 0.0, restitution: 0.0 });
       world.addContactMaterial(playerGroundContactMaterial);
 
-      // Initialize players
       for (let i = 0; i < NUM_PLAYERS; i++) {
         const player = {
           id: i,
           camera: new THREE.PerspectiveCamera(75, (window.innerWidth / NUM_PLAYERS) / window.innerHeight, 0.1, 1000),
-          body: null,
-          controls: null,
-          yawObject: null, // Will be set based on player type
-          pitchObject: new THREE.Object3D(),
+          body: null, controls: null, yawObject: null, pitchObject: new THREE.Object3D(),
           directionIndicator: createPlayerDirectionIndicatorMesh(),
           crosshairElement: document.getElementById(i === 0 ? 'crosshairP1' : 'crosshairP2'),
+          tagStatusElement: document.getElementById(i === 0 ? 'player1Status' : 'player2Status'),
+          isIt: false,
 
           moveForward: false, moveBackward: false, moveLeft: false, moveRight: false,
           moveUpAction: false, moveDownAction: false,
           lookLeft: false, lookRight: false, lookUp: false, lookDown: false,
           actionPlace: false, actionRemove: false,
 
-          canJump: false,
-          isInWater: false,
-          waterContactCount: 0,
-
-          targetYaw: 0,
-          targetPitch: 0,
-          currentYaw: 0,
-          currentPitch: 0,
+          canJump: false, isInWater: false, waterContactCount: 0,
+          targetYaw: 0, targetPitch: 0, currentYaw: 0, currentPitch: 0,
         };
 
         player.camera.position.y = playerHeight * 0.4;
-        player.pitchObject.add(player.camera); // Camera is child of pitch object
+        player.pitchObject.add(player.camera);
 
-        if (i === 0) { // Player 1 uses PointerLockControls
-          player.controls = new PointerLockControls(player.camera, document.body); // PointerLockControls now owns camera
-          player.yawObject = player.controls.getObject(); // This IS the yawObject
-        } else { // Player 2 uses keyboard look
+        if (i === 0) {
+          player.controls = new PointerLockControls(player.camera, document.body);
+          player.yawObject = player.controls.getObject();
+        } else {
           player.yawObject = new THREE.Object3D();
-          player.yawObject.add(player.pitchObject); // Pitch is child of yaw for P2
+          player.yawObject.add(player.pitchObject);
         }
-
-        scene.add(player.yawObject); // Add player's root view object (yawObject) to scene
+        scene.add(player.yawObject);
         scene.add(player.directionIndicator);
-        player.directionIndicator.visible = false;
+        player.directionIndicator.visible = false; // Initially hidden
 
         const playerShape = new CANNON.Box(new CANNON.Vec3(playerRadius, playerHeight / 2, playerRadius));
         const initialPlayerPos = new THREE.Vector3(
-          worldSize.width / 4 + (i * blockSize * 3) - (blockSize * 1.5 * (NUM_PLAYERS - 1) / 2),
-          worldSize.height + 2,
+          worldSize.width / 4 + (i * blockSize * 5) - (blockSize * 2.5 * (NUM_PLAYERS - 1) / 2), // Use the more spread out spawn
+          worldSize.height + 2, // Spawn high enough
           worldSize.depth / 4
         );
         player.body = new CANNON.Body({
@@ -518,20 +607,36 @@
           shape: playerShape, material: playerMaterial, fixedRotation: true, linearDamping: originalPlayerDamping
         });
         world.addBody(player.body);
-        player.yawObject.position.copy(player.body.position); // Initial sync of yawObject position
+        player.yawObject.position.copy(player.body.position);
 
-        player.body.userData = { playerId: i };
+        player.body.userData = { playerId: i }; // Important for collision checks
 
+        // --- Player Collision Listeners ---
         player.body.addEventListener("collide", (event) => {
           const contact = event.contact; const upAxis = new CANNON.Vec3(0, 1, 0);
           let contactNormal = new CANNON.Vec3();
           if (contact.bi.id === player.body.id) contact.ni.negate(contactNormal);
           else contactNormal.copy(contact.ni);
 
+          // Ground contact for jumping
           if (contactNormal.dot(upAxis) > 0.5) {
             const otherBody = (contact.bi.id === player.body.id) ? contact.bj : contact.bi;
             if (otherBody.mass === 0 && otherBody.collisionResponse !== 0 && (!otherBody.userData || otherBody.userData.playerId === undefined)) {
               if (!player.isInWater) player.canJump = true;
+            }
+          }
+
+          // Tagging logic on collision
+          if (tagGameActive && tagCooldown <= 0 && NUM_PLAYERS >= 2) {
+            const thisPlayerBody = player.body;
+            const otherBodyInCollision = (event.bodyA.id === thisPlayerBody.id) ? event.bodyB : event.bodyA;
+            if (otherBodyInCollision.userData && typeof otherBodyInCollision.userData.playerId !== 'undefined') {
+              const thisPlayer = players[thisPlayerBody.userData.playerId];
+              const otherPlayer = players[otherBodyInCollision.userData.playerId];
+              if (thisPlayer && otherPlayer && thisPlayer.id !== otherPlayer.id) {
+                if (thisPlayer.isIt && !otherPlayer.isIt) switchItPlayer(thisPlayer.id, otherPlayer.id);
+                else if (!thisPlayer.isIt && otherPlayer.isIt) switchItPlayer(otherPlayer.id, thisPlayer.id);
+              }
             }
           }
         });
@@ -548,10 +653,12 @@
             if (otherBody.userData.blockType === blockTypes.WATER) exitWater(player);
           }
         });
+        // --- End Player Collision Listeners ---
 
         players.push(player);
       }
 
+      // --- Initial Ground ---
       const groundGeo = new THREE.PlaneGeometry(worldSize.width * blockSize * 2, worldSize.depth * blockSize * 2);
       const groundMat = new THREE.MeshStandardMaterial({ color: 0x607D3B, side: THREE.DoubleSide, roughness: 1, metalness: 0 });
       initialGroundMesh = new THREE.Mesh(groundGeo, groundMat);
@@ -567,58 +674,60 @@
       });
       initialGroundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
       world.addBody(initialGroundBody);
+      // --- End Initial Ground ---
 
       setupUIAndEventListeners();
       setupBlockSelector();
+      updateGameModeUI(); // Set initial UI state based on default gameMode
 
-      clearWorld();
-      if (initialGroundMesh) initialGroundMesh.visible = true;
-
-      resetPlayersToSpawn();
-      generateWorld();
-      animate();
+      clearWorld(); // Clear any test blocks
+      if (initialGroundMesh) initialGroundMesh.visible = true; // Ensure base ground is visible
+      resetPlayersToSpawn(); // Set initial player positions
+      generateWorld();      // Generate procedural world
+      animate();            // Start the loop
     }
 
-    function resetPlayersToSpawn() {
-      players.forEach((player, i) => {
+    //----------------------------------------------------------------
+    // PLAYER STATE / RESPAWN / ENVIRONMENT INTERACTION
+    //----------------------------------------------------------------
+
+    function resetPlayersToSpawn(playerToReset = null) {
+      // If a specific player is passed, reset only them; otherwise, reset all
+      const playersToUpdate = playerToReset ? [playerToReset] : players;
+
+      playersToUpdate.forEach((player, iOriginal) => {
+        // Use the player's actual ID for consistent spawn points
+        const playerIndex = player.id;
         const spawnPos = new THREE.Vector3(
-          worldSize.width / 4 + (i * blockSize * 4) - (blockSize * 2 * (NUM_PLAYERS - 1) / 2),
-          worldSize.height + 2,
+          worldSize.width / 4 + (playerIndex * blockSize * 5) - (blockSize * 2.5 * (NUM_PLAYERS - 1) / 2),
+          worldSize.height + 3, // Spawn high enough to avoid instant ground collision issues
           worldSize.depth / 4
         );
         player.body.position.copy(spawnPos);
         player.body.velocity.set(0, 0, 0);
         player.body.angularVelocity.set(0, 0, 0);
+        player.body.quaternion.set(0, 0, 0, 1); // Reset body rotation
 
         player.yawObject.position.copy(player.body.position);
         player.yawObject.quaternion.set(0, 0, 0, 1);
-        player.pitchObject.quaternion.set(0, 0, 0, 1); // Reset pitch object's rotation
-        player.currentYaw = 0;
-        player.currentPitch = 0;
-        player.targetYaw = 0;
-        player.targetPitch = 0;
+        player.pitchObject.quaternion.set(0, 0, 0, 1);
+        player.currentYaw = 0; player.currentPitch = 0; player.targetYaw = 0; player.targetPitch = 0;
 
-        // For P1, ensure PointerLockControls internal rotations are also reset if possible
-        // This is often tricky as PointerLockControls manages its own state.
-        // A simpler approach is to rely on the next mouse move to "snap" it.
-        // Or, if controls.reset() or similar existed, call it.
-        if (player.controls && typeof player.controls.reset === 'function') { // Hypothetical reset
-          // player.controls.reset(); 
-        } else if (player.id === 0 && player.controls) {
-          // For PointerLockControls, the camera is part of its hierarchy.
-          // We've reset player.yawObject.quaternion. Player 1's camera rotation
-          // will be updated by PointerLockControls on the next mouse move or lock event.
-        }
-
-
-        player.isInWater = false;
-        player.waterContactCount = 0;
-        player.canJump = false;
-        world.gravity.set(0, originalGravityY, 0);
-        player.body.linearDamping = originalPlayerDamping;
+        player.isInWater = false; player.waterContactCount = 0; player.canJump = false;
+        player.isIt = false; // Always reset 'It' status on spawn
       });
-    }
 
+      // Only adjust global physics/damping if resetting ALL players
+      if (!playerToReset) {
+        if (!players.some(p => p.isInWater)) { world.gravity.set(0, originalGravityY, 0); }
+        players.forEach(p => p.body.linearDamping = originalPlayerDamping);
+      }
+      else { // If resetting only one player
+        playerToReset.body.linearDamping = originalPlayerDamping;
+        // Ensure gravity resets if no one is in water anymore
+        if (!players.some(p => p.isInWater)) world.gravity.set(0, originalGravityY, 0);
+      }
+    }
 
     function enterWater(player) {
       player.waterContactCount++;
@@ -633,23 +742,32 @@
       if (player.isInWater && player.waterContactCount <= 0) {
         player.isInWater = false; player.waterContactCount = 0;
         const anyPlayerInWater = players.some(p => p.isInWater);
-        if (!anyPlayerInWater) {
+        if (!anyPlayerInWater) { // Reset gravity ONLY if NO players are in water
           world.gravity.set(0, originalGravityY, 0);
         }
-        player.body.linearDamping = originalPlayerDamping;
+        player.body.linearDamping = originalPlayerDamping; // Reset this player's damping
       }
     }
+
     function enterLava(player) {
-      const spawnPos = new THREE.Vector3(
-        worldSize.width / 4 + (player.id * blockSize * 4) - (blockSize * 2 * (NUM_PLAYERS - 1) / 2),
-        worldSize.height + 10,
-        worldSize.depth / 4
-      );
-      player.body.position.copy(spawnPos);
-      player.body.velocity.set(0, 0, 0);
-      if (player.isInWater) { exitWater(player); }
+      console.warn(`Player ${player.id} entered lava. Respawning.`);
+      if (player.isInWater) { exitWater(player); } // Exit water state before respawn
+
+      const wasIt = player.isIt; // Check if they were IT *before* respawning
+
+      resetPlayersToSpawn(player); // Respawn only this player (also sets player.isIt to false)
+
+      // If in tag mode, and this player was "IT", reassign "IT" status
+      if (tagGameActive && wasIt && NUM_PLAYERS > 1) {
+        let newItCandidateId = (player.id + 1) % NUM_PLAYERS; // Simplistic: next player
+        switchItPlayer(player.id, newItCandidateId, true); // Pass true to indicate it's a forced switch (no tag needed)
+        console.log(`Player ${player.id} fell in lava while "IT". Player ${newItCandidateId + 1} is now IT.`);
+      }
     }
 
+    //----------------------------------------------------------------
+    // WORLD GENERATION AND BLOCK MANAGEMENT
+    //----------------------------------------------------------------
     function generateWorld() {
       const boxGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
       for (let x = 0; x < worldSize.width; x++) {
@@ -671,6 +789,7 @@
           }
         }
       }
+      if (initialGroundMesh) initialGroundMesh.visible = false; // Hide the infinite plane if blocks are generated
     }
 
     function addBlockInternal(position, type, material, geometry) {
@@ -690,8 +809,8 @@
       });
 
       if (type === blockTypes.WATER || type === blockTypes.LAVA) {
-        blockBody.collisionResponse = 0;
-        blockBody.userData = { blockType: type };
+        blockBody.collisionResponse = 0; // No physical collision, but triggers events
+        blockBody.userData = { blockType: type }; // Needed for contact events
       }
       if (type === blockTypes.GLOWSTONE || type === blockTypes.LAVA) {
         const light = new THREE.PointLight(0xffffff, 0, 8);
@@ -699,16 +818,47 @@
         if (type === blockTypes.GLOWSTONE) { light.color.setHex(0xffffdd); light.intensity = 0.7; light.distance = 7; }
         else { light.color.setHex(0xff7700); light.intensity = 0.6; light.distance = 6; }
         scene.add(light);
-        blockMesh.userData.light = light;
+        blockMesh.userData.light = light; // Store reference to remove it later
       }
       world.addBody(blockBody);
-      blockMesh.userData.cannonBody = blockBody;
+      blockMesh.userData.cannonBody = blockBody; // Store reference to remove it later
       return blockMesh;
     }
 
+    function removeBlockByMesh(blockMesh) {
+      if (!blockMesh || !blockMesh.userData) return; // Safety check
+
+      if (blockMesh.userData.light) {
+        scene.remove(blockMesh.userData.light);
+        blockMesh.userData.light.dispose(); // Dispose light resources
+        blockMesh.userData.light = null;
+      }
+      if (blockMesh.userData.cannonBody) {
+        world.removeBody(blockMesh.userData.cannonBody);
+        blockMesh.userData.cannonBody = null;
+      }
+      scene.remove(blockMesh);
+      const index = worldObjects.indexOf(blockMesh);
+      if (index > -1) worldObjects.splice(index, 1);
+
+      // Dispose geometry and material to free memory
+      if (blockMesh.geometry) blockMesh.geometry.dispose();
+      if (blockMesh.material) {
+        const material = blockMesh.material;
+        if (Array.isArray(material)) {
+          material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
+        } else { if (material.map) material.map.dispose(); material.dispose(); }
+      }
+    }
+
+
+    //----------------------------------------------------------------
+    // UI and EVENT LISTENERS
+    //----------------------------------------------------------------
 
     function setupBlockSelector() {
       const selectorDiv = document.getElementById('block-selector');
+      selectorDiv.innerHTML = ''; // Clear previous options
       Object.keys(blockTypes).forEach((key) => {
         const type = blockTypes[key];
         const option = document.createElement('div');
@@ -745,8 +895,11 @@
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
       updateCrosshairPositions();
+      // Update tag status display positions if tag game is active
+      if (tagGameActive) {
+        players.forEach(player => updatePlayerTagVisuals(player, true)); // Pass true for resize
+      }
     }
-
     function updateCrosshairPositions() {
       players.forEach((player, i) => {
         if (player.crosshairElement) {
@@ -760,10 +913,9 @@
 
 
     function onKeyDown(event) {
-      if (players[0].controls && !players[0].controls.isLocked && event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-        if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
-          return;
-        }
+      // Prevent key input if focused on text input/select, unless it's an essential game key maybe (e.g. Esc)
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
+        return;
       }
 
       switch (event.code) {
@@ -773,15 +925,21 @@
         case 'KeyD': players[0].moveRight = true; break;
         case 'Space': players[0].moveUpAction = true; break;
         case 'ShiftLeft': players[0].moveDownAction = true; break;
-        case 'Digit1': currentBlockType = blockTypes.GRASS; updateBlockSelectorUI(); break;
-        case 'Digit2': currentBlockType = blockTypes.DIRT; updateBlockSelectorUI(); break;
-        case 'Digit3': currentBlockType = blockTypes.STONE; updateBlockSelectorUI(); break;
-        case 'Digit4': currentBlockType = blockTypes.WOOD; updateBlockSelectorUI(); break;
-        case 'Digit5': currentBlockType = blockTypes.WATER; updateBlockSelectorUI(); break;
-        case 'Digit6': currentBlockType = blockTypes.LAVA; updateBlockSelectorUI(); break;
-        case 'Digit7': currentBlockType = blockTypes.GLOWSTONE; updateBlockSelectorUI(); break;
+      }
+      // Block selection only in creative mode
+      if (gameMode === 'creative') {
+        switch (event.code) {
+          case 'Digit1': currentBlockType = blockTypes.GRASS; updateBlockSelectorUI(); break;
+          case 'Digit2': currentBlockType = blockTypes.DIRT; updateBlockSelectorUI(); break;
+          case 'Digit3': currentBlockType = blockTypes.STONE; updateBlockSelectorUI(); break;
+          case 'Digit4': currentBlockType = blockTypes.WOOD; updateBlockSelectorUI(); break;
+          case 'Digit5': currentBlockType = blockTypes.WATER; updateBlockSelectorUI(); break;
+          case 'Digit6': currentBlockType = blockTypes.LAVA; updateBlockSelectorUI(); break;
+          case 'Digit7': currentBlockType = blockTypes.GLOWSTONE; updateBlockSelectorUI(); break;
+        }
       }
 
+      // Player 2 Controls
       switch (event.code) {
         case 'KeyI': players[1].moveForward = true; break;
         case 'KeyJ': players[1].moveLeft = true; break;
@@ -793,11 +951,16 @@
         case 'ArrowDown': players[1].lookDown = true; break;
         case 'ArrowLeft': players[1].lookLeft = true; break;
         case 'ArrowRight': players[1].lookRight = true; break;
-        case 'KeyO': players[1].actionPlace = true; break;
-        case 'KeyP': players[1].actionRemove = true; break;
+        case 'KeyO': if (gameMode === 'creative') players[1].actionPlace = true; break; // Creative only
+        case 'KeyP': if (gameMode === 'creative') players[1].actionRemove = true; break; // Creative only
       }
     }
+
     function onKeyUp(event) {
+      // Check active element again in case focus changed
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
+        return;
+      }
       switch (event.code) {
         case 'KeyW': players[0].moveForward = false; break;
         case 'KeyA': players[0].moveLeft = false; break;
@@ -817,43 +980,58 @@
         case 'ArrowDown': players[1].lookDown = false; break;
         case 'ArrowLeft': players[1].lookLeft = false; break;
         case 'ArrowRight': players[1].lookRight = false; break;
-        case 'KeyO': players[1].actionPlace = false; break;
-        case 'KeyP': players[1].actionRemove = false; break;
+        case 'KeyO': players[1].actionPlace = false; break; // Always set to false on keyup
+        case 'KeyP': players[1].actionRemove = false; break; // Always set to false on keyup
       }
     }
 
     function onMouseDown(event) {
-      const player = players[0];
-      if (!player.controls || !player.controls.isLocked) return;
+      if (gameMode === 'tag') return; // No block interaction in tag mode
 
-      handleBlockInteraction(player, event.button);
+      const player = players[0];
+      if (!player.controls || !player.controls.isLocked) return; // Only when locked and has controls
+      handleBlockInteraction(player, event.button); // event.button: 0=Left, 1=Middle, 2=Right
     }
 
+    //----------------------------------------------------------------
+    // GAME ACTIONS (Placing/Removing blocks)
+    //----------------------------------------------------------------
+
     function handlePlayerKeyboardActions(player) {
+      // Only allow in creative mode
+      if (gameMode === 'tag') return;
+
       if (player.actionPlace) {
-        handleBlockInteraction(player, 0);
-        player.actionPlace = false;
+        handleBlockInteraction(player, 0); // 0 for Left-click (Place)
+        player.actionPlace = false; // Consume the action
       }
       if (player.actionRemove) {
-        handleBlockInteraction(player, 2);
-        player.actionRemove = false;
+        handleBlockInteraction(player, 2); // 2 for Right-click (Remove)
+        player.actionRemove = false; // Consume the action
       }
     }
 
     function handleBlockInteraction(player, mouseButton) {
-      raycaster.setFromCamera(pointer, player.camera);
-      const intersects = raycaster.intersectObjects(worldObjects, false);
+      if (gameMode === 'tag') return; // Double check
+
+      raycaster.setFromCamera(pointer, player.camera); // Use shared 'pointer' {x:0, y:0} for center screen
+      const intersects = raycaster.intersectObjects(worldObjects, false); // Check against world blocks
 
       if (intersects.length > 0) {
         const intersect = intersects[0];
+        // Right-click or middle-click (button 2 or 1) to remove
         if (mouseButton === 2 || mouseButton === 1) {
           if (intersect.object.userData.blockType && intersect.object.userData.cannonBody) {
             removeBlockByMesh(intersect.object);
           }
-        } else if (mouseButton === 0) {
+        }
+        // Left-click (button 0) to place
+        else if (mouseButton === 0) {
           const placementPosition = new THREE.Vector3();
+          // Calculate position *just* outside the clicked face
           placementPosition.copy(intersect.object.position).addScaledVector(intersect.face.normal, blockSize);
 
+          // Check for collision with players before placing
           const newBlockHalfExtents = new CANNON.Vec3(blockSize / 2, blockSize / 2, blockSize / 2);
           const newBlockAABB = new CANNON.AABB({
             lowerBound: new CANNON.Vec3(placementPosition.x - newBlockHalfExtents.x, placementPosition.y - newBlockHalfExtents.y, placementPosition.z - newBlockHalfExtents.z),
@@ -862,19 +1040,21 @@
 
           let collisionWithPlayer = false;
           for (const p of players) {
-            p.body.computeAABB();
+            p.body.computeAABB(); // Ensure AABB is up-to-date
             if (newBlockAABB.overlaps(p.body.aabb)) {
               collisionWithPlayer = true;
               break;
             }
           }
           if (collisionWithPlayer) {
-            console.log("Cannot place block: intersects a player."); return;
+            // console.log("Cannot place block: intersects a player.");
+            return; // Stop placement
           }
 
+          // Check if a block already exists at the target position
           if (!worldObjects.some(obj => obj.position.distanceTo(placementPosition) < 0.1)) {
             const newBlockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-            const newBlockMaterial = blockMaterials[currentBlockType] || blockMaterials[blockTypes.STONE];
+            const newBlockMaterial = blockMaterials[currentBlockType] || blockMaterials[blockTypes.STONE]; // Fallback
             addBlockInternal(placementPosition, currentBlockType, newBlockMaterial, newBlockGeometry);
           }
         }
@@ -882,29 +1062,9 @@
     }
 
 
-    function removeBlockByMesh(blockMesh) {
-      if (blockMesh.userData.light) {
-        scene.remove(blockMesh.userData.light);
-        blockMesh.userData.light = null;
-      }
-      if (blockMesh.userData.cannonBody) {
-        world.removeBody(blockMesh.userData.cannonBody);
-      }
-      scene.remove(blockMesh);
-      const index = worldObjects.indexOf(blockMesh);
-      if (index > -1) worldObjects.splice(index, 1);
-
-
-      if (blockMesh.geometry) blockMesh.geometry.dispose();
-      if (blockMesh.material) {
-        const material = blockMesh.material;
-        if (Array.isArray(material)) {
-          material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
-        } else { if (material.map) material.map.dispose(); material.dispose(); }
-      }
-    }
-
-
+    //----------------------------------------------------------------
+    // ANIMATION LOOP
+    //----------------------------------------------------------------
     const FWD = new THREE.Vector3(0, 0, -1);
     const RIGHT = new THREE.Vector3(1, 0, 0);
     const tempForwardVector = new THREE.Vector3();
@@ -912,25 +1072,47 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      const time = performance.now(); const delta = (time - lastTime) / 1000; lastTime = time;
+      const time = performance.now();
+      const delta = (time - lastTime) / 1000;
+      lastTime = time;
 
-      if (world) world.step(timeStep, delta, 3);
+      if (world) world.step(timeStep, delta, 3); // Physics step
 
-      const P1_controlsLocked = players[0].controls && players[0].controls.isLocked;
+      // Update Tag Cooldown
+      if (tagGameActive && tagCooldown > 0) {
+        tagCooldown -= delta;
+        if (tagCooldown < 0) tagCooldown = 0;
+        // Update status display if cooldown is active (for the "IT" player)
+        if (itPlayerId !== -1 && players[itPlayerId] && players[itPlayerId].isIt) {
+          updatePlayerTagVisuals(players[itPlayerId]);
+        }
+      }
+
+      const P1_controlsLocked = players.length > 0 && players[0].controls && players[0].controls.isLocked;
 
       players.forEach((player, index) => {
         const playerBody = player.body;
         const playerViewObject = player.yawObject;
 
+        // --- NaN CHECK ---
+        if (isNaN(playerBody.position.x) || isNaN(playerBody.position.y) || isNaN(playerBody.position.z)) {
+          console.error(`Player ${player.id} body position is NaN! Respawning.`);
+          enterLava(player); // Force a respawn via lava logic
+          return; // Skip further processing for this player this frame
+        }
+        // --- END NaN CHECK ---
+
+        // Player 2 keyboard look (only when P1 is locked/game active)
         if (index === 1 && P1_controlsLocked) {
-          const lookSpeed = Math.PI * 0.5 * delta;
+          const lookSpeed = Math.PI * 0.5 * delta; // Adjust speed as needed
           if (player.lookLeft) player.targetYaw += lookSpeed;
           if (player.lookRight) player.targetYaw -= lookSpeed;
           if (player.lookUp) player.targetPitch += lookSpeed;
           if (player.lookDown) player.targetPitch -= lookSpeed;
 
-          player.targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.targetPitch));
+          player.targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, player.targetPitch)); // Clamp pitch
 
+          // Smooth interpolation for look
           player.currentYaw = THREE.MathUtils.lerp(player.currentYaw, player.targetYaw, 0.2);
           player.currentPitch = THREE.MathUtils.lerp(player.currentPitch, player.targetPitch, 0.2);
 
@@ -938,91 +1120,109 @@
           player.pitchObject.rotation.x = player.currentPitch;
         }
 
-
+        // Movement logic (only when P1 is locked/game active)
         if (P1_controlsLocked) {
-          let currentSpeed = playerSpeed; let targetVelocityY = playerBody.velocity.y;
+          let currentSpeed = playerSpeed;
+          let targetVelocityY = playerBody.velocity.y; // Preserve existing Y velocity unless changed
 
+          // Apply water physics or jump/descend logic
           if (player.isInWater) {
             currentSpeed *= waterProperties.speedFactor;
             if (player.moveUpAction) targetVelocityY = waterProperties.swimUpVelocity;
             else if (player.moveDownAction) targetVelocityY = waterProperties.swimDownVelocity;
           } else {
             if (player.moveUpAction && player.canJump) { targetVelocityY = jumpVelocity; player.canJump = false; }
-            else if (player.moveDownAction) { targetVelocityY = -playerSpeed; player.canJump = false; }
+            else if (player.moveDownAction) { targetVelocityY = -playerSpeed; player.canJump = false; } // Move down force
           }
-          playerBody.velocity.y = targetVelocityY;
+          playerBody.velocity.y = targetVelocityY; // Apply Y velocity change
 
+          // Calculate movement direction based on input and view
           const direction = new THREE.Vector3();
           direction.x = Number(player.moveRight) - Number(player.moveLeft);
           direction.z = Number(player.moveForward) - Number(player.moveBackward);
 
-          playerBody.velocity.x = 0; playerBody.velocity.z = 0;
+          playerBody.velocity.x = 0; // Reset horizontal velocity before applying new one
+          playerBody.velocity.z = 0;
 
           if (direction.x !== 0 || direction.z !== 0) {
+            // Get forward and right vectors relative to the player's view
             FWD.set(0, 0, -1).applyQuaternion(playerViewObject.quaternion);
             RIGHT.set(1, 0, 0).applyQuaternion(playerViewObject.quaternion);
             const moveDir = new THREE.Vector3(
-              RIGHT.x * direction.x + FWD.x * direction.z, 0,
+              RIGHT.x * direction.x + FWD.x * direction.z, 0, // Ignore Y component for horizontal move
               RIGHT.z * direction.x + FWD.z * direction.z
             ).normalize();
             playerBody.velocity.x = moveDir.x * currentSpeed;
             playerBody.velocity.z = moveDir.z * currentSpeed;
           }
 
+          // Handle P2's keyboard-based actions (place/remove)
           if (index === 1) {
             handlePlayerKeyboardActions(player);
           }
-        }
+        } // End if(P1_controlsLocked)
 
+        // Sync visual object to physics body
         playerViewObject.position.copy(playerBody.position);
 
+        // Update direction indicator
         const indicator = player.directionIndicator;
         if (indicator) {
           indicator.position.copy(playerBody.position);
-          indicator.position.y = playerBody.position.y - (playerHeight / 2);
+          indicator.position.y = playerBody.position.y - (playerHeight / 2) - 0.1; // Position below feet
 
           playerViewObject.getWorldDirection(tempForwardVector);
-          tempForwardVector.y = 0; tempForwardVector.normalize();
-          if (tempForwardVector.lengthSq() > 0.001) {
+          tempForwardVector.y = 0; // Project onto horizontal plane
+          tempForwardVector.normalize();
+          if (tempForwardVector.lengthSq() > 0.001) { // Avoid issues if vector is zero
             tempLookAtTarget.copy(indicator.position).add(tempForwardVector);
             indicator.lookAt(tempLookAtTarget);
           }
         }
 
+        // Check for falling out of the world
         if (playerBody.position.y < -30) {
-          enterLava(player);
+          enterLava(player); // Use lava logic to respawn
         }
-      });
+      }); // End forEach player
 
+      // --- Render ---
       renderer.clear();
-
       players.forEach((player, i) => {
-        const P1_controlsLocked = players[0].controls && players[0].controls.isLocked;
-        if (!P1_controlsLocked && i > 0) {
-          // Skip P2 render if game not started
-        } else {
+        if (!P1_controlsLocked && i > 0) { /* Skip P2 render if game not started/locked */ }
+        else {
           const viewportWidth = window.innerWidth / NUM_PLAYERS;
           const viewportX = i * viewportWidth;
-
           renderer.setViewport(viewportX, 0, viewportWidth, window.innerHeight);
           renderer.setScissor(viewportX, 0, viewportWidth, window.innerHeight);
-          renderer.render(scene, player.camera);
+          if (player.camera) renderer.render(scene, player.camera); // Ensure camera exists
         }
       });
-    }
+      // --- End Render ---
+
+    } // End animate()
+
+
+    //----------------------------------------------------------------
+    // WORLD STATE MANAGEMENT (Clear, Save, Load)
+    //----------------------------------------------------------------
 
     function clearWorld() {
+      // Safely iterate and remove all blocks
       [...worldObjects].forEach(obj => removeBlockByMesh(obj));
-      worldObjects = [];
+      worldObjects = []; // Ensure array is empty
 
+      // Reset player states related to the world
       players.forEach(player => {
         player.isInWater = false;
         player.waterContactCount = 0;
         player.canJump = false;
       });
+      // Reset gravity if no one is in water
       if (!players.some(p => p.isInWater)) {
         world.gravity.set(0, originalGravityY, 0);
       }
+      if (initialGroundMesh) initialGroundMesh.visible = true; // Show the base plane again
     }
 
     function getCurrentWorldData() {
@@ -1048,64 +1248,224 @@
     }
 
     async function loadWorldFromSaveData(worldData) {
-      clearWorld();
+      clearWorld(); // Clear existing blocks and reset states
 
       worldData.blocks.forEach(blockData => addBlockFromData(blockData));
 
-      resetPlayersToSpawn();
+      resetPlayersToSpawn(); // Reset players to default spawn positions/states
 
+      // Optionally restore P1 position if saved
       if (worldData.player && worldData.player.position) {
         const p1Data = worldData.player;
         players[0].body.position.set(p1Data.position.x, p1Data.position.y, p1Data.position.z);
         if (p1Data.quaternion) {
           players[0].yawObject.quaternion.set(p1Data.quaternion.x, p1Data.quaternion.y, p1Data.quaternion.z, p1Data.quaternion.w);
         }
-        players[0].yawObject.position.copy(players[0].body.position);
+        players[0].yawObject.position.copy(players[0].body.position); // Sync view object
       }
 
-      if (initialGroundMesh) initialGroundMesh.visible = false;
-      console.log("World loaded from data. Players reset to spawn points (P1 may use saved pos).");
+      if (initialGroundMesh) initialGroundMesh.visible = false; // Hide base plane if loading a world
+      console.log("World loaded from data.");
     }
+
+    //----------------------------------------------------------------
+    // TAG GAME LOGIC
+    //----------------------------------------------------------------
+
+    function updateGameModeUI() {
+      document.getElementById('creativeModeButton').classList.toggle('selected', gameMode === 'creative');
+      document.getElementById('tagModeButton').classList.toggle('selected', gameMode === 'tag');
+      document.getElementById('tagInstructions').style.display = gameMode === 'tag' ? 'block' : 'none';
+
+      const P1_controlsLocked = players.length > 0 && players[0].controls && players[0].controls.isLocked;
+      // Block selector only visible in creative AND when game is running
+      document.getElementById('block-selector').style.display = (gameMode === 'creative' && P1_controlsLocked) ? 'flex' : 'none';
+    }
+
+    function startTagGame() {
+      if (gameMode !== 'tag' || NUM_PLAYERS < 2) {
+        tagGameActive = false;
+        return;
+      }
+      console.log("Starting Tag Game...");
+      tagGameActive = true;
+      itPlayerId = Math.floor(Math.random() * NUM_PLAYERS);
+      tagCooldown = TAG_COOLDOWN_DURATION / 2; // Start with a short grace period
+
+      players.forEach((player, i) => {
+        player.isIt = (i === itPlayerId);
+        updatePlayerTagVisuals(player); // Update visuals for all players
+      });
+      console.log(`Tag game started. Player ${itPlayerId + 1} is IT.`);
+    }
+
+    function endTagGame() {
+      if (!tagGameActive) return; // Don't do anything if not active
+      console.log("Ending Tag Game...");
+      tagGameActive = false;
+      itPlayerId = -1;
+      tagCooldown = 0;
+      players.forEach(player => {
+        player.isIt = false;
+        updatePlayerTagVisuals(player); // Resets visuals and hides status for all
+      });
+      console.log("Tag game ended or paused.");
+    }
+
+    function resetTagGameElements() { // Called when switching to creative or full world reset/load
+      endTagGame();
+    }
+
+    function updatePlayerTagVisuals(player, isResize = false) {
+      if (!player) return; // Safety check
+
+      if (player.directionIndicator) {
+
+        // --- FORCED DEBUGGING SECTION (Uncomment to test basic visibility) ---
+        /*
+        console.log("DEBUG: Forcing indicator visuals for player", player.id)
+        player.directionIndicator.material.color.setHex(0x00ff00); // Bright green
+        player.directionIndicator.material.emissive.setHex(0x00ff00);
+        player.directionIndicator.scale.set(2, 2, 2); // Make it big
+        player.directionIndicator.visible = true; // Force visible
+        return; // Skip rest of logic when debugging
+        */
+        // --- END FORCED DEBUGGING SECTION ---
+
+        // --- Regular Logic (Comment out the debug section above to use this) ---
+        if (tagGameActive && player.isIt) {
+          player.directionIndicator.material.color.setHex(0xff0000); // Red for "It"
+          player.directionIndicator.material.emissive.setHex(0xdd0000);
+          player.directionIndicator.scale.set(1.5, 1.5, 1.5);
+        } else if (tagGameActive && !player.isIt) {
+          player.directionIndicator.material.color.setHex(0x00ff00); // Green for Runner
+          player.directionIndicator.material.emissive.setHex(0x00dd00);
+          player.directionIndicator.scale.set(1.2, 1.2, 1.2);
+        } else { // Not tag game or creative mode
+          player.directionIndicator.material.color.setHex(0xffA500); // Original color
+          player.directionIndicator.material.emissive.setHex(0xcc8400);
+          player.directionIndicator.scale.set(1, 1, 1);
+        }
+        // --- End Regular Logic ---
+      }
+
+      if (player.tagStatusElement) {
+        const P1_controlsLocked = players.length > 0 && players[0].controls && players[0].controls.isLocked;
+        if (tagGameActive && P1_controlsLocked) {
+          player.tagStatusElement.textContent = player.isIt ? "YOU ARE IT!" : "RUN!";
+          if (tagCooldown > 0 && player.isIt) { // Only show cooldown to the one who is IT
+            player.tagStatusElement.textContent += ` (CD: ${tagCooldown.toFixed(1)}s)`;
+          }
+          player.tagStatusElement.style.display = 'block';
+          // Position/size update, also on resize
+          const viewportWidth = window.innerWidth / NUM_PLAYERS;
+          const viewportX = player.id * viewportWidth;
+          player.tagStatusElement.style.left = `${viewportX}px`;
+          player.tagStatusElement.style.width = `${viewportWidth}px`;
+        } else {
+          player.tagStatusElement.textContent = '';
+          player.tagStatusElement.style.display = 'none';
+        }
+      }
+    }
+
+    // forced = true means the switch happens without a physical tag (e.g., lava death)
+    function switchItPlayer(oldItPlayerId, newItPlayerId, forced = false) {
+      if (!tagGameActive && !forced) return; // Allow forced switch even if game not active momentarily
+      if (oldItPlayerId === newItPlayerId) return; // Can't tag yourself
+
+      if (players[oldItPlayerId]) players[oldItPlayerId].isIt = false;
+      if (players[newItPlayerId]) players[newItPlayerId].isIt = true;
+      itPlayerId = newItPlayerId;
+      tagCooldown = TAG_COOLDOWN_DURATION; // Reset cooldown on any switch
+
+      // Update visuals for both involved players
+      if (players[oldItPlayerId]) updatePlayerTagVisuals(players[oldItPlayerId]);
+      if (players[newItPlayerId]) updatePlayerTagVisuals(players[newItPlayerId]);
+
+      console.log(`Tag! Player ${newItPlayerId + 1} is now IT. Cooldown: ${tagCooldown}s`);
+    }
+    //----------------------------------------------------------------
+    // MAIN UI SETUP
+    //----------------------------------------------------------------
 
     function setupUIAndEventListeners() {
       const blocker = document.getElementById('blocker');
       const instructionsDiv = document.getElementById('instructions');
       const playButton = document.getElementById('playButton');
-
-      playButton.addEventListener('click', () => {
-        if (players[0].controls) players[0].controls.lock();
-      });
-
       const saveLoadUIDiv = document.getElementById('save-load-ui');
 
-      if (players[0].controls) {
+      playButton.addEventListener('click', () => {
+        if (players.length > 0 && players[0].controls) players[0].controls.lock();
+      });
+
+      // Ensure controls exist before adding listeners
+      if (players.length > 0 && players[0].controls) {
+
         players[0].controls.addEventListener('lock', () => {
+          console.log("Controls Locked");
           instructionsDiv.style.display = 'none';
           blocker.style.display = 'none';
-          saveLoadUIDiv.style.display = 'none';
+          saveLoadUIDiv.style.display = 'none'; // Hide save/load when playing
+
+          if (gameMode === 'tag') {
+            startTagGame();
+          } else {
+            endTagGame(); // Ensure tag elements are off if starting in creative
+          }
+          updateGameModeUI(); // Controls block selector visibility based on mode + lock state
+
           players.forEach(p => {
-            if (p.directionIndicator) p.directionIndicator.visible = true;
-            if (p.crosshairElement) p.crosshairElement.style.display = 'block';
+            if (p.directionIndicator) p.directionIndicator.visible = true; // SHOW indicators
+            if (p.crosshairElement) p.crosshairElement.style.display = 'block'; // SHOW crosshairs
+            updatePlayerTagVisuals(p); // Update tag visuals (shows/hides status text, sets indicator colors)
           });
-          updateCrosshairPositions();
+          updateCrosshairPositions(); // Set crosshair positions
         });
+
         players[0].controls.addEventListener('unlock', () => {
+          console.log("Controls Unlocked");
           blocker.style.display = 'flex';
           instructionsDiv.style.display = '';
-          saveLoadUIDiv.style.display = 'block';
+          saveLoadUIDiv.style.display = 'block'; // Always show save/load when unlocked
+
+          endTagGame(); // ALWAYS end any active tag game when unlocking/pausing
+          updateGameModeUI(); // Update UI state (will hide block selector as game is not locked)
+
           players.forEach(p => {
-            if (p.directionIndicator) p.directionIndicator.visible = false;
-            if (p.crosshairElement) p.crosshairElement.style.display = 'none';
+            if (p.directionIndicator) p.directionIndicator.visible = false; // HIDE indicators
+            if (p.crosshairElement) p.crosshairElement.style.display = 'none'; // HIDE crosshairs
+            // updatePlayerTagVisuals is called by endTagGame, ensuring status text is hidden etc
           });
-          populateWorldList();
+          populateWorldList(); // Refresh world list
         });
-      }
+      } // end if controls exist
 
       document.addEventListener('keydown', onKeyDown);
       document.addEventListener('keyup', onKeyUp);
       window.addEventListener('resize', onWindowResize);
       document.addEventListener('mousedown', onMouseDown);
 
+      // --- Game Mode Buttons ---
+      const creativeModeButton = document.getElementById('creativeModeButton');
+      const tagModeButton = document.getElementById('tagModeButton');
+      creativeModeButton.addEventListener('click', () => {
+        gameMode = 'creative';
+        updateGameModeUI();
+        resetTagGameElements(); // Clear any tag state immediately
+      });
+      tagModeButton.addEventListener('click', () => {
+        if (NUM_PLAYERS < 2) {
+          alert("Tag mode requires at least 2 players.");
+          return;
+        }
+        gameMode = 'tag';
+        updateGameModeUI();
+      });
+      // --- End Game Mode Buttons ---
+
+
+      // --- Save/Load/New World Buttons ---
       const worldNameInput = document.getElementById('worldNameInput');
       const saveWorldButton = document.getElementById('saveWorldButton');
       const worldListSelect = document.getElementById('worldListSelect');
@@ -1123,20 +1483,24 @@
           worldNameInput.value = ''; populateWorldList();
         } catch (error) { console.error("Error saving world:", error); alert(`Failed to save world: ${error.message || error}`); }
       });
+
       loadWorldButton.addEventListener('click', async () => {
         const worldName = worldListSelect.value;
         if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) {
           alert("Please select a valid world to load."); return;
         }
         if (!confirm(`Load world "${worldName}"? Current unsaved progress will be lost.`)) return;
+        resetTagGameElements(); // Reset tag game state BEFORE loading
         try {
           const worldData = await loadWorldDB(worldName);
           if (worldData) {
             await loadWorldFromSaveData(worldData);
             alert(`World "${worldName}" loaded. Click "Click to play" to continue.`);
+            if (initialGroundMesh) initialGroundMesh.visible = false; // Ensure base plane is hidden
           } else { alert(`World "${worldName}" not found or data is corrupt.`); }
         } catch (error) { console.error("Error loading world:", error); alert(`Failed to load world: ${error.message || error}`); }
       });
+
       deleteWorldButton.addEventListener('click', async () => {
         const worldName = worldListSelect.value;
         if (!worldName || worldListSelect.selectedOptions.length === 0 || worldListSelect.selectedOptions[0].disabled) {
@@ -1149,21 +1513,25 @@
           } catch (error) { console.error("Error deleting world:", error); alert(`Failed to delete world: ${error.message || error}`); }
         }
       });
+
       newWorldButton.addEventListener('click', () => {
         if (!confirm("Create a new procedural world? Current unsaved progress will be lost.")) return;
+        resetTagGameElements(); // Reset tag game state BEFORE new world
         clearWorld();
-        if (initialGroundMesh) initialGroundMesh.visible = true;
+        if (initialGroundMesh) initialGroundMesh.visible = false; // Hide base plane
         resetPlayersToSpawn();
         generateWorld();
         alert("New procedural world created. Click 'Click to play' to continue.");
       });
-    }
+      // --- End Save/Load/New World Buttons ---
+
+    } // End setupUIAndEventListeners
 
     async function populateWorldList() {
       const worldListSelect = document.getElementById('worldListSelect');
       try {
         const names = await getAllWorldNamesDB();
-        worldListSelect.innerHTML = '';
+        worldListSelect.innerHTML = ''; // Clear existing options
         if (names.length === 0) {
           const option = document.createElement('option');
           option.textContent = "No saved worlds"; option.disabled = true;
