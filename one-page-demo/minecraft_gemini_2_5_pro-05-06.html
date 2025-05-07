@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MiniCraft.js - World Saving/Loading (Fixed)</title>
+  <title>MiniCraft.js - Player World Indicator</title>
   <style>
     body {
       margin: 0;
@@ -29,7 +29,6 @@
     #instructions {
       width: 80%;
       max-width: 500px;
-      /* Increased max-width for new UI */
       padding: 20px;
       font-family: Arial, sans-serif;
       font-size: 16px;
@@ -40,7 +39,6 @@
     }
 
     #instructions p:first-of-type {
-      /* The "Click to play" */
       cursor: pointer;
       font-weight: bold;
     }
@@ -100,14 +98,12 @@
       box-shadow: 0 0 10px cyan;
     }
 
-    /* Styles for Save/Load UI */
     #save-load-ui {
       margin-top: 20px;
       background-color: rgba(0, 0, 0, 0.3);
       padding: 15px;
       border-radius: 8px;
       text-align: left;
-      /* Override parent center align */
     }
 
     #save-load-ui h3 {
@@ -125,7 +121,6 @@
       color: white;
       margin-bottom: 10px;
       box-sizing: border-box;
-      /* Ensure padding doesn't increase width */
     }
 
     #save-load-ui button {
@@ -162,7 +157,6 @@
     .world-management-row select {
       flex-grow: 1;
       min-height: 100px;
-      /* Ensure select is reasonably sized */
     }
 
     .world-management-buttons {
@@ -224,6 +218,7 @@
 
     let scene, camera, renderer, controls;
     let worldObjects = [];
+    let playerDirectionIndicatorMesh;
 
     let world;
     let playerBody;
@@ -236,7 +231,7 @@
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
     let moveUpAction = false, moveDown = false;
 
-    const playerHeight = 1.8;
+    const playerHeight = 1.8; // Total height of player collision box
     const playerRadius = 0.4;
     const playerSpeed = 5.0;
     const jumpVelocity = 7.0;
@@ -332,7 +327,7 @@
       });
     }
 
-    init(); // Call init to start the process
+    init();
 
     function createTexture(color, text = null, isFluid = false) {
       const canvas = document.createElement('canvas');
@@ -384,12 +379,59 @@
       });
     }
 
+    function createPlayerDirectionIndicatorMesh() {
+      const length = 0.5; // How long the prism points forward
+      const baseWidth = 0.3; // Width of the triangular base at the back
+      const prismHeight = 0.1; // Thickness/height of the prism off the ground
+
+      const shape = new THREE.Shape();
+      // Create triangle in XY plane. It will be extruded along Z.
+      // Tip of the triangle (pointing part) along +X. Base along Y axis.
+      shape.moveTo(length, 0);          // Tip
+      shape.lineTo(0, baseWidth / 2);   // Back-top corner (in 2D shape)
+      shape.lineTo(0, -baseWidth / 2);  // Back-bottom corner (in 2D shape)
+      shape.closePath();
+
+      const extrudeSettings = {
+        depth: prismHeight, // Extrusion depth gives the prism its thickness
+        bevelEnabled: false
+      };
+
+      const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+      // Geometry transformation to make it suitable for lookAt():
+      // 1. Rotate so the shape's XY plane becomes the world XZ plane (prism lies flat).
+      //    The extrusion depth (original Z) becomes the prism's height (world Y).
+      geometry.rotateX(Math.PI / 2);
+      // 2. Rotate so the shape's +X direction (pointing tip) aligns with the mesh's local +Z.
+      geometry.rotateY(-Math.PI / 2);
+      // 3. Translate so the bottom of the prism is at Y=0 in its local coordinates.
+      geometry.translate(0, prismHeight / 2, 0);
+
+      const material = new THREE.MeshStandardMaterial({
+        color: 0xffA500, // Orange
+        emissive: 0xcc8400, // Darker orange emissive
+        roughness: 0.7,
+        metalness: 0.2,
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      return mesh;
+    }
+
+
     async function init() {
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87CEEB);
       scene.fog = new THREE.Fog(0x87CEEB, 10, 75);
 
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      // Set camera's local Y position for eye height relative to playerBody's center
+      // playerBody.position is its center. playerHeight is total height.
+      // Eyes are approx. 0.4 * playerHeight above the center.
+      camera.position.y = playerHeight * 0.4;
+
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -473,15 +515,18 @@
       world.addBody(initialGroundBody);
 
       controls = new PointerLockControls(camera, document.body);
-      camera.position.set(0, 0.7, 0);
-      const playerCamObject = controls.getObject();
-      playerCamObject.position.copy(playerBody.position);
+      const playerCamObject = controls.getObject(); // This is the yawObject
+      playerCamObject.position.copy(playerBody.position); // Initial sync
       scene.add(playerCamObject);
+
+
+      playerDirectionIndicatorMesh = createPlayerDirectionIndicatorMesh();
+      scene.add(playerDirectionIndicatorMesh); // Add to scene, not camera object
+      playerDirectionIndicatorMesh.visible = false; // Initially hidden
 
       setupUIAndEventListeners();
       setupBlockSelector();
 
-      // Create an initial procedural world on startup
       clearWorld();
       if (initialGroundMesh) initialGroundMesh.visible = true;
 
@@ -493,7 +538,7 @@
 
       generateWorld();
 
-      animate(); // Start animation loop AFTER all setup
+      animate();
     }
 
     function enterWater() {
@@ -519,7 +564,7 @@
     }
 
     function generateWorld() {
-      const boxGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize); // Can be shared
+      const boxGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
       for (let x = 0; x < worldSize.width; x++) {
         for (let z = 0; z < worldSize.depth; z++) {
           const groundLevel = Math.floor(worldSize.height / 3);
@@ -613,9 +658,8 @@
     }
     function onKeyDown(event) {
       if (controls && !controls.isLocked && event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-        // Allow typing in input fields when controls are not locked
         if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
-          return; // Don't process game keybinds
+          return;
         }
       }
       switch (event.code) {
@@ -639,7 +683,7 @@
       }
     }
     function onMouseDown(event) {
-      if (!controls || !controls.isLocked) return; // Check if controls is defined
+      if (!controls || !controls.isLocked) return;
       pointer.set(0, 0); raycaster.setFromCamera(pointer, camera);
       const intersects = raycaster.intersectObjects(worldObjects, false);
 
@@ -695,14 +739,17 @@
 
 
     const direction = new THREE.Vector3(); const FWD = new THREE.Vector3(0, 0, -1); const RIGHT = new THREE.Vector3(1, 0, 0);
+    const tempForwardVector = new THREE.Vector3(); // For player indicator rotation
+    const tempLookAtTarget = new THREE.Vector3();  // For player indicator rotation
+
     function animate() {
       requestAnimationFrame(animate);
       const time = performance.now(); const delta = (time - lastTime) / 1000; lastTime = time;
 
       if (world) world.step(timeStep, delta, 3);
 
-      if (controls && controls.isLocked) { // Check if controls is defined
-        const playerObject = controls.getObject();
+      if (controls && controls.isLocked) {
+        const playerCamObject = controls.getObject(); // This is the yawObject from PointerLockControls
         let currentSpeed = playerSpeed; let targetVelocityY = playerBody.velocity.y;
 
         if (isInWater) {
@@ -711,7 +758,7 @@
           else if (moveDown) targetVelocityY = waterProperties.swimDownVelocity;
         } else {
           if (moveUpAction && canJump) { targetVelocityY = jumpVelocity; canJump = false; }
-          else if (moveDown) { targetVelocityY = -playerSpeed; canJump = false; }
+          else if (moveDown) { targetVelocityY = -playerSpeed; canJump = false; } // Allow moving down if Shift is pressed
         }
         playerBody.velocity.y = targetVelocityY;
 
@@ -720,16 +767,35 @@
         playerBody.velocity.x = 0; playerBody.velocity.z = 0;
 
         if (direction.x !== 0 || direction.z !== 0) {
-          FWD.set(0, 0, -1).applyQuaternion(playerObject.quaternion);
-          RIGHT.set(1, 0, 0).applyQuaternion(playerObject.quaternion);
+          FWD.set(0, 0, -1).applyQuaternion(playerCamObject.quaternion); // Use yawObject's quaternion for horizontal movement
+          RIGHT.set(1, 0, 0).applyQuaternion(playerCamObject.quaternion);
           const moveDir = new THREE.Vector3(
-            RIGHT.x * direction.x + FWD.x * direction.z, 0,
+            RIGHT.x * direction.x + FWD.x * direction.z, 0, // Movement is strictly horizontal
             RIGHT.z * direction.x + FWD.z * direction.z
           ).normalize();
           playerBody.velocity.x = moveDir.x * currentSpeed;
           playerBody.velocity.z = moveDir.z * currentSpeed;
         }
-        playerObject.position.copy(playerBody.position);
+
+        playerCamObject.position.copy(playerBody.position); // Sync yawObject's position with physics body
+
+        // Update player direction indicator
+        if (playerDirectionIndicatorMesh) {
+          playerDirectionIndicatorMesh.position.copy(playerBody.position);
+          // playerBody.position is center of player. playerHeight is total height.
+          // Place indicator at player's "feet"
+          playerDirectionIndicatorMesh.position.y = playerBody.position.y - (playerHeight / 2);
+
+          playerCamObject.getWorldDirection(tempForwardVector); // Get camera's (yawObject's) forward vector
+          tempForwardVector.y = 0; // Project onto XZ plane for horizontal direction
+          tempForwardVector.normalize();
+
+          if (tempForwardVector.lengthSq() > 0.001) { // Avoid issues if looking straight up/down
+            tempLookAtTarget.copy(playerDirectionIndicatorMesh.position).add(tempForwardVector);
+            playerDirectionIndicatorMesh.lookAt(tempLookAtTarget);
+          }
+        }
+
 
         if (playerBody.position.y < -30) {
           playerBody.position.set(worldSize.width / 4, worldSize.height + 10, worldSize.depth / 4);
@@ -742,7 +808,7 @@
 
     function clearWorld() {
       [...worldObjects].forEach(obj => removeBlockByMesh(obj));
-      worldObjects = []; // Ensure it's reset
+      worldObjects = [];
 
       if (isInWater) { waterContactCount = 0; exitWater(); }
       canJump = false;
@@ -782,8 +848,8 @@
           worldData.player.quaternion.x, worldData.player.quaternion.y,
           worldData.player.quaternion.z, worldData.player.quaternion.w
         );
-      } else { playerCamObject.quaternion.set(0, 0, 0, 1); } // Reset if no quaternion
-      playerCamObject.position.copy(playerBody.position);
+      } else { playerCamObject.quaternion.set(0, 0, 0, 1); }
+      playerCamObject.position.copy(playerBody.position); // Sync after loading
 
       worldData.blocks.forEach(blockData => addBlockFromData(blockData));
 
@@ -802,19 +868,21 @@
       const playButton = document.getElementById('playButton');
 
       playButton.addEventListener('click', () => {
-        if (controls) controls.lock(); // Check if controls is defined
+        if (controls) controls.lock();
       });
 
-      if (controls) { // Ensure controls exists before adding listeners
+      if (controls) {
         controls.addEventListener('lock', () => {
           instructions.style.display = 'none';
           blocker.style.display = 'none';
           saveLoadUIDiv.style.display = 'none';
+          if (playerDirectionIndicatorMesh) playerDirectionIndicatorMesh.visible = true;
         });
         controls.addEventListener('unlock', () => {
           blocker.style.display = 'flex';
           instructions.style.display = '';
           saveLoadUIDiv.style.display = 'block';
+          if (playerDirectionIndicatorMesh) playerDirectionIndicatorMesh.visible = false;
           populateWorldList();
         });
       }
