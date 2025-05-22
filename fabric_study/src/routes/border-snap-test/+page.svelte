@@ -48,6 +48,18 @@
         canvas.add(circle);
         canvas.add(triangle);
 
+        const rotatedRect = new Rect({
+            left: 400,
+            top: 150,
+            width: 80,
+            height: 80,
+            fill: 'purple',
+            stroke: 'black',
+            strokeWidth: 2,
+            angle: 30 // Initial rotation
+        });
+        canvas.add(rotatedRect);
+
         // Render canvas
         canvas.renderAll();
 

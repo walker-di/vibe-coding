@@ -68,9 +68,6 @@ export function initCanvasBorderSnap(
     // Clear previous guidelines
     guidelines.length = 0;
 
-    // Get object bounds
-    const objectBounds = activeObject.getBoundingRect();
-
     // Get canvas dimensions
     const canvasWidth = canvas.width || 0;
     const canvasHeight = canvas.height || 0;
@@ -78,102 +75,128 @@ export function initCanvasBorderSnap(
     // Calculate the effective margin based on zoom
     const margin = SNAP_MARGIN / (canvas.getZoom() || 1);
 
-    // Check left border
-    if (Math.abs(objectBounds.left) <= margin) {
-      // Snap to left border
-      activeObject.set('left', 0);
-      activeObject.setCoords();
+    // Ensure oCoords are up-to-date
+    activeObject.setCoords();
+    const oCoords = activeObject.oCoords;
 
-      // Add guideline
-      guidelines.push({
-        x1: 0,
-        y1: 0,
-        x2: 0,
-        y2: canvasHeight
-      });
+    // If oCoords are not available, fall back to getBoundingRect (though this shouldn't happen for typical objects)
+    if (!oCoords) {
+      // Fallback to existing logic if oCoords are somehow undefined
+      const objectBounds = activeObject.getBoundingRect();
+      // Check left border
+      if (Math.abs(objectBounds.left) <= margin) {
+        activeObject.set('left', 0);
+        guidelines.push({ x1: 0, y1: 0, x2: 0, y2: canvasHeight });
+      }
+      // Check right border
+      if (Math.abs((objectBounds.left + objectBounds.width) - canvasWidth) <= margin) {
+        activeObject.set('left', canvasWidth - objectBounds.width);
+        guidelines.push({ x1: canvasWidth, y1: 0, x2: canvasWidth, y2: canvasHeight });
+      }
+      // Check top border
+      if (Math.abs(objectBounds.top) <= margin) {
+        activeObject.set('top', 0);
+        guidelines.push({ x1: 0, y1: 0, x2: canvasWidth, y2: 0 });
+      }
+      // Check bottom border
+      if (Math.abs((objectBounds.top + objectBounds.height) - canvasHeight) <= margin) {
+        activeObject.set('top', canvasHeight - objectBounds.height);
+        guidelines.push({ x1: 0, y1: canvasHeight, x2: canvasWidth, y2: canvasHeight });
+      }
+      // Horizontal center
+      const objectCenterX = objectBounds.left + objectBounds.width / 2;
+      const canvasCenterX = canvasWidth / 2;
+      if (Math.abs(objectCenterX - canvasCenterX) <= margin) {
+        activeObject.set('left', canvasCenterX - objectBounds.width / 2);
+        guidelines.push({ x1: canvasCenterX, y1: 0, x2: canvasCenterX, y2: canvasHeight });
+      }
+      // Vertical center
+      const objectCenterY = objectBounds.top + objectBounds.height / 2;
+      const canvasCenterY = canvasHeight / 2;
+      if (Math.abs(objectCenterY - canvasCenterY) <= margin) {
+        activeObject.set('top', canvasCenterY - objectBounds.height / 2);
+        guidelines.push({ x1: 0, y1: canvasCenterY, x2: canvasWidth, y2: canvasCenterY });
+      }
+      if (guidelines.length > 0) activeObject.setCoords();
+      return;
+    }
+
+    const minX = Math.min(oCoords.tl.x, oCoords.tr.x, oCoords.br.x, oCoords.bl.x);
+    const maxX = Math.max(oCoords.tl.x, oCoords.tr.x, oCoords.br.x, oCoords.bl.x);
+    const minY = Math.min(oCoords.tl.y, oCoords.tr.y, oCoords.br.y, oCoords.bl.y);
+    const maxY = Math.max(oCoords.tl.y, oCoords.tr.y, oCoords.br.y, oCoords.bl.y);
+
+    // Check left border
+    if (Math.abs(minX) <= margin) {
+      activeObject.set('left', activeObject.left - minX);
+      guidelines.push({ x1: 0, y1: 0, x2: 0, y2: canvasHeight });
     }
 
     // Check right border
-    if (Math.abs((objectBounds.left + objectBounds.width) - canvasWidth) <= margin) {
-      // Snap to right border
-      const newLeft = canvasWidth - objectBounds.width;
-      activeObject.set('left', newLeft);
-      activeObject.setCoords();
-
-      // Add guideline
-      guidelines.push({
-        x1: canvasWidth,
-        y1: 0,
-        x2: canvasWidth,
-        y2: canvasHeight
-      });
+    else if (Math.abs(maxX - canvasWidth) <= margin) {
+      activeObject.set('left', activeObject.left + (canvasWidth - maxX));
+      guidelines.push({ x1: canvasWidth, y1: 0, x2: canvasWidth, y2: canvasHeight });
     }
 
     // Check top border
-    if (Math.abs(objectBounds.top) <= margin) {
-      // Snap to top border
-      activeObject.set('top', 0);
-      activeObject.setCoords();
-
-      // Add guideline
-      guidelines.push({
-        x1: 0,
-        y1: 0,
-        x2: canvasWidth,
-        y2: 0
-      });
+    if (Math.abs(minY) <= margin) {
+      activeObject.set('top', activeObject.top - minY);
+      guidelines.push({ x1: 0, y1: 0, x2: canvasWidth, y2: 0 });
     }
 
     // Check bottom border
-    if (Math.abs((objectBounds.top + objectBounds.height) - canvasHeight) <= margin) {
-      // Snap to bottom border
-      const newTop = canvasHeight - objectBounds.height;
-      activeObject.set('top', newTop);
+    else if (Math.abs(maxY - canvasHeight) <= margin) {
+      activeObject.set('top', activeObject.top + (canvasHeight - maxY));
+      guidelines.push({ x1: 0, y1: canvasHeight, x2: canvasWidth, y2: canvasHeight });
+    }
+    
+    // Recalculate oCoords if any snap occurred for border checks before center checks
+    if (guidelines.length > 0) {
       activeObject.setCoords();
+      // Update min/max X/Y for center checks if border snap occurred
+      const newOCoords = activeObject.oCoords;
+      if (newOCoords) { // Check if newOCoords exist
+        const newMinX = Math.min(newOCoords.tl.x, newOCoords.tr.x, newOCoords.br.x, newOCoords.bl.x);
+        const newMaxX = Math.max(newOCoords.tl.x, newOCoords.tr.x, newOCoords.br.x, newOCoords.bl.x);
+        const newMinY = Math.min(newOCoords.tl.y, newOCoords.tr.y, newOCoords.br.y, newOCoords.bl.y);
+        const newMaxY = Math.max(newOCoords.tl.y, newOCoords.tr.y, newOCoords.br.y, newOCoords.bl.y);
+        
+        // Check horizontal center alignment
+        const objectVisualCenterX = newMinX + (newMaxX - newMinX) / 2;
+        const canvasCenterX = canvasWidth / 2;
+        if (Math.abs(objectVisualCenterX - canvasCenterX) <= margin) {
+          activeObject.set('left', activeObject.left + (canvasCenterX - objectVisualCenterX));
+          guidelines.push({ x1: canvasCenterX, y1: 0, x2: canvasCenterX, y2: canvasHeight });
+        }
 
-      // Add guideline
-      guidelines.push({
-        x1: 0,
-        y1: canvasHeight,
-        x2: canvasWidth,
-        y2: canvasHeight
-      });
+        // Check vertical center alignment
+        const objectVisualCenterY = newMinY + (newMaxY - newMinY) / 2;
+        const canvasCenterY = canvasHeight / 2;
+        if (Math.abs(objectVisualCenterY - canvasCenterY) <= margin) {
+          activeObject.set('top', activeObject.top + (canvasCenterY - objectVisualCenterY));
+          guidelines.push({ x1: 0, y1: canvasCenterY, x2: canvasWidth, y2: canvasCenterY });
+        }
+      }
+    } else {
+      // If no border snap occurred, check center with original oCoords derived values
+      const objectVisualCenterX = minX + (maxX - minX) / 2;
+      const canvasCenterX = canvasWidth / 2;
+      if (Math.abs(objectVisualCenterX - canvasCenterX) <= margin) {
+        activeObject.set('left', activeObject.left + (canvasCenterX - objectVisualCenterX));
+        guidelines.push({ x1: canvasCenterX, y1: 0, x2: canvasCenterX, y2: canvasHeight });
+      }
+
+      const objectVisualCenterY = minY + (maxY - minY) / 2;
+      const canvasCenterY = canvasHeight / 2;
+      if (Math.abs(objectVisualCenterY - canvasCenterY) <= margin) {
+        activeObject.set('top', activeObject.top + (canvasCenterY - objectVisualCenterY));
+        guidelines.push({ x1: 0, y1: canvasCenterY, x2: canvasWidth, y2: canvasCenterY });
+      }
     }
 
-    // Check horizontal center alignment
-    const objectCenterX = objectBounds.left + objectBounds.width / 2;
-    const canvasCenterX = canvasWidth / 2;
-    if (Math.abs(objectCenterX - canvasCenterX) <= margin) {
-      // Snap to horizontal center
-      const newLeft = canvasCenterX - objectBounds.width / 2;
-      activeObject.set('left', newLeft);
+    // Final call to setCoords if any snapping happened
+    if (guidelines.length > 0) {
       activeObject.setCoords();
-
-      // Add guideline
-      guidelines.push({
-        x1: canvasCenterX,
-        y1: 0,
-        x2: canvasCenterX,
-        y2: canvasHeight
-      });
-    }
-
-    // Check vertical center alignment
-    const objectCenterY = objectBounds.top + objectBounds.height / 2;
-    const canvasCenterY = canvasHeight / 2;
-    if (Math.abs(objectCenterY - canvasCenterY) <= margin) {
-      // Snap to vertical center
-      const newTop = canvasCenterY - objectBounds.height / 2;
-      activeObject.set('top', newTop);
-      activeObject.setCoords();
-
-      // Add guideline
-      guidelines.push({
-        x1: 0,
-        y1: canvasCenterY,
-        x2: canvasWidth,
-        y2: canvasCenterY
-      });
     }
   }
 
