@@ -1,12 +1,16 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'; // Removed Type import again
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler, RequestEvent } from './$types'; // Import RequestEvent
-import { env } from '$env/dynamic/private'; // Use dynamic private env for server-side
+import { env } from "$env/dynamic/private"; // Use dynamic private env for server-side
+import {
+	GoogleGenerativeAI,
+	HarmBlockThreshold,
+	HarmCategory,
+} from "@google/generative-ai"; // Removed Type import again
+import { error, json } from "@sveltejs/kit";
+import type { RequestEvent, RequestHandler } from "./$types"; // Import RequestEvent
 
 const GEMINI_API_KEY = process.env.GOOGLE_API_KEY;
 
 if (!GEMINI_API_KEY) {
-	console.error('GEMINI_API_KEY environment variable is not set.');
+	console.error("GEMINI_API_KEY environment variable is not set.");
 	// Throwing an error during initialization might be better
 	// depending on how critical this API is.
 }
@@ -14,22 +18,44 @@ if (!GEMINI_API_KEY) {
 // Define the JSON schema for the product data based on ProductForm.svelte fields
 // Using string literals based on documentation examples, despite potential type mismatch
 const productSchema = {
-	type: 'OBJECT',
+	type: "OBJECT",
 	properties: {
-		name: { type: 'STRING', description: 'Product name (required)', nullable: false },
-		overview: { type: 'STRING', description: 'A brief summary of the product.' },
-		industry: { type: 'STRING', description: 'The industry the product belongs to (e.g., Business Video Media).' },
-		details: { type: 'STRING', description: 'More in-depth information about the product.' },
-		featuresStrengths: { type: 'STRING', description: 'List key features or strengths, potentially separated by newlines.' },
-		description: { type: 'STRING', description: 'Internal notes or description (optional).' },
+		name: {
+			type: "STRING",
+			description: "Product name (required)",
+			nullable: false,
+		},
+		overview: {
+			type: "STRING",
+			description: "A brief summary of the product.",
+		},
+		industry: {
+			type: "STRING",
+			description:
+				"The industry the product belongs to (e.g., Business Video Media).",
+		},
+		details: {
+			type: "STRING",
+			description: "More in-depth information about the product.",
+		},
+		featuresStrengths: {
+			type: "STRING",
+			description:
+				"List key features or strengths, potentially separated by newlines.",
+		},
+		description: {
+			type: "STRING",
+			description: "Internal notes or description (optional).",
+		},
 		// imageUrl: { type: 'STRING', description: 'URL for the product image (optional).' }
 	},
-	required: ['name']
+	required: ["name"],
 };
 
-export const POST: RequestHandler = async ({ request }: RequestEvent) => { // Add RequestEvent type
+export const POST: RequestHandler = async ({ request }: RequestEvent) => {
+	// Add RequestEvent type
 	if (!GEMINI_API_KEY) {
-		throw error(500, 'Server configuration error: API key missing.');
+		throw error(500, "Server configuration error: API key missing.");
 	}
 
 	let instructions: string;
@@ -40,28 +66,30 @@ export const POST: RequestHandler = async ({ request }: RequestEvent) => { // Ad
 		instructions = body.instructions;
 		currentProductData = body.currentData ?? null; // Get currentData, default to null
 
-		if (!instructions || typeof instructions !== 'string') {
-			throw new Error('Invalid instructions provided.');
+		if (!instructions || typeof instructions !== "string") {
+			throw new Error("Invalid instructions provided.");
 		}
 		// Optional: Add validation for currentProductData if needed
-		if (currentProductData && typeof currentProductData !== 'object') {
-			throw new Error('Invalid currentData format provided.');
+		if (currentProductData && typeof currentProductData !== "object") {
+			throw new Error("Invalid currentData format provided.");
 		}
-
 	} catch (err: any) {
-		console.error('Error parsing request body:', err);
-		throw error(400, `Bad Request: Could not parse request body. ${err.message}`);
+		console.error("Error parsing request body:", err);
+		throw error(
+			400,
+			`Bad Request: Could not parse request body. ${err.message}`,
+		);
 	}
 
 	try {
 		const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 		const model = genAI.getGenerativeModel({
-			model: 'gemini-2.5-flash-preview-04-17',
+			model: "gemini-2.5-flash-preview-05-20",
 			generationConfig: {
 				temperature: 1,
-				responseMimeType: 'application/json',
+				responseMimeType: "application/json",
 				// Use type assertion to bypass strict type checking for the schema
-				responseSchema: productSchema as any
+				responseSchema: productSchema as any,
 			},
 		});
 
@@ -72,7 +100,7 @@ User Instructions:
 "${instructions}"
 
 Current Product Data:
-${currentProductData ? JSON.stringify(currentProductData, null, 2) : 'None (creating new product).'}
+${currentProductData ? JSON.stringify(currentProductData, null, 2) : "None (creating new product)."}
 `;
 
 		console.log("Sending prompt to Gemini:", prompt); // Log the prompt for debugging
@@ -87,14 +115,16 @@ ${currentProductData ? JSON.stringify(currentProductData, null, 2) : 'None (crea
 			// Optional: Add validation against the schema here if needed
 			return json(generatedData);
 		} catch (parseError) {
-			console.error('Error parsing Gemini JSON response:', parseError);
-			console.error('Raw Gemini response text:', text);
-			throw error(500, 'Failed to parse AI response.');
+			console.error("Error parsing Gemini JSON response:", parseError);
+			console.error("Raw Gemini response text:", text);
+			throw error(500, "Failed to parse AI response.");
 		}
-
 	} catch (err: any) {
-		console.error('Error calling Gemini API:', err);
+		console.error("Error calling Gemini API:", err);
 		// Provide a more generic error to the client
-		throw error(500, `Failed to generate product data: ${err.message || 'Unknown error'}`);
+		throw error(
+			500,
+			`Failed to generate product data: ${err.message || "Unknown error"}`,
+		);
 	}
 };
