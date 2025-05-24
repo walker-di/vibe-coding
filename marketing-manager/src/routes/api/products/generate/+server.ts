@@ -98,7 +98,7 @@ export const POST: RequestHandler = async ({ request }: RequestEvent) => {
 If everything is empty, it is a new product. please fill all the fields. otherwise, strictly only apply the changes requested from the user.
 User Instructions:
 "${instructions}"
-
+Do not use markdown format like \`\`\`json
 Current Product Data:
 ${currentProductData ? JSON.stringify(currentProductData, null, 2) : "None (creating new product)."}
 `;

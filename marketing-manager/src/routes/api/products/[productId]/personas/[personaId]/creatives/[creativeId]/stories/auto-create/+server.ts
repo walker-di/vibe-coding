@@ -1,227 +1,282 @@
-import { generateContent, type AIProvider } from '$lib/server/aiProviderService';
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler, RequestEvent } from './$types';
-import { db } from '$lib/server/db';
-import { products, personas, creatives, scenes, clips, stories } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import {
+	type AIProvider,
+	generateContent,
+} from "$lib/server/aiProviderService";
+import { db } from "$lib/server/db";
+import {
+	clips,
+	creatives,
+	personas,
+	products,
+	scenes,
+	stories,
+} from "$lib/server/db/schema";
+import { error, json } from "@sveltejs/kit";
+import { eq } from "drizzle-orm";
+import type { RequestEvent, RequestHandler } from "./$types";
 
 // No need to check API keys here as it's handled in the aiProviderService
 
 // Schema for the storyboard with scenes and clips
 // Using uppercase types for Gemini compatibility, our converter will handle OpenAI's lowercase requirement
 const storyboardSchema = {
-  type: 'OBJECT',
-  properties: {
-    title: { type: 'STRING', description: 'Title for the storyboard' },
-    description: { type: 'STRING', description: 'Brief description of the storyboard' },
-    scenes: {
-      type: 'ARRAY',
-      description: 'Array of scenes in the storyboard, each with a specific purpose in the narrative',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          description: { type: 'STRING', description: 'A descriptive title for this scene that captures its purpose in the overall narrative' },
-          clips: {
-            type: 'ARRAY',
-            description: 'Array of clips that form a coherent scene with a specific purpose in the story',
-            items: {
-              type: 'OBJECT',
-              properties: {
-                narration: { type: 'STRING', description: 'Professional voice-over script for this clip in Brazilian Portuguese' },
-                visualDescription: { type: 'STRING', description: 'Detailed visual description of what appears in this clip' },
-                duration: { type: 'NUMBER', description: 'Suggested duration for this clip in seconds (typically between 5-10 seconds)' }
-              },
-              required: ['narration', 'visualDescription', 'duration']
-            }
-          }
-        },
-        required: ['description', 'clips']
-      }
-    }
-  },
-  required: ['title', 'description', 'scenes']
+	type: "OBJECT",
+	properties: {
+		title: { type: "STRING", description: "Title for the storyboard" },
+		description: {
+			type: "STRING",
+			description: "Brief description of the storyboard",
+		},
+		scenes: {
+			type: "ARRAY",
+			description:
+				"Array of scenes in the storyboard, each with a specific purpose in the narrative",
+			items: {
+				type: "OBJECT",
+				properties: {
+					description: {
+						type: "STRING",
+						description:
+							"A descriptive title for this scene that captures its purpose in the overall narrative",
+					},
+					clips: {
+						type: "ARRAY",
+						description:
+							"Array of clips that form a coherent scene with a specific purpose in the story",
+						items: {
+							type: "OBJECT",
+							properties: {
+								narration: {
+									type: "STRING",
+									description:
+										"Professional voice-over script for this clip in Brazilian Portuguese",
+								},
+								visualDescription: {
+									type: "STRING",
+									description:
+										"Detailed visual description of what appears in this clip",
+								},
+								duration: {
+									type: "NUMBER",
+									description:
+										"Suggested duration for this clip in seconds (typically between 5-10 seconds)",
+								},
+							},
+							required: ["narration", "visualDescription", "duration"],
+						},
+					},
+				},
+				required: ["description", "clips"],
+			},
+		},
+	},
+	required: ["title", "description", "scenes"],
 };
 
 export const POST: RequestHandler = async ({ request, params }) => {
-  // API key availability is checked in the aiProviderService
+	// API key availability is checked in the aiProviderService
 
-  const productId = parseInt(params.productId || '', 10);
-  const personaId = parseInt(params.personaId || '', 10);
-  const creativeId = parseInt(params.creativeId || '', 10);
+	const productId = parseInt(params.productId || "", 10);
+	const personaId = parseInt(params.personaId || "", 10);
+	const creativeId = parseInt(params.creativeId || "", 10);
 
-  if (isNaN(productId) || isNaN(personaId) || isNaN(creativeId)) {
-    throw error(400, 'Invalid Product, Persona, or Creative ID.');
-  }
+	if (isNaN(productId) || isNaN(personaId) || isNaN(creativeId)) {
+		throw error(400, "Invalid Product, Persona, or Creative ID.");
+	}
 
-  let storyPrompt: string;
-  let storyId: number | undefined;
-  let aiProvider: AIProvider = 'gemini'; // Default to Gemini
-  let includeProductInfo: boolean = true; // Default to including product info
-  let includePersonaInfo: boolean = true; // Default to including persona info
-  let includeCreativeInfo: boolean = true; // Default to including creative info
+	let storyPrompt: string;
+	let storyId: number | undefined;
+	let aiProvider: AIProvider = "gemini"; // Default to Gemini
+	let includeProductInfo: boolean = true; // Default to including product info
+	let includePersonaInfo: boolean = true; // Default to including persona info
+	let includeCreativeInfo: boolean = true; // Default to including creative info
 
-  try {
-    const body = await request.json();
-    storyPrompt = body.storyPrompt;
-    storyId = body.storyId;
+	try {
+		const body = await request.json();
+		storyPrompt = body.storyPrompt;
+		storyId = body.storyId;
 
-    // Get the AI provider from the request body, default to 'gemini' if not provided
-    if (body.aiProvider && ['gemini', 'openai', 'claude'].includes(body.aiProvider)) {
-      aiProvider = body.aiProvider;
-    }
+		// Get the AI provider from the request body, default to 'gemini' if not provided
+		if (
+			body.aiProvider &&
+			["gemini", "openai", "claude"].includes(body.aiProvider)
+		) {
+			aiProvider = body.aiProvider;
+		}
 
-    // Get whether to include specific context information from the request body
-    if (body.includeProductInfo !== undefined) {
-      includeProductInfo = body.includeProductInfo;
-    }
+		// Get whether to include specific context information from the request body
+		if (body.includeProductInfo !== undefined) {
+			includeProductInfo = body.includeProductInfo;
+		}
 
-    if (body.includePersonaInfo !== undefined) {
-      includePersonaInfo = body.includePersonaInfo;
-    }
+		if (body.includePersonaInfo !== undefined) {
+			includePersonaInfo = body.includePersonaInfo;
+		}
 
-    if (body.includeCreativeInfo !== undefined) {
-      includeCreativeInfo = body.includeCreativeInfo;
-    }
+		if (body.includeCreativeInfo !== undefined) {
+			includeCreativeInfo = body.includeCreativeInfo;
+		}
 
-    if (!storyPrompt || typeof storyPrompt !== 'string') {
-      throw new Error('Invalid or missing storyPrompt.');
-    }
+		if (!storyPrompt || typeof storyPrompt !== "string") {
+			throw new Error("Invalid or missing storyPrompt.");
+		}
+	} catch (err: any) {
+		console.error("Error parsing request body:", err);
+		throw error(
+			400,
+			`Bad Request: Could not parse request body. ${err.message}`,
+		);
+	}
 
-  } catch (err: any) {
-    console.error('Error parsing request body:', err);
-    throw error(400, `Bad Request: Could not parse request body. ${err.message}`);
-  }
+	// Fetch Product, Persona, and Creative details for context
+	const product = await db.query.products.findFirst({
+		where: eq(products.id, productId),
+		columns: {
+			name: true,
+			description: true,
+			industry: true,
+			overview: true,
+			details: true,
+			featuresStrengths: true,
+		},
+	});
 
+	const persona = await db.query.personas.findFirst({
+		where: eq(personas.id, personaId),
+		columns: {
+			name: true,
+			insights: true,
+			personaTitle: true,
+			ageRangeSelection: true,
+			ageRangeCustom: true,
+			gender: true,
+			location: true,
+			jobTitle: true,
+			incomeLevel: true,
+			personalityTraits: true,
+			valuesText: true,
+			spendingHabits: true,
+			interestsHobbies: true,
+			lifestyle: true,
+			needsPainPoints: true,
+			goalsExpectations: true,
+			backstory: true,
+			purchaseProcess: true,
+		},
+	});
 
-  // Fetch Product, Persona, and Creative details for context
-  const product = await db.query.products.findFirst({
-    where: eq(products.id, productId),
-    columns: {
-      name: true,
-      description: true,
-      industry: true,
-      overview: true,
-      details: true,
-      featuresStrengths: true
-    }
-  });
+	const creative = await db.query.creatives.findFirst({
+		where: eq(creatives.id, creativeId),
+		with: {
+			textData: true,
+			imageData: true,
+			videoData: true,
+			lpData: true,
+		},
+	});
 
-  const persona = await db.query.personas.findFirst({
-    where: eq(personas.id, personaId),
-    columns: {
-      name: true,
-      insights: true,
-      personaTitle: true,
-      ageRangeSelection: true,
-      ageRangeCustom: true,
-      gender: true,
-      location: true,
-      jobTitle: true,
-      incomeLevel: true,
-      personalityTraits: true,
-      valuesText: true,
-      spendingHabits: true,
-      interestsHobbies: true,
-      lifestyle: true,
-      needsPainPoints: true,
-      goalsExpectations: true,
-      backstory: true,
-      purchaseProcess: true
-    }
-  });
+	console.log("Fetched product:", product);
+	console.log("Fetched persona:", persona);
+	console.log("Fetched creative:", creative);
 
-  const creative = await db.query.creatives.findFirst({
-    where: eq(creatives.id, creativeId),
-    with: {
-      textData: true,
-      imageData: true,
-      videoData: true,
-      lpData: true
-    }
-  });
+	if (!product) {
+		throw error(404, `Product with ID ${productId} not found.`);
+	}
+	if (!persona) {
+		throw error(404, `Persona with ID ${personaId} not found.`);
+	}
+	if (!creative) {
+		throw error(404, `Creative with ID ${creativeId} not found.`);
+	}
 
-  console.log('Fetched product:', product);
-  console.log('Fetched persona:', persona);
-  console.log('Fetched creative:', creative);
+	// Get or create a story
+	let storyRecord;
 
-  if (!product) {
-    throw error(404, `Product with ID ${productId} not found.`);
-  }
-  if (!persona) {
-    throw error(404, `Persona with ID ${personaId} not found.`);
-  }
-  if (!creative) {
-    throw error(404, `Creative with ID ${creativeId} not found.`);
-  }
+	if (storyId) {
+		// If storyId is provided, verify it exists
+		storyRecord = await db.query.stories.findFirst({
+			where: eq(stories.id, storyId),
+			columns: { id: true, title: true, aspectRatio: true },
+		});
 
-  // Get or create a story
-  let storyRecord;
+		if (!storyRecord) {
+			throw error(404, `Story with ID ${storyId} not found`);
+		}
+	} else {
+		// Create a new story if storyId is not provided
+		const storyName = storyPrompt.substring(0, 30) + "...";
+		const [newStory] = await db
+			.insert(stories)
+			.values({
+				creativeId, // Required field
+				title: storyName,
+				description: storyPrompt,
+				aspectRatio: "16:9",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			})
+			.returning();
 
-  if (storyId) {
-    // If storyId is provided, verify it exists
-    storyRecord = await db.query.stories.findFirst({
-      where: eq(stories.id, storyId),
-      columns: { id: true, title: true, aspectRatio: true }
-    });
+		storyRecord = newStory;
+		console.log(`Created new story with ID: ${storyRecord.id}`);
+	}
 
-    if (!storyRecord) {
-      throw error(404, `Story with ID ${storyId} not found`);
-    }
-  } else {
-    // Create a new story if storyId is not provided
-    const storyName = storyPrompt.substring(0, 30) + '...';
-    const [newStory] = await db.insert(stories).values({
-      creativeId, // Required field
-      title: storyName,
-      description: storyPrompt,
-      aspectRatio: '16:9',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
+	// We'll use the aiProviderService instead of initializing Gemini directly
 
-    storyRecord = newStory;
-    console.log(`Created new story with ID: ${storyRecord.id}`);
-  }
+	let targetPrompt = `\n## Channel info ##\n`;
+	// Creative context
+	targetPrompt += `Name${creative.name}\n`;
 
-  // We'll use the aiProviderService instead of initializing Gemini directly
+	if (creative.description) {
+		targetPrompt += `Description: ${creative.description}\n`;
+	}
 
-  let targetPrompt = `\n## Channel info ##\n`;
-  // Creative context
-  targetPrompt += `Name${creative.name}\n`;
-
-  if (creative.description) {
-    targetPrompt += `Description: ${creative.description}\n`;
-  }
-
-  // Type-specific creative details
-  if (creative.type === 'text' && creative.textData) {
-    targetPrompt += `\nText Creative Details:\n`;
-    if (creative.textData.headline) targetPrompt += `Headline: ${creative.textData.headline}\n`;
-    if (creative.textData.body) targetPrompt += `Body: ${creative.textData.body}\n`;
-    if (creative.textData.callToAction) targetPrompt += `Call to Action: ${creative.textData.callToAction}\n`;
-    if (creative.textData.appealFeature) targetPrompt += `Appeal Feature: ${creative.textData.appealFeature}\n`;
-    if (creative.textData.emotion) targetPrompt += `Emotion: ${creative.textData.emotion}\n`;
-    if (creative.textData.platformNotes) targetPrompt += `Platform Notes: ${creative.textData.platformNotes}\n`;
-  } else if (creative.type === 'image' && creative.imageData) {
-    targetPrompt += `\nImage Creative Details:\n`;
-    if (creative.imageData.appealFeature) targetPrompt += `Appeal Feature: ${creative.imageData.appealFeature}\n`;
-    if (creative.imageData.emotion) targetPrompt += `Emotion: ${creative.imageData.emotion}\n`;
-    if (creative.imageData.platformNotes) targetPrompt += `Platform Notes: ${creative.imageData.platformNotes}\n`;
-  } else if (creative.type === 'video' && creative.videoData) {
-    targetPrompt += `\nVideo Creative Details:\n`;
-    if (creative.videoData.duration) targetPrompt += `Duration: ${creative.videoData.duration}\n`;
-    if (creative.videoData.appealFeature) targetPrompt += `Appeal Feature: ${creative.videoData.appealFeature}\n`;
-    if (creative.videoData.emotion) targetPrompt += `Emotion: ${creative.videoData.emotion}\n`;
-    if (creative.videoData.platform) targetPrompt += `Platform: ${creative.videoData.platform}\n`;
-  } else if (creative.type === 'lp' && creative.lpData) {
-    targetPrompt += `\nLanding Page Creative Details:\n`;
-    if (creative.lpData.headline) targetPrompt += `Headline: ${creative.lpData.headline}\n`;
-    if (creative.lpData.appealFeature) targetPrompt += `Appeal Feature: ${creative.lpData.appealFeature}\n`;
-    if (creative.lpData.emotion) targetPrompt += `Emotion: ${creative.lpData.emotion}\n`;
-    if (creative.lpData.platformNotes) targetPrompt += `Platform Notes: ${creative.lpData.platformNotes}\n`;
-  }
-  // Create a context-aware prompt for generating scenes and clips
-  let prompt = `You are a highly creative and empathetic AI content strategist and professional social media content creator. Your mission is to craft compelling, non-generic, and emotionally resonant short-form (Reels/Shorts) and potentially longer-form (YouTube) video storyboards based on user input. Your primary goal is to deeply resonate with the target audience, stop the scroll, evoke a specific emotion, and drive action.
+	// Type-specific creative details
+	if (creative.type === "text" && creative.textData) {
+		targetPrompt += `\nText Creative Details:\n`;
+		if (creative.textData.headline)
+			targetPrompt += `Headline: ${creative.textData.headline}\n`;
+		if (creative.textData.body)
+			targetPrompt += `Body: ${creative.textData.body}\n`;
+		if (creative.textData.callToAction)
+			targetPrompt += `Call to Action: ${creative.textData.callToAction}\n`;
+		if (creative.textData.appealFeature)
+			targetPrompt += `Appeal Feature: ${creative.textData.appealFeature}\n`;
+		if (creative.textData.emotion)
+			targetPrompt += `Emotion: ${creative.textData.emotion}\n`;
+		if (creative.textData.platformNotes)
+			targetPrompt += `Platform Notes: ${creative.textData.platformNotes}\n`;
+	} else if (creative.type === "image" && creative.imageData) {
+		targetPrompt += `\nImage Creative Details:\n`;
+		if (creative.imageData.appealFeature)
+			targetPrompt += `Appeal Feature: ${creative.imageData.appealFeature}\n`;
+		if (creative.imageData.emotion)
+			targetPrompt += `Emotion: ${creative.imageData.emotion}\n`;
+		if (creative.imageData.platformNotes)
+			targetPrompt += `Platform Notes: ${creative.imageData.platformNotes}\n`;
+	} else if (creative.type === "video" && creative.videoData) {
+		targetPrompt += `\nVideo Creative Details:\n`;
+		if (creative.videoData.duration)
+			targetPrompt += `Duration: ${creative.videoData.duration}\n`;
+		if (creative.videoData.appealFeature)
+			targetPrompt += `Appeal Feature: ${creative.videoData.appealFeature}\n`;
+		if (creative.videoData.emotion)
+			targetPrompt += `Emotion: ${creative.videoData.emotion}\n`;
+		if (creative.videoData.platform)
+			targetPrompt += `Platform: ${creative.videoData.platform}\n`;
+	} else if (creative.type === "lp" && creative.lpData) {
+		targetPrompt += `\nLanding Page Creative Details:\n`;
+		if (creative.lpData.headline)
+			targetPrompt += `Headline: ${creative.lpData.headline}\n`;
+		if (creative.lpData.appealFeature)
+			targetPrompt += `Appeal Feature: ${creative.lpData.appealFeature}\n`;
+		if (creative.lpData.emotion)
+			targetPrompt += `Emotion: ${creative.lpData.emotion}\n`;
+		if (creative.lpData.platformNotes)
+			targetPrompt += `Platform Notes: ${creative.lpData.platformNotes}\n`;
+	}
+	// Create a context-aware prompt for generating scenes and clips
+	let prompt = `You are a highly creative and empathetic AI content strategist and professional social media content creator. Your mission is to craft compelling, non-generic, and emotionally resonant short-form (Reels/Shorts) and potentially longer-form (YouTube) video storyboards based on user input. Your primary goal is to deeply resonate with the target audience, stop the scroll, evoke a specific emotion, and drive action.
 
 You MUST adhere to the provided structure, narrative flow, and constraints. However, your creativity is paramount in bringing these elements to life in a vivid, specific, and engaging way that avoids cliché and speaks directly to the target persona.
 ${targetPrompt}
@@ -293,297 +348,383 @@ Here’s the high-impact narrative flow adapted for these platforms, which you m
     *   *Example Idea:* Persona looks directly at the camera. "If you're tired of information overload and messy notes, AI Recap is a game-changer." On-screen text/graphics: "Transform your workflow." "Click the link in the description to try AI Recap." Remind viewers to like/subscribe for more tips.
 `;
 
-  // Add context information header if any context is included
-  if (includeProductInfo || includePersonaInfo || includeCreativeInfo) {
-    prompt += '\n\nDETAILED CONTEXT INFORMATION (Use it to make the content more interesting):\n';
+	// Add context information header if any context is included
+	if (includeProductInfo || includePersonaInfo || includeCreativeInfo) {
+		prompt +=
+			"\n\nDETAILED CONTEXT INFORMATION (Use it to make the content more interesting):\n";
 
-    // Product context (only if includeProductInfo is true)
-    if (includeProductInfo) {
-      prompt += `\n## PRODUCT DETAILS (only promotion posts) ##\n`;
-      prompt += `Product Name: ${product.name}\n`;
+		// Product context (only if includeProductInfo is true)
+		if (includeProductInfo) {
+			prompt += `\n## PRODUCT DETAILS (only promotion posts) ##\n`;
+			prompt += `Product Name: ${product.name}\n`;
 
-      if (product.overview) {
-        prompt += `Overview: ${product.overview}\n`;
-      }
+			if (product.overview) {
+				prompt += `Overview: ${product.overview}\n`;
+			}
 
-      if (product.industry) {
-        prompt += `Industry: ${product.industry}\n`;
-      }
+			if (product.industry) {
+				prompt += `Industry: ${product.industry}\n`;
+			}
 
-      if (product.details) {
-        prompt += `Details: ${product.details}\n`;
-      }
+			if (product.details) {
+				prompt += `Details: ${product.details}\n`;
+			}
 
-      if (product.featuresStrengths) {
-        prompt += `Key Features and Strengths:\n${product.featuresStrengths}\n`;
-      }
-    }
+			if (product.featuresStrengths) {
+				prompt += `Key Features and Strengths:\n${product.featuresStrengths}\n`;
+			}
+		}
 
-    // Persona context (only if includePersonaInfo is true)
-    if (includePersonaInfo) {
-      prompt += `\n## TARGET AUDIENCE ##\n`;
-      prompt += `Persona: ${persona.personaTitle ? ` (${persona.personaTitle})` : ''}\n`;
+		// Persona context (only if includePersonaInfo is true)
+		if (includePersonaInfo) {
+			prompt += `\n## TARGET AUDIENCE ##\n`;
+			prompt += `Persona: ${persona.personaTitle ? ` (${persona.personaTitle})` : ""}\n`;
 
-      // Demographics
-      prompt += `\nDemographics\n`;
+			// Demographics
+			prompt += `\nDemographics\n`;
 
-      if (persona.ageRangeSelection && persona.ageRangeSelection !== 'Unspecified') {
-        prompt += `Age Range\n${persona.ageRangeSelection === 'Custom' ? persona.ageRangeCustom : persona.ageRangeSelection}\n`;
-      }
+			if (
+				persona.ageRangeSelection &&
+				persona.ageRangeSelection !== "Unspecified"
+			) {
+				prompt += `Age Range\n${persona.ageRangeSelection === "Custom" ? persona.ageRangeCustom : persona.ageRangeSelection}\n`;
+			}
 
-      if (persona.gender && persona.gender !== 'Unspecified') {
-        prompt += `Gender\n${persona.gender}\n`;
-      }
+			if (persona.gender && persona.gender !== "Unspecified") {
+				prompt += `Gender\n${persona.gender}\n`;
+			}
 
-      if (persona.location) {
-        prompt += `Location\n${persona.location}\n`;
-      }
+			if (persona.location) {
+				prompt += `Location\n${persona.location}\n`;
+			}
 
-      if (persona.jobTitle) {
-        prompt += `Job Title\n${persona.jobTitle}\n`;
-      }
+			if (persona.jobTitle) {
+				prompt += `Job Title\n${persona.jobTitle}\n`;
+			}
 
-      if (persona.incomeLevel) {
-        prompt += `Income Level\n${persona.incomeLevel}\n`;
-      }
+			if (persona.incomeLevel) {
+				prompt += `Income Level\n${persona.incomeLevel}\n`;
+			}
 
-      // Psychographics
-      prompt += `\nPsychographics\n`;
+			// Psychographics
+			prompt += `\nPsychographics\n`;
 
-      if (persona.personalityTraits) {
-        prompt += `Personality Traits\n${persona.personalityTraits}\n`;
-      }
+			if (persona.personalityTraits) {
+				prompt += `Personality Traits\n${persona.personalityTraits}\n`;
+			}
 
-      if (persona.valuesText) {
-        prompt += `Values\n${persona.valuesText}\n`;
-      }
+			if (persona.valuesText) {
+				prompt += `Values\n${persona.valuesText}\n`;
+			}
 
-      if (persona.spendingHabits) {
-        prompt += `Spending Habits\n${persona.spendingHabits}\n`;
-      }
+			if (persona.spendingHabits) {
+				prompt += `Spending Habits\n${persona.spendingHabits}\n`;
+			}
 
-      if (persona.interestsHobbies) {
-        prompt += `Interests & Hobbies\n${persona.interestsHobbies}\n`;
-      }
+			if (persona.interestsHobbies) {
+				prompt += `Interests & Hobbies\n${persona.interestsHobbies}\n`;
+			}
 
-      if (persona.lifestyle) {
-        prompt += `Lifestyle\n${persona.lifestyle}\n`;
-      }
+			if (persona.lifestyle) {
+				prompt += `Lifestyle\n${persona.lifestyle}\n`;
+			}
 
-      // Needs & Goals
-      prompt += `\nNeeds & Goals\n`;
+			// Needs & Goals
+			prompt += `\nNeeds & Goals\n`;
 
-      if (persona.needsPainPoints) {
-        prompt += `Pain Points: ${persona.needsPainPoints}\n`;
-      }
+			if (persona.needsPainPoints) {
+				prompt += `Pain Points: ${persona.needsPainPoints}\n`;
+			}
 
-      if (persona.goalsExpectations) {
-        prompt += `Goals: ${persona.goalsExpectations}\n`;
-      }
+			if (persona.goalsExpectations) {
+				prompt += `Goals: ${persona.goalsExpectations}\n`;
+			}
 
-      // Story & Behavior
-      prompt += `\nStory & Behavior\n`;
+			// Story & Behavior
+			prompt += `\nStory & Behavior\n`;
 
-      if (persona.backstory) {
-        prompt += `Backstory\n${persona.backstory}\n`;
-      }
+			if (persona.backstory) {
+				prompt += `Backstory\n${persona.backstory}\n`;
+			}
 
-      if (persona.purchaseProcess) {
-        prompt += `Purchase Process\n${persona.purchaseProcess}\n`;
-      }
-    }
+			if (persona.purchaseProcess) {
+				prompt += `Purchase Process\n${persona.purchaseProcess}\n`;
+			}
+		}
 
-    // Creative context (only if includeCreativeInfo is true)
-    if (includeCreativeInfo && creative) {
-      prompt += `\n## CREATIVE DETAILS ##\n`;
-      prompt += `Creative Name: ${creative.name}\n`;
-      prompt += `Creative Type: ${creative.type}\n`;
+		// Creative context (only if includeCreativeInfo is true)
+		if (includeCreativeInfo && creative) {
+			prompt += `\n## CREATIVE DETAILS ##\n`;
+			prompt += `Creative Name: ${creative.name}\n`;
+			prompt += `Creative Type: ${creative.type}\n`;
 
-      // Add type-specific creative details
-      if (creative.type === 'text' && creative.textData) {
-        if (creative.textData.headline) prompt += `Headline: ${creative.textData.headline}\n`;
-        if (creative.textData.body) prompt += `Body: ${creative.textData.body}\n`;
-        if (creative.textData.callToAction) prompt += `Call to Action: ${creative.textData.callToAction}\n`;
-      } else if (creative.type === 'image' && creative.imageData) {
-        if (creative.imageData.appealFeature) prompt += `Appeal/Feature: ${creative.imageData.appealFeature}\n`;
-        if (creative.imageData.emotion) prompt += `Emotion: ${creative.imageData.emotion}\n`;
-      } else if (creative.type === 'video' && creative.videoData) {
-        if (creative.videoData.duration) prompt += `Duration: ${creative.videoData.duration}\n`;
-        if (creative.videoData.emotion) prompt += `Emotion: ${creative.videoData.emotion}\n`;
-      } else if (creative.type === 'lp' && creative.lpData) {
-        if (creative.lpData.headline) prompt += `Headline: ${creative.lpData.headline}\n`;
-      }
-    }
+			// Add type-specific creative details
+			if (creative.type === "text" && creative.textData) {
+				if (creative.textData.headline)
+					prompt += `Headline: ${creative.textData.headline}\n`;
+				if (creative.textData.body)
+					prompt += `Body: ${creative.textData.body}\n`;
+				if (creative.textData.callToAction)
+					prompt += `Call to Action: ${creative.textData.callToAction}\n`;
+			} else if (creative.type === "image" && creative.imageData) {
+				if (creative.imageData.appealFeature)
+					prompt += `Appeal/Feature: ${creative.imageData.appealFeature}\n`;
+				if (creative.imageData.emotion)
+					prompt += `Emotion: ${creative.imageData.emotion}\n`;
+			} else if (creative.type === "video" && creative.videoData) {
+				if (creative.videoData.duration)
+					prompt += `Duration: ${creative.videoData.duration}\n`;
+				if (creative.videoData.emotion)
+					prompt += `Emotion: ${creative.videoData.emotion}\n`;
+			} else if (creative.type === "lp" && creative.lpData) {
+				if (creative.lpData.headline)
+					prompt += `Headline: ${creative.lpData.headline}\n`;
+			}
+		}
 
-    // If not including any context, add a note about it
-    if (!includeProductInfo && !includePersonaInfo && !includeCreativeInfo) {
-      prompt += '\n\nCreate content based solely on the user\'s prompt without additional context information.\n';
-    }
+		// If not including any context, add a note about it
+		if (!includeProductInfo && !includePersonaInfo && !includeCreativeInfo) {
+			prompt +=
+				"\n\nCreate content based solely on the user's prompt without additional context information.\n";
+		}
+		prompt += "Do not use markdown format like ```json";
 
-    // Log the full prompt for debugging
-    console.log(`FULL PROMPT TO ${aiProvider.toUpperCase()}:\n` + prompt);
+		// Log the full prompt for debugging
+		console.log(`FULL PROMPT TO ${aiProvider.toUpperCase()}:\n` + prompt);
 
-    // Generate content with the selected AI provider
-    console.log(`Sending prompt to ${aiProvider}...`);
-    let text;
-    try {
-      const result = await generateContent(
-        aiProvider,
-        prompt,
-        storyPrompt,
-        storyboardSchema
-      );
-      text = result.text;
-      console.log(`Received response from ${aiProvider}`);
-    } catch (aiError: any) {
-      console.error(`Error generating content with ${aiProvider}:`, aiError);
-      throw error(500, `Failed to generate content with ${aiProvider}: ${aiError.message || 'Unknown error'}`);
-    }
+		// Generate content with the selected AI provider
+		console.log(`Sending prompt to ${aiProvider}...`);
+		let text;
+		try {
+			const result = await generateContent(
+				aiProvider,
+				prompt,
+				storyPrompt,
+				storyboardSchema,
+			);
+			text = result.text;
+			console.log(`Received response from ${aiProvider}`);
+		} catch (aiError: any) {
+			console.error(`Error generating content with ${aiProvider}:`, aiError);
+			throw error(
+				500,
+				`Failed to generate content with ${aiProvider}: ${aiError.message || "Unknown error"}`,
+			);
+		}
 
+		if (!text) {
+			throw new Error(`No text received from ${aiProvider}`);
+		}
+		const storyboardData = JSON.parse(text);
+		console.log("Generated storyboard data:", storyboardData);
 
-    if (!text) {
-      throw new Error(`No text received from ${aiProvider}`);
-    }
-    const storyboardData = JSON.parse(text);
-    console.log('Generated storyboard data:', storyboardData);
+		// Check if we have scenes in the response (new schema) or frames (old schema)
+		const createdScenes = [];
+		const createdClips = [];
 
-    // Check if we have scenes in the response (new schema) or frames (old schema)
-    const createdScenes = [];
-    const createdClips = [];
+		if (
+			storyboardData.scenes &&
+			Array.isArray(storyboardData.scenes) &&
+			storyboardData.scenes.length > 0
+		) {
+			console.log("Processing scene-based storyboard structure");
 
-    if (storyboardData.scenes && Array.isArray(storyboardData.scenes) && storyboardData.scenes.length > 0) {
-      console.log('Processing scene-based storyboard structure');
+			// Create scenes and clips based on the new structure
+			for (
+				let sceneIndex = 0;
+				sceneIndex < storyboardData.scenes.length;
+				sceneIndex++
+			) {
+				const sceneData = storyboardData.scenes[sceneIndex];
 
-      // Create scenes and clips based on the new structure
-      for (let sceneIndex = 0; sceneIndex < storyboardData.scenes.length; sceneIndex++) {
-        const sceneData = storyboardData.scenes[sceneIndex];
+				// Create a new scene
+				const [newScene] = await db
+					.insert(scenes)
+					.values({
+						storyId: storyRecord.id,
+						description: sceneData.description || `Scene ${sceneIndex + 1}`,
+						orderIndex: sceneIndex, // Order based on index
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					})
+					.returning();
 
-        // Create a new scene
-        const [newScene] = await db.insert(scenes).values({
-          storyId: storyRecord.id,
-          description: sceneData.description || `Scene ${sceneIndex + 1}`,
-          orderIndex: sceneIndex, // Order based on index
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }).returning();
+				createdScenes.push(newScene);
+				console.log(
+					`Created scene ${sceneIndex + 1}/${storyboardData.scenes.length} with ID: ${newScene.id}`,
+				);
 
-        createdScenes.push(newScene);
-        console.log(`Created scene ${sceneIndex + 1}/${storyboardData.scenes.length} with ID: ${newScene.id}`);
+				// Create clips for this scene
+				if (sceneData.clips && Array.isArray(sceneData.clips)) {
+					for (
+						let clipIndex = 0;
+						clipIndex < sceneData.clips.length;
+						clipIndex++
+					) {
+						const clipData = sceneData.clips[clipIndex];
+						try {
+							// Create a clip for this scene
+							const [newClip] = await db
+								.insert(clips)
+								.values({
+									sceneId: newScene.id,
+									orderIndex: clipIndex,
+									narration: clipData.narration || "",
+									description: clipData.visualDescription || "",
+									canvas: JSON.stringify({ objects: [] }), // Empty canvas initially
+									imageUrl: null, // Will be generated by the clip-preview endpoint
+									duration: clipData.duration
+										? Math.round(clipData.duration * 1000)
+										: 5000, // Convert to milliseconds
+									createdAt: new Date(),
+									updatedAt: new Date(),
+								})
+								.returning();
 
-        // Create clips for this scene
-        if (sceneData.clips && Array.isArray(sceneData.clips)) {
-          for (let clipIndex = 0; clipIndex < sceneData.clips.length; clipIndex++) {
-            const clipData = sceneData.clips[clipIndex];
-            try {
-              // Create a clip for this scene
-              const [newClip] = await db.insert(clips).values({
-                sceneId: newScene.id,
-                orderIndex: clipIndex,
-                narration: clipData.narration || '',
-                description: clipData.visualDescription || '',
-                canvas: JSON.stringify({ objects: [] }), // Empty canvas initially
-                imageUrl: null, // Will be generated by the clip-preview endpoint
-                duration: clipData.duration ? Math.round(clipData.duration * 1000) : 5000, // Convert to milliseconds
-                createdAt: new Date(),
-                updatedAt: new Date()
-              }).returning();
+							createdClips.push(newClip);
+							console.log(
+								`Created clip ${clipIndex + 1}/${sceneData.clips.length} for scene ${sceneIndex + 1} with ID: ${newClip.id}`,
+							);
+						} catch (clipError) {
+							console.error(
+								`Error creating clip for scene ${newScene.id}:`,
+								clipError,
+							);
+						}
+					}
+				}
+			}
+		}
+		// Fallback to old frame-based structure for backward compatibility
+		else if (
+			storyboardData.frames &&
+			Array.isArray(storyboardData.frames) &&
+			storyboardData.frames.length > 0
+		) {
+			console.log("Processing legacy frame-based storyboard structure");
 
-              createdClips.push(newClip);
-              console.log(`Created clip ${clipIndex + 1}/${sceneData.clips.length} for scene ${sceneIndex + 1} with ID: ${newClip.id}`);
-            } catch (clipError) {
-              console.error(`Error creating clip for scene ${newScene.id}:`, clipError);
-            }
-          }
-        }
-      }
-    }
-    // Fallback to old frame-based structure for backward compatibility
-    else if (storyboardData.frames && Array.isArray(storyboardData.frames) && storyboardData.frames.length > 0) {
-      console.log('Processing legacy frame-based storyboard structure');
+			// Create a single scene for all frames
+			const [newScene] = await db
+				.insert(scenes)
+				.values({
+					storyId: storyRecord.id,
+					description:
+						storyboardData.description || "Generated from AI storyboard",
+					orderIndex: 0, // First scene
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				})
+				.returning();
 
-      // Create a single scene for all frames
-      const [newScene] = await db.insert(scenes).values({
-        storyId: storyRecord.id,
-        description: storyboardData.description || 'Generated from AI storyboard',
-        orderIndex: 0, // First scene
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }).returning();
+			createdScenes.push(newScene);
+			console.log(
+				`Created single scene with ID: ${newScene.id} for ${storyboardData.frames.length} frames`,
+			);
 
-      createdScenes.push(newScene);
-      console.log(`Created single scene with ID: ${newScene.id} for ${storyboardData.frames.length} frames`);
+			// Create clips for each frame
+			for (let i = 0; i < storyboardData.frames.length; i++) {
+				const frame = storyboardData.frames[i];
+				try {
+					// Create a clip for this frame
+					const [newClip] = await db
+						.insert(clips)
+						.values({
+							sceneId: newScene.id,
+							orderIndex: i,
+							narration: frame.narration || "",
+							description: frame.visualDescription || "",
+							canvas: JSON.stringify({ objects: [] }), // Empty canvas initially
+							imageUrl: null, // Will be generated by the clip-preview endpoint
+							duration: 5000, // Default duration in milliseconds
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						})
+						.returning();
 
-      // Create clips for each frame
-      for (let i = 0; i < storyboardData.frames.length; i++) {
-        const frame = storyboardData.frames[i];
-        try {
-          // Create a clip for this frame
-          const [newClip] = await db.insert(clips).values({
-            sceneId: newScene.id,
-            orderIndex: i,
-            narration: frame.narration || '',
-            description: frame.visualDescription || '',
-            canvas: JSON.stringify({ objects: [] }), // Empty canvas initially
-            imageUrl: null, // Will be generated by the clip-preview endpoint
-            duration: 5000, // Default duration in milliseconds
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }).returning();
+					createdClips.push(newClip);
+					console.log(
+						`Created clip ${i + 1}/${storyboardData.frames.length} with ID: ${newClip.id}`,
+					);
+				} catch (clipError) {
+					console.error(
+						`Error creating clip for frame ${frame.id}:`,
+						clipError,
+					);
+				}
+			}
+		} else {
+			throw new Error("Invalid storyboard data: missing scenes or frames");
+		}
 
-          createdClips.push(newClip);
-          console.log(`Created clip ${i + 1}/${storyboardData.frames.length} with ID: ${newClip.id}`);
-        } catch (clipError) {
-          console.error(`Error creating clip for frame ${frame.id}:`, clipError);
-        }
-      }
-    } else {
-      throw new Error('Invalid storyboard data: missing scenes or frames');
-    }
+		// Create a context summary for the response
+		const contextSummary = {
+			// Creative information
+			creativeType: creative.type,
+			creativeName: creative.name,
+			creativeDescription: creative.description,
 
-    // Create a context summary for the response
-    const contextSummary = {
-      // Creative information
-      creativeType: creative.type,
-      creativeName: creative.name,
-      creativeDescription: creative.description,
+			// Type-specific creative information
+			textHeadline:
+				creative.type === "text" && creative.textData
+					? creative.textData.headline
+					: null,
+			textBody:
+				creative.type === "text" && creative.textData
+					? creative.textData.body
+					: null,
+			textCTA:
+				creative.type === "text" && creative.textData
+					? creative.textData.callToAction
+					: null,
 
-      // Type-specific creative information
-      textHeadline: creative.type === 'text' && creative.textData ? creative.textData.headline : null,
-      textBody: creative.type === 'text' && creative.textData ? creative.textData.body : null,
-      textCTA: creative.type === 'text' && creative.textData ? creative.textData.callToAction : null,
+			imageAppeal:
+				creative.type === "image" && creative.imageData
+					? creative.imageData.appealFeature
+					: null,
+			imageEmotion:
+				creative.type === "image" && creative.imageData
+					? creative.imageData.emotion
+					: null,
 
-      imageAppeal: creative.type === 'image' && creative.imageData ? creative.imageData.appealFeature : null,
-      imageEmotion: creative.type === 'image' && creative.imageData ? creative.imageData.emotion : null,
+			videoEmotion:
+				creative.type === "video" && creative.videoData
+					? creative.videoData.emotion
+					: null,
+			videoDuration:
+				creative.type === "video" && creative.videoData
+					? creative.videoData.duration
+					: null,
 
-      videoEmotion: creative.type === 'video' && creative.videoData ? creative.videoData.emotion : null,
-      videoDuration: creative.type === 'video' && creative.videoData ? creative.videoData.duration : null,
+			lpHeadline:
+				creative.type === "lp" && creative.lpData
+					? creative.lpData.headline
+					: null,
 
-      lpHeadline: creative.type === 'lp' && creative.lpData ? creative.lpData.headline : null,
+			// Persona information
+			personaName: persona.name,
+			personaTitle: persona.personaTitle,
+			personaPainPoints: persona.needsPainPoints,
+			personaGoals: persona.goalsExpectations,
+			personaValues: persona.valuesText,
 
-      // Persona information
-      personaName: persona.name,
-      personaTitle: persona.personaTitle,
-      personaPainPoints: persona.needsPainPoints,
-      personaGoals: persona.goalsExpectations,
-      personaValues: persona.valuesText,
+			// Product information
+			productName: product.name,
+			productFeatures: product.featuresStrengths,
+			productOverview: product.overview,
+			productDetails: product.details,
+		};
 
-      // Product information
-      productName: product.name,
-      productFeatures: product.featuresStrengths,
-      productOverview: product.overview,
-      productDetails: product.details
-    };
-
-    return json({
-      success: true,
-      message: `Successfully created ${createdScenes.length} scenes with ${createdClips.length} clips from AI storyboard with context-aware content`,
-      storyId: storyRecord.id,
-      sceneCount: createdScenes.length,
-      clipCount: createdClips.length,
-      scenes: createdScenes,
-      clips: createdClips,
-      contextUsed: includeProductInfo || includePersonaInfo || includeCreativeInfo,
-      contextSummary
-    });
-  }
+		return json({
+			success: true,
+			message: `Successfully created ${createdScenes.length} scenes with ${createdClips.length} clips from AI storyboard with context-aware content`,
+			storyId: storyRecord.id,
+			sceneCount: createdScenes.length,
+			clipCount: createdClips.length,
+			scenes: createdScenes,
+			clips: createdClips,
+			contextUsed:
+				includeProductInfo || includePersonaInfo || includeCreativeInfo,
+			contextSummary,
+		});
+	}
 };
