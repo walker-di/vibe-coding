@@ -395,6 +395,10 @@ export class GameEngine extends EventEmitter {
 
     // Game control
     pauseGame(): ActionResult {
+        console.log('PAUSE: Before pause - nodes count:', this.gameState.nodes.length);
+        console.log('PAUSE: Courses before:', this.gameState.nodes.filter(n => n.type === 'Course').map(c => ({ id: c.id, label: c.label })));
+        console.log('PAUSE: Personnel before:', this.gameState.nodes.filter(n => n.type === 'Personnel').map(p => ({ id: p.id, label: p.label, enrolledInCourse: (p as any).enrolledInCourse })));
+
         this.gameState.isPaused = true;
         this.pausedAt = Date.now(); // Store when we paused
 
@@ -407,6 +411,10 @@ export class GameEngine extends EventEmitter {
                     const realElapsedTime = (Date.now() - personnel.courseProgress.startTime) / 1000;
                     const gameSpeedElapsedTime = realElapsedTime * this.gameState.gameSpeed;
                     personnel.courseProgress.remainingTime = Math.max(0, personnel.courseProgress.duration - gameSpeedElapsedTime);
+
+                    // Ensure the enrolledInCourse property is preserved during pause
+                    (personnel as any).enrolledInCourse = personnel.courseProgress.courseId;
+                    console.log('PAUSE: Set enrolledInCourse for', personnel.id, 'to', personnel.courseProgress.courseId);
                 }
             }
         });
@@ -419,11 +427,20 @@ export class GameEngine extends EventEmitter {
             clearInterval(this.courseProcessingInterval);
             this.courseProcessingInterval = null;
         }
+
+        console.log('PAUSE: After pause - nodes count:', this.gameState.nodes.length);
+        console.log('PAUSE: Courses after:', this.gameState.nodes.filter(n => n.type === 'Course').map(c => ({ id: c.id, label: c.label })));
+        console.log('PAUSE: Personnel after:', this.gameState.nodes.filter(n => n.type === 'Personnel').map(p => ({ id: p.id, label: p.label, enrolledInCourse: (p as any).enrolledInCourse })));
+
         this.emitStateChange('STATE_CHANGED', this.gameState);
         return { success: true, message: 'Game paused' };
     }
 
     resumeGame(): ActionResult {
+        console.log('RESUME: Before resume - nodes count:', this.gameState.nodes.length);
+        console.log('RESUME: Courses before:', this.gameState.nodes.filter(n => n.type === 'Course').map(c => ({ id: c.id, label: c.label })));
+        console.log('RESUME: Personnel before:', this.gameState.nodes.filter(n => n.type === 'Personnel').map(p => ({ id: p.id, label: p.label, enrolledInCourse: (p as any).enrolledInCourse })));
+
         this.gameState.isPaused = false;
 
         // Adjust week start time to account for pause duration
@@ -442,6 +459,10 @@ export class GameEngine extends EventEmitter {
                     personnel.courseProgress.startTime = currentTime;
                     personnel.courseProgress.duration = personnel.courseProgress.remainingTime;
 
+                    // Ensure the enrolledInCourse property is set for compound node functionality
+                    (personnel as any).enrolledInCourse = personnel.courseProgress.courseId;
+                    console.log('RESUME: Set enrolledInCourse for', personnel.id, 'to', personnel.courseProgress.courseId);
+
                     // Update course progress tracking
                     const course = this.gameState.nodes.find(n => n.id === personnel.courseProgress!.courseId) as CourseData;
                     if (course && course.personnelProgress[personnel.id]) {
@@ -453,6 +474,11 @@ export class GameEngine extends EventEmitter {
         });
 
         this.startGameLoop();
+
+        console.log('RESUME: After resume - nodes count:', this.gameState.nodes.length);
+        console.log('RESUME: Courses after:', this.gameState.nodes.filter(n => n.type === 'Course').map(c => ({ id: c.id, label: c.label })));
+        console.log('RESUME: Personnel after:', this.gameState.nodes.filter(n => n.type === 'Personnel').map(p => ({ id: p.id, label: p.label, enrolledInCourse: (p as any).enrolledInCourse })));
+
         this.emitStateChange('STATE_CHANGED', this.gameState);
         return { success: true, message: 'Game resumed' };
     }

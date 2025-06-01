@@ -330,7 +330,7 @@ export function gameNodesToCytoscapeElements(nodes: any[], edges: any[]) {
     const cytoscapeNodes = nodes.map(node => {
         const nodeData: any = {
             id: node.id,
-            label: node.label,
+            label: node.label || node.id, // Fallback to ID if no label
             type: node.type,
             ...node
         };
@@ -341,9 +341,15 @@ export function gameNodesToCytoscapeElements(nodes: any[], edges: any[]) {
         }
 
         // Handle parent-child relationships for compound nodes
-        if (node.type === 'Personnel' && node.enrolledInCourse) {
-            nodeData.parent = node.enrolledInCourse;
-            console.log(`Setting parent for ${node.id} to ${node.enrolledInCourse}`);
+        if (node.type === 'Personnel') {
+            // Check both enrolledInCourse property and courseProgress for parent relationship
+            const parentCourseId = node.enrolledInCourse || (node.courseProgress ? node.courseProgress.courseId : null);
+            if (parentCourseId) {
+                nodeData.parent = parentCourseId;
+                console.log('CYTOSCAPE: Setting parent for', node.id, 'to', parentCourseId, 'from', node.enrolledInCourse ? 'enrolledInCourse' : 'courseProgress');
+            } else {
+                console.log('CYTOSCAPE: No parent for personnel', node.id, '- enrolledInCourse:', node.enrolledInCourse, 'courseProgress:', !!node.courseProgress);
+            }
         }
 
         return {
@@ -375,8 +381,6 @@ export function gameNodesToCytoscapeElements(nodes: any[], edges: any[]) {
         if (aHasParent && !bHasParent) return 1;  // a is child, b is parent
         return 0; // both are same type
     });
-
-    console.log('Cytoscape elements:', sortedNodes.map(n => ({ id: n.data.id, type: n.data.type, parent: n.data.parent })));
 
     return [...sortedNodes, ...cytoscapeEdges];
 }

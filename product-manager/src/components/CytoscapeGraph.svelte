@@ -230,6 +230,9 @@
         try {
             // Convert game data to Cytoscape format
             const elements = gameNodesToCytoscapeElements(nodes, edges);
+            console.log('CYTOSCAPE: Updating with', nodes.length, 'nodes,', edges.length, 'edges');
+            console.log('CYTOSCAPE: Courses:', nodes.filter(n => n.type === 'Course').map(c => ({ id: c.id, label: c.label })));
+            console.log('CYTOSCAPE: Personnel:', nodes.filter(n => n.type === 'Personnel').map(p => ({ id: p.id, label: p.label, enrolledInCourse: (p as any).enrolledInCourse })));
 
             // Get current elements in Cytoscape
             const currentNodes = cy.nodes().map((n: any) => n.id());

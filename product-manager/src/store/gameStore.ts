@@ -59,6 +59,10 @@ export const completedTasks = derived(gameState, $gameState => {
 
 // Listen to game engine state changes
 gameEngine.on('stateChanged', (newState: GameState) => {
+    console.log('STORE: State changed - nodes count:', newState.nodes.length);
+    console.log('STORE: Courses:', newState.nodes.filter(n => n.type === 'Course').map(c => ({ id: c.id, label: c.label })));
+    console.log('STORE: Personnel:', newState.nodes.filter(n => n.type === 'Personnel').map(p => ({ id: p.id, label: p.label, enrolledInCourse: (p as any).enrolledInCourse })));
+
     // Update the store
     gameState.set({
         nodes: [...newState.nodes],
