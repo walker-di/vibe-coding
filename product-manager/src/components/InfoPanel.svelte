@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { gameSpeed, isPaused } from '../store/gameStore';
+    import { gameSpeed, isPaused, nodes } from '../store/gameStore';
     import type { BaseNodeData, PersonnelData, ProductData, TaskData, ResourceData, MarketData, IdeaData, CourseData } from '../types';
 
     interface Props {
@@ -13,6 +13,17 @@
     // Real-time update for course progress - sync with game engine
     let updateInterval: NodeJS.Timeout | null = null;
     let currentTime = $state(Date.now());
+
+    // Derived state for real-time progress calculations
+    let realTimeTaskProgress = $derived.by(() => {
+        if (!data || !isTaskData(data)) return null;
+        return getRealTimeTaskProgress(data);
+    });
+
+    let realTimeCourseProgress = $derived.by(() => {
+        if (!data || !isPersonnelData(data)) return null;
+        return getRealTimeCourseProgress(data);
+    });
 
     onMount(() => {
         // Update current time every 100ms for smoother real-time progress
@@ -160,6 +171,72 @@
             remainingTime
         };
     }
+
+    // Calculate real-time task progress (accounting for game speed and pause state)
+    function getRealTimeTaskProgress(taskData: TaskData) {
+        if (!taskData.assignedPersonnelIds.length) {
+            // If no personnel assigned, use the stored progress
+            return {
+                progress: taskData.progress,
+                remainingTime: taskData.remainingTime || 0,
+                progressPercent: Math.min(100, Math.max(0, taskData.progress * 100))
+            };
+        }
+
+        if ($isPaused) {
+            // If paused, use the stored progress and remaining time
+            return {
+                progress: taskData.progress,
+                remainingTime: taskData.remainingTime || 0,
+                progressPercent: Math.min(100, Math.max(0, taskData.progress * 100))
+            };
+        }
+
+        // Use game engine's progress as baseline + add smooth interpolation for real-time updates
+        // The game engine updates every 1000ms, we interpolate between those updates
+        const baseProgress = taskData.progress;
+        const totalDurationSeconds = taskData.timeToComplete * 120;
+
+        if (taskData.assignedPersonnelIds.length > 0 && baseProgress < 1 && !$isPaused) {
+            // Calculate total efficiency of assigned personnel
+            let totalEfficiency = 0;
+            taskData.assignedPersonnelIds.forEach(personnelId => {
+                const personnel = $nodes.find(node => node.id === personnelId && node.type === 'Personnel') as PersonnelData;
+                if (personnel) {
+                    totalEfficiency += personnel.efficiency;
+                } else {
+                    totalEfficiency += 1.0;
+                }
+            });
+
+            // Calculate the exact same progress rate that the game engine uses
+            const progressPerSecond = (totalEfficiency / totalDurationSeconds) * $gameSpeed;
+
+            // Add interpolation for smooth updates between game engine updates (max 1 second)
+            // This gives us smooth progress without double-counting
+            const interpolationProgress = progressPerSecond * 0.5; // Conservative 0.5 second interpolation
+            const smoothProgress = Math.min(1, baseProgress + interpolationProgress);
+
+            const remainingSeconds = Math.max(0, totalDurationSeconds * (1 - smoothProgress));
+            const progressPercent = Math.min(100, Math.max(0, smoothProgress * 100));
+
+            return {
+                progress: smoothProgress,
+                remainingTime: remainingSeconds,
+                progressPercent
+            };
+        } else {
+            // Fallback: use stored progress (paused, completed, or no personnel)
+            const remainingSeconds = Math.max(0, totalDurationSeconds * (1 - baseProgress));
+            const progressPercent = Math.min(100, Math.max(0, baseProgress * 100));
+
+            return {
+                progress: baseProgress,
+                remainingTime: remainingSeconds,
+                progressPercent
+            };
+        }
+    }
 </script>
 
 {#if data}
@@ -235,33 +312,30 @@
                                 <span class="text-white font-mono">{data.assignedToTaskId}</span>
                             </div>
                         {/if}
-                        {#if data.courseProgress}
-                            {@const realTimeProgress = getRealTimeCourseProgress(data)}
-                            {#if realTimeProgress}
-                                <div class="mt-3 p-3 bg-gray-700 rounded-lg">
-                                    <div class="flex justify-between items-center mb-2">
-                                        <span class="text-gray-300 font-medium">📚 Course Progress</span>
-                                        <span class="text-xs text-gray-400">Course ID: {data.courseProgress.courseId}</span>
+                        {#if data.courseProgress && realTimeCourseProgress}
+                            <div class="mt-3 p-3 bg-gray-700 rounded-lg">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-gray-300 font-medium">📚 Course Progress</span>
+                                    <span class="text-xs text-gray-400">Course ID: {data.courseProgress.courseId}</span>
+                                </div>
+                                <div class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">Remaining Time:</span>
+                                        <span class="text-white font-mono">
+                                            {realTimeCourseProgress.remainingTime <= 0 ? '✅ Done!' : formatDuration(realTimeCourseProgress.remainingTime)}
+                                        </span>
                                     </div>
-                                    <div class="space-y-2">
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-400">Remaining Time:</span>
-                                            <span class="text-white font-mono">
-                                                {realTimeProgress.remainingTime <= 0 ? '✅ Done!' : formatDuration(realTimeProgress.remainingTime)}
-                                            </span>
-                                        </div>
-                                        <div class="w-full bg-gray-600 rounded-full h-2">
-                                            <div
-                                                class="{realTimeProgress.progressPercent >= 100 ? 'bg-green-500' : 'bg-blue-500'} h-2 rounded-full transition-all duration-300"
-                                                style="width: {realTimeProgress.progressPercent}%"
-                                            ></div>
-                                        </div>
-                                        <div class="text-xs text-center {realTimeProgress.progressPercent >= 100 ? 'text-green-400' : 'text-gray-400'}">
-                                            {realTimeProgress.progressPercent >= 100 ? '✅ Completed!' : `${Math.round(realTimeProgress.progressPercent)}% Complete`}
-                                        </div>
+                                    <div class="w-full bg-gray-600 rounded-full h-2">
+                                        <div
+                                            class="{realTimeCourseProgress.progressPercent >= 100 ? 'bg-green-500' : 'bg-blue-500'} h-2 rounded-full transition-all duration-300"
+                                            style="width: {realTimeCourseProgress.progressPercent}%"
+                                        ></div>
+                                    </div>
+                                    <div class="text-xs text-center {realTimeCourseProgress.progressPercent >= 100 ? 'text-green-400' : 'text-gray-400'}">
+                                        {realTimeCourseProgress.progressPercent >= 100 ? '✅ Completed!' : `${Math.round(realTimeCourseProgress.progressPercent)}% Complete`}
                                     </div>
                                 </div>
-                            {/if}
+                            </div>
                         {/if}
                     </div>
                 </div>
@@ -303,14 +377,35 @@
                 </div>
             {/if}
 
-            {#if isTaskData(data)}
+            {#if isTaskData(data) && realTimeTaskProgress}
                 <div>
                     <h4 class="text-sm font-medium text-gray-300 mb-2">Task Details</h4>
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between">
                             <span class="text-gray-400">Progress:</span>
-                            <span class="text-white">{formatPercentage(data.progress)}</span>
+                            <span class="text-white">{formatPercentage(realTimeTaskProgress.progress)}</span>
                         </div>
+
+                        <!-- Real-time progress bar -->
+                        <div class="w-full bg-gray-600 rounded-full h-2">
+                            <div
+                                class="{realTimeTaskProgress.progress >= 1 ? 'bg-green-500' : 'bg-amber-500'} h-2 rounded-full transition-all duration-300"
+                                style="width: {realTimeTaskProgress.progressPercent}%"
+                            ></div>
+                        </div>
+                        <div class="text-xs text-center {realTimeTaskProgress.progress >= 1 ? 'text-green-400' : 'text-gray-400'}">
+                            {realTimeTaskProgress.progress >= 1 ? '✅ Completed!' : `${Math.round(realTimeTaskProgress.progressPercent)}% Complete`}
+                        </div>
+
+                        {#if data.assignedPersonnelIds.length > 0 && realTimeTaskProgress.remainingTime > 0}
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Remaining Time:</span>
+                                <span class="text-white font-mono">
+                                    {realTimeTaskProgress.remainingTime <= 0 ? '✅ Done!' : formatDuration(realTimeTaskProgress.remainingTime)}
+                                </span>
+                            </div>
+                        {/if}
+
                         <div class="flex justify-between">
                             <span class="text-gray-400">Time to Complete:</span>
                             <span class="text-white">{data.timeToComplete} ticks</span>

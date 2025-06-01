@@ -17,9 +17,10 @@
     interface Props {
         onOpenCourseModal?: () => void;
         onOpenHiringModal?: () => void;
+        onOpenFinanceModal?: () => void;
     }
 
-    let { onOpenCourseModal = () => {}, onOpenHiringModal = () => {} }: Props = $props();
+    let { onOpenCourseModal = () => {}, onOpenHiringModal = () => {}, onOpenFinanceModal = () => {} }: Props = $props();
 
     // Format currency
     function formatCurrency(amount: number): string {
@@ -167,6 +168,13 @@
                 >
                     <span>🎓</span>
                     <span>Training</span>
+                </button>
+                <button
+                    class="flex items-center space-x-2 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm"
+                    onclick={onOpenFinanceModal}
+                >
+                    <span>💰</span>
+                    <span>Finance</span>
                 </button>
             </div>
         </div>

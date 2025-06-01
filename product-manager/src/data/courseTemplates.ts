@@ -193,6 +193,17 @@ export const courseTemplates: CourseTemplate[] = [
         maxParticipants: 3
     },
     {
+        id: 'pitching-mastery',
+        label: 'Pitching Mastery',
+        description: 'Master the art of creating compelling investor pitches and presentations',
+        skillsImproved: ['pitching', 'presentation', 'business development'],
+        efficiencyBoost: 0.15,
+        duration: 180, // 3 minutes
+        cost: 3500,
+        category: 'business',
+        maxParticipants: 3
+    },
+    {
         id: 'quality-assurance',
         label: 'Quality Assurance',
         description: 'Master testing methodologies and quality control processes',

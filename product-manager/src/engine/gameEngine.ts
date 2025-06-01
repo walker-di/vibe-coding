@@ -14,6 +14,8 @@ import type {
     CustomerData,
     ContentData,
     CampaignData,
+    AngelFounderData,
+    PitchData,
     MarketingMetrics,
     PopulationSegment,
     GameEvent,
@@ -70,7 +72,7 @@ export class GameEngine extends EventEmitter {
                 label: 'Founder',
                 type: 'Personnel',
                 description: 'Company founder with entrepreneurial skills',
-                skills: ['leadership', 'vision', 'networking'],
+                skills: ['leadership', 'vision', 'networking', 'pitching'],
                 efficiency: 0.8,
                 morale: 0.9,
                 salary: 0, // Founder doesn't take salary initially
@@ -161,6 +163,8 @@ export class GameEngine extends EventEmitter {
                     return this.removeEdge(action.payload.edgeId);
                 case 'ASSIGN_PERSONNEL_TO_TASK':
                     return this.assignPersonnelToTask(action.payload.personnelId, action.payload.taskId);
+                case 'UNASSIGN_PERSONNEL_FROM_TASK':
+                    return this.unassignPersonnelFromTask(action.payload.personnelId, action.payload.taskId);
                 case 'PAUSE_GAME':
                     return this.pauseGame();
                 case 'RESUME_GAME':
@@ -203,6 +207,12 @@ export class GameEngine extends EventEmitter {
                     return this.processContentPerformance(action.payload.contentId);
                 case 'UPDATE_MARKETING_METRICS':
                     return this.updateMarketingMetrics();
+                case 'CREATE_PITCH':
+                    return this.createPitch(action.payload);
+                case 'PRESENT_PITCH':
+                    return this.presentPitch(action.payload);
+                case 'SECURE_ANGEL_FUNDING':
+                    return this.secureAngelFunding(action.payload);
                 default:
                     return { success: false, message: `Unknown action type: ${action.type}` };
             }
@@ -302,26 +312,89 @@ export class GameEngine extends EventEmitter {
             return { success: false, message: 'Personnel is already assigned to a task' };
         }
 
+        // Check if personnel has required skills
+        const hasRequiredSkills = task.requiredSkills.some(skill =>
+            personnel.skills.includes(skill)
+        );
+
+        if (!hasRequiredSkills) {
+            return {
+                success: false,
+                message: `Personnel lacks required skills. Task requires: ${task.requiredSkills.join(', ')}. Personnel has: ${personnel.skills.join(', ')}`
+            };
+        }
+
         // Assign personnel to task
         personnel.assignedToTaskId = taskId;
         if (!task.assignedPersonnelIds.includes(personnelId)) {
             task.assignedPersonnelIds.push(personnelId);
         }
 
-        // Create edge to represent assignment
-        const edgeId = `assignment-${personnelId}-${taskId}`;
-        const assignmentEdge: EdgeData = {
-            id: edgeId,
-            source: personnelId,
-            target: taskId,
-            label: 'assigned to',
-            type: 'assignment'
+        // Initialize task timing if this is the first personnel assigned
+        if (task.assignedPersonnelIds.length === 1 && !task.startTime) {
+            const currentTime = Date.now();
+            task.startTime = currentTime;
+            // Calculate total duration in seconds: timeToComplete ticks * 120 seconds per tick
+            const totalDurationSeconds = task.timeToComplete * 120;
+            task.remainingTime = totalDurationSeconds;
+        }
+
+        // Set the personnel's assigned task for compound node functionality
+        (personnel as any).assignedToTask = taskId;
+
+        // Position personnel inside the task node
+        const taskPosition = task.position || { x: 200, y: 200 };
+        const assignedCount = task.assignedPersonnelIds.length;
+        const angle = (assignedCount - 1) * (Math.PI * 2 / Math.max(task.assignedPersonnelIds.length, 4));
+        const radius = 30; // Distance from task center
+
+        personnel.position = {
+            x: taskPosition.x + Math.cos(angle) * radius,
+            y: taskPosition.y + Math.sin(angle) * radius
         };
 
-        this.gameState.edges.push(assignmentEdge);
         this.emitStateChange('STATE_CHANGED', this.gameState);
 
         return { success: true, message: 'Personnel assigned to task successfully' };
+    }
+
+    unassignPersonnelFromTask(personnelId: string, taskId: string): ActionResult {
+        const personnel = this.gameState.nodes.find(node => node.id === personnelId && node.type === 'Personnel') as PersonnelData;
+        const task = this.gameState.nodes.find(node => node.id === taskId && node.type === 'Task') as TaskData;
+
+        if (!personnel) {
+            return { success: false, message: 'Personnel not found' };
+        }
+
+        if (!task) {
+            return { success: false, message: 'Task not found' };
+        }
+
+        const assignmentIndex = task.assignedPersonnelIds.indexOf(personnelId);
+        if (assignmentIndex === -1) {
+            return { success: false, message: 'Personnel is not assigned to this task' };
+        }
+
+        // Remove personnel from task
+        task.assignedPersonnelIds.splice(assignmentIndex, 1);
+
+        // Clear personnel assignment tracking
+        delete personnel.assignedToTaskId;
+        delete (personnel as any).assignedToTask;
+
+        // Move personnel outside the task
+        const taskPosition = task.position || { x: 200, y: 200 };
+        personnel.position = {
+            x: taskPosition.x + 100 + Math.random() * 100,
+            y: taskPosition.y + 100 + Math.random() * 100
+        };
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `${personnel.label} unassigned from ${task.label}`,
+            data: { personnelId, taskId }
+        };
     }
 
     // Personnel management
@@ -378,10 +451,8 @@ export class GameEngine extends EventEmitter {
                 task.assignedPersonnelIds = task.assignedPersonnelIds.filter(id => id !== personnelId);
             }
 
-            // Remove assignment edge
-            this.gameState.edges = this.gameState.edges.filter(
-                edge => !(edge.source === personnelId && edge.target === personnel.assignedToTaskId && edge.type === 'assignment')
-            );
+            // Clear the personnel's assigned task for compound node functionality
+            delete (personnel as any).assignedToTask;
         }
 
         // Remove personnel node
@@ -465,6 +536,13 @@ export class GameEngine extends EventEmitter {
                     (personnel as any).enrolledInCourse = personnel.courseProgress.courseId;
                     console.log('PAUSE: Set enrolledInCourse for', personnel.id, 'to', personnel.courseProgress.courseId);
                 }
+            } else if (node.type === 'Task') {
+                const task = node as TaskData;
+                if (task.assignedPersonnelIds.length > 0 && task.startTime) {
+                    // Update remainingTime based on current progress for display purposes
+                    const totalDurationSeconds = task.timeToComplete * 120;
+                    task.remainingTime = Math.max(0, totalDurationSeconds * (1 - task.progress));
+                }
             }
         });
 
@@ -518,6 +596,12 @@ export class GameEngine extends EventEmitter {
                         course.personnelProgress[personnel.id].startTime = currentTime;
                         course.personnelProgress[personnel.id].remainingTime = personnel.courseProgress.remainingTime;
                     }
+                }
+            } else if (node.type === 'Task') {
+                const task = node as TaskData;
+                if (task.assignedPersonnelIds.length > 0 && task.startTime && task.remainingTime) {
+                    // Reset start time to current time, keeping remaining duration
+                    task.startTime = currentTime;
                 }
             }
         });
@@ -578,6 +662,19 @@ export class GameEngine extends EventEmitter {
                         course.personnelProgress[personnel.id].remainingTime = remainingTime;
                     }
                 }
+            } else if (node.type === 'Task') {
+                const task = node as TaskData;
+                if (task.assignedPersonnelIds.length > 0 && task.startTime) {
+                    // For tasks, we don't need to adjust timing because the progress is managed
+                    // by the processTasksRealTime() method which uses task.progress as the source of truth.
+                    // The progress calculation already accounts for the current game speed.
+                    // We just need to reset the startTime to maintain consistency for any timing displays.
+                    task.startTime = currentTime;
+
+                    // Update remainingTime based on current progress for display purposes
+                    const totalDurationSeconds = task.timeToComplete * 120;
+                    task.remainingTime = Math.max(0, totalDurationSeconds * (1 - task.progress));
+                }
             }
         });
 
@@ -605,9 +702,10 @@ export class GameEngine extends EventEmitter {
                 this.tick();
             }, tickDuration);
 
-            // Start real-time course processing (every 1 second)
+            // Start real-time course and task processing (every 1 second)
             this.courseProcessingInterval = setInterval(() => {
                 this.processCourses();
+                this.processTasksRealTime();
                 this.emitStateChange('STATE_CHANGED', this.gameState);
             }, 1000);
         }
@@ -938,7 +1036,7 @@ export class GameEngine extends EventEmitter {
 
     private processTasks() {
         const tasks = this.gameState.nodes.filter(node => node.type === 'Task') as TaskData[];
-        
+
         tasks.forEach(task => {
             if (task.assignedPersonnelIds.length > 0 && task.progress < 1) {
                 // Calculate progress based on assigned personnel efficiency
@@ -953,6 +1051,34 @@ export class GameEngine extends EventEmitter {
                 // Progress increases based on total efficiency and time
                 const progressIncrease = (totalEfficiency / task.timeToComplete) * 0.1; // 0.1 per tick base rate
                 task.progress = Math.min(1, task.progress + progressIncrease);
+
+                // Check if task is completed
+                if (task.progress >= 1) {
+                    this.completeTask(task);
+                }
+            }
+        });
+    }
+
+    private processTasksRealTime() {
+        const tasks = this.gameState.nodes.filter(node => node.type === 'Task') as TaskData[];
+
+        tasks.forEach(task => {
+            if (task.assignedPersonnelIds.length > 0 && task.progress < 1) {
+                // Calculate progress based on assigned personnel efficiency
+                let totalEfficiency = 0;
+                task.assignedPersonnelIds.forEach(personnelId => {
+                    const personnel = this.gameState.nodes.find(node => node.id === personnelId) as PersonnelData;
+                    if (personnel) {
+                        totalEfficiency += personnel.efficiency;
+                    }
+                });
+
+                // Real-time progress: progress per second based on game speed
+                // Base rate: complete in timeToComplete ticks (weeks)
+                // Each tick = 120 seconds, so progress per second = efficiency / (timeToComplete * 120)
+                const progressPerSecond = (totalEfficiency / (task.timeToComplete * 120)) * this.gameState.gameSpeed;
+                task.progress = Math.min(1, task.progress + progressPerSecond);
 
                 // Check if task is completed
                 if (task.progress >= 1) {
@@ -1002,6 +1128,35 @@ export class GameEngine extends EventEmitter {
     }
 
     private completeTask(task: TaskData) {
+        // Check if this is a pitch task
+        if (task.label === 'Create Investor Pitch' && task.requiredSkills.includes('pitching')) {
+            // Create a pitch node when pitch task is completed
+            const assignedPersonnel = this.gameState.nodes.find(node =>
+                node.id === task.assignedPersonnelIds[0] && node.type === 'Personnel'
+            ) as PersonnelData;
+
+            if (assignedPersonnel) {
+                const newPitch: PitchData = {
+                    id: `pitch-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                    label: 'Investor Pitch',
+                    type: 'Pitch',
+                    description: 'A compelling pitch presentation for angel investors',
+                    quality: Math.min(0.5 + (assignedPersonnel.efficiency * 0.5), 1.0),
+                    createdBy: assignedPersonnel.id,
+                    createdAt: Date.now(),
+                    isCompleted: true,
+                    position: {
+                        x: task.position?.x || Math.random() * 400 + 100,
+                        y: (task.position?.y || Math.random() * 400 + 100) + 100
+                    }
+                };
+
+                // Add pitch to game state
+                this.gameState.nodes.push(newPitch);
+                this.emitStateChange('NODE_ADDED', newPitch);
+            }
+        }
+
         // Task completion logic would go here
         // For now, just emit an event
         this.emitStateChange('TASK_COMPLETED', task);
@@ -1285,6 +1440,141 @@ export class GameEngine extends EventEmitter {
 
         this.emit('stateChanged', this.gameState);
         this.emit(eventType, event);
+    }
+
+    // Pitch and Angel Founder System Methods
+    createPitch(payload: any): ActionResult {
+        const { personnelId, targetAngelFounderId } = payload;
+
+        // Find the personnel creating the pitch
+        const personnel = this.gameState.nodes.find(node =>
+            node.id === personnelId && node.type === 'Personnel'
+        ) as PersonnelData;
+
+        if (!personnel) {
+            return { success: false, message: 'Personnel not found' };
+        }
+
+        // Check if personnel has pitching skill
+        if (!personnel.skills.includes('pitching')) {
+            return { success: false, message: 'Personnel does not have pitching skill' };
+        }
+
+        // Check if personnel has enough action points
+        if (personnel.actionPoints < 1) {
+            return { success: false, message: 'Not enough action points' };
+        }
+
+        // Create pitch task
+        const newPitchTask: TaskData = {
+            id: `pitch-task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            label: 'Create Investor Pitch',
+            type: 'Task',
+            description: 'Create a compelling pitch presentation for angel investors',
+            requiredSkills: ['pitching'],
+            timeToComplete: 5, // 5 ticks to complete
+            progress: 0,
+            assignedPersonnelIds: [],
+            inputNodeIds: [],
+            outputNodeId: undefined, // Will create a pitch node when completed
+            position: payload.position || {
+                x: Math.random() * 400 + 100,
+                y: Math.random() * 400 + 100
+            }
+        };
+
+        // Add task to game state
+        this.gameState.nodes.push(newPitchTask);
+        this.emitStateChange('NODE_ADDED', newPitchTask);
+
+        return {
+            success: true,
+            message: `Created pitch task: ${newPitchTask.label}`,
+            data: newPitchTask
+        };
+    }
+
+    presentPitch(payload: any): ActionResult {
+        const { pitchId, angelFounderId } = payload;
+
+        const pitch = this.gameState.nodes.find(node =>
+            node.id === pitchId && node.type === 'Pitch'
+        ) as PitchData;
+
+        const angelFounder = this.gameState.nodes.find(node =>
+            node.id === angelFounderId && node.type === 'AngelFounder'
+        ) as AngelFounderData;
+
+        if (!pitch) {
+            return { success: false, message: 'Pitch not found' };
+        }
+
+        if (!angelFounder) {
+            return { success: false, message: 'Angel founder not found' };
+        }
+
+        if (!angelFounder.isAvailable) {
+            return { success: false, message: 'Angel founder is no longer available' };
+        }
+
+        // Present the pitch
+        if (!pitch.presentedTo) {
+            pitch.presentedTo = [];
+        }
+        pitch.presentedTo.push(angelFounderId);
+
+        // Check if pitch is good enough (based on quality and angel founder requirements)
+        const pitchSuccess = pitch.quality > 0.7; // 70% quality threshold
+
+        if (pitchSuccess) {
+            angelFounder.pitchId = pitchId;
+            angelFounder.isAvailable = false;
+
+            this.emitStateChange('STATE_CHANGED', this.gameState);
+            return {
+                success: true,
+                message: `Angel founder ${angelFounder.label} is interested! You can now secure funding.`,
+                data: { pitchAccepted: true, angelFounder }
+            };
+        } else {
+            this.emitStateChange('STATE_CHANGED', this.gameState);
+            return {
+                success: true,
+                message: `Angel founder ${angelFounder.label} was not convinced by the pitch. Try improving it or finding another investor.`,
+                data: { pitchAccepted: false }
+            };
+        }
+    }
+
+    secureAngelFunding(payload: any): ActionResult {
+        const { angelFounderId } = payload;
+
+        const angelFounder = this.gameState.nodes.find(node =>
+            node.id === angelFounderId && node.type === 'AngelFounder'
+        ) as AngelFounderData;
+
+        if (!angelFounder) {
+            return { success: false, message: 'Angel founder not found' };
+        }
+
+        if (angelFounder.fundingProvided) {
+            return { success: false, message: 'Funding has already been secured from this angel founder' };
+        }
+
+        if (!angelFounder.pitchId) {
+            return { success: false, message: 'No successful pitch has been presented to this angel founder' };
+        }
+
+        // Provide funding
+        this.gameState.companyFinances.capital += angelFounder.fundingAmount;
+        angelFounder.fundingProvided = true;
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `Secured $${angelFounder.fundingAmount.toLocaleString()} funding from ${angelFounder.label}!`,
+            data: { fundingAmount: angelFounder.fundingAmount }
+        };
     }
 
     // Cleanup

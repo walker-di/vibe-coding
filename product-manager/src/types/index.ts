@@ -1,6 +1,6 @@
 // Core type definitions for ProductGraphTycoon
 
-export type NodeType = 'Personnel' | 'Product' | 'Resource' | 'Task' | 'Market' | 'Idea' | 'Course' | 'Population' | 'Lead' | 'Customer' | 'Content' | 'Campaign';
+export type NodeType = 'Personnel' | 'Product' | 'Resource' | 'Task' | 'Market' | 'Idea' | 'Course' | 'Population' | 'Lead' | 'Customer' | 'Content' | 'Campaign' | 'AngelFounder' | 'Pitch';
 
 export interface BaseNodeData {
     id: string; // Unique ID
@@ -46,6 +46,8 @@ export interface TaskData extends BaseNodeData {
     assignedPersonnelIds: string[];
     inputNodeIds: string[]; // Resources needed
     outputNodeId?: string; // Product/Resource generated
+    startTime?: number; // Timestamp when personnel was first assigned
+    remainingTime?: number; // Remaining time in seconds (for pause/resume functionality)
 }
 
 export interface ResourceData extends BaseNodeData {
@@ -180,6 +182,27 @@ export interface CampaignPerformance {
     roi: number; // Return on investment
 }
 
+export interface AngelFounderData extends BaseNodeData {
+    type: 'AngelFounder';
+    fundingAmount: number; // Amount they're willing to invest
+    requirements: string[]; // What they want to see (e.g., 'pitch', 'business-plan')
+    isAvailable: boolean; // Whether they're still available for funding
+    pitchId?: string; // ID of the pitch that convinced them
+    fundingProvided: boolean; // Whether they've already provided funding
+    expertise: string[]; // Areas of expertise they bring
+    networkValue: number; // Additional value beyond money (0-1)
+}
+
+export interface PitchData extends BaseNodeData {
+    type: 'Pitch';
+    targetAngelFounderId?: string; // Which angel founder this pitch is for
+    quality: number; // Quality of the pitch (0-1)
+    createdBy: string; // Personnel ID who created the pitch
+    createdAt: number; // Timestamp when created
+    isCompleted: boolean; // Whether the pitch is finished
+    presentedTo?: string[]; // Angel founder IDs this has been presented to
+}
+
 export interface EdgeData {
     id: string;
     source: string; // Source node ID
@@ -198,7 +221,7 @@ export interface CompanyFinances {
 
 // Game State in engine
 export interface GameState {
-    nodes: Array<BaseNodeData | PersonnelData | ProductData | TaskData | ResourceData | MarketData | IdeaData | CourseData | PopulationData | LeadData | CustomerData | ContentData | CampaignData>;
+    nodes: Array<BaseNodeData | PersonnelData | ProductData | TaskData | ResourceData | MarketData | IdeaData | CourseData | PopulationData | LeadData | CustomerData | ContentData | CampaignData | AngelFounderData | PitchData>;
     edges: EdgeData[];
     companyFinances: CompanyFinances;
     marketingMetrics: MarketingMetrics;
@@ -256,6 +279,7 @@ export type GameActionType =
     | 'ADD_EDGE'
     | 'REMOVE_EDGE'
     | 'ASSIGN_PERSONNEL_TO_TASK'
+    | 'UNASSIGN_PERSONNEL_FROM_TASK'
     | 'UNASSIGN_PERSONNEL'
     | 'COMBINE_NODES'
     | 'DEVELOP_PRODUCT'
@@ -284,7 +308,10 @@ export type GameActionType =
     | 'CONVERT_LEAD'
     | 'UPDATE_CUSTOMER'
     | 'PROCESS_CONTENT_PERFORMANCE'
-    | 'UPDATE_MARKETING_METRICS';
+    | 'UPDATE_MARKETING_METRICS'
+    | 'CREATE_PITCH'
+    | 'PRESENT_PITCH'
+    | 'SECURE_ANGEL_FUNDING';
 
 export interface GameAction {
     type: GameActionType;

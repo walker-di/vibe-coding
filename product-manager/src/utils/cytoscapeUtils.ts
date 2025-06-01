@@ -342,13 +342,19 @@ export function gameNodesToCytoscapeElements(nodes: any[], edges: any[]) {
 
         // Handle parent-child relationships for compound nodes
         if (node.type === 'Personnel') {
-            // Check both enrolledInCourse property and courseProgress for parent relationship
+            // Check for course enrollment first
             const parentCourseId = node.enrolledInCourse || (node.courseProgress ? node.courseProgress.courseId : null);
+            // Check for task assignment second
+            const parentTaskId = node.assignedToTask || node.assignedToTaskId;
+
             if (parentCourseId) {
                 nodeData.parent = parentCourseId;
-                console.log('CYTOSCAPE: Setting parent for', node.id, 'to', parentCourseId, 'from', node.enrolledInCourse ? 'enrolledInCourse' : 'courseProgress');
+                console.log('CYTOSCAPE: Setting parent for', node.id, 'to course', parentCourseId);
+            } else if (parentTaskId) {
+                nodeData.parent = parentTaskId;
+                console.log('CYTOSCAPE: Setting parent for', node.id, 'to task', parentTaskId);
             } else {
-                console.log('CYTOSCAPE: No parent for personnel', node.id, '- enrolledInCourse:', node.enrolledInCourse, 'courseProgress:', !!node.courseProgress);
+                console.log('CYTOSCAPE: No parent for personnel', node.id, '- enrolledInCourse:', node.enrolledInCourse, 'assignedToTask:', node.assignedToTask);
             }
         }
 

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import type { BaseNodeData } from '../types';
-    import { getNodeById, addNode, removeNode, createTask, firePersonnel } from '../store/gameStore';
+    import { getNodeById, addNode, removeNode, createTask, firePersonnel, dispatchGameAction } from '../store/gameStore';
     import { showSuccessNotification, showErrorNotification } from '../store/uiStore';
 
     interface Props {
@@ -187,6 +187,25 @@
         onClose();
     }
 
+    function handleCreatePitch() {
+        if (!nodeId) return;
+
+        const result = dispatchGameAction({
+            type: 'CREATE_PITCH',
+            payload: {
+                personnelId: nodeId,
+                position: { x: x - 200, y: y - 100 }
+            }
+        });
+
+        if (result.success) {
+            showSuccessNotification('Created pitch task! Assign personnel to work on it.');
+        } else {
+            showErrorNotification(result.message);
+        }
+        onClose();
+    }
+
     // Check if personnel has project creation skills
     function canCreateProjects(): boolean {
         if (!nodeData || nodeData.type !== 'Personnel') return false;
@@ -209,6 +228,12 @@
         return personnel.skills?.includes('app-development') ||
                personnel.skills?.includes('mobile development') ||
                personnel.skills?.includes('project-creation');
+    }
+
+    function canCreatePitch(): boolean {
+        if (!nodeData || nodeData.type !== 'Personnel') return false;
+        const personnel = nodeData as any;
+        return personnel.skills?.includes('pitching');
     }
 
     // Get available actions based on node type
@@ -239,6 +264,9 @@
                 }
                 if (canCreateApps()) {
                     personnelActions.push({ label: 'Create App', action: handleCreateApp, icon: '📱' });
+                }
+                if (canCreatePitch()) {
+                    personnelActions.push({ label: 'Create Pitch', action: handleCreatePitch, icon: '🎯' });
                 }
 
                 personnelActions.push({ label: 'Duplicate', action: handleDuplicateNode, icon: '📋' });

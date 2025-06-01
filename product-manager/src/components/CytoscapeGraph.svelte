@@ -70,8 +70,8 @@
                     return node.data('type') === 'Personnel';
                 },
                 dropTarget: (dropTarget: any, grabbedNode: any) => {
-                    // Allow dropping Personnel on Course nodes
-                    return dropTarget.data('type') === 'Course' && grabbedNode.data('type') === 'Personnel';
+                    // Allow dropping Personnel on Course nodes and Task nodes
+                    return (dropTarget.data('type') === 'Course' || dropTarget.data('type') === 'Task') && grabbedNode.data('type') === 'Personnel';
                 },
                 dropSibling: () => false, // Don't allow sibling drops for now
                 newParentNode: () => ({}), // Don't create new parent nodes

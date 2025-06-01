@@ -9,6 +9,7 @@
     import ContextMenu from '../components/ContextMenu.svelte';
     import HiringModal from '../components/HiringModal.svelte';
     import CourseModalSimple from '../components/CourseModalSimple.svelte';
+    import FinanceModal from '../components/FinanceModal.svelte';
     import MarketingPanel from '../components/MarketingPanel.svelte';
 
 
@@ -31,6 +32,7 @@
     let cytoscapeGraph: CytoscapeGraph;
     let hiringModalVisible = false;
     let courseModalVisible = false;
+    let financeModalVisible = false;
     let marketingPanelVisible = false;
 
     onMount(() => {
@@ -103,6 +105,19 @@
                 } else {
                     showErrorNotification(result.message);
                 }
+            }
+            // Handle personnel assignment to tasks
+            else if (draggedNode?.type === 'Personnel' && targetNode?.type === 'Task') {
+                const result = dispatchGameAction({
+                    type: 'ASSIGN_PERSONNEL_TO_TASK',
+                    payload: { personnelId: draggedNodeId, taskId: targetNodeId }
+                });
+
+                if (result.success) {
+                    showSuccessNotification(result.message);
+                } else {
+                    showErrorNotification(result.message);
+                }
             } else {
                 // Generic drop notification for other combinations
                 showSuccessNotification(`Dropped ${draggedNodeId} onto ${targetNodeId}`);
@@ -133,6 +148,14 @@
     function handleCloseCourseModal() {
         courseModalVisible = false;
     }
+
+    function handleOpenFinanceModal() {
+        financeModalVisible = true;
+    }
+
+    function handleCloseFinanceModal() {
+        financeModalVisible = false;
+    }
 </script>
 
 <svelte:head>
@@ -142,7 +165,7 @@
 
 <div class="h-screen flex flex-col bg-gray-900 text-white overflow-hidden">
     <!-- HUD -->
-    <Hud onOpenCourseModal={handleOpenCourseModal} onOpenHiringModal={handleOpenHiringModal} />
+    <Hud onOpenCourseModal={handleOpenCourseModal} onOpenHiringModal={handleOpenHiringModal} onOpenFinanceModal={handleOpenFinanceModal} />
 
     <!-- Main game area -->
     <main class="flex-1 relative">
@@ -203,6 +226,12 @@
         <CourseModalSimple
             bind:visible={courseModalVisible}
             onClose={handleCloseCourseModal}
+        />
+
+        <!-- Finance Modal -->
+        <FinanceModal
+            bind:visible={financeModalVisible}
+            onClose={handleCloseFinanceModal}
         />
     </main>
 

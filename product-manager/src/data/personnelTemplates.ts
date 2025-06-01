@@ -89,6 +89,26 @@ export const personnelTemplates: PersonnelTemplate[] = [
         category: 'manager'
     },
 
+    // Business Development
+    {
+        label: 'Business Development Manager',
+        description: 'Specializes in partnerships, funding, and business growth',
+        skills: ['business development', 'pitching', 'networking', 'strategy'],
+        efficiency: 0.8,
+        morale: 0.8,
+        salary: 1350,
+        category: 'business'
+    },
+    {
+        label: 'Sales Manager',
+        description: 'Expert in sales and client presentations',
+        skills: ['sales', 'pitching', 'presentation', 'negotiation'],
+        efficiency: 0.75,
+        morale: 0.8,
+        salary: 1250,
+        category: 'business'
+    },
+
     // Specialists
     {
         label: 'QA Tester',
