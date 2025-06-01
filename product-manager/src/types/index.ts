@@ -21,6 +21,12 @@ export interface PersonnelData extends BaseNodeData {
     assignedToTaskId?: string;
     actionPoints: number; // Current action points available
     maxActionPoints: number; // Maximum action points per cycle
+    courseProgress?: {
+        courseId: string;
+        startTime: number; // Timestamp when course started for this personnel
+        duration: number; // Total duration in seconds
+        remainingTime: number; // Remaining time in seconds
+    };
 }
 
 export interface ProductData extends BaseNodeData {
@@ -70,12 +76,15 @@ export interface CourseData extends BaseNodeData {
     courseTemplateId: string; // Reference to CourseTemplate
     skillsImproved: string[];
     efficiencyBoost: number;
-    duration: number; // Duration in ticks
+    duration: number; // Duration in seconds
     cost: number;
     category: 'technical' | 'design' | 'management' | 'business';
     maxParticipants: number;
     enrolledPersonnelIds: string[]; // Personnel currently taking the course
-    startTick?: number; // When the course started
+    personnelProgress: Record<string, {
+        startTime: number; // When this specific personnel started the course
+        remainingTime: number; // Remaining time for this personnel
+    }>; // Track individual progress for each personnel
     isActive: boolean; // Whether the course is currently running
     isCompleted: boolean; // Whether the course has finished
 }

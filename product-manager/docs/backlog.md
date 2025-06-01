@@ -225,4 +225,17 @@
 - ✅ **Skill Enhancement System**: Personnel gain new skills and efficiency boosts upon course completion
 - ✅ **Course Cost Management**: Courses cost $2,000-$3,800 with real-time capital validation
 
+### Latest Major Update: Enhanced Training Course System
+- ✅ **Real-Time Course Progress**: Individual personnel countdown timers with live updates every 100ms
+- ✅ **Game Speed Synchronization**: Course progress now respects game speed multipliers (0.5x to 5x)
+- ✅ **Seconds-Based Duration**: Courses now use seconds instead of weeks for more engaging progression
+- ✅ **Individual Progress Tracking**: Each personnel has separate countdown timers and progress bars
+- ✅ **Progress Reset on Exit**: Personnel who leave courses early have their progress completely reset
+- ✅ **Project Creation Skills**: New skills (web-development, app-development, project-creation) enable creating projects
+- ✅ **Context Menu Project Creation**: Personnel with appropriate skills can create websites and mobile apps
+- ✅ **Enhanced InfoPanel**: Real-time progress bars, completion indicators, and improved layout
+- ✅ **Pause/Resume Compatibility**: Course progress properly pauses and resumes with game state
+- ✅ **Speed Change Handling**: Existing course progress updates immediately when game speed changes
+- ✅ **Visual Completion Feedback**: Progress bars turn green and show "✅ Completed!" when finished
+
 This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across 6 two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, the action points system provides strategic resource management, and the course training system enables personnel development through visual compound node interactions.

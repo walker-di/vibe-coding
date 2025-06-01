@@ -145,6 +145,72 @@
         onClose();
     }
 
+    function handleCreateWebsite() {
+        const newWebsite = {
+            id: `website-${Date.now()}`,
+            label: 'Website Project',
+            type: 'Product' as const,
+            description: 'A website development project',
+            quality: 0.3,
+            features: ['responsive design', 'user interface'],
+            developmentProgress: 0,
+            position: { x: x - 200, y: y - 100 }
+        };
+
+        const result = addNode(newWebsite);
+        if (result.success) {
+            showSuccessNotification('Created website project');
+        } else {
+            showErrorNotification(result.message);
+        }
+        onClose();
+    }
+
+    function handleCreateApp() {
+        const newApp = {
+            id: `app-${Date.now()}`,
+            label: 'Mobile App Project',
+            type: 'Product' as const,
+            description: 'A mobile application development project',
+            quality: 0.3,
+            features: ['mobile interface', 'cross-platform'],
+            developmentProgress: 0,
+            position: { x: x - 200, y: y - 100 }
+        };
+
+        const result = addNode(newApp);
+        if (result.success) {
+            showSuccessNotification('Created mobile app project');
+        } else {
+            showErrorNotification(result.message);
+        }
+        onClose();
+    }
+
+    // Check if personnel has project creation skills
+    function canCreateProjects(): boolean {
+        if (!nodeData || nodeData.type !== 'Personnel') return false;
+        const personnel = nodeData as any;
+        return personnel.skills?.includes('project-creation') ||
+               personnel.skills?.includes('web-development') ||
+               personnel.skills?.includes('app-development');
+    }
+
+    function canCreateWebsites(): boolean {
+        if (!nodeData || nodeData.type !== 'Personnel') return false;
+        const personnel = nodeData as any;
+        return personnel.skills?.includes('web-development') ||
+               personnel.skills?.includes('project-creation');
+    }
+
+    function canCreateApps(): boolean {
+        if (!nodeData || nodeData.type !== 'Personnel') return false;
+        const personnel = nodeData as any;
+        return personnel.skills?.includes('app-development') ||
+               personnel.skills?.includes('mobile development') ||
+               personnel.skills?.includes('project-creation');
+    }
+
     // Get available actions based on node type
     function getAvailableActions() {
         if (!nodeData) {
@@ -162,11 +228,21 @@
 
         switch (nodeData.type) {
             case 'Personnel':
-                return [
+                const personnelActions = [
                     { label: 'Fire Personnel', action: handleFirePersonnel, icon: '🚫', danger: true },
                     { label: 'Create Task', action: handleCreateTask, icon: '⚡' },
-                    { label: 'Duplicate', action: handleDuplicateNode, icon: '📋' }
                 ];
+
+                // Add project creation options based on skills
+                if (canCreateWebsites()) {
+                    personnelActions.push({ label: 'Create Website', action: handleCreateWebsite, icon: '🌐' });
+                }
+                if (canCreateApps()) {
+                    personnelActions.push({ label: 'Create App', action: handleCreateApp, icon: '📱' });
+                }
+
+                personnelActions.push({ label: 'Duplicate', action: handleDuplicateNode, icon: '📋' });
+                return personnelActions;
             case 'Task':
                 return [
                     { label: 'Hire Personnel', action: handleOpenHiringModal, icon: '👥' },

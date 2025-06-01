@@ -46,6 +46,7 @@
             category: selectedCourse.category,
             maxParticipants: selectedCourse.maxParticipants,
             enrolledPersonnelIds: [],
+            personnelProgress: {},
             isActive: false,
             isCompleted: false,
             position: {
@@ -82,6 +83,21 @@
             maximumFractionDigits: 0
         }).format(amount);
     }
+
+    // Format duration in seconds to readable format
+    function formatDuration(seconds: number): string {
+        if (seconds < 60) {
+            return `${seconds}s`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+        }
+    }
 </script>
 
 {#if visible}
@@ -114,7 +130,7 @@
                             <div class="text-sm opacity-75 mb-2">{course.description}</div>
                             <div class="flex justify-between items-center text-xs">
                                 <span>{formatCurrency(course.cost)}</span>
-                                <span>{course.duration} weeks</span>
+                                <span>{formatDuration(course.duration)}</span>
                                 <span>+{(course.efficiencyBoost * 100).toFixed(0)}% efficiency</span>
                             </div>
                         </button>

@@ -78,6 +78,21 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
   - Smooth visual transitions and no progress stacking
   - Pause-aware timing system that maintains progress during pauses
 
+### 7. Enhanced Training Course System
+- **Status**: ✅ Fully Implemented and Working
+- **Features**:
+  - **Real-Time Individual Progress**: Each personnel has separate countdown timers
+  - **Seconds-Based Duration**: Courses use seconds (180s-360s) instead of weeks for engaging progression
+  - **Game Speed Synchronization**: Course progress respects speed multipliers (0.5x to 5x)
+  - **Live Progress Updates**: InfoPanel updates every 100ms with remaining time and percentage
+  - **Progress Reset on Exit**: Personnel who leave courses early lose all progress
+  - **Visual Completion Feedback**: Progress bars turn green with "✅ Completed!" when finished
+  - **Project Creation Skills**: New skills enable creating websites and mobile apps
+  - **Context Menu Integration**: Personnel with skills can create projects via right-click
+  - **Enhanced InfoPanel**: Wider layout (384px), real-time progress bars, completion indicators
+  - **Pause/Resume Compatibility**: Course progress properly pauses and resumes with game state
+  - **Speed Change Handling**: Existing course progress updates immediately when speed changes
+
 ## 🔧 Technical Implementation Details
 
 ### Cytoscape Configuration
@@ -184,11 +199,26 @@ src/
 - ✅ **Immediate Tick Triggering**: No more stacking at 100% progress
 - ✅ **Pause-aware System**: Maintains progress during pauses
 
+### Enhanced Training Course System (Latest Update)
+- ✅ **Real-Time Progress Tracking**: Individual personnel countdown timers with 100ms updates
+- ✅ **Game Speed Synchronization**: Course progress respects all speed multipliers (0.5x to 5x)
+- ✅ **Seconds-Based Duration**: Changed from weeks to seconds for more engaging progression
+- ✅ **Individual Progress Management**: Each personnel has separate progress tracking and reset capability
+- ✅ **Project Creation Skills**: Added web-development, app-development, project-creation skills
+- ✅ **Context Menu Project Creation**: Personnel can create websites/apps based on acquired skills
+- ✅ **Enhanced InfoPanel**: Wider layout (384px), real-time progress bars, visual completion feedback
+- ✅ **Synchronization Fixes**: Resolved timing issues between InfoPanel display and game engine
+- ✅ **Pause/Resume Compatibility**: Course progress properly handles game state changes
+- ✅ **Speed Change Handling**: Existing course progress updates immediately when speed changes
+
 ### Technical Improvements
 - ✅ **Game Engine Updates**: Week-based tick system with real-time tracking
 - ✅ **State Management**: New currentWeekStartTime tracking
 - ✅ **Performance**: 50ms timer updates for responsive progress
 - ✅ **Visual Polish**: Improved node styling and progress animations
+- ✅ **Course Progress Engine**: Real-time individual progress tracking with game speed integration
+- ✅ **InfoPanel Optimization**: Reactive calculations with game state synchronization
+- ✅ **Context Menu Enhancement**: Skill-based action availability for project creation
 
 ## 🎯 Next Steps / Future Enhancements
 
@@ -212,16 +242,24 @@ src/
 - ✅ Zoom sensitivity (increased from 0.2 to 1.0)
 - ✅ Shop button sizing (compact 64x64px design)
 - ✅ State synchronization (engine ↔ store ↔ UI)
-- ✅ **NEW**: Timer progress stacking at 100% (now triggers immediately)
-- ✅ **NEW**: Speed control inconsistencies (smooth transitions implemented)
-- ✅ **NEW**: Action points not visible (now displayed on personnel nodes)
+- ✅ Timer progress stacking at 100% (now triggers immediately)
+- ✅ Speed control inconsistencies (smooth transitions implemented)
+- ✅ Action points not visible (now displayed on personnel nodes)
+- ✅ **LATEST**: Course progress timing synchronization issues (fixed with game speed integration)
+- ✅ **LATEST**: InfoPanel course progress out of sync with global clock (resolved)
+- ✅ **LATEST**: Game speed changes not applied to existing courses (fixed)
+- ✅ **LATEST**: Course progress not respecting pause/resume state (resolved)
+- ✅ **LATEST**: InfoPanel scrollbar visibility (improved layout with responsive height)
 
 ### Current Status
 - No critical issues identified
 - Application is stable and fully functional
 - All core features working as designed
-- **NEW**: Action points system fully operational
-- **NEW**: Timer system working perfectly with all speed settings
+- Action points system fully operational
+- Timer system working perfectly with all speed settings
+- **LATEST**: Course training system fully synchronized with game engine
+- **LATEST**: Real-time progress tracking working flawlessly across all game speeds
+- **LATEST**: InfoPanel layout optimized for better user experience
 
 ## 📊 Development Metrics
 

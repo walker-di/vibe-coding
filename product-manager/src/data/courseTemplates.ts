@@ -6,7 +6,7 @@ export interface CourseTemplate {
     description: string;
     skillsImproved: string[];
     efficiencyBoost: number; // Amount to increase efficiency (0-0.3)
-    duration: number; // Duration in ticks (weeks)
+    duration: number; // Duration in seconds
     cost: number;
     category: 'technical' | 'design' | 'management' | 'business';
     prerequisites?: string[]; // Required skills to take the course
@@ -21,7 +21,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Learn the basics of programming and software development',
         skillsImproved: ['programming', 'debugging'],
         efficiencyBoost: 0.15,
-        duration: 3,
+        duration: 180, // 3 minutes
         cost: 2000,
         category: 'technical',
         maxParticipants: 5
@@ -32,7 +32,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Master advanced programming concepts and patterns',
         skillsImproved: ['programming', 'architecture', 'debugging'],
         efficiencyBoost: 0.2,
-        duration: 4,
+        duration: 240, // 4 minutes
         cost: 4000,
         category: 'technical',
         prerequisites: ['programming'],
@@ -44,7 +44,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Learn to develop mobile applications for iOS and Android',
         skillsImproved: ['mobile development', 'programming', 'ui design'],
         efficiencyBoost: 0.18,
-        duration: 4,
+        duration: 240, // 4 minutes
         cost: 3500,
         category: 'technical',
         prerequisites: ['programming'],
@@ -56,9 +56,33 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Master deployment, automation, and infrastructure management',
         skillsImproved: ['devops', 'infrastructure', 'automation'],
         efficiencyBoost: 0.2,
-        duration: 3,
+        duration: 180, // 3 minutes
         cost: 3000,
         category: 'technical',
+        maxParticipants: 3
+    },
+    {
+        id: 'web-development',
+        label: 'Web Development Mastery',
+        description: 'Learn to create websites and web applications',
+        skillsImproved: ['web-development', 'programming', 'frontend', 'project-creation'],
+        efficiencyBoost: 0.18,
+        duration: 300, // 5 minutes
+        cost: 3800,
+        category: 'technical',
+        prerequisites: ['programming'],
+        maxParticipants: 4
+    },
+    {
+        id: 'app-development',
+        label: 'App Development Specialist',
+        description: 'Master mobile and desktop application development',
+        skillsImproved: ['app-development', 'mobile development', 'programming', 'project-creation'],
+        efficiencyBoost: 0.2,
+        duration: 360, // 6 minutes
+        cost: 4200,
+        category: 'technical',
+        prerequisites: ['programming', 'mobile development'],
         maxParticipants: 3
     },
 
@@ -69,7 +93,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Learn the principles of user interface and experience design',
         skillsImproved: ['ui design', 'ux research', 'prototyping'],
         efficiencyBoost: 0.15,
-        duration: 3,
+        duration: 180, // 3 minutes
         cost: 2500,
         category: 'design',
         maxParticipants: 4
@@ -80,7 +104,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Master design systems, accessibility, and advanced UX principles',
         skillsImproved: ['ui design', 'ux research', 'prototyping', 'branding'],
         efficiencyBoost: 0.22,
-        duration: 4,
+        duration: 240, // 4 minutes
         cost: 4500,
         category: 'design',
         prerequisites: ['ui design'],
@@ -92,7 +116,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Learn visual design, branding, and marketing materials creation',
         skillsImproved: ['graphic design', 'branding', 'marketing'],
         efficiencyBoost: 0.16,
-        duration: 3,
+        duration: 180, // 3 minutes
         cost: 2200,
         category: 'design',
         maxParticipants: 4
@@ -105,7 +129,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Learn to effectively manage projects, teams, and timelines',
         skillsImproved: ['project management', 'leadership', 'planning'],
         efficiencyBoost: 0.18,
-        duration: 3,
+        duration: 180, // 3 minutes
         cost: 3000,
         category: 'management',
         maxParticipants: 5
@@ -116,7 +140,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Master agile methodologies and scrum framework',
         skillsImproved: ['project management', 'leadership', 'planning', 'mentoring'],
         efficiencyBoost: 0.2,
-        duration: 2,
+        duration: 120, // 2 minutes
         cost: 2800,
         category: 'management',
         prerequisites: ['project management'],
@@ -128,7 +152,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Develop leadership skills and team management capabilities',
         skillsImproved: ['leadership', 'mentoring', 'planning'],
         efficiencyBoost: 0.17,
-        duration: 3,
+        duration: 180, // 3 minutes
         cost: 3200,
         category: 'management',
         maxParticipants: 4
@@ -141,7 +165,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Learn modern digital marketing strategies and tools',
         skillsImproved: ['marketing', 'social media', 'content creation', 'analytics'],
         efficiencyBoost: 0.16,
-        duration: 3,
+        duration: 180, // 3 minutes
         cost: 2400,
         category: 'business',
         maxParticipants: 5
@@ -152,7 +176,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Master data analysis, statistics, and business intelligence',
         skillsImproved: ['data analysis', 'statistics', 'reporting', 'analytics'],
         efficiencyBoost: 0.19,
-        duration: 4,
+        duration: 240, // 4 minutes
         cost: 3300,
         category: 'business',
         maxParticipants: 4
@@ -163,7 +187,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Learn product management, market research, and strategy development',
         skillsImproved: ['product management', 'market research', 'strategy', 'planning'],
         efficiencyBoost: 0.21,
-        duration: 4,
+        duration: 240, // 4 minutes
         cost: 4200,
         category: 'business',
         maxParticipants: 3
@@ -174,7 +198,7 @@ export const courseTemplates: CourseTemplate[] = [
         description: 'Master testing methodologies and quality control processes',
         skillsImproved: ['testing', 'quality assurance', 'debugging'],
         efficiencyBoost: 0.15,
-        duration: 2,
+        duration: 120, // 2 minutes
         cost: 2000,
         category: 'technical',
         maxParticipants: 5

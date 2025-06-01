@@ -45,11 +45,13 @@ class EventEmitter {
 export class GameEngine extends EventEmitter {
     private gameState: GameState;
     private tickInterval: NodeJS.Timeout | null = null;
+    private courseProcessingInterval: NodeJS.Timeout | null = null;
     private pausedAt: number | null = null;
 
     constructor() {
         super();
         this.gameState = this.initializeGameState();
+        this.startGameLoop(); // Start the game loop immediately
     }
 
     private initializeGameState(): GameState {
@@ -395,9 +397,27 @@ export class GameEngine extends EventEmitter {
     pauseGame(): ActionResult {
         this.gameState.isPaused = true;
         this.pausedAt = Date.now(); // Store when we paused
+
+        // Pause course progress for all personnel
+        this.gameState.nodes.forEach(node => {
+            if (node.type === 'Personnel') {
+                const personnel = node as PersonnelData;
+                if (personnel.courseProgress) {
+                    // Update remaining time before pausing (accounting for game speed)
+                    const realElapsedTime = (Date.now() - personnel.courseProgress.startTime) / 1000;
+                    const gameSpeedElapsedTime = realElapsedTime * this.gameState.gameSpeed;
+                    personnel.courseProgress.remainingTime = Math.max(0, personnel.courseProgress.duration - gameSpeedElapsedTime);
+                }
+            }
+        });
+
         if (this.tickInterval) {
             clearInterval(this.tickInterval);
             this.tickInterval = null;
+        }
+        if (this.courseProcessingInterval) {
+            clearInterval(this.courseProcessingInterval);
+            this.courseProcessingInterval = null;
         }
         this.emitStateChange('STATE_CHANGED', this.gameState);
         return { success: true, message: 'Game paused' };
@@ -411,6 +431,26 @@ export class GameEngine extends EventEmitter {
             const pauseDuration = Date.now() - this.pausedAt;
             this.gameState.currentWeekStartTime += pauseDuration;
         }
+
+        // Resume course progress for all personnel
+        const currentTime = Date.now();
+        this.gameState.nodes.forEach(node => {
+            if (node.type === 'Personnel') {
+                const personnel = node as PersonnelData;
+                if (personnel.courseProgress) {
+                    // Reset start time to current time, keeping remaining duration
+                    personnel.courseProgress.startTime = currentTime;
+                    personnel.courseProgress.duration = personnel.courseProgress.remainingTime;
+
+                    // Update course progress tracking
+                    const course = this.gameState.nodes.find(n => n.id === personnel.courseProgress!.courseId) as CourseData;
+                    if (course && course.personnelProgress[personnel.id]) {
+                        course.personnelProgress[personnel.id].startTime = currentTime;
+                        course.personnelProgress[personnel.id].remainingTime = personnel.courseProgress.remainingTime;
+                    }
+                }
+            }
+        });
 
         this.startGameLoop();
         this.emitStateChange('STATE_CHANGED', this.gameState);
@@ -440,6 +480,32 @@ export class GameEngine extends EventEmitter {
             this.gameState.currentWeekStartTime = now - newElapsedTime;
         }
 
+        // Update course progress for speed change
+        const currentTime = Date.now();
+        this.gameState.nodes.forEach(node => {
+            if (node.type === 'Personnel') {
+                const personnel = node as PersonnelData;
+                if (personnel.courseProgress) {
+                    // Calculate current progress with old speed
+                    const realElapsedTime = (currentTime - personnel.courseProgress.startTime) / 1000;
+                    const oldSpeedElapsedTime = realElapsedTime * oldSpeed;
+                    const remainingTime = Math.max(0, personnel.courseProgress.duration - oldSpeedElapsedTime);
+
+                    // Reset with new speed
+                    personnel.courseProgress.startTime = currentTime;
+                    personnel.courseProgress.duration = remainingTime;
+                    personnel.courseProgress.remainingTime = remainingTime;
+
+                    // Update course progress tracking
+                    const course = this.gameState.nodes.find(n => n.id === personnel.courseProgress!.courseId) as CourseData;
+                    if (course && course.personnelProgress[personnel.id]) {
+                        course.personnelProgress[personnel.id].startTime = currentTime;
+                        course.personnelProgress[personnel.id].remainingTime = remainingTime;
+                    }
+                }
+            }
+        });
+
         // Restart game loop with new speed if not paused
         if (!this.gameState.isPaused) {
             this.startGameLoop();
@@ -454,12 +520,21 @@ export class GameEngine extends EventEmitter {
         if (this.tickInterval) {
             clearInterval(this.tickInterval);
         }
+        if (this.courseProcessingInterval) {
+            clearInterval(this.courseProcessingInterval);
+        }
 
         if (!this.gameState.isPaused) {
             const tickDuration = (120 * 1000) / this.gameState.gameSpeed; // Base tick is 120 seconds (1 week)
             this.tickInterval = setInterval(() => {
                 this.tick();
             }, tickDuration);
+
+            // Start real-time course processing (every 1 second)
+            this.courseProcessingInterval = setInterval(() => {
+                this.processCourses();
+                this.emitStateChange('STATE_CHANGED', this.gameState);
+            }, 1000);
         }
     }
 
@@ -467,6 +542,10 @@ export class GameEngine extends EventEmitter {
         if (this.tickInterval) {
             clearInterval(this.tickInterval);
             this.tickInterval = null;
+        }
+        if (this.courseProcessingInterval) {
+            clearInterval(this.courseProcessingInterval);
+            this.courseProcessingInterval = null;
         }
     }
 
@@ -556,8 +635,28 @@ export class GameEngine extends EventEmitter {
             return { success: false, message: 'Course is at maximum capacity' };
         }
 
+        // Check if personnel is already in another course
+        if (personnel.courseProgress) {
+            return { success: false, message: 'Personnel is already enrolled in another course' };
+        }
+
         // Enroll personnel
         course.enrolledPersonnelIds.push(personnelId);
+
+        // Initialize individual progress tracking
+        const currentTime = Date.now();
+        course.personnelProgress[personnelId] = {
+            startTime: currentTime,
+            remainingTime: course.duration
+        };
+
+        // Set personnel course progress
+        personnel.courseProgress = {
+            courseId: courseId,
+            startTime: currentTime,
+            duration: course.duration,
+            remainingTime: course.duration
+        };
 
         // Set the personnel's enrolled course for compound node functionality
         (personnel as any).enrolledInCourse = courseId;
@@ -573,13 +672,9 @@ export class GameEngine extends EventEmitter {
             y: coursePosition.y + Math.sin(angle) * radius
         };
 
-        console.log(`Enrolled ${personnelId} in course ${courseId}. Personnel enrolledInCourse:`, (personnel as any).enrolledInCourse);
-        console.log(`Positioned personnel at:`, personnel.position);
-
         // Start course if this is the first enrollment
         if (course.enrolledPersonnelIds.length === 1 && !course.isActive) {
             course.isActive = true;
-            course.startTick = this.gameState.currentTick;
         }
 
         this.emitStateChange('STATE_CHANGED', this.gameState);
@@ -615,6 +710,10 @@ export class GameEngine extends EventEmitter {
         // Remove personnel from course
         course.enrolledPersonnelIds.splice(enrollmentIndex, 1);
 
+        // Clear personnel progress tracking
+        delete course.personnelProgress[personnelId];
+        delete personnel.courseProgress;
+
         // Clear the personnel's enrolled course for compound node functionality
         delete (personnel as any).enrolledInCourse;
 
@@ -628,13 +727,12 @@ export class GameEngine extends EventEmitter {
         // Stop course if no one is enrolled
         if (course.enrolledPersonnelIds.length === 0 && course.isActive && !course.isCompleted) {
             course.isActive = false;
-            course.startTick = undefined;
         }
 
         this.emitStateChange('STATE_CHANGED', this.gameState);
         return {
             success: true,
-            message: `${personnel.label} removed from ${course.label}`,
+            message: `${personnel.label} removed from ${course.label} (progress reset)`,
             data: { personnelId, courseId }
         };
     }
@@ -661,7 +759,6 @@ export class GameEngine extends EventEmitter {
         }
 
         course.isActive = true;
-        course.startTick = this.gameState.currentTick;
 
         this.emitStateChange('STATE_CHANGED', this.gameState);
         return {
@@ -671,7 +768,66 @@ export class GameEngine extends EventEmitter {
         };
     }
 
+    completePersonnelCourse(personnelId: string): ActionResult {
+        const personnel = this.gameState.nodes.find(node =>
+            node.id === personnelId && node.type === 'Personnel'
+        ) as PersonnelData;
+
+        if (!personnel || !personnel.courseProgress) {
+            return { success: false, message: 'Personnel not found or not enrolled in a course' };
+        }
+
+        const course = this.gameState.nodes.find(node =>
+            node.id === personnel.courseProgress!.courseId && node.type === 'Course'
+        ) as CourseData;
+
+        if (!course) {
+            return { success: false, message: 'Course not found' };
+        }
+
+        // Apply skill improvements and efficiency boosts
+        course.skillsImproved.forEach(skill => {
+            if (!personnel.skills.includes(skill)) {
+                personnel.skills.push(skill);
+            }
+        });
+
+        // Boost efficiency (cap at 1.0)
+        personnel.efficiency = Math.min(1.0, personnel.efficiency + course.efficiencyBoost);
+
+        // Remove personnel from course
+        const enrollmentIndex = course.enrolledPersonnelIds.indexOf(personnelId);
+        if (enrollmentIndex !== -1) {
+            course.enrolledPersonnelIds.splice(enrollmentIndex, 1);
+        }
+
+        // Clear progress tracking
+        delete course.personnelProgress[personnelId];
+        delete personnel.courseProgress;
+        delete (personnel as any).enrolledInCourse;
+
+        // Move personnel outside the course
+        const coursePosition = course.position || { x: 200, y: 200 };
+        personnel.position = {
+            x: coursePosition.x + 100 + Math.random() * 100,
+            y: coursePosition.y + 100 + Math.random() * 100
+        };
+
+        // Stop course if no one is enrolled
+        if (course.enrolledPersonnelIds.length === 0 && course.isActive) {
+            course.isActive = false;
+        }
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `${personnel.label} completed ${course.label}!`,
+            data: { personnelId, courseId: course.id }
+        };
+    }
+
     completeCourse(courseId: string): ActionResult {
+        // This method is kept for compatibility but now completes all remaining personnel
         const course = this.gameState.nodes.find(node =>
             node.id === courseId && node.type === 'Course'
         ) as CourseData;
@@ -680,38 +836,16 @@ export class GameEngine extends EventEmitter {
             return { success: false, message: `Course with id ${courseId} not found` };
         }
 
-        if (course.isCompleted) {
-            return { success: false, message: 'Course has already been completed' };
-        }
-
-        // Apply skill improvements and efficiency boosts to enrolled personnel
         const improvedPersonnel: string[] = [];
-        course.enrolledPersonnelIds.forEach(personnelId => {
-            const personnel = this.gameState.nodes.find(node =>
-                node.id === personnelId && node.type === 'Personnel'
-            ) as PersonnelData;
 
-            if (personnel) {
-                // Add new skills
-                course.skillsImproved.forEach(skill => {
-                    if (!personnel.skills.includes(skill)) {
-                        personnel.skills.push(skill);
-                    }
-                });
-
-                // Boost efficiency (cap at 1.0)
-                personnel.efficiency = Math.min(1.0, personnel.efficiency + course.efficiencyBoost);
-                improvedPersonnel.push(personnel.label);
-
-                // Clear the personnel's enrolled course since course is completed
-                delete (personnel as any).enrolledInCourse;
-
-                // Move personnel outside the course
-                const coursePosition = course.position || { x: 200, y: 200 };
-                personnel.position = {
-                    x: coursePosition.x + 100 + Math.random() * 100,
-                    y: coursePosition.y + 100 + Math.random() * 100
-                };
+        // Complete course for all enrolled personnel
+        [...course.enrolledPersonnelIds].forEach(personnelId => {
+            const result = this.completePersonnelCourse(personnelId);
+            if (result.success) {
+                const personnel = this.gameState.nodes.find(node => node.id === personnelId) as PersonnelData;
+                if (personnel) {
+                    improvedPersonnel.push(personnel.label);
+                }
             }
         });
 
@@ -755,15 +889,39 @@ export class GameEngine extends EventEmitter {
 
     private processCourses() {
         const courses = this.gameState.nodes.filter(node => node.type === 'Course') as CourseData[];
+        const currentTime = Date.now();
 
         courses.forEach(course => {
-            if (course.isActive && !course.isCompleted && course.startTick !== undefined) {
-                const ticksElapsed = this.gameState.currentTick - course.startTick;
+            if (course.isActive && !course.isCompleted) {
+                // Check each enrolled personnel's progress
+                const completedPersonnel: string[] = [];
 
-                // Check if course duration has been reached
-                if (ticksElapsed >= course.duration) {
-                    this.completeCourse(course.id);
-                }
+                course.enrolledPersonnelIds.forEach(personnelId => {
+                    const personnel = this.gameState.nodes.find(node =>
+                        node.id === personnelId && node.type === 'Personnel'
+                    ) as PersonnelData;
+
+                    if (personnel && personnel.courseProgress) {
+                        // Calculate elapsed time with game speed multiplier
+                        const realElapsedTime = (currentTime - personnel.courseProgress.startTime) / 1000;
+                        const gameSpeedElapsedTime = realElapsedTime * this.gameState.gameSpeed;
+                        const remainingTime = Math.max(0, personnel.courseProgress.duration - gameSpeedElapsedTime);
+
+                        // Update remaining time
+                        personnel.courseProgress.remainingTime = remainingTime;
+                        course.personnelProgress[personnelId].remainingTime = remainingTime;
+
+                        // Check if personnel completed the course
+                        if (remainingTime <= 0) {
+                            completedPersonnel.push(personnelId);
+                        }
+                    }
+                });
+
+                // Complete courses for personnel who finished
+                completedPersonnel.forEach(personnelId => {
+                    this.completePersonnelCourse(personnelId);
+                });
             }
         });
     }

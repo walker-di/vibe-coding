@@ -22,17 +22,22 @@ A business simulation game where players build and manage a product development 
 - **Financial Integration**: Hiring costs (5x salary) with capital validation
 - **Personnel Management**: Fire personnel with proper cleanup of assignments
 
-### ✅ Course System (Sprint 2 - Completed)
+### ✅ Enhanced Training Course System (Sprint 2 - Completed)
 - **15+ Predefined Courses**: Across 4 categories (Technical, Design, Management, Business)
+- **Real-Time Individual Progress**: Each personnel has separate countdown timers with live updates
+- **Game Speed Synchronization**: Course progress respects all speed multipliers (0.5x to 5x)
+- **Seconds-Based Duration**: Courses use seconds (180s-360s) for engaging real-time progression
 - **Course Categories**:
-  - **Technical**: Programming Fundamentals ($2000), Advanced Algorithms ($3000), System Architecture ($3500), DevOps Practices ($2500)
-  - **Design**: UI/UX Principles ($2200), Design Thinking ($2800), User Research ($2600), Visual Design ($2000)
-  - **Management**: Project Management ($2400), Team Leadership ($3200), Agile Methodologies ($2600), Strategic Planning ($3800)
-  - **Business**: Business Strategy ($3000), Marketing Fundamentals ($2200), Financial Planning ($2800), Customer Development ($2400)
-- **Compound Drag-and-Drop**: Visual grouping of personnel within course nodes using cytoscape-compound-drag-and-drop
-- **Automatic Progression**: Courses start when personnel enroll and complete after specified duration
-- **Skill Enhancement**: Personnel gain new skills and efficiency boosts upon course completion
-- **Cost Management**: Courses require capital investment with varying costs and durations
+  - **Technical**: Programming Fundamentals (180s, $2000), Web Development Mastery (300s, $3800), App Development Specialist (360s, $4200)
+  - **Design**: UI/UX Design Fundamentals (180s, $2500), Advanced Design Systems (240s, $4500)
+  - **Management**: Project Management (180s, $3000), Agile & Scrum Mastery (120s, $2800)
+  - **Business**: Digital Marketing (180s, $2400), Data Analysis & Insights (240s, $3300)
+- **Project Creation Skills**: New skills (web-development, app-development, project-creation) enable creating projects
+- **Context Menu Integration**: Personnel with skills can create websites and mobile apps via right-click
+- **Enhanced InfoPanel**: Real-time progress bars, completion indicators, wider layout (384px)
+- **Visual Feedback**: Progress bars turn green with "✅ Completed!" when finished
+- **Progress Reset**: Personnel who leave courses early lose all progress
+- **Pause/Resume Compatibility**: Course progress properly handles game state changes
 
 ### 🔄 Task Management (Sprint 2 - In Progress)
 - **Task Creation**: Basic framework for creating tasks with skill requirements
@@ -103,6 +108,8 @@ A business simulation game where players build and manage a product development 
 - **[Game Concept](docs/concept.md)**: Detailed game design and mechanics
 - **[Sprint Backlog](docs/backlog.md)**: Development progress and roadmap
 - **[Architecture](docs/archtecture.md)**: Technical architecture and design patterns
+- **[Current Implementation](docs/current-implementation.md)**: Detailed status of implemented features
+- **[Training Course System](docs/training-course-system.md)**: Comprehensive guide to the enhanced course system
 
 ## 🎯 Current Sprint 2 Status
 
