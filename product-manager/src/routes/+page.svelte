@@ -142,7 +142,7 @@
 
 <div class="h-screen flex flex-col bg-gray-900 text-white overflow-hidden">
     <!-- HUD -->
-    <Hud onOpenCourseModal={handleOpenCourseModal} />
+    <Hud onOpenCourseModal={handleOpenCourseModal} onOpenHiringModal={handleOpenHiringModal} />
 
     <!-- Main game area -->
     <main class="flex-1 relative">

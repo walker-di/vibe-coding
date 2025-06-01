@@ -160,7 +160,18 @@
 
 ---
 
-## 🚀 Sprint 5 (2 weeks) - Revenue Generation & Product Sales (CURRENT PRIORITY)
+## ✅ Sprint 5 (2 weeks) - HR System Reorganization & UI Improvements (COMPLETED)
+
+| **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
+|----------------|----------|--------------|-----------------|--------------|------------|------------------------|
+| **As a player, I want organized HR management** | Move Personnel from Shop to HR section | High | 3 | Frontend Dev | ✅ Completed | Personnel hiring separated from general shop |
+| | Create dedicated HR section in HUD | High | 2 | Frontend Dev | ✅ Completed | HR section with Hire Personnel and Training buttons |
+| | Implement Personnel hiring modal | High | 3 | Frontend Dev | ✅ Completed | Modal shows all personnel with category filtering |
+| | Update Shop to focus on Resources/Ideas | Medium | 2 | Frontend Dev | ✅ Completed | Shop only contains non-personnel items |
+
+---
+
+## 🚀 Sprint 6 (2 weeks) - Revenue Generation & Product Sales (CURRENT PRIORITY)
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -180,9 +191,18 @@
 | | Implement sales funnel visualization | Medium | 3 | Frontend Dev | Not Started | Visualize customer journey from lead to purchase |
 | | Add revenue forecasting | Low | 2 | Backend Dev | Not Started | Predict future revenue based on trends |
 
+**Sprint 5 Achievements:**
+- ✅ **HR System Reorganization**: Personnel hiring moved from Shop to dedicated HR section
+- ✅ **Improved User Experience**: Logical separation of HR functions from general purchasing
+- ✅ **Enhanced Personnel Management**: Dedicated hiring modal with category filtering
+- ✅ **Streamlined Shop Interface**: Shop now focuses on Resources and Ideas only
+- ✅ **Professional HR Interface**: Modal-based hiring system with detailed personnel information
+- ✅ **Category-based Personnel Filtering**: Developers, Designers, Managers, Specialists organization
+- ✅ **Integrated HR Controls**: Hire Personnel and Training buttons in unified HR section
+
 ---
 
-## Sprint 5 (2 weeks) - Polish & User Experience
+## Sprint 7 (2 weeks) - Polish & User Experience
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -198,7 +218,7 @@
 
 ---
 
-## Sprint 6 (2 weeks) - Testing, Optimization & Release Prep
+## Sprint 8 (2 weeks) - Testing, Optimization & Release Prep
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -244,10 +264,10 @@
 - **Performance Concerns**: Dedicated optimization sprint (Sprint 6)
 
 ### Current Status Summary
-- **Sprints 1-3**: ✅ Completed (Foundation, Graph Canvas, Shop Interface, Action Points, Timer System, Course Training)
-- **Sprint 4**: ✅ Completed (Marketing & Customer Relationship Management System)
-- **Sprint 5**: 🚀 Current Priority (Revenue Generation & Product Sales)
-- **Sprints 6-7**: ⏳ Planned (Advanced Features, Polish, Testing)
+- **Sprints 1-4**: ✅ Completed (Foundation, Graph Canvas, Shop Interface, Action Points, Timer System, Course Training, Marketing & CRM)
+- **Sprint 5**: ✅ Completed (HR System Reorganization & UI Improvements)
+- **Sprint 6**: 🚀 Current Priority (Revenue Generation & Product Sales)
+- **Sprints 7-8**: ⏳ Planned (Advanced Features, Polish, Testing)
 
 ### Recent Major Achievements (Latest Sprint Extension)
 - ✅ **Action Points System**: Complete implementation with 3 points per personnel per week
@@ -289,4 +309,14 @@
 - ✅ **Action Points Integration**: Content creation consumes personnel action points and company capital
 - ✅ **Marketing Panel UI**: Dedicated dashboard accessible via "📊 Marketing" button with content creation interface
 
-This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across multiple two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, the action points system provides strategic resource management, the course training system enables personnel development, and the marketing system creates a complete customer acquisition and relationship management experience.
+### Latest Major Update: HR System Reorganization (Sprint 5)
+- ✅ **Personnel Management Separation**: Moved all personnel hiring from Shop to dedicated HR section
+- ✅ **Professional HR Interface**: Created modal-based hiring system with detailed personnel information
+- ✅ **Category-based Organization**: Personnel organized by Developers, Designers, Managers, Specialists
+- ✅ **Unified HR Controls**: Hire Personnel and Training buttons consolidated in single HR section
+- ✅ **Streamlined Shop Experience**: Shop now focuses exclusively on Resources and Ideas
+- ✅ **Enhanced User Experience**: Logical separation of HR functions from general purchasing
+- ✅ **Modal-based Hiring**: Professional hiring interface with category filtering and detailed stats
+- ✅ **Improved Information Architecture**: Better organization of game functions for intuitive navigation
+
+This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across multiple two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, the action points system provides strategic resource management, the course training system enables personnel development, the marketing system creates a complete customer acquisition and relationship management experience, and the HR system provides professional personnel management capabilities.

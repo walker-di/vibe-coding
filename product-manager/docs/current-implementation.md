@@ -24,7 +24,6 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
 - **Location**: Integrated into HUD below financial summary
 - **Design**: Compact 64x64px cards in horizontal layout
 - **Available Items**:
-  - **Personnel**: Junior Developer ($3k), UI/UX Designer ($4k), Marketing Specialist ($3.5k), Senior Developer ($8k)
   - **Resources**: Cloud Hosting ($1k), Development Tools ($2k)
   - **Ideas**: Market Research ($5k)
 - **Features**:
@@ -33,6 +32,7 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
   - Capital deduction on purchase
   - Hover tooltips with item descriptions
   - Compact display (first word only, k-format costs)
+  - **NEW**: Streamlined to focus on Resources and Ideas only
 
 ### 3. Game Engine & State Management
 - **Status**: ✅ Fully Implemented and Working
@@ -49,12 +49,14 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
 ### 4. UI Components
 - **Status**: ✅ Fully Implemented and Working
 - **Components**:
-  - **HUD**: Financial info, game controls, integrated shop
+  - **HUD**: Financial info, game controls, integrated shop, **NEW** HR section
   - **CytoscapeGraph**: Main graph visualization component
   - **InfoPanel**: Node details display
   - **ContextMenu**: Right-click actions
-  - **Shop**: Purchase interface
-  - **Timer**: **NEW** Progress bar UI showing week progression (0-100%)
+  - **Shop**: Purchase interface (Resources and Ideas only)
+  - **Timer**: Progress bar UI showing week progression (0-100%)
+  - **HiringModal**: **NEW** Professional personnel hiring interface
+  - **MarketingPanel**: Marketing dashboard & content creation
 - **Styling**: Tailwind CSS with responsive design
 
 ### 5. Action Points System
@@ -107,7 +109,23 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
   - **Marketing Metrics**: Track total leads, customers, content created, active campaigns, and conversion rates
   - **Brand Awareness**: Dynamic brand awareness system affecting content reach and performance
 
-### 9. New Node Types (Marketing System)
+### 9. HR Management System
+- **Status**: ✅ Newly Implemented and Working
+- **Features**:
+  - **Dedicated HR Section**: Separate section in HUD for human resources management
+  - **Personnel Hiring Modal**: Professional modal interface for hiring personnel
+  - **Category-based Organization**: Personnel organized by Developers, Designers, Managers, Specialists
+  - **Detailed Personnel Information**: Skills, efficiency, salary, and hiring costs displayed
+  - **Category Filtering**: Filter personnel by role type for easier selection
+  - **Unified HR Controls**: Hire Personnel and Training buttons in single location
+  - **Professional Interface**: Modal-based hiring system with detailed stats and descriptions
+- **Available Personnel**:
+  - **Developers**: Junior Developer, Senior Developer, Full-Stack Developer, Mobile Developer
+  - **Designers**: UI/UX Designer, Graphic Designer
+  - **Managers**: Project Manager, Product Manager
+  - **Specialists**: QA Tester, DevOps Engineer, Data Analyst, Marketing Specialist
+
+### 10. New Node Types (Marketing System)
 - **Status**: ✅ Fully Implemented
 - **Node Types**:
   - **Population Node**: Represents total addressable market with demographic segments
@@ -160,7 +178,9 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
 - **Week**: Starts at 月目001 with 0% progress
 
 ### Available Actions
-- **Purchase Items**: From shop interface (costs capital)
+- **Purchase Items**: From shop interface (Resources and Ideas only, costs capital)
+- **Personnel Hiring**: Access via "👥 Hire Personnel" button in HR section
+- **Personnel Training**: Access via "🎓 Training" button in HR section
 - **Personnel Interaction**: Click personnel to consume action points (1 point per click)
 - **Marketing Dashboard**: Access via "📊 Marketing" button for content creation and metrics
 - **Content Creation**: Marketing personnel can create platform-specific content (costs action points)
@@ -186,13 +206,13 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
 src/
 ├── components/
 │   ├── CytoscapeGraph.svelte    ✅ Graph visualization with action points
-│   ├── Shop.svelte              ✅ Purchase interface
-│   ├── Hud.svelte               ✅ Header with controls
+│   ├── Shop.svelte              ✅ Purchase interface (Resources & Ideas only)
+│   ├── Hud.svelte               ✅ Header with controls & HR section
 │   ├── Timer.svelte             ✅ Progress bar timer
 │   ├── InfoPanel.svelte         ✅ Node details
 │   ├── ContextMenu.svelte       ✅ Right-click actions
-│   ├── MarketingPanel.svelte    ✅ NEW: Marketing dashboard & content creation
-│   ├── HiringModal.svelte       ✅ Personnel hiring interface
+│   ├── MarketingPanel.svelte    ✅ Marketing dashboard & content creation
+│   ├── HiringModal.svelte       ✅ NEW: Professional personnel hiring interface
 │   └── CourseModalSimple.svelte ✅ Course creation interface
 ├── data/
 │   ├── contentTemplates.ts      ✅ NEW: Marketing content templates
@@ -287,6 +307,16 @@ src/
 6. **Task System**: Create and assign tasks to personnel (using action points)
 7. **Advanced Interactions**: Drag-and-drop node combinations for marketing workflows
 
+### HR System Implementation (Latest Update)
+- ✅ **Personnel Management Reorganization**: Moved all personnel hiring from Shop to dedicated HR section
+- ✅ **Professional Hiring Interface**: Created modal-based hiring system with detailed personnel information
+- ✅ **Category-based Organization**: Personnel organized by Developers, Designers, Managers, Specialists
+- ✅ **Unified HR Controls**: Hire Personnel and Training buttons consolidated in single HR section
+- ✅ **Streamlined Shop Experience**: Shop now focuses exclusively on Resources and Ideas
+- ✅ **Enhanced User Experience**: Logical separation of HR functions from general purchasing
+- ✅ **Modal-based Hiring**: Professional hiring interface with category filtering and detailed stats
+- ✅ **Improved Information Architecture**: Better organization of game functions for intuitive navigation
+
 ### Marketing System Enhancements
 1. **Social Media Analytics**: Detailed performance tracking with engagement metrics and viral potential
 2. **Influencer System**: Hire influencers or partner with other companies for cross-promotion
@@ -331,15 +361,15 @@ src/
 
 ## 📊 Development Metrics
 
-- **Total Components**: 9 Svelte components (including marketing system)
-- **Lines of Code**: ~3500+ (estimated, including marketing system)
+- **Total Components**: 9 Svelte components (including marketing system and HR modal)
+- **Lines of Code**: ~3600+ (estimated, including marketing system and HR reorganization)
 - **Data Templates**: 4 template files (content, population, courses, personnel)
-- **Node Types**: 9 different node types (including 5 new marketing nodes)
+- **Node Types**: 9 different node types (including 5 marketing nodes)
 - **Dependencies**: Cytoscape.js, Tailwind CSS, TypeScript
 - **Build Time**: Fast (Vite)
 - **Bundle Size**: Optimized for web delivery
 
 ---
 
-**Last Updated**: Current implementation as of latest development session (Marketing System Added)
-**Status**: ✅ Production Ready for Core Features + Marketing & Customer Relationship Management
+**Last Updated**: Current implementation as of latest development session (HR System Reorganization Added)
+**Status**: ✅ Production Ready for Core Features + Marketing & Customer Relationship Management + Professional HR System

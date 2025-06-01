@@ -5,6 +5,8 @@
     import { companyFinances } from '../store/gameStore';
     import { showSuccessNotification, showErrorNotification } from '../store/uiStore';
 
+
+
     interface Props {
         visible: boolean;
         onClose?: () => void;
@@ -12,12 +14,12 @@
 
     let { visible = $bindable(false), onClose = () => {} }: Props = $props();
 
-    let selectedCategory: PersonnelTemplate['category'] | 'all' = 'all';
-    let selectedTemplate: PersonnelTemplate | null = null;
-    let modalElement: HTMLDivElement;
+    let selectedCategory = $state<PersonnelTemplate['category'] | 'all'>('all');
+    let selectedTemplate = $state<PersonnelTemplate | null>(null);
+    let modalElement = $state<HTMLDivElement>();
 
     // Filter templates based on selected category
-    const filteredTemplates = $derived(() => {
+    const filteredTemplates = $derived.by(() => {
         if (selectedCategory === 'all') {
             return personnelTemplates;
         }

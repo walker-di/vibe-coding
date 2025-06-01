@@ -3,11 +3,7 @@
     import { companyFinances } from '../store/gameStore';
     import { showSuccessNotification, showErrorNotification } from '../store/uiStore';
 
-    interface Props {
-        onOpenCourseModal?: () => void;
-    }
-
-    let { onOpenCourseModal = () => {} }: Props = $props();
+    // No props needed for Shop component anymore
     
     interface ShopItem {
         id: string;
@@ -20,42 +16,6 @@
     }
     
     const shopItems: ShopItem[] = [
-        {
-            id: 'junior-dev',
-            label: 'Junior Developer',
-            type: 'Personnel',
-            cost: 3000,
-            description: 'A junior developer with basic programming skills',
-            icon: '👨‍💻',
-            requirements: []
-        },
-        {
-            id: 'designer',
-            label: 'UI/UX Designer',
-            type: 'Personnel',
-            cost: 4000,
-            description: 'A designer who can create beautiful interfaces',
-            icon: '🎨',
-            requirements: []
-        },
-        {
-            id: 'marketing-specialist',
-            label: 'Marketing Specialist',
-            type: 'Personnel',
-            cost: 3500,
-            description: 'Expert in digital marketing and customer acquisition',
-            icon: '📈',
-            requirements: []
-        },
-        {
-            id: 'senior-dev',
-            label: 'Senior Developer',
-            type: 'Personnel',
-            cost: 8000,
-            description: 'Experienced developer with advanced skills',
-            icon: '👨‍💼',
-            requirements: []
-        },
         {
             id: 'cloud-hosting',
             label: 'Cloud Hosting',
@@ -82,25 +42,10 @@
             description: 'Comprehensive market analysis for new opportunities',
             icon: '🔍',
             requirements: []
-        },
-        {
-            id: 'course',
-            label: 'Training Course',
-            type: 'Course',
-            cost: 0, // Cost will be determined by selected course
-            description: 'Create a training course to improve personnel skills',
-            icon: '🎓',
-            requirements: []
         }
     ];
     
     function purchaseItem(item: ShopItem) {
-        // Special handling for Course type - open modal instead of direct purchase
-        if (item.type === 'Course') {
-            onOpenCourseModal();
-            return;
-        }
-
         // Check if player has enough money
         let currentFinances: any;
         const unsubscribe = companyFinances.subscribe(finances => currentFinances = finances);
@@ -114,24 +59,7 @@
         // Create the appropriate node data based on item type
         let nodeData: any;
         
-        if (item.type === 'Personnel') {
-            nodeData = {
-                id: `${item.id}-${Date.now()}`,
-                label: item.label,
-                type: 'Personnel',
-                description: item.description,
-                skills: getSkillsForPersonnel(item.id),
-                efficiency: getEfficiencyForPersonnel(item.id),
-                morale: 0.8,
-                salary: Math.floor(item.cost * 0.1), // 10% of purchase cost as monthly salary
-                actionPoints: 3, // Start with full action points
-                maxActionPoints: 3, // Default max action points
-                position: {
-                    x: Math.random() * 400 + 100,
-                    y: Math.random() * 400 + 100
-                }
-            };
-        } else if (item.type === 'Resource') {
+        if (item.type === 'Resource') {
             nodeData = {
                 id: `${item.id}-${Date.now()}`,
                 label: item.label,
@@ -180,27 +108,7 @@
             showErrorNotification(`Failed to purchase ${item.label}: ${result.message}`);
         }
     }
-    
-    function getSkillsForPersonnel(itemId: string): string[] {
-        const skillMap: Record<string, string[]> = {
-            'junior-dev': ['programming', 'debugging'],
-            'designer': ['ui design', 'ux design', 'prototyping'],
-            'marketing-specialist': ['marketing', 'social media', 'analytics'],
-            'senior-dev': ['programming', 'architecture', 'mentoring', 'debugging']
-        };
-        return skillMap[itemId] || ['general'];
-    }
-    
-    function getEfficiencyForPersonnel(itemId: string): number {
-        const efficiencyMap: Record<string, number> = {
-            'junior-dev': 0.6,
-            'designer': 0.7,
-            'marketing-specialist': 0.7,
-            'senior-dev': 0.9
-        };
-        return efficiencyMap[itemId] || 0.5;
-    }
-    
+
     function canAfford(cost: number): boolean {
         let currentFinances: any;
         const unsubscribe = companyFinances.subscribe(finances => currentFinances = finances);
@@ -225,11 +133,11 @@
     <div class="flex gap-1 justify-start">
         {#each shopItems as item}
             <button
-                class="relative w-16 h-16 p-1 rounded border-2 transition-all duration-200 {(item.type === 'Course' || canAfford(item.cost))
+                class="relative w-16 h-16 p-1 rounded border-2 transition-all duration-200 {canAfford(item.cost)
                     ? `${getTypeColor(item.type)} border-gray-600 hover:border-gray-400 hover:scale-105 cursor-pointer`
                     : 'bg-gray-700 border-gray-600 opacity-50 cursor-not-allowed'}"
-                onclick={() => (item.type === 'Course' || canAfford(item.cost)) && purchaseItem(item)}
-                disabled={item.type !== 'Course' && !canAfford(item.cost)}
+                onclick={() => canAfford(item.cost) && purchaseItem(item)}
+                disabled={!canAfford(item.cost)}
             >
                 <!-- Icon -->
                 <div class="text-sm mb-0.5 text-center">
@@ -243,7 +151,7 @@
 
                 <!-- Cost -->
                 <div class="text-yellow-400 font-bold text-xs text-center leading-none">
-                    {item.type === 'Course' ? 'Varies' : (item.cost >= 1000 ? `${item.cost/1000}k` : item.cost)}
+                    {item.cost >= 1000 ? `${item.cost/1000}k` : item.cost}
                 </div>
 
                 <!-- Description (tooltip on hover) -->
