@@ -1144,20 +1144,45 @@ export class GameEngine extends EventEmitter {
                     quality: Math.min(0.5 + (assignedPersonnel.efficiency * 0.5), 1.0),
                     createdBy: assignedPersonnel.id,
                     createdAt: Date.now(),
-                    isCompleted: true,
+                    isCompleted: false, // Make it a normal item that can be used
                     position: {
                         x: task.position?.x || Math.random() * 400 + 100,
-                        y: (task.position?.y || Math.random() * 400 + 100) + 100
+                        y: task.position?.y || Math.random() * 400 + 100
                     }
                 };
 
                 // Add pitch to game state
                 this.gameState.nodes.push(newPitch);
                 this.emitStateChange('NODE_ADDED', newPitch);
+
+                // Unassign all personnel from the task and position them outside
+                const taskPosition = task.position || { x: 200, y: 200 };
+                task.assignedPersonnelIds.forEach(personnelId => {
+                    const personnel = this.gameState.nodes.find(node =>
+                        node.id === personnelId && node.type === 'Personnel'
+                    ) as PersonnelData;
+
+                    if (personnel) {
+                        // Clear personnel assignment tracking
+                        delete personnel.assignedToTaskId;
+                        delete (personnel as any).assignedToTask;
+
+                        // Move personnel outside the task
+                        personnel.position = {
+                            x: taskPosition.x + 100 + Math.random() * 100,
+                            y: taskPosition.y + 100 + Math.random() * 100
+                        };
+                    }
+                });
+
+                // Remove the task node itself
+                this.removeNode(task.id);
+
+                return; // Exit early since we've handled everything for pitch tasks
             }
         }
 
-        // Task completion logic would go here
+        // Task completion logic would go here for other task types
         // For now, just emit an event
         this.emitStateChange('TASK_COMPLETED', task);
     }

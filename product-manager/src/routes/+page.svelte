@@ -118,6 +118,19 @@
                 } else {
                     showErrorNotification(result.message);
                 }
+            }
+            // Handle pitch presentation to angel founders
+            else if (draggedNode?.type === 'Pitch' && targetNode?.type === 'AngelFounder') {
+                const result = dispatchGameAction({
+                    type: 'PRESENT_PITCH',
+                    payload: { pitchId: draggedNodeId, angelFounderId: targetNodeId }
+                });
+
+                if (result.success) {
+                    showSuccessNotification(result.message);
+                } else {
+                    showErrorNotification(result.message);
+                }
             } else {
                 // Generic drop notification for other combinations
                 showSuccessNotification(`Dropped ${draggedNodeId} onto ${targetNodeId}`);

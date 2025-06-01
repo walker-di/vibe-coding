@@ -66,12 +66,18 @@
         if (compoundDragAndDrop && cy.compoundDragAndDrop) {
             const cdnd = cy.compoundDragAndDrop({
                 grabbedNode: (node: any) => {
-                    // Only allow Personnel nodes to be grabbed for compound operations
-                    return node.data('type') === 'Personnel';
+                    // Allow Personnel and Pitch nodes to be grabbed for compound operations
+                    return node.data('type') === 'Personnel' || node.data('type') === 'Pitch';
                 },
                 dropTarget: (dropTarget: any, grabbedNode: any) => {
                     // Allow dropping Personnel on Course nodes and Task nodes
-                    return (dropTarget.data('type') === 'Course' || dropTarget.data('type') === 'Task') && grabbedNode.data('type') === 'Personnel';
+                    // Allow dropping Pitch nodes on AngelFounder nodes
+                    if (grabbedNode.data('type') === 'Personnel') {
+                        return dropTarget.data('type') === 'Course' || dropTarget.data('type') === 'Task';
+                    } else if (grabbedNode.data('type') === 'Pitch') {
+                        return dropTarget.data('type') === 'AngelFounder';
+                    }
+                    return false;
                 },
                 dropSibling: () => false, // Don't allow sibling drops for now
                 newParentNode: () => ({}), // Don't create new parent nodes
