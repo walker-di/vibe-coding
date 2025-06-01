@@ -28,7 +28,7 @@
         layout = 'cose'
     }: Props = $props();
 
-    let cy: Core | undefined;
+    let cy: Core | undefined = $state();
     let cyContainer: HTMLDivElement;
     let draggedNode: NodeSingular | null = null;
 
@@ -41,9 +41,9 @@
             elements: [], // Will be populated by $effect
             style: cytoscapeStylesheet,
             layout: getCytoscapeLayout(layout),
-            wheelSensitivity: 0.2,
-            minZoom: 0.2,
-            maxZoom: 3,
+            wheelSensitivity: 1.0, // Increased from 0.2 for faster zooming
+            minZoom: 0.1,
+            maxZoom: 5,
             userZoomingEnabled: true,
             userPanningEnabled: true,
             boxSelectionEnabled: false,
@@ -133,7 +133,7 @@
         try {
             // Convert game data to Cytoscape format
             const elements = gameNodesToCytoscapeElements(nodes, edges);
-            
+
             // Get current elements in Cytoscape
             const currentNodes = cy.nodes().map(n => n.id());
             const currentEdges = cy.edges().map(e => e.id());
@@ -243,20 +243,24 @@
     });
 </script>
 
-<div 
-    bind:this={cyContainer} 
-    class="w-full h-full bg-gray-900 rounded-lg border border-gray-700"
-    style="min-height: 400px;"
->
-    <!-- Loading state or empty state could go here -->
-    {#if !cy}
-        <div class="flex items-center justify-center h-full text-gray-400">
-            <div class="text-center">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                <p>Loading graph...</p>
+<div class="relative w-full h-full">
+
+
+    <div
+        bind:this={cyContainer}
+        class="w-full h-full bg-gray-900 rounded-lg border border-gray-700"
+        style="min-height: 400px;"
+    >
+        <!-- Loading state or empty state could go here -->
+        {#if !cy}
+            <div class="flex items-center justify-center h-full text-gray-400">
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                    <p>Loading graph...</p>
+                </div>
             </div>
-        </div>
-    {/if}
+        {/if}
+    </div>
 </div>
 
 <style>

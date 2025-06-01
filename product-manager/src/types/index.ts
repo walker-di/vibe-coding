@@ -135,6 +135,7 @@ export type GameActionType =
     | 'DISCOVER_IDEA'
     | 'CREATE_TASK'
     | 'COMPLETE_TASK'
+    | 'UPDATE_FINANCES'
     | 'PAUSE_GAME'
     | 'RESUME_GAME'
     | 'SET_GAME_SPEED';

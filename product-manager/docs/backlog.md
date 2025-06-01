@@ -40,16 +40,17 @@
 
 ---
 
-## 🚀 Sprint 2 (2 weeks) - Game Mechanics & Node Interactions (IN PROGRESS)
+## ✅ Sprint 2 (2 weeks) - Game Mechanics & Node Interactions (COMPLETED)
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
-| **As a player, I want to hire and manage personnel** | Implement personnel hiring system | High | 4 | Backend Dev | ✅ Completed | Can hire personnel with different skills and salaries |
-| | Create personnel templates and categories | High | 2 | Backend Dev | ✅ Completed | 12 personnel types across 4 categories available |
-| | Build hiring modal interface | High | 3 | Frontend Dev | ✅ Completed | Full-featured hiring interface with filtering |
-| | Add personnel firing functionality | Medium | 2 | Backend Dev | ✅ Completed | Can fire personnel with proper cleanup |
-| | Add personnel skill matching for tasks | High | 3 | Backend Dev | Not Started | Personnel efficiency affects task completion |
-| | Implement personnel morale system | Medium | 3 | Backend Dev | Not Started | Morale affects efficiency, can be improved |
+| **As a player, I want to purchase items and expand my company** | Create Stacklands-style shop interface | High | 4 | Frontend Dev | ✅ Completed | Compact 64x64px cards with 7 purchasable items |
+| | Implement shop integration in HUD | High | 2 | Frontend Dev | ✅ Completed | Shop positioned below financial summary |
+| | Add real-time affordability checking | High | 3 | Backend Dev | ✅ Completed | Visual feedback for affordable/unaffordable items |
+| | Create automatic node generation on purchase | High | 3 | Backend Dev | ✅ Completed | Purchased items appear as nodes in graph |
+| **As a player, I want responsive graph interaction** | Optimize Cytoscape zoom sensitivity | High | 2 | Frontend Dev | ✅ Completed | 5x faster zoom (wheelSensitivity: 1.0) |
+| | Improve node positioning and layout | Medium | 3 | Frontend Dev | ✅ Completed | Cose layout with proper node spacing |
+| | Add intelligent element diffing | High | 4 | Frontend Dev | ✅ Completed | Only update changed nodes/edges for performance |
 | **As a player, I want to create and manage tasks** | Create task creation workflow | High | 4 | Backend Dev | 🔄 In Progress | Can create tasks with requirements and outputs |
 | | Implement task assignment logic | High | 5 | Backend Dev | Not Started | Assign personnel to tasks, track progress |
 | | Add task completion rewards | Medium | 3 | Backend Dev | Not Started | Completed tasks generate products/resources |
@@ -64,24 +65,45 @@
 | | Add expense tracking (salaries, resources) | High | 3 | Backend Dev | ✅ Completed | Track and display ongoing expenses |
 | | Create financial alerts and warnings | Medium | 2 | Frontend Dev | Not Started | Warn when running low on capital |
 
-**Sprint 2 Progress Summary:**
-- ✅ **Personnel Hiring System**: Complete with 12 personnel templates, hiring modal, and financial integration
+**Sprint 2 Achievements:**
+- ✅ **Stacklands-Style Shop Interface**: Complete with 7 purchasable items in compact 64x64px cards
+- ✅ **Enhanced Graph Interaction**: 5x faster zoom, intelligent element diffing, optimized performance
+- ✅ **Real-time Purchase System**: Affordability checking, automatic node creation, capital integration
+- ✅ **UI/UX Improvements**: Shop integrated in HUD below financial summary, responsive design
 - 🔄 **Task Creation**: Basic framework implemented, assignment logic in progress
-- ⏳ **Product Development**: Awaiting task system completion
-- ⏳ **Node Combinations**: Planned for later in sprint
-- ⏳ **Market System**: Planned for later in sprint
 
 **Completed Features:**
-- Personnel hiring with cost validation and capital deduction
-- Personnel firing with proper assignment cleanup
-- 12 diverse personnel templates across 4 categories
-- Full-featured hiring modal with category filtering
-- Context menu integration for hiring/firing actions
-- Real-time financial tracking and expense calculation
+- Stacklands-style shop with 7 items: 4 Personnel, 2 Resources, 1 Idea
+- Real-time affordability checking with visual feedback (enabled/disabled states)
+- Automatic node creation with proper positioning and styling
+- Enhanced Cytoscape performance (wheelSensitivity: 1.0, intelligent diffing)
+- Shop integration in HUD positioned below financial information
+- Compact card design optimized for horizontal space (64x64px)
+- Cost display in k-format (3k, 4k) for space efficiency
 
 ---
 
-## Sprint 3 (2 weeks) - Advanced Features & Polish
+## 🚀 Sprint 3 (2 weeks) - Task System & Node Interactions (CURRENT PRIORITY)
+
+| **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
+|----------------|----------|--------------|-----------------|--------------|------------|------------------------|
+| **As a player, I want to create and manage tasks** | Complete task creation workflow | High | 4 | Backend Dev | 🔄 In Progress | Can create tasks with requirements and outputs |
+| | Implement task assignment logic | High | 5 | Backend Dev | Not Started | Assign personnel to tasks, track progress |
+| | Add task completion rewards | High | 3 | Backend Dev | Not Started | Completed tasks generate products/resources |
+| | Add task progress tracking | Medium | 3 | Backend Dev | Not Started | Tasks show progress based on assigned personnel |
+| **As a player, I want meaningful node combinations** | Implement drag-and-drop node combination | High | 5 | Frontend Dev | Not Started | Dragging compatible nodes creates relationships |
+| | Add combination validation and feedback | High | 3 | Frontend Dev | Not Started | Invalid combinations show helpful feedback |
+| | Create visual feedback for valid combinations | Medium | 2 | Frontend Dev | Not Started | Highlight valid drop targets during drag |
+| **As a player, I want to develop products** | Implement idea-to-product workflow | High | 5 | Backend Dev | Not Started | Convert ideas into development tasks |
+| | Add product quality system | Medium | 4 | Backend Dev | Not Started | Product quality affects market value |
+| | Create product feature system | Medium | 3 | Backend Dev | Not Started | Products have features that affect appeal |
+| **As a player, I want basic revenue generation** | Implement basic market system | High | 4 | Backend Dev | Not Started | Products can be sold for revenue |
+| | Add simple product sales mechanics | Medium | 3 | Backend Dev | Not Started | Products generate revenue over time |
+| | Create financial alerts and warnings | Medium | 2 | Frontend Dev | Not Started | Warn when running low on capital |
+
+---
+
+## Sprint 4 (2 weeks) - Advanced Features & Market Dynamics
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -93,33 +115,30 @@
 | | Create resource optimization challenges | Medium | 2 | Backend Dev | Not Started | Efficient resource use affects profitability |
 | **As a player, I want advanced personnel features** | Implement personnel training system | Medium | 4 | Backend Dev | Not Started | Can train personnel to improve skills |
 | | Add personnel specialization paths | Medium | 3 | Backend Dev | Not Started | Personnel can specialize in specific areas |
-| | Create team dynamics and synergies | Low | 3 | Backend Dev | Not Started | Personnel work better in compatible teams |
+| | Add personnel skill matching for tasks | High | 3 | Backend Dev | Not Started | Personnel efficiency affects task completion |
+| | Implement personnel morale system | Medium | 3 | Backend Dev | Not Started | Morale affects efficiency, can be improved |
 | **As a player, I want visual improvements** | Add animations for node interactions | Medium | 3 | Frontend Dev | Not Started | Smooth animations for drag/drop, selections |
 | | Implement graph layout improvements | Medium | 2 | Frontend Dev | Not Started | Better automatic layout and manual positioning |
-| | Create visual themes and customization | Low | 2 | Frontend Dev | Not Started | Different visual themes for the game |
-| **As a player, I want game progression** | Implement achievement system | Medium | 3 | Backend Dev | Not Started | Unlock achievements for milestones |
-| | Add difficulty scaling | Medium | 2 | Backend Dev | Not Started | Game becomes more challenging over time |
-| | Create scenario-based challenges | Low | 4 | Backend Dev | Not Started | Specific business scenarios to solve |
 
 ---
 
-## Sprint 4 (2 weeks) - Advanced Interactions & Polish
+## Sprint 5 (2 weeks) - Polish & User Experience
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
-| **As a player, I want to combine nodes meaningfully** | Implement node combination logic | High | 5 | Backend Dev | Not Started | Dragging compatible nodes creates new relationships |
-| | Add validation for combinations | High | 3 | Backend Dev | Not Started | Invalid combinations show feedback |
-| | Create product development workflow | High | 4 | Backend Dev | Not Started | Ideas → Development → Products workflow works |
-| **As a player, I want financial management** | Implement company finances system | High | 4 | Backend Dev | Not Started | Track revenue, expenses, capital |
-| | Add salary payment system | Medium | 3 | Backend Dev | Not Started | Personnel cost money each tick |
-| | Create basic market simulation | Medium | 4 | Backend Dev | Not Started | Products generate revenue based on quality |
 | **As a player, I want a polished experience** | Improve visual design and animations | Medium | 4 | Frontend Dev | Not Started | Smooth animations, polished UI |
-| | Add game tutorial/onboarding | Low | 3 | Frontend Dev | Not Started | New players understand basic mechanics |
-| | Implement save/load functionality | Medium | 3 | Backend Dev | Not Started | Game state persists between sessions |
+| | Create visual themes and customization | Low | 2 | Frontend Dev | Not Started | Different visual themes for the game |
+| | Add game tutorial/onboarding | Medium | 3 | Frontend Dev | Not Started | New players understand basic mechanics |
+| | Implement save/load functionality | High | 3 | Backend Dev | Not Started | Game state persists between sessions |
+| **As a player, I want game progression** | Implement achievement system | Medium | 3 | Backend Dev | Not Started | Unlock achievements for milestones |
+| | Add difficulty scaling | Medium | 2 | Backend Dev | Not Started | Game becomes more challenging over time |
+| | Create scenario-based challenges | Low | 4 | Backend Dev | Not Started | Specific business scenarios to solve |
+| **As a player, I want team dynamics** | Create team dynamics and synergies | Medium | 3 | Backend Dev | Not Started | Personnel work better in compatible teams |
+| | Add advanced personnel interactions | Low | 2 | Backend Dev | Not Started | Personnel can collaborate on complex tasks |
 
 ---
 
-## Sprint 5 (2 weeks) - Testing, Optimization & Release Prep
+## Sprint 6 (2 weeks) - Testing, Optimization & Release Prep
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -151,14 +170,22 @@
 - **5 SP**: 1.5-2 days
 
 ### Dependencies
-- Sprint 2 depends on Sprint 1 foundation
-- Sprint 3 depends on Sprint 2 components
-- Sprint 4 builds on Sprint 3 mechanics
-- Sprint 5 requires completed features from previous sprints
+- ✅ Sprint 1 & 2: Foundation and shop interface completed
+- Sprint 3 depends on Sprint 2 shop system (completed)
+- Sprint 4 builds on Sprint 3 task mechanics
+- Sprint 5 requires completed core features from previous sprints
+- Sprint 6 requires stable features for testing and optimization
 
 ### Risk Mitigation
-- **Cytoscape Integration Complexity**: Allocated extra time in Sprint 2 for learning curve
-- **State Management Complexity**: Dedicated tasks for bridging engine and UI state
-- **Performance Concerns**: Dedicated optimization sprint (Sprint 5)
+- ✅ **Cytoscape Integration Complexity**: Successfully resolved with optimized performance
+- ✅ **State Management Complexity**: Implemented with Svelte 5 runes and reactive stores
+- ✅ **Shop Interface Design**: Completed with Stacklands-style compact cards
+- **Task System Complexity**: Current focus for Sprint 3, may require additional time
+- **Performance Concerns**: Dedicated optimization sprint (Sprint 6)
 
-This backlog provides a structured approach to building your ProductGraphTycoon game, with clear deliverables and dependencies mapped out across 5 two-week sprints.
+### Current Status Summary
+- **Sprints 1-2**: ✅ Completed (Foundation, Graph Canvas, Shop Interface)
+- **Sprint 3**: 🚀 Current Priority (Task System & Node Interactions)
+- **Sprints 4-6**: ⏳ Planned (Advanced Features, Polish, Testing)
+
+This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across 6 two-week sprints. The foundation is solid and the core purchase/expansion mechanics are working.

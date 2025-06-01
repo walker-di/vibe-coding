@@ -1,8 +1,8 @@
 <script lang="ts">
-    import { 
-        companyFinances, 
-        currentTick, 
-        gameSpeed, 
+    import {
+        companyFinances,
+        currentTick,
+        gameSpeed,
         isPaused,
         totalPersonnel,
         totalProducts,
@@ -11,6 +11,7 @@
         resumeGame,
         setGameSpeed
     } from '../store/gameStore';
+    import Shop from './Shop.svelte';
 
     // Format currency
     function formatCurrency(amount: number): string {
@@ -135,5 +136,10 @@
                 <span>{$isPaused ? 'Paused' : 'Running'}</span>
             </div>
         </div>
+    </div>
+
+    <!-- Shop section -->
+    <div class="mt-3 pt-3 border-t border-gray-700">
+        <Shop />
     </div>
 </header>

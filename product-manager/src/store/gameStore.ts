@@ -163,6 +163,7 @@ export function createTask(taskData: any): ActionResult {
 export function startGame() {
     // Ensure the store is initialized with the current game state
     const currentState = gameEngine.getState();
+
     gameState.set({
         nodes: [...currentState.nodes],
         edges: [...currentState.edges],

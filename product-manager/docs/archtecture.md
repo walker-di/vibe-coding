@@ -2,20 +2,71 @@ Using Svelte 5 with its new rune-based reactivity and Tailwind CSS 4 for styling
 
 Here's a more detailed developer document focusing on architecture, Svelte 5 integration, Cytoscape usage, and Tailwind considerations for your Business/Product Building & Management game.
 
-## Developer Documentation: "ProductGraphTycoon" (Working Title)
+## Developer Documentation: "ProductGraphTycoon"
 
 **Game Concept:** A business simulation game where players build and manage a company by creating products, hiring personnel, managing finances, and navigating market challenges. The core interaction is card-based (represented as nodes) and visualized as a dynamic graph using Cytoscape.js.
+
+**Current Status:** ✅ **IMPLEMENTED AND WORKING**
+- Graph canvas with interactive nodes (Founder, Initial Capital, Mobile App Idea)
+- Stacklands-style shop interface with purchasable items
+- Real-time financial tracking and game state management
+- Responsive zoom controls and node interactions
 
 **Tech Stack:**
 
 *   **Frontend Framework:** Svelte 5 (using Runes: `$state`, `$derived`, `$effect`)
-*   **Styling:** Tailwind CSS 4 (using the new engine features if applicable, otherwise standard utility-first)
-*   **Graph Visualization:** Cytoscape.js
-*   **Language:** TypeScript (recommended for type safety and better DX)
+*   **Styling:** Tailwind CSS 4 (utility-first approach)
+*   **Graph Visualization:** Cytoscape.js (v3.x)
+*   **Language:** TypeScript (for type safety and better DX)
+*   **Build Tool:** Vite (for fast development and building)
 
 ---
 
-### 1. Project Structure (Illustrative)
+## Current Implementation Status
+
+### ✅ Completed Features
+
+1. **Graph Canvas System**
+   - Cytoscape.js integration with Svelte 5 runes
+   - Interactive node visualization (Personnel: blue circles, Resources: purple rectangles, Ideas: cyan stars)
+   - Responsive zoom controls (wheelSensitivity: 1.0 for fast zooming)
+   - Node positioning and layout management
+
+2. **Shop Interface (Stacklands-style)**
+   - Compact 64x64px purchase cards in HUD
+   - 7 purchasable items: Personnel (Junior Dev $3k, Designer $4k, Marketing $3.5k, Senior Dev $8k), Resources (Cloud Hosting $1k, Dev Tools $2k), Ideas (Market Research $5k)
+   - Real-time affordability checking and visual feedback
+   - Automatic node creation and capital deduction on purchase
+
+3. **Game Engine & State Management**
+   - Singleton GameEngine with event-driven architecture
+   - Reactive Svelte stores using $state and $derived runes
+   - Real-time financial tracking (capital, revenue/expenses per tick, totals)
+   - Game loop with configurable speed (0.5x to 5x)
+
+4. **UI Components**
+   - HUD with financial summary and shop integration
+   - Info panels for node details
+   - Context menus for node actions
+   - Responsive layout with Tailwind CSS
+
+### 🔧 Technical Implementation Details
+
+**Cytoscape Configuration:**
+- wheelSensitivity: 1.0 (5x faster than default)
+- minZoom: 0.1, maxZoom: 5
+- Layout: 'cose' algorithm for organic node positioning
+- Custom stylesheets for different node types
+
+**Shop Card Design:**
+- Fixed 64x64px dimensions for consistency
+- Flex layout with minimal gaps (gap-1)
+- Compact text (text-xs) and icons (text-sm)
+- Cost display in k format (3k, 4k) for space efficiency
+
+---
+
+### 1. Project Structure (Current)
 
 ```
 /src
@@ -266,11 +317,15 @@ export interface GameState {
     </div>
     ```
 
-*   **`CytoscapeGraph.svelte`:**
-    *   **Props:** `nodes: BaseNodeData[]`, `edges: EdgeData[]`.
-    *   **Events:** `onNodeClick(nodeId: string)`, `onEdgeClick(edgeId: string)`, `onCanvasClick()`, `onNodeRightClick(nodeId: string, position: {x: number, y: number})`, `onDragNodes(nodeId: string, targetNodeId: string | null)`.
-    *   Uses `onMount` to initialize Cytoscape.
-    *   Uses Svelte 5 `$effect` to reactively update the Cytoscape graph when `nodes` or `edges` props change. This is where the magic of Svelte 5 runes comes in for efficient updates.
+*   **`CytoscapeGraph.svelte`:** ✅ **IMPLEMENTED**
+    *   **Props:** `nodes: BaseNodeData[]`, `edges: EdgeData[]`, `layout: string`, event handlers
+    *   **Events:** `onNodeClick`, `onEdgeClick`, `onCanvasClick`, `onNodeRightClick`, `onNodeDrop`
+    *   **Current Features:**
+        - Cytoscape initialization with optimized settings (wheelSensitivity: 1.0)
+        - Reactive updates using Svelte 5 `$effect` rune
+        - Intelligent element diffing (add/remove/update only changed elements)
+        - Drag and drop support for node interactions
+        - Automatic layout management with 'cose' algorithm
 
     ```html
     <!-- src/components/CytoscapeGraph.svelte -->
@@ -410,9 +465,25 @@ export interface GameState {
     *   Actions dispatch calls to `gameStore.dispatchGameAction(...)`.
     *   Styled with Tailwind CSS.
 
-*   **`Hud.svelte`:**
-    *   Displays global info like `gameStore.capital`, `gameStore.currentTick`.
-    *   Styled with Tailwind CSS.
+*   **`Hud.svelte`:** ✅ **IMPLEMENTED**
+    *   Displays global info: capital, revenue/expenses per tick, personnel/products/tasks counts
+    *   Game controls: pause/resume, speed adjustment (0.5x to 5x)
+    *   Financial summary: Total Revenue, Total Expenses, Net Profit
+    *   **Integrated Shop component** positioned below financial information
+    *   Styled with Tailwind CSS for responsive layout
+
+*   **`Shop.svelte`:** ✅ **IMPLEMENTED**
+    *   **Stacklands-style purchase interface** with compact 64x64px cards
+    *   **7 purchasable items:**
+        - Personnel: Junior Developer ($3k), UI/UX Designer ($4k), Marketing Specialist ($3.5k), Senior Developer ($8k)
+        - Resources: Cloud Hosting ($1k), Development Tools ($2k)
+        - Ideas: Market Research ($5k)
+    *   **Features:**
+        - Real-time affordability checking with visual feedback
+        - Automatic node creation with proper positioning
+        - Finance integration (capital deduction)
+        - Hover tooltips with item descriptions
+        - Compact display (first word only, k-format costs)
 
 ---
 

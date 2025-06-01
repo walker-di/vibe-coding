@@ -135,6 +135,8 @@ export class GameEngine extends EventEmitter {
                     return this.firePersonnel(action.payload.personnelId);
                 case 'CREATE_TASK':
                     return this.createTask(action.payload);
+                case 'UPDATE_FINANCES':
+                    return this.updateFinancesAction(action.payload);
                 default:
                     return { success: false, message: `Unknown action type: ${action.type}` };
             }
@@ -352,6 +354,24 @@ export class GameEngine extends EventEmitter {
             message: `Created task: ${newTask.label}`,
             data: newTask
         };
+    }
+
+    // Finance management
+    updateFinancesAction(payload: { capitalChange?: number; revenueChange?: number; expenseChange?: number }): ActionResult {
+        if (payload.capitalChange !== undefined) {
+            this.gameState.companyFinances.capital += payload.capitalChange;
+        }
+
+        if (payload.revenueChange !== undefined) {
+            this.gameState.companyFinances.revenuePerTick += payload.revenueChange;
+        }
+
+        if (payload.expenseChange !== undefined) {
+            this.gameState.companyFinances.expensesPerTick += payload.expenseChange;
+        }
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return { success: true, message: 'Finances updated successfully' };
     }
 
     // Game control
