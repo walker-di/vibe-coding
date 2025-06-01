@@ -30,6 +30,7 @@
     let cy: any = $state();
     let cyContainer: HTMLDivElement;
     let draggedNode: any = null;
+    let hasInitialCentered = false; // Flag to track if we've done initial centering
 
     onMount(async () => {
         if (!cyContainer) return;
@@ -282,7 +283,21 @@
             // Run layout if there are new elements (without fit to prevent auto-centering)
             if (nodesToAdd.length > 0) {
                 const layoutOptions = getCytoscapeLayout(layout, { fit: false });
-                cy.layout(layoutOptions).run();
+                const layoutInstance = cy.layout(layoutOptions);
+
+                // Center the graph once after initial layout is complete (game initialization)
+                if (!hasInitialCentered) {
+                    layoutInstance.one('layoutstop', () => {
+                        cy?.center();
+                        hasInitialCentered = true;
+                    });
+                }
+
+                layoutInstance.run();
+            } else if (!hasInitialCentered && elements.length > 0) {
+                // If no new nodes but we have elements and haven't centered yet, center immediately
+                cy?.center();
+                hasInitialCentered = true;
             }
 
         } catch (error) {
