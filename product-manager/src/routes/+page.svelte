@@ -9,6 +9,7 @@
     import ContextMenu from '../components/ContextMenu.svelte';
     import HiringModal from '../components/HiringModal.svelte';
     import CourseModalSimple from '../components/CourseModalSimple.svelte';
+    import MarketingPanel from '../components/MarketingPanel.svelte';
 
 
     // Import stores
@@ -30,6 +31,7 @@
     let cytoscapeGraph: CytoscapeGraph;
     let hiringModalVisible = false;
     let courseModalVisible = false;
+    let marketingPanelVisible = false;
 
     onMount(() => {
         if (browser) {
@@ -165,6 +167,21 @@
             />
         {/if}
 
+        <!-- Marketing Panel -->
+        {#if marketingPanelVisible}
+            <div class="absolute top-4 left-4 w-80 z-20">
+                <div class="relative">
+                    <button
+                        class="absolute top-2 right-2 z-30 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm"
+                        onclick={() => marketingPanelVisible = false}
+                    >
+                        ×
+                    </button>
+                    <MarketingPanel />
+                </div>
+            </div>
+        {/if}
+
         <!-- Context Menu -->
         {#if $contextMenu.visible}
             <ContextMenu
@@ -191,6 +208,12 @@
 
     <!-- Game controls overlay -->
     <div class="absolute bottom-4 left-4 flex space-x-2">
+        <button
+            class="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors"
+            onclick={() => marketingPanelVisible = !marketingPanelVisible}
+        >
+            📊 Marketing
+        </button>
         <button
             class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
             onclick={() => cytoscapeGraph?.fitGraph()}

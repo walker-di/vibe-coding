@@ -17,6 +17,7 @@ export const gameState = writable<GameState>({
     nodes: [...initialGameState.nodes],
     edges: [...initialGameState.edges],
     companyFinances: { ...initialGameState.companyFinances },
+    marketingMetrics: { ...initialGameState.marketingMetrics },
     currentTick: initialGameState.currentTick,
     currentWeekStartTime: initialGameState.currentWeekStartTime,
     availableIdeas: [...initialGameState.availableIdeas],
@@ -57,6 +58,34 @@ export const completedTasks = derived(gameState, $gameState => {
     return $gameState.nodes.filter(node => node.type === 'Task' && (node as any).progress >= 1);
 });
 
+// Marketing-related derived stores
+export const marketingMetrics = derived(gameState, $gameState => $gameState.marketingMetrics);
+
+export const totalLeads = derived(gameState, $gameState => {
+    return $gameState.nodes.filter(node => node.type === 'Lead').length;
+});
+
+export const totalCustomers = derived(gameState, $gameState => {
+    return $gameState.nodes.filter(node => node.type === 'Customer').length;
+});
+
+export const totalContent = derived(gameState, $gameState => {
+    return $gameState.nodes.filter(node => node.type === 'Content').length;
+});
+
+export const activeCampaigns = derived(gameState, $gameState => {
+    return $gameState.nodes.filter(node => node.type === 'Campaign' && (node as any).isActive).length;
+});
+
+export const populationData = derived(gameState, $gameState => {
+    return $gameState.nodes.find(node => node.type === 'Population');
+});
+
+export const brandAwareness = derived(gameState, $gameState => {
+    const population = $gameState.nodes.find(node => node.type === 'Population') as any;
+    return population?.awareness || 0;
+});
+
 // Listen to game engine state changes
 gameEngine.on('stateChanged', (newState: GameState) => {
     console.log('STORE: State changed - nodes count:', newState.nodes.length);
@@ -68,6 +97,7 @@ gameEngine.on('stateChanged', (newState: GameState) => {
         nodes: [...newState.nodes],
         edges: [...newState.edges],
         companyFinances: { ...newState.companyFinances },
+        marketingMetrics: { ...newState.marketingMetrics },
         currentTick: newState.currentTick,
         currentWeekStartTime: newState.currentWeekStartTime,
         availableIdeas: [...newState.availableIdeas],
@@ -194,6 +224,49 @@ export function completeCourse(courseId: string): ActionResult {
     });
 }
 
+// Marketing action functions
+export function createContent(contentData: any): ActionResult {
+    return dispatchGameAction({
+        type: 'CREATE_CONTENT',
+        payload: contentData
+    });
+}
+
+export function createCampaign(campaignData: any): ActionResult {
+    return dispatchGameAction({
+        type: 'CREATE_CAMPAIGN',
+        payload: campaignData
+    });
+}
+
+export function startCampaign(campaignId: string): ActionResult {
+    return dispatchGameAction({
+        type: 'START_CAMPAIGN',
+        payload: { campaignId }
+    });
+}
+
+export function stopCampaign(campaignId: string): ActionResult {
+    return dispatchGameAction({
+        type: 'STOP_CAMPAIGN',
+        payload: { campaignId }
+    });
+}
+
+export function convertLead(leadId: string): ActionResult {
+    return dispatchGameAction({
+        type: 'CONVERT_LEAD',
+        payload: { leadId }
+    });
+}
+
+export function updateMarketingMetrics(): ActionResult {
+    return dispatchGameAction({
+        type: 'UPDATE_MARKETING_METRICS',
+        payload: {}
+    });
+}
+
 // Game control functions
 export function startGame() {
     // Ensure the store is initialized with the current game state
@@ -203,6 +276,7 @@ export function startGame() {
         nodes: [...currentState.nodes],
         edges: [...currentState.edges],
         companyFinances: { ...currentState.companyFinances },
+        marketingMetrics: { ...currentState.marketingMetrics },
         currentTick: currentState.currentTick,
         currentWeekStartTime: currentState.currentWeekStartTime,
         availableIdeas: [...currentState.availableIdeas],
@@ -254,4 +328,24 @@ export function getIdeas(): BaseNodeData[] {
 
 export function getMarkets(): BaseNodeData[] {
     return getNodesByType('Market');
+}
+
+export function getLeads(): BaseNodeData[] {
+    return getNodesByType('Lead');
+}
+
+export function getCustomers(): BaseNodeData[] {
+    return getNodesByType('Customer');
+}
+
+export function getContent(): BaseNodeData[] {
+    return getNodesByType('Content');
+}
+
+export function getCampaigns(): BaseNodeData[] {
+    return getNodesByType('Campaign');
+}
+
+export function getPopulation(): BaseNodeData | undefined {
+    return getNodesByType('Population')[0];
 }

@@ -1,6 +1,6 @@
 // Core type definitions for ProductGraphTycoon
 
-export type NodeType = 'Personnel' | 'Product' | 'Resource' | 'Task' | 'Market' | 'Idea' | 'Course';
+export type NodeType = 'Personnel' | 'Product' | 'Resource' | 'Task' | 'Market' | 'Idea' | 'Course' | 'Population' | 'Lead' | 'Customer' | 'Content' | 'Campaign';
 
 export interface BaseNodeData {
     id: string; // Unique ID
@@ -89,6 +89,97 @@ export interface CourseData extends BaseNodeData {
     isCompleted: boolean; // Whether the course has finished
 }
 
+// Marketing and Customer Relationship System
+export interface PopulationData extends BaseNodeData {
+    type: 'Population';
+    totalSize: number; // Total addressable market size
+    segments: PopulationSegment[];
+    growthRate: number; // Population growth per tick (0-0.1)
+    awareness: number; // Brand awareness level (0-1)
+}
+
+export interface PopulationSegment {
+    id: string;
+    name: string; // e.g., "Young Professionals", "Students", "Entrepreneurs"
+    size: number; // Number of people in this segment
+    interests: string[]; // What content they respond to
+    conversionRate: number; // Base conversion rate from lead to customer (0-1)
+    averageValue: number; // Average revenue per customer in this segment
+    platforms: string[]; // Preferred social media platforms
+}
+
+export interface LeadData extends BaseNodeData {
+    type: 'Lead';
+    segmentId: string; // Which population segment they belong to
+    source: string; // How they were generated (e.g., "instagram-post", "youtube-video")
+    score: number; // Lead quality score (0-100)
+    generatedAt: number; // Timestamp when lead was created
+    conversionProbability: number; // Chance to convert to customer (0-1)
+    interests: string[]; // What content/products they're interested in
+    touchpoints: string[]; // History of interactions with content
+}
+
+export interface CustomerData extends BaseNodeData {
+    type: 'Customer';
+    segmentId: string; // Which population segment they belong to
+    acquisitionSource: string; // Original lead source
+    lifetimeValue: number; // Total revenue generated
+    loyaltyLevel: number; // Customer loyalty (0-1)
+    purchaseHistory: Purchase[];
+    lastPurchaseAt: number; // Timestamp of last purchase
+    churnRisk: number; // Risk of leaving (0-1)
+}
+
+export interface Purchase {
+    productId: string;
+    amount: number;
+    timestamp: number;
+    satisfaction: number; // 0-1
+}
+
+export interface ContentData extends BaseNodeData {
+    type: 'Content';
+    contentType: 'post' | 'video' | 'article' | 'story' | 'reel';
+    platform: 'instagram' | 'facebook' | 'youtube' | 'linkedin' | 'tiktok';
+    quality: number; // Content quality (0-1)
+    targetSegments: string[]; // Which population segments this targets
+    createdBy: string; // Personnel ID who created it
+    createdAt: number; // Timestamp
+    performance: ContentPerformance;
+    cost: number; // Cost to create
+}
+
+export interface ContentPerformance {
+    views: number;
+    likes: number;
+    shares: number;
+    comments: number;
+    leadsGenerated: number;
+    engagementRate: number; // 0-1
+    reach: number; // Number of unique people reached
+}
+
+export interface CampaignData extends BaseNodeData {
+    type: 'Campaign';
+    contentIds: string[]; // Content pieces used in this campaign
+    targetSegments: string[]; // Population segments being targeted
+    budget: number; // Money allocated to campaign
+    spent: number; // Money already spent
+    duration: number; // Campaign duration in ticks
+    startedAt: number; // Timestamp when campaign started
+    isActive: boolean;
+    performance: CampaignPerformance;
+}
+
+export interface CampaignPerformance {
+    totalReach: number;
+    totalLeads: number;
+    totalConversions: number;
+    costPerLead: number;
+    conversionRate: number;
+    roi: number; // Return on investment
+}
+
 export interface EdgeData {
     id: string;
     source: string; // Source node ID
@@ -107,14 +198,28 @@ export interface CompanyFinances {
 
 // Game State in engine
 export interface GameState {
-    nodes: Array<BaseNodeData | PersonnelData | ProductData | TaskData | ResourceData | MarketData | IdeaData | CourseData>;
+    nodes: Array<BaseNodeData | PersonnelData | ProductData | TaskData | ResourceData | MarketData | IdeaData | CourseData | PopulationData | LeadData | CustomerData | ContentData | CampaignData>;
     edges: EdgeData[];
     companyFinances: CompanyFinances;
+    marketingMetrics: MarketingMetrics;
     currentTick: number; // Current week number (each tick = 1 week = 120 seconds)
     currentWeekStartTime: number; // Timestamp when current week started
     availableIdeas: string[]; // IDs of IdeaNodes
     gameSpeed: number; // Multiplier for tick speed
     isPaused: boolean;
+}
+
+export interface MarketingMetrics {
+    totalLeads: number;
+    totalCustomers: number;
+    totalRevenue: number;
+    averageCustomerValue: number;
+    conversionRate: number; // Leads to customers
+    brandAwareness: number; // 0-1
+    contentCreated: number;
+    activeCampaigns: number;
+    monthlyActiveCustomers: number;
+    customerChurnRate: number; // 0-1
 }
 
 export interface ActionResult {
@@ -170,7 +275,16 @@ export type GameActionType =
     | 'ENROLL_PERSONNEL_IN_COURSE'
     | 'REMOVE_PERSONNEL_FROM_COURSE'
     | 'START_COURSE'
-    | 'COMPLETE_COURSE';
+    | 'COMPLETE_COURSE'
+    | 'CREATE_CONTENT'
+    | 'CREATE_CAMPAIGN'
+    | 'START_CAMPAIGN'
+    | 'STOP_CAMPAIGN'
+    | 'GENERATE_LEADS'
+    | 'CONVERT_LEAD'
+    | 'UPDATE_CUSTOMER'
+    | 'PROCESS_CONTENT_PERFORMANCE'
+    | 'UPDATE_MARKETING_METRICS';
 
 export interface GameAction {
     type: GameActionType;

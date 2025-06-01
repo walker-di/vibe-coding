@@ -9,9 +9,17 @@ import type {
     ResourceData,
     IdeaData,
     CourseData,
+    PopulationData,
+    LeadData,
+    CustomerData,
+    ContentData,
+    CampaignData,
+    MarketingMetrics,
+    PopulationSegment,
     GameEvent,
     GameEventType
 } from '../types';
+import { populationSegments } from '../data/populationSegments';
 
 // Simple event emitter for game state changes
 class EventEmitter {
@@ -90,7 +98,18 @@ export class GameEngine extends EventEmitter {
                 unitCost: 1,
                 category: 'service',
                 position: { x: 200, y: 200 }
-            } as ResourceData
+            } as ResourceData,
+            {
+                id: 'population-1',
+                label: 'Target Market',
+                type: 'Population',
+                description: 'Your potential customer base',
+                totalSize: populationSegments.reduce((sum, segment) => sum + segment.size, 0),
+                segments: [...populationSegments],
+                growthRate: 0.02, // 2% growth per tick
+                awareness: 0.01, // Very low initial brand awareness
+                position: { x: 400, y: 200 }
+            } as PopulationData
         ];
 
         return {
@@ -102,6 +121,18 @@ export class GameEngine extends EventEmitter {
                 expensesPerTick: 0,
                 totalRevenue: 0,
                 totalExpenses: 0
+            },
+            marketingMetrics: {
+                totalLeads: 0,
+                totalCustomers: 0,
+                totalRevenue: 0,
+                averageCustomerValue: 0,
+                conversionRate: 0,
+                brandAwareness: 0.01,
+                contentCreated: 0,
+                activeCampaigns: 0,
+                monthlyActiveCustomers: 0,
+                customerChurnRate: 0
             },
             currentTick: 0,
             currentWeekStartTime: Date.now(),
@@ -154,6 +185,24 @@ export class GameEngine extends EventEmitter {
                     return this.startCourse(action.payload.courseId);
                 case 'COMPLETE_COURSE':
                     return this.completeCourse(action.payload.courseId);
+                case 'CREATE_CONTENT':
+                    return this.createContent(action.payload);
+                case 'CREATE_CAMPAIGN':
+                    return this.createCampaign(action.payload);
+                case 'START_CAMPAIGN':
+                    return this.startCampaign(action.payload.campaignId);
+                case 'STOP_CAMPAIGN':
+                    return this.stopCampaign(action.payload.campaignId);
+                case 'GENERATE_LEADS':
+                    return this.generateLeads(action.payload);
+                case 'CONVERT_LEAD':
+                    return this.convertLead(action.payload.leadId);
+                case 'UPDATE_CUSTOMER':
+                    return this.updateCustomer(action.payload);
+                case 'PROCESS_CONTENT_PERFORMANCE':
+                    return this.processContentPerformance(action.payload.contentId);
+                case 'UPDATE_MARKETING_METRICS':
+                    return this.updateMarketingMetrics();
                 default:
                     return { success: false, message: `Unknown action type: ${action.type}` };
             }
@@ -974,6 +1023,257 @@ export class GameEngine extends EventEmitter {
         // Add revenue (placeholder - would be calculated from products sold)
         this.gameState.companyFinances.capital += this.gameState.companyFinances.revenuePerTick;
         this.gameState.companyFinances.totalRevenue += this.gameState.companyFinances.revenuePerTick;
+    }
+
+    // Marketing System Methods
+    createContent(payload: any): ActionResult {
+        const { contentTemplateId, personnelId, targetSegments, platform } = payload;
+
+        // Find the personnel creating the content
+        const personnel = this.gameState.nodes.find(node =>
+            node.id === personnelId && node.type === 'Personnel'
+        ) as PersonnelData;
+
+        if (!personnel) {
+            return { success: false, message: 'Personnel not found' };
+        }
+
+        // Check if personnel has enough action points
+        if (personnel.actionPoints < 1) {
+            return { success: false, message: 'Not enough action points' };
+        }
+
+        // Create content node
+        const newContent: ContentData = {
+            id: `content-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            label: payload.label || 'New Content',
+            type: 'Content',
+            description: payload.description || 'Marketing content',
+            contentType: payload.contentType || 'post',
+            platform: platform || 'instagram',
+            quality: Math.min(0.5 + (personnel.efficiency * 0.5), 1.0),
+            targetSegments: targetSegments || ['young-professionals'],
+            createdBy: personnelId,
+            createdAt: Date.now(),
+            performance: {
+                views: 0,
+                likes: 0,
+                shares: 0,
+                comments: 0,
+                leadsGenerated: 0,
+                engagementRate: 0,
+                reach: 0
+            },
+            cost: payload.cost || 200,
+            position: payload.position || {
+                x: Math.random() * 400 + 100,
+                y: Math.random() * 400 + 100
+            }
+        };
+
+        // Deduct cost and action points
+        this.gameState.companyFinances.capital -= newContent.cost;
+        personnel.actionPoints -= 1;
+
+        // Add content to game state
+        this.gameState.nodes.push(newContent);
+        this.gameState.marketingMetrics.contentCreated += 1;
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `Created ${newContent.label} for $${newContent.cost}`,
+            data: newContent
+        };
+    }
+
+    createCampaign(payload: any): ActionResult {
+        const { contentIds, targetSegments, budget, duration } = payload;
+
+        // Validate content exists
+        const contents = contentIds.map((id: string) =>
+            this.gameState.nodes.find(node => node.id === id && node.type === 'Content')
+        ).filter(Boolean);
+
+        if (contents.length === 0) {
+            return { success: false, message: 'No valid content found for campaign' };
+        }
+
+        // Check budget
+        if (this.gameState.companyFinances.capital < budget) {
+            return { success: false, message: 'Not enough capital for campaign budget' };
+        }
+
+        // Create campaign node
+        const newCampaign: CampaignData = {
+            id: `campaign-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            label: payload.label || 'Marketing Campaign',
+            type: 'Campaign',
+            description: payload.description || 'A marketing campaign',
+            contentIds: [...contentIds],
+            targetSegments: [...targetSegments],
+            budget: budget,
+            spent: 0,
+            duration: duration || 7, // 7 ticks default
+            startedAt: 0,
+            isActive: false,
+            performance: {
+                totalReach: 0,
+                totalLeads: 0,
+                totalConversions: 0,
+                costPerLead: 0,
+                conversionRate: 0,
+                roi: 0
+            },
+            position: payload.position || {
+                x: Math.random() * 400 + 100,
+                y: Math.random() * 400 + 100
+            }
+        };
+
+        this.gameState.nodes.push(newCampaign);
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+
+        return {
+            success: true,
+            message: `Created campaign: ${newCampaign.label}`,
+            data: newCampaign
+        };
+    }
+
+    startCampaign(campaignId: string): ActionResult {
+        const campaign = this.gameState.nodes.find(node =>
+            node.id === campaignId && node.type === 'Campaign'
+        ) as CampaignData;
+
+        if (!campaign) {
+            return { success: false, message: 'Campaign not found' };
+        }
+
+        if (campaign.isActive) {
+            return { success: false, message: 'Campaign is already active' };
+        }
+
+        if (this.gameState.companyFinances.capital < campaign.budget) {
+            return { success: false, message: 'Not enough capital to start campaign' };
+        }
+
+        campaign.isActive = true;
+        campaign.startedAt = Date.now();
+        this.gameState.marketingMetrics.activeCampaigns += 1;
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `Started campaign: ${campaign.label}`,
+            data: campaign
+        };
+    }
+
+    stopCampaign(campaignId: string): ActionResult {
+        const campaign = this.gameState.nodes.find(node =>
+            node.id === campaignId && node.type === 'Campaign'
+        ) as CampaignData;
+
+        if (!campaign) {
+            return { success: false, message: 'Campaign not found' };
+        }
+
+        if (!campaign.isActive) {
+            return { success: false, message: 'Campaign is not active' };
+        }
+
+        campaign.isActive = false;
+        this.gameState.marketingMetrics.activeCampaigns = Math.max(0, this.gameState.marketingMetrics.activeCampaigns - 1);
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `Stopped campaign: ${campaign.label}`,
+            data: campaign
+        };
+    }
+
+    generateLeads(payload: any): ActionResult {
+        // This would be called automatically by content performance processing
+        // For now, just return success
+        return { success: true, message: 'Leads generation processed' };
+    }
+
+    convertLead(leadId: string): ActionResult {
+        const lead = this.gameState.nodes.find(node =>
+            node.id === leadId && node.type === 'Lead'
+        ) as LeadData;
+
+        if (!lead) {
+            return { success: false, message: 'Lead not found' };
+        }
+
+        // Convert lead to customer
+        const newCustomer: CustomerData = {
+            id: `customer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            label: `Customer from ${lead.source}`,
+            type: 'Customer',
+            description: 'A converted customer',
+            segmentId: lead.segmentId,
+            acquisitionSource: lead.source,
+            lifetimeValue: 0,
+            loyaltyLevel: 0.5,
+            purchaseHistory: [],
+            lastPurchaseAt: 0,
+            churnRisk: 0.1,
+            position: {
+                x: lead.position?.x || Math.random() * 400 + 100,
+                y: lead.position?.y || Math.random() * 400 + 100
+            }
+        };
+
+        // Remove lead and add customer
+        this.removeNode(leadId);
+        this.gameState.nodes.push(newCustomer);
+        this.gameState.marketingMetrics.totalCustomers += 1;
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `Lead converted to customer`,
+            data: newCustomer
+        };
+    }
+
+    updateCustomer(payload: any): ActionResult {
+        // Customer update logic would go here
+        return { success: true, message: 'Customer updated' };
+    }
+
+    processContentPerformance(contentId: string): ActionResult {
+        // Content performance processing logic would go here
+        return { success: true, message: 'Content performance processed' };
+    }
+
+    updateMarketingMetrics(): ActionResult {
+        // Calculate marketing metrics from current state
+        const leads = this.gameState.nodes.filter(node => node.type === 'Lead');
+        const customers = this.gameState.nodes.filter(node => node.type === 'Customer');
+        const content = this.gameState.nodes.filter(node => node.type === 'Content');
+        const activeCampaigns = this.gameState.nodes.filter(node =>
+            node.type === 'Campaign' && (node as CampaignData).isActive
+        );
+
+        this.gameState.marketingMetrics.totalLeads = leads.length;
+        this.gameState.marketingMetrics.totalCustomers = customers.length;
+        this.gameState.marketingMetrics.contentCreated = content.length;
+        this.gameState.marketingMetrics.activeCampaigns = activeCampaigns.length;
+
+        // Calculate conversion rate
+        if (this.gameState.marketingMetrics.totalLeads > 0) {
+            this.gameState.marketingMetrics.conversionRate =
+                this.gameState.marketingMetrics.totalCustomers /
+                (this.gameState.marketingMetrics.totalLeads + this.gameState.marketingMetrics.totalCustomers);
+        }
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return { success: true, message: 'Marketing metrics updated' };
     }
 
     private emitStateChange(eventType: GameEventType, data?: any) {
