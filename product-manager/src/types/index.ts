@@ -19,6 +19,8 @@ export interface PersonnelData extends BaseNodeData {
     morale: number; // 0-1
     salary: number;
     assignedToTaskId?: string;
+    actionPoints: number; // Current action points available
+    maxActionPoints: number; // Maximum action points per cycle
 }
 
 export interface ProductData extends BaseNodeData {
@@ -84,7 +86,8 @@ export interface GameState {
     nodes: Array<BaseNodeData | PersonnelData | ProductData | TaskData | ResourceData | MarketData | IdeaData>;
     edges: EdgeData[];
     companyFinances: CompanyFinances;
-    currentTick: number;
+    currentTick: number; // Current week number (each tick = 1 week = 120 seconds)
+    currentWeekStartTime: number; // Timestamp when current week started
     availableIdeas: string[]; // IDs of IdeaNodes
     gameSpeed: number; // Multiplier for tick speed
     isPaused: boolean;
@@ -138,7 +141,8 @@ export type GameActionType =
     | 'UPDATE_FINANCES'
     | 'PAUSE_GAME'
     | 'RESUME_GAME'
-    | 'SET_GAME_SPEED';
+    | 'SET_GAME_SPEED'
+    | 'CONSUME_ACTION_POINTS';
 
 export interface GameAction {
     type: GameActionType;

@@ -70,7 +70,9 @@
 - ✅ **Enhanced Graph Interaction**: 5x faster zoom, intelligent element diffing, optimized performance
 - ✅ **Real-time Purchase System**: Affordability checking, automatic node creation, capital integration
 - ✅ **UI/UX Improvements**: Shop integrated in HUD below financial summary, responsive design
-- 🔄 **Task Creation**: Basic framework implemented, assignment logic in progress
+- ✅ **Action Points System**: Complete implementation with visual feedback and weekly restoration
+- ✅ **Timer & Progress System**: Week-based progression with real-time progress bar
+- ✅ **Game Speed Controls**: Smooth speed transitions with pause-aware timing
 
 **Completed Features:**
 - Stacklands-style shop with 7 items: 4 Personnel, 2 Resources, 1 Idea
@@ -80,15 +82,23 @@
 - Shop integration in HUD positioned below financial information
 - Compact card design optimized for horizontal space (64x64px)
 - Cost display in k-format (3k, 4k) for space efficiency
+- **NEW**: Action points system (3 points per personnel per week)
+- **NEW**: Visual action points display on personnel nodes (⚡ 3/3)
+- **NEW**: Progress bar timer showing week completion (0-100%)
+- **NEW**: Week-based timing (1 tick = 1 week = 120 seconds)
+- **NEW**: Speed controls with smooth transitions (0.5x to 5x)
 
 ---
 
-## 🚀 Sprint 3 (2 weeks) - Task System & Node Interactions (CURRENT PRIORITY)
+## 🚀 Sprint 3 (2 weeks) - Task System & Action Point Mechanics (CURRENT PRIORITY)
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
-| **As a player, I want to create and manage tasks** | Complete task creation workflow | High | 4 | Backend Dev | 🔄 In Progress | Can create tasks with requirements and outputs |
-| | Implement task assignment logic | High | 5 | Backend Dev | Not Started | Assign personnel to tasks, track progress |
+| **As a player, I want to use action points strategically** | Implement diverse action point costs | High | 3 | Backend Dev | Not Started | Different actions cost different amounts (1-3 points) |
+| | Add action point feedback and tooltips | Medium | 2 | Frontend Dev | Not Started | Clear feedback on action costs and remaining points |
+| | Create action point efficiency mechanics | Medium | 3 | Backend Dev | Not Started | Personnel efficiency affects action point effectiveness |
+| **As a player, I want to create and manage tasks** | Complete task creation workflow | High | 4 | Backend Dev | Not Started | Can create tasks with requirements and outputs |
+| | Implement task assignment logic (using action points) | High | 5 | Backend Dev | Not Started | Assign personnel to tasks, costs action points |
 | | Add task completion rewards | High | 3 | Backend Dev | Not Started | Completed tasks generate products/resources |
 | | Add task progress tracking | Medium | 3 | Backend Dev | Not Started | Tasks show progress based on assigned personnel |
 | **As a player, I want meaningful node combinations** | Implement drag-and-drop node combination | High | 5 | Frontend Dev | Not Started | Dragging compatible nodes creates relationships |
@@ -184,8 +194,16 @@
 - **Performance Concerns**: Dedicated optimization sprint (Sprint 6)
 
 ### Current Status Summary
-- **Sprints 1-2**: ✅ Completed (Foundation, Graph Canvas, Shop Interface)
-- **Sprint 3**: 🚀 Current Priority (Task System & Node Interactions)
+- **Sprints 1-2**: ✅ Completed (Foundation, Graph Canvas, Shop Interface, Action Points, Timer System)
+- **Sprint 3**: 🚀 Current Priority (Task System & Action Point Mechanics)
 - **Sprints 4-6**: ⏳ Planned (Advanced Features, Polish, Testing)
 
-This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across 6 two-week sprints. The foundation is solid and the core purchase/expansion mechanics are working.
+### Recent Major Achievements (Latest Sprint Extension)
+- ✅ **Action Points System**: Complete implementation with 3 points per personnel per week
+- ✅ **Visual Feedback**: Action points displayed on personnel nodes (⚡ 3/3 format)
+- ✅ **Timer Overhaul**: Week-based progression with real-time progress bar (0-100%)
+- ✅ **Speed Control Fixes**: Smooth transitions between speeds without progress jumps
+- ✅ **Immediate Tick System**: No more stacking at 100%, immediate week transitions
+- ✅ **Pause-Aware Timing**: Maintains progress accurately during pauses and resumes
+
+This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across 6 two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, and the action points system provides a strategic resource management layer.

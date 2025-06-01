@@ -44,6 +44,7 @@ class EventEmitter {
 export class GameEngine extends EventEmitter {
     private gameState: GameState;
     private tickInterval: NodeJS.Timeout | null = null;
+    private pausedAt: number | null = null;
 
     constructor() {
         super();
@@ -62,6 +63,8 @@ export class GameEngine extends EventEmitter {
                 efficiency: 0.8,
                 morale: 0.9,
                 salary: 0, // Founder doesn't take salary initially
+                actionPoints: 3,
+                maxActionPoints: 3,
                 position: { x: 100, y: 100 }
             } as PersonnelData,
             {
@@ -98,6 +101,7 @@ export class GameEngine extends EventEmitter {
                 totalExpenses: 0
             },
             currentTick: 0,
+            currentWeekStartTime: Date.now(),
             availableIdeas: ['idea-1'],
             gameSpeed: 1,
             isPaused: false
@@ -137,6 +141,8 @@ export class GameEngine extends EventEmitter {
                     return this.createTask(action.payload);
                 case 'UPDATE_FINANCES':
                     return this.updateFinancesAction(action.payload);
+                case 'CONSUME_ACTION_POINTS':
+                    return this.consumeActionPoints(action.payload.personnelId, action.payload.amount || 1);
                 default:
                     return { success: false, message: `Unknown action type: ${action.type}` };
             }
@@ -276,6 +282,8 @@ export class GameEngine extends EventEmitter {
             efficiency: personnelTemplate.efficiency || 0.7,
             morale: personnelTemplate.morale || 0.8,
             salary: personnelTemplate.salary || 1000,
+            actionPoints: 3, // Start with full action points
+            maxActionPoints: 3, // Default max action points
             position: personnelTemplate.position || {
                 x: Math.random() * 400 + 100,
                 y: Math.random() * 400 + 100
@@ -377,6 +385,7 @@ export class GameEngine extends EventEmitter {
     // Game control
     pauseGame(): ActionResult {
         this.gameState.isPaused = true;
+        this.pausedAt = Date.now(); // Store when we paused
         if (this.tickInterval) {
             clearInterval(this.tickInterval);
             this.tickInterval = null;
@@ -387,6 +396,13 @@ export class GameEngine extends EventEmitter {
 
     resumeGame(): ActionResult {
         this.gameState.isPaused = false;
+
+        // Adjust week start time to account for pause duration
+        if (this.pausedAt && this.gameState.currentWeekStartTime) {
+            const pauseDuration = Date.now() - this.pausedAt;
+            this.gameState.currentWeekStartTime += pauseDuration;
+        }
+
         this.startGameLoop();
         this.emitStateChange('STATE_CHANGED', this.gameState);
         return { success: true, message: 'Game resumed' };
@@ -397,8 +413,24 @@ export class GameEngine extends EventEmitter {
             return { success: false, message: 'Game speed must be between 0.1 and 5' };
         }
 
+        const oldSpeed = this.gameState.gameSpeed;
         this.gameState.gameSpeed = speed;
-        
+
+        // Adjust the current week start time to maintain progress continuity
+        if (this.gameState.currentWeekStartTime) {
+            const now = Date.now();
+            const elapsedTime = now - this.gameState.currentWeekStartTime;
+            const oldWeekDuration = (120 * 1000) / oldSpeed;
+            const newWeekDuration = (120 * 1000) / speed;
+
+            // Calculate how much progress we've made in the old speed
+            const progressRatio = elapsedTime / oldWeekDuration;
+
+            // Adjust start time so the same progress ratio applies to new speed
+            const newElapsedTime = progressRatio * newWeekDuration;
+            this.gameState.currentWeekStartTime = now - newElapsedTime;
+        }
+
         // Restart game loop with new speed if not paused
         if (!this.gameState.isPaused) {
             this.startGameLoop();
@@ -415,7 +447,7 @@ export class GameEngine extends EventEmitter {
         }
 
         if (!this.gameState.isPaused) {
-            const tickDuration = 1000 / this.gameState.gameSpeed; // Base tick is 1 second
+            const tickDuration = (120 * 1000) / this.gameState.gameSpeed; // Base tick is 120 seconds (1 week)
             this.tickInterval = setInterval(() => {
                 this.tick();
             }, tickDuration);
@@ -429,10 +461,15 @@ export class GameEngine extends EventEmitter {
         }
     }
 
+    // Public tick method that can be called externally
     tick() {
         if (this.gameState.isPaused) return;
 
         this.gameState.currentTick++;
+        this.gameState.currentWeekStartTime = Date.now(); // Reset week start time
+
+        // Each tick represents 1 week, so restore action points every tick
+        this.restoreActionPoints();
 
         // Process ongoing tasks
         this.processTasks();
@@ -442,6 +479,39 @@ export class GameEngine extends EventEmitter {
 
         // Emit state change
         this.emitStateChange('STATE_CHANGED', this.gameState);
+    }
+
+    private restoreActionPoints() {
+        // Restore action points for all personnel at the start of each cycle
+        this.gameState.nodes.forEach(node => {
+            if (node.type === 'Personnel') {
+                const personnel = node as PersonnelData;
+                personnel.actionPoints = personnel.maxActionPoints;
+            }
+        });
+    }
+
+    consumeActionPoints(personnelId: string, amount: number = 1): ActionResult {
+        const personnel = this.gameState.nodes.find(node =>
+            node.id === personnelId && node.type === 'Personnel'
+        ) as PersonnelData;
+
+        if (!personnel) {
+            return { success: false, message: `Personnel with id ${personnelId} not found` };
+        }
+
+        if (personnel.actionPoints < amount) {
+            return { success: false, message: `Not enough action points. Has ${personnel.actionPoints}, needs ${amount}` };
+        }
+
+        personnel.actionPoints -= amount;
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+
+        return {
+            success: true,
+            message: `Consumed ${amount} action point(s). ${personnel.actionPoints} remaining.`,
+            data: { personnelId, remainingActionPoints: personnel.actionPoints }
+        };
     }
 
     private processTasks() {

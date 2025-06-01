@@ -18,6 +18,7 @@ export const gameState = writable<GameState>({
     edges: [...initialGameState.edges],
     companyFinances: { ...initialGameState.companyFinances },
     currentTick: initialGameState.currentTick,
+    currentWeekStartTime: initialGameState.currentWeekStartTime,
     availableIdeas: [...initialGameState.availableIdeas],
     gameSpeed: initialGameState.gameSpeed,
     isPaused: initialGameState.isPaused
@@ -28,6 +29,7 @@ export const nodes = derived(gameState, $gameState => $gameState.nodes);
 export const edges = derived(gameState, $gameState => $gameState.edges);
 export const companyFinances = derived(gameState, $gameState => $gameState.companyFinances);
 export const currentTick = derived(gameState, $gameState => $gameState.currentTick);
+export const currentWeekStartTime = derived(gameState, $gameState => $gameState.currentWeekStartTime);
 export const availableIdeas = derived(gameState, $gameState => $gameState.availableIdeas);
 export const gameSpeed = derived(gameState, $gameState => $gameState.gameSpeed);
 export const isPaused = derived(gameState, $gameState => $gameState.isPaused);
@@ -63,6 +65,7 @@ gameEngine.on('stateChanged', (newState: GameState) => {
         edges: [...newState.edges],
         companyFinances: { ...newState.companyFinances },
         currentTick: newState.currentTick,
+        currentWeekStartTime: newState.currentWeekStartTime,
         availableIdeas: [...newState.availableIdeas],
         gameSpeed: newState.gameSpeed,
         isPaused: newState.isPaused
@@ -169,6 +172,7 @@ export function startGame() {
         edges: [...currentState.edges],
         companyFinances: { ...currentState.companyFinances },
         currentTick: currentState.currentTick,
+        currentWeekStartTime: currentState.currentWeekStartTime,
         availableIdeas: [...currentState.availableIdeas],
         gameSpeed: currentState.gameSpeed,
         isPaused: currentState.isPaused

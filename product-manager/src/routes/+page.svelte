@@ -11,7 +11,7 @@
 
 
     // Import stores
-    import { nodes, edges, startGame, stopGame } from '../store/gameStore';
+    import { nodes, edges, startGame, stopGame, dispatchGameAction } from '../store/gameStore';
     import {
         contextMenu,
         infoPanelData,
@@ -20,7 +20,8 @@
         showContextMenu,
         hideContextMenu,
         setInfoPanelData,
-        showSuccessNotification
+        showSuccessNotification,
+        showErrorNotification
     } from '../store/uiStore';
 
 
@@ -46,6 +47,20 @@
     function handleNodeClick(nodeId: string, nodeData: any) {
         selectNode(nodeId, nodeData);
         setInfoPanelData(nodeData);
+
+        // Test action points consumption for Personnel nodes
+        if (nodeData.type === 'Personnel') {
+            const result = dispatchGameAction({
+                type: 'CONSUME_ACTION_POINTS',
+                payload: { personnelId: nodeId, amount: 1 }
+            });
+
+            if (result.success) {
+                showSuccessNotification(result.message);
+            } else {
+                showErrorNotification(result.message);
+            }
+        }
     }
 
     function handleEdgeClick(edgeId: string, edgeData: any) {
@@ -149,7 +164,7 @@
         </button>
         <button
             class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
-            onclick={() => cytoscapeGraph?.runLayout('cose')}
+            onclick={() => cytoscapeGraph?.runLayout('cose', true)}
         >
             Re-layout
         </button>

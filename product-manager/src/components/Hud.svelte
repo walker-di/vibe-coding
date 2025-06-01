@@ -12,6 +12,7 @@
         setGameSpeed
     } from '../store/gameStore';
     import Shop from './Shop.svelte';
+    import Timer from './Timer.svelte';
 
     // Format currency
     function formatCurrency(amount: number): string {
@@ -50,6 +51,9 @@
                 <h1 class="text-xl font-bold text-white">ProductGraphTycoon</h1>
                 <span class="text-sm text-gray-400">Tick {$currentTick || 0}</span>
             </div>
+
+            <!-- Timer component -->
+            <Timer />
 
             <!-- Financial info -->
             <div class="flex items-center space-x-4">

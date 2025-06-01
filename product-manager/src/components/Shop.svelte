@@ -103,6 +103,8 @@
                 efficiency: getEfficiencyForPersonnel(item.id),
                 morale: 0.8,
                 salary: Math.floor(item.cost * 0.1), // 10% of purchase cost as monthly salary
+                actionPoints: 3, // Start with full action points
+                maxActionPoints: 3, // Default max action points
                 position: {
                     x: Math.random() * 400 + 100,
                     y: Math.random() * 400 + 100

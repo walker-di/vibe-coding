@@ -25,12 +25,19 @@ export const cytoscapeStylesheet: Stylesheet[] = [
     // Personnel nodes (blue)
     {
         selector: 'node[type="Personnel"]',
-        style: { 
+        style: {
             'background-color': '#3B82F6', // blue-500
             'shape': 'ellipse',
-            'border-color': '#1D4ED8' // blue-700
+            'border-color': '#1D4ED8', // blue-700
+            'text-wrap': 'wrap',
+            'text-max-width': '80px',
+            'font-size': '10px',
+            'text-outline-width': 2,
+            'text-outline-color': '#1F2937'
         }
     },
+
+
     
     // Product nodes (green)
     {
@@ -170,14 +177,16 @@ export const cytoscapeStylesheet: Stylesheet[] = [
     }
 ];
 
-export function getCytoscapeLayout(name: string = 'cose'): LayoutOptions {
+export function getCytoscapeLayout(name: string = 'cose', options: { fit?: boolean } = {}): LayoutOptions {
+    const { fit = false } = options; // Default to false to prevent auto-fit
+
     const layouts: Record<string, LayoutOptions> = {
         cose: {
             name: 'cose',
             padding: 30,
             animate: true,
             animationDuration: 500,
-            fit: true,
+            fit: fit,
             idealEdgeLength: 100,
             nodeRepulsion: 20000,
             nodeOverlap: 10,
@@ -187,67 +196,76 @@ export function getCytoscapeLayout(name: string = 'cose'): LayoutOptions {
             coolingFactor: 0.95,
             minTemp: 1.0
         },
-        
+
         grid: {
             name: 'grid',
             padding: 30,
             animate: true,
             animationDuration: 500,
-            fit: true,
+            fit: fit,
             rows: undefined,
             cols: undefined
         },
-        
+
         circle: {
             name: 'circle',
             padding: 30,
             animate: true,
             animationDuration: 500,
-            fit: true,
+            fit: fit,
             radius: undefined,
             startAngle: 3 / 2 * Math.PI,
             sweep: undefined,
             clockwise: true
         },
-        
+
         concentric: {
             name: 'concentric',
             padding: 30,
             animate: true,
             animationDuration: 500,
-            fit: true,
+            fit: fit,
             minNodeSpacing: 10,
             concentric: (node: any) => node.degree(),
             levelWidth: () => 1
         },
-        
+
         breadthfirst: {
             name: 'breadthfirst',
             padding: 30,
             animate: true,
             animationDuration: 500,
-            fit: true,
+            fit: fit,
             directed: false,
             spacingFactor: 1.75,
             maximal: false
         }
     };
-    
+
     return layouts[name] || layouts.cose;
 }
 
 // Helper function to convert game nodes to Cytoscape elements
 export function gameNodesToCytoscapeElements(nodes: any[], edges: any[]) {
-    const cytoscapeNodes = nodes.map(node => ({
-        group: 'nodes' as const,
-        data: {
+    const cytoscapeNodes = nodes.map(node => {
+        const nodeData: any = {
             id: node.id,
             label: node.label,
             type: node.type,
             ...node
-        },
-        position: node.position || { x: Math.random() * 400, y: Math.random() * 400 }
-    }));
+        };
+
+        // Add action points to Personnel node labels
+        if (node.type === 'Personnel' && node.actionPoints !== undefined && node.maxActionPoints !== undefined) {
+            nodeData.label = `${node.label}\n⚡ ${node.actionPoints}/${node.maxActionPoints}`;
+        }
+
+        return {
+            group: 'nodes' as const,
+            data: nodeData,
+            position: node.position || { x: Math.random() * 400, y: Math.random() * 400 }
+        };
+    });
     
     const cytoscapeEdges = edges.map(edge => ({
         group: 'edges' as const,

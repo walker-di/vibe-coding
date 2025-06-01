@@ -40,7 +40,7 @@
             container: cyContainer,
             elements: [], // Will be populated by $effect
             style: cytoscapeStylesheet,
-            layout: getCytoscapeLayout(layout),
+            layout: getCytoscapeLayout(layout, { fit: true }), // Initial layout should fit
             wheelSensitivity: 1.0, // Increased from 0.2 for faster zooming
             minZoom: 0.1,
             maxZoom: 5,
@@ -77,6 +77,50 @@
             const nodeData = node.data();
             const position = event.position || event.renderedPosition;
             onNodeRightClick(node.id(), position, nodeData);
+        });
+
+        // Middle mouse button panning
+        let isPanning = false;
+        let lastPanPosition = { x: 0, y: 0 };
+
+        cyContainer.addEventListener('mousedown', (event) => {
+            if (event.button === 1) { // Middle mouse button
+                event.preventDefault();
+                isPanning = true;
+                lastPanPosition = { x: event.clientX, y: event.clientY };
+                cyContainer.style.cursor = 'grabbing';
+            }
+        });
+
+        cyContainer.addEventListener('mousemove', (event) => {
+            if (isPanning && cy) {
+                event.preventDefault();
+                const deltaX = event.clientX - lastPanPosition.x;
+                const deltaY = event.clientY - lastPanPosition.y;
+
+                const currentPan = cy.pan();
+                cy.pan({
+                    x: currentPan.x + deltaX,
+                    y: currentPan.y + deltaY
+                });
+
+                lastPanPosition = { x: event.clientX, y: event.clientY };
+            }
+        });
+
+        cyContainer.addEventListener('mouseup', (event) => {
+            if (event.button === 1) { // Middle mouse button
+                event.preventDefault();
+                isPanning = false;
+                cyContainer.style.cursor = 'default';
+            }
+        });
+
+        cyContainer.addEventListener('mouseleave', () => {
+            if (isPanning) {
+                isPanning = false;
+                cyContainer.style.cursor = 'default';
+            }
         });
 
         // Drag and drop handlers
@@ -183,9 +227,9 @@
                 }
             });
 
-            // Run layout if there are new elements
+            // Run layout if there are new elements (without fit to prevent auto-centering)
             if (nodesToAdd.length > 0) {
-                const layoutOptions = getCytoscapeLayout(layout);
+                const layoutOptions = getCytoscapeLayout(layout, { fit: false });
                 cy.layout(layoutOptions).run();
             }
 
@@ -203,9 +247,9 @@
         cy?.center();
     }
 
-    export function runLayout(layoutName?: string) {
+    export function runLayout(layoutName?: string, shouldFit: boolean = false) {
         if (cy) {
-            const layoutOptions = getCytoscapeLayout(layoutName || layout);
+            const layoutOptions = getCytoscapeLayout(layoutName || layout, { fit: shouldFit });
             cy.layout(layoutOptions).run();
         }
     }
