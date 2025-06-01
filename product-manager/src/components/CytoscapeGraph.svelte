@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import cytoscape from 'cytoscape';
-    import type { Core, NodeSingular, EdgeSingular, Position } from 'cytoscape';
     import type { BaseNodeData, EdgeData } from '../types';
     import { cytoscapeStylesheet, getCytoscapeLayout, gameNodesToCytoscapeElements } from '../utils/cytoscapeUtils';
 
@@ -12,7 +11,7 @@
         onNodeClick?: (nodeId: string, nodeData: BaseNodeData) => void;
         onEdgeClick?: (edgeId: string, edgeData: EdgeData) => void;
         onCanvasClick?: () => void;
-        onNodeRightClick?: (nodeId: string, position: Position, nodeData: BaseNodeData) => void;
+        onNodeRightClick?: (nodeId: string, position: { x: number; y: number }, nodeData: BaseNodeData) => void;
         onNodeDrop?: (draggedNodeId: string, targetNodeId: string | null) => void;
         layout?: string;
     }
@@ -28,15 +27,27 @@
         layout = 'cose'
     }: Props = $props();
 
-    let cy: Core | undefined = $state();
+    let cy: any = $state();
     let cyContainer: HTMLDivElement;
-    let draggedNode: NodeSingular | null = null;
+    let draggedNode: any = null;
 
-    onMount(() => {
+    onMount(async () => {
         if (!cyContainer) return;
 
+        // Dynamically import and register the compound drag and drop extension (client-side only)
+        let compoundDragAndDrop: any = null;
+        try {
+            const module = await import('cytoscape-compound-drag-and-drop');
+            compoundDragAndDrop = module.default;
+            (cytoscape as any).use(compoundDragAndDrop);
+            console.log('Compound drag and drop extension loaded successfully');
+        } catch (error) {
+            console.warn('Failed to load compound drag and drop extension:', error);
+        }
+
         // Initialize Cytoscape
-        cy = cytoscape({
+        const cytoscapeCore = (cytoscape as any);
+        cy = cytoscapeCore({
             container: cyContainer,
             elements: [], // Will be populated by $effect
             style: cytoscapeStylesheet,
@@ -50,30 +61,67 @@
             selectionType: 'single'
         });
 
+        // Initialize compound drag and drop if available
+        if (compoundDragAndDrop && cy.compoundDragAndDrop) {
+            const cdnd = cy.compoundDragAndDrop({
+                grabbedNode: (node: any) => {
+                    // Only allow Personnel nodes to be grabbed for compound operations
+                    return node.data('type') === 'Personnel';
+                },
+                dropTarget: (dropTarget: any, grabbedNode: any) => {
+                    // Allow dropping Personnel on Course nodes
+                    return dropTarget.data('type') === 'Course' && grabbedNode.data('type') === 'Personnel';
+                },
+                dropSibling: () => false, // Don't allow sibling drops for now
+                newParentNode: () => ({}), // Don't create new parent nodes
+                overThreshold: 10,
+                outThreshold: 10
+            });
+
+            console.log('Compound drag and drop initialized:', cdnd);
+
+            // Add compound drag and drop event handlers
+            cy.on('cdndover', (event: any, dropTarget: any) => {
+                console.log('Personnel node over course:', event.target.id(), 'over', dropTarget.id());
+            });
+
+            cy.on('cdndout', (event: any, dropTarget: any) => {
+                console.log('Personnel node out of course:', event.target.id(), 'out of', dropTarget.id());
+            });
+
+            cy.on('cdnddrop', (event: any, dropTarget: any) => {
+                const grabbedNode = event.target;
+                console.log('Personnel dropped on course:', grabbedNode.id(), 'on', dropTarget.id());
+                onNodeDrop(grabbedNode.id(), dropTarget.id());
+            });
+        }
+
+
+
         // Node click handler
-        cy.on('tap', 'node', (event) => {
-            const node: NodeSingular = event.target;
+        cy.on('tap', 'node', (event: any) => {
+            const node: any = event.target;
             const nodeData = node.data();
             onNodeClick(node.id(), nodeData);
         });
 
         // Edge click handler
-        cy.on('tap', 'edge', (event) => {
-            const edge: EdgeSingular = event.target;
+        cy.on('tap', 'edge', (event: any) => {
+            const edge: any = event.target;
             const edgeData = edge.data();
             onEdgeClick(edge.id(), edgeData);
         });
 
         // Canvas click handler
-        cy.on('tap', (event) => {
+        cy.on('tap', (event: any) => {
             if (event.target === cy) {
                 onCanvasClick();
             }
         });
 
         // Right click handler
-        cy.on('cxttap', 'node', (event) => {
-            const node: NodeSingular = event.target;
+        cy.on('cxttap', 'node', (event: any) => {
+            const node: any = event.target;
             const nodeData = node.data();
             const position = event.position || event.renderedPosition;
             onNodeRightClick(node.id(), position, nodeData);
@@ -123,24 +171,26 @@
             }
         });
 
-        // Drag and drop handlers
-        cy.on('grab', 'node', (event) => {
+
+
+        // Fallback drag and drop handlers for non-compound operations
+        cy.on('grab', 'node', (event: any) => {
             draggedNode = event.target;
         });
 
-        cy.on('free', 'node', (event) => {
+        cy.on('free', 'node', (event: any) => {
             if (draggedNode) {
                 const target = event.target;
                 const position = target.position();
-                
+
                 // Find if the node was dropped on another node
-                const dropTarget = cy?.nodes().filter(node => {
+                const dropTarget = cy?.nodes().filter((node: any) => {
                     if (node.id() === target.id()) return false; // Don't drop on itself
                     const bb = node.boundingBox();
                     const tolerance = 20; // Pixels of tolerance for drop detection
-                    return position.x > bb.x1 - tolerance && 
-                           position.x < bb.x2 + tolerance && 
-                           position.y > bb.y1 - tolerance && 
+                    return position.x > bb.x1 - tolerance &&
+                           position.x < bb.x2 + tolerance &&
+                           position.y > bb.y1 - tolerance &&
                            position.y < bb.y2 + tolerance;
                 }).first();
 
@@ -149,10 +199,12 @@
                 } else {
                     onNodeDrop(draggedNode.id(), null);
                 }
-                
+
                 draggedNode = null;
             }
         });
+
+
 
         // Handle window resize
         const handleResize = () => {
@@ -179,9 +231,9 @@
             const elements = gameNodesToCytoscapeElements(nodes, edges);
 
             // Get current elements in Cytoscape
-            const currentNodes = cy.nodes().map(n => n.id());
-            const currentEdges = cy.edges().map(e => e.id());
-            
+            const currentNodes = cy.nodes().map((n: any) => n.id());
+            const currentEdges = cy.edges().map((e: any) => e.id());
+
             // Find elements to add and remove
             const newNodeIds = elements
                 .filter(el => el.group === 'nodes')
@@ -189,9 +241,9 @@
             const newEdgeIds = elements
                 .filter(el => el.group === 'edges')
                 .map(el => el.data.id);
-            
-            const nodesToRemove = currentNodes.filter(id => !newNodeIds.includes(id));
-            const edgesToRemove = currentEdges.filter(id => !newEdgeIds.includes(id));
+
+            const nodesToRemove = currentNodes.filter((id: any) => !newNodeIds.includes(id));
+            const edgesToRemove = currentEdges.filter((id: any) => !newEdgeIds.includes(id));
             const nodesToAdd = elements.filter(el => 
                 el.group === 'nodes' && !currentNodes.includes(el.data.id)
             );
@@ -201,10 +253,10 @@
 
             // Remove elements that no longer exist
             if (nodesToRemove.length > 0) {
-                cy.remove(cy.nodes().filter(n => nodesToRemove.includes(n.id())));
+                cy.remove(cy.nodes().filter((n: any) => nodesToRemove.includes(n.id())));
             }
             if (edgesToRemove.length > 0) {
-                cy.remove(cy.edges().filter(e => edgesToRemove.includes(e.id())));
+                cy.remove(cy.edges().filter((e: any) => edgesToRemove.includes(e.id())));
             }
 
             // Add new elements

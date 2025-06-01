@@ -162,6 +162,34 @@ export function createTask(taskData: any): ActionResult {
     });
 }
 
+export function enrollPersonnelInCourse(personnelId: string, courseId: string): ActionResult {
+    return dispatchGameAction({
+        type: 'ENROLL_PERSONNEL_IN_COURSE',
+        payload: { personnelId, courseId }
+    });
+}
+
+export function removePersonnelFromCourse(personnelId: string, courseId: string): ActionResult {
+    return dispatchGameAction({
+        type: 'REMOVE_PERSONNEL_FROM_COURSE',
+        payload: { personnelId, courseId }
+    });
+}
+
+export function startCourse(courseId: string): ActionResult {
+    return dispatchGameAction({
+        type: 'START_COURSE',
+        payload: { courseId }
+    });
+}
+
+export function completeCourse(courseId: string): ActionResult {
+    return dispatchGameAction({
+        type: 'COMPLETE_COURSE',
+        payload: { courseId }
+    });
+}
+
 // Game control functions
 export function startGame() {
     // Ensure the store is initialized with the current game state

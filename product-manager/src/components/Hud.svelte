@@ -14,6 +14,12 @@
     import Shop from './Shop.svelte';
     import Timer from './Timer.svelte';
 
+    interface Props {
+        onOpenCourseModal?: () => void;
+    }
+
+    let { onOpenCourseModal = () => {} }: Props = $props();
+
     // Format currency
     function formatCurrency(amount: number): string {
         return new Intl.NumberFormat('en-US', {
@@ -144,6 +150,6 @@
 
     <!-- Shop section -->
     <div class="mt-3 pt-3 border-t border-gray-700">
-        <Shop />
+        <Shop onOpenCourseModal={onOpenCourseModal} />
     </div>
 </header>

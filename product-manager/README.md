@@ -22,6 +22,18 @@ A business simulation game where players build and manage a product development 
 - **Financial Integration**: Hiring costs (5x salary) with capital validation
 - **Personnel Management**: Fire personnel with proper cleanup of assignments
 
+### ✅ Course System (Sprint 2 - Completed)
+- **15+ Predefined Courses**: Across 4 categories (Technical, Design, Management, Business)
+- **Course Categories**:
+  - **Technical**: Programming Fundamentals ($2000), Advanced Algorithms ($3000), System Architecture ($3500), DevOps Practices ($2500)
+  - **Design**: UI/UX Principles ($2200), Design Thinking ($2800), User Research ($2600), Visual Design ($2000)
+  - **Management**: Project Management ($2400), Team Leadership ($3200), Agile Methodologies ($2600), Strategic Planning ($3800)
+  - **Business**: Business Strategy ($3000), Marketing Fundamentals ($2200), Financial Planning ($2800), Customer Development ($2400)
+- **Compound Drag-and-Drop**: Visual grouping of personnel within course nodes using cytoscape-compound-drag-and-drop
+- **Automatic Progression**: Courses start when personnel enroll and complete after specified duration
+- **Skill Enhancement**: Personnel gain new skills and efficiency boosts upon course completion
+- **Cost Management**: Courses require capital investment with varying costs and durations
+
 ### 🔄 Task Management (Sprint 2 - In Progress)
 - **Task Creation**: Basic framework for creating tasks with skill requirements
 - **Task Assignment**: Foundation for assigning personnel to tasks (in development)
@@ -32,19 +44,24 @@ A business simulation game where players build and manage a product development 
 1. **Start the Game**: The game begins with your founder, an initial idea, and $50,000 capital
 2. **Hire Personnel**: Right-click on empty space and select "Hire Personnel" to open the hiring modal
 3. **Browse Personnel**: Filter by category (Developers, Designers, Managers, Specialists) and view detailed stats
-4. **Manage Finances**: Watch your capital decrease as you hire personnel and pay salaries each tick
-5. **Fire Personnel**: Right-click on personnel nodes to fire them if needed
+4. **Create Courses**: Click the Course shop item (🎓) to open the course selection modal
+5. **Enroll Personnel**: Drag personnel nodes onto course nodes to enroll them for training
+6. **Manage Finances**: Watch your capital decrease as you hire personnel, create courses, and pay salaries each tick
+7. **Fire Personnel**: Right-click on personnel nodes to fire them if needed
 
 ### Game Controls
 - **Left-click nodes**: View detailed information in the InfoPanel
 - **Right-click**: Open context menu for actions (hire, fire, create tasks)
 - **Drag nodes**: Reposition elements on the graph
+- **Drag personnel to courses**: Enroll personnel in training courses with visual grouping
+- **Shop items**: Click shop buttons to create courses or other items
 - **Game Controls**: Use bottom-left buttons to pause/resume and adjust game speed
 - **Graph Controls**: Fit graph, re-layout, or center view using bottom-right buttons
 
 ### Financial Management
 - **Starting Capital**: $50,000
 - **Hiring Costs**: 5x the personnel's salary (one-time cost)
+- **Course Costs**: Range from $2,000 to $3,800 depending on course complexity
 - **Ongoing Expenses**: Personnel salaries deducted each game tick
 - **Revenue**: Currently $0 (market system coming in future sprints)
 
@@ -52,7 +69,7 @@ A business simulation game where players build and manage a product development 
 
 - **Frontend**: Svelte 5 with TypeScript
 - **Styling**: Tailwind CSS 4
-- **Graph Visualization**: Cytoscape.js
+- **Graph Visualization**: Cytoscape.js with cytoscape-compound-drag-and-drop extension
 - **State Management**: Svelte stores with reactive updates
 - **Build Tool**: Vite
 - **Package Manager**: npm
@@ -68,6 +85,7 @@ A business simulation game where players build and manage a product development 
 
 ### Sprint 2 (Current) - Game Mechanics & Node Interactions
 - ✅ Personnel hiring and management systems
+- ✅ Course system with compound drag-and-drop functionality
 - 🔄 Task creation and assignment workflows
 - ⏳ Product development from ideas to market
 - ⏳ Basic market system for product sales
@@ -94,6 +112,11 @@ A business simulation game where players build and manage a product development 
 - ✅ Personnel firing with proper cleanup
 - ✅ Financial integration and validation
 - ✅ Context menu integration
+- ✅ Course system with 15+ predefined courses
+- ✅ Course modal with category filtering
+- ✅ Compound drag-and-drop for personnel enrollment
+- ✅ Automatic course progression and completion
+- ✅ Skill enhancement and efficiency boosts
 
 **In Progress:**
 - 🔄 Task creation and assignment system

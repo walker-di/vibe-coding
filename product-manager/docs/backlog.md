@@ -51,6 +51,11 @@
 | **As a player, I want responsive graph interaction** | Optimize Cytoscape zoom sensitivity | High | 2 | Frontend Dev | ✅ Completed | 5x faster zoom (wheelSensitivity: 1.0) |
 | | Improve node positioning and layout | Medium | 3 | Frontend Dev | ✅ Completed | Cose layout with proper node spacing |
 | | Add intelligent element diffing | High | 4 | Frontend Dev | ✅ Completed | Only update changed nodes/edges for performance |
+| **As a player, I want to train personnel through courses** | Create course system with predefined courses | High | 5 | Backend Dev | ✅ Completed | 15+ courses across 4 categories with costs and durations |
+| | Implement course modal interface | High | 3 | Frontend Dev | ✅ Completed | Modal with category filtering and course selection |
+| | Add compound drag-and-drop for enrollment | High | 4 | Frontend Dev | ✅ Completed | Personnel visually group inside course nodes |
+| | Implement automatic course progression | High | 3 | Backend Dev | ✅ Completed | Courses start/complete automatically, personnel gain skills |
+| | Add skill enhancement and efficiency boosts | Medium | 3 | Backend Dev | ✅ Completed | Personnel gain new skills and efficiency upon completion |
 | **As a player, I want to create and manage tasks** | Create task creation workflow | High | 4 | Backend Dev | 🔄 In Progress | Can create tasks with requirements and outputs |
 | | Implement task assignment logic | High | 5 | Backend Dev | Not Started | Assign personnel to tasks, track progress |
 | | Add task completion rewards | Medium | 3 | Backend Dev | Not Started | Completed tasks generate products/resources |
@@ -73,20 +78,29 @@
 - ✅ **Action Points System**: Complete implementation with visual feedback and weekly restoration
 - ✅ **Timer & Progress System**: Week-based progression with real-time progress bar
 - ✅ **Game Speed Controls**: Smooth speed transitions with pause-aware timing
+- ✅ **Course Training System**: 15+ predefined courses with automatic progression and skill enhancement
+- ✅ **Compound Drag-and-Drop**: Visual grouping of personnel within course nodes using cytoscape extension
+- ✅ **Personnel Development**: Skill acquisition and efficiency boosts through course completion
 
 **Completed Features:**
-- Stacklands-style shop with 7 items: 4 Personnel, 2 Resources, 1 Idea
+- Stacklands-style shop with 8 items: 4 Personnel, 2 Resources, 1 Idea, 1 Course
 - Real-time affordability checking with visual feedback (enabled/disabled states)
 - Automatic node creation with proper positioning and styling
 - Enhanced Cytoscape performance (wheelSensitivity: 1.0, intelligent diffing)
 - Shop integration in HUD positioned below financial information
 - Compact card design optimized for horizontal space (64x64px)
 - Cost display in k-format (3k, 4k) for space efficiency
-- **NEW**: Action points system (3 points per personnel per week)
-- **NEW**: Visual action points display on personnel nodes (⚡ 3/3)
-- **NEW**: Progress bar timer showing week completion (0-100%)
-- **NEW**: Week-based timing (1 tick = 1 week = 120 seconds)
-- **NEW**: Speed controls with smooth transitions (0.5x to 5x)
+- **Action Points System**: 3 points per personnel per week with visual feedback
+- **Visual Action Points Display**: Personnel nodes show ⚡ 3/3 format
+- **Progress Bar Timer**: Week completion shown as 0-100% progress bar
+- **Week-based Timing**: 1 tick = 1 week = 120 seconds
+- **Speed Controls**: Smooth transitions between 0.5x to 5x speeds
+- **Course Training System**: 15+ predefined courses across 4 categories
+- **Course Modal Interface**: Category filtering and detailed course information
+- **Compound Drag-and-Drop**: Personnel visually group inside course nodes
+- **Automatic Course Progression**: Courses start when enrolled, complete after duration
+- **Skill Enhancement**: Personnel gain new skills and efficiency boosts upon completion
+- **Course Cost Management**: Courses cost $2,000-$3,800 with capital validation
 
 ---
 
@@ -205,5 +219,10 @@
 - ✅ **Speed Control Fixes**: Smooth transitions between speeds without progress jumps
 - ✅ **Immediate Tick System**: No more stacking at 100%, immediate week transitions
 - ✅ **Pause-Aware Timing**: Maintains progress accurately during pauses and resumes
+- ✅ **Course Training System**: 15+ predefined courses across Technical, Design, Management, Business categories
+- ✅ **Compound Drag-and-Drop**: Personnel visually group inside course nodes using cytoscape-compound-drag-and-drop
+- ✅ **Automatic Course Progression**: Courses start when personnel enroll, complete after specified duration
+- ✅ **Skill Enhancement System**: Personnel gain new skills and efficiency boosts upon course completion
+- ✅ **Course Cost Management**: Courses cost $2,000-$3,800 with real-time capital validation
 
-This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across 6 two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, and the action points system provides a strategic resource management layer.
+This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across 6 two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, the action points system provides strategic resource management, and the course training system enables personnel development through visual compound node interactions.

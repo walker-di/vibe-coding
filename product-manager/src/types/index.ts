@@ -1,6 +1,6 @@
 // Core type definitions for ProductGraphTycoon
 
-export type NodeType = 'Personnel' | 'Product' | 'Resource' | 'Task' | 'Market' | 'Idea';
+export type NodeType = 'Personnel' | 'Product' | 'Resource' | 'Task' | 'Market' | 'Idea' | 'Course';
 
 export interface BaseNodeData {
     id: string; // Unique ID
@@ -65,6 +65,21 @@ export interface IdeaData extends BaseNodeData {
     discovered: boolean;
 }
 
+export interface CourseData extends BaseNodeData {
+    type: 'Course';
+    courseTemplateId: string; // Reference to CourseTemplate
+    skillsImproved: string[];
+    efficiencyBoost: number;
+    duration: number; // Duration in ticks
+    cost: number;
+    category: 'technical' | 'design' | 'management' | 'business';
+    maxParticipants: number;
+    enrolledPersonnelIds: string[]; // Personnel currently taking the course
+    startTick?: number; // When the course started
+    isActive: boolean; // Whether the course is currently running
+    isCompleted: boolean; // Whether the course has finished
+}
+
 export interface EdgeData {
     id: string;
     source: string; // Source node ID
@@ -83,7 +98,7 @@ export interface CompanyFinances {
 
 // Game State in engine
 export interface GameState {
-    nodes: Array<BaseNodeData | PersonnelData | ProductData | TaskData | ResourceData | MarketData | IdeaData>;
+    nodes: Array<BaseNodeData | PersonnelData | ProductData | TaskData | ResourceData | MarketData | IdeaData | CourseData>;
     edges: EdgeData[];
     companyFinances: CompanyFinances;
     currentTick: number; // Current week number (each tick = 1 week = 120 seconds)
@@ -142,7 +157,11 @@ export type GameActionType =
     | 'PAUSE_GAME'
     | 'RESUME_GAME'
     | 'SET_GAME_SPEED'
-    | 'CONSUME_ACTION_POINTS';
+    | 'CONSUME_ACTION_POINTS'
+    | 'ENROLL_PERSONNEL_IN_COURSE'
+    | 'REMOVE_PERSONNEL_FROM_COURSE'
+    | 'START_COURSE'
+    | 'COMPLETE_COURSE';
 
 export interface GameAction {
     type: GameActionType;

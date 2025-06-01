@@ -8,6 +8,7 @@
     import Hud from '../components/Hud.svelte';
     import ContextMenu from '../components/ContextMenu.svelte';
     import HiringModal from '../components/HiringModal.svelte';
+    import CourseModalSimple from '../components/CourseModalSimple.svelte';
 
 
     // Import stores
@@ -28,6 +29,7 @@
 
     let cytoscapeGraph: CytoscapeGraph;
     let hiringModalVisible = false;
+    let courseModalVisible = false;
 
     onMount(() => {
         if (browser) {
@@ -82,8 +84,27 @@
     function handleNodeDrop(draggedNodeId: string, targetNodeId: string | null) {
         if (targetNodeId) {
             console.log(`Dropped ${draggedNodeId} onto ${targetNodeId}`);
-            // Here you could implement node combination logic
-            showSuccessNotification(`Dropped ${draggedNodeId} onto ${targetNodeId}`);
+
+            // Get the dragged and target nodes
+            const draggedNode = $nodes.find(node => node.id === draggedNodeId);
+            const targetNode = $nodes.find(node => node.id === targetNodeId);
+
+            // Handle personnel enrollment in courses
+            if (draggedNode?.type === 'Personnel' && targetNode?.type === 'Course') {
+                const result = dispatchGameAction({
+                    type: 'ENROLL_PERSONNEL_IN_COURSE',
+                    payload: { personnelId: draggedNodeId, courseId: targetNodeId }
+                });
+
+                if (result.success) {
+                    showSuccessNotification(result.message);
+                } else {
+                    showErrorNotification(result.message);
+                }
+            } else {
+                // Generic drop notification for other combinations
+                showSuccessNotification(`Dropped ${draggedNodeId} onto ${targetNodeId}`);
+            }
         }
     }
 
@@ -102,6 +123,14 @@
     function handleCloseHiringModal() {
         hiringModalVisible = false;
     }
+
+    function handleOpenCourseModal() {
+        courseModalVisible = true;
+    }
+
+    function handleCloseCourseModal() {
+        courseModalVisible = false;
+    }
 </script>
 
 <svelte:head>
@@ -111,7 +140,7 @@
 
 <div class="h-screen flex flex-col bg-gray-900 text-white overflow-hidden">
     <!-- HUD -->
-    <Hud />
+    <Hud onOpenCourseModal={handleOpenCourseModal} />
 
     <!-- Main game area -->
     <main class="flex-1 relative">
@@ -151,6 +180,12 @@
         <HiringModal
             bind:visible={hiringModalVisible}
             onClose={handleCloseHiringModal}
+        />
+
+        <!-- Course Modal -->
+        <CourseModalSimple
+            bind:visible={courseModalVisible}
+            onClose={handleCloseCourseModal}
         />
     </main>
 

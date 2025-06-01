@@ -37,8 +37,18 @@ export const cytoscapeStylesheet: Stylesheet[] = [
         }
     },
 
+    // Personnel nodes when enrolled in courses (smaller, positioned inside parent)
+    {
+        selector: 'node[type="Personnel"][parent]',
+        style: {
+            'width': '40px',
+            'height': '40px',
+            'font-size': '8px',
+            'text-max-width': '35px'
+        }
+    },
 
-    
+
     // Product nodes (green)
     {
         selector: 'node[type="Product"]',
@@ -82,10 +92,53 @@ export const cytoscapeStylesheet: Stylesheet[] = [
     // Idea nodes (cyan)
     {
         selector: 'node[type="Idea"]',
-        style: { 
+        style: {
             'background-color': '#06B6D4', // cyan-500
             'shape': 'star',
             'border-color': '#0891B2' // cyan-600
+        }
+    },
+
+    // Course nodes (green, compound parent nodes)
+    {
+        selector: 'node[type="Course"]',
+        style: {
+            'background-color': '#22C55E', // green-500
+            'background-opacity': 0.8,
+            'shape': 'round-rectangle',
+            'border-color': '#16A34A', // green-600
+            'width': '160px',
+            'height': '120px',
+            'text-wrap': 'wrap',
+            'text-max-width': '140px',
+            'font-size': '10px',
+            'text-valign': 'top',
+            'text-halign': 'center',
+            'text-margin-y': '-15px',
+            'compound-sizing-wrt-labels': 'include',
+            'min-width': '160px',
+            'min-height': '120px',
+            'padding': '20px'
+        }
+    },
+
+    // Active course nodes (brighter green)
+    {
+        selector: 'node[type="Course"][isActive="true"]',
+        style: {
+            'background-color': '#16A34A', // green-600
+            'border-color': '#15803D', // green-700
+            'border-width': 3
+        }
+    },
+
+    // Completed course nodes (gray)
+    {
+        selector: 'node[type="Course"][isCompleted="true"]',
+        style: {
+            'background-color': '#6B7280', // gray-500
+            'border-color': '#4B5563', // gray-600
+            'opacity': 0.7
         }
     },
     
@@ -169,10 +222,37 @@ export const cytoscapeStylesheet: Stylesheet[] = [
     // Selected edge
     {
         selector: 'edge:selected',
-        style: { 
+        style: {
             'width': 4,
             'line-color': '#FACC15', // yellow-400
             'target-arrow-color': '#FACC15'
+        }
+    },
+
+    // Compound drag and drop styles
+    {
+        selector: '.cdnd-grabbed-node',
+        style: {
+            'opacity': 0.7,
+            'border-width': 3,
+            'border-color': '#FACC15' // yellow-400
+        }
+    },
+
+    {
+        selector: '.cdnd-drop-target',
+        style: {
+            'border-width': 4,
+            'border-color': '#10B981', // emerald-500
+            'background-color': '#34D399' // emerald-400
+        }
+    },
+
+    {
+        selector: '.cdnd-drop-sibling',
+        style: {
+            'border-width': 3,
+            'border-color': '#F59E0B' // amber-500
         }
     }
 ];
@@ -260,6 +340,12 @@ export function gameNodesToCytoscapeElements(nodes: any[], edges: any[]) {
             nodeData.label = `${node.label}\n⚡ ${node.actionPoints}/${node.maxActionPoints}`;
         }
 
+        // Handle parent-child relationships for compound nodes
+        if (node.type === 'Personnel' && node.enrolledInCourse) {
+            nodeData.parent = node.enrolledInCourse;
+            console.log(`Setting parent for ${node.id} to ${node.enrolledInCourse}`);
+        }
+
         return {
             group: 'nodes' as const,
             data: nodeData,
@@ -279,7 +365,20 @@ export function gameNodesToCytoscapeElements(nodes: any[], edges: any[]) {
         }
     }));
     
-    return [...cytoscapeNodes, ...cytoscapeEdges];
+    // Sort nodes so that parent nodes come before child nodes
+    const sortedNodes = cytoscapeNodes.sort((a, b) => {
+        // Parent nodes (no parent property) should come first
+        const aHasParent = a.data.parent !== undefined;
+        const bHasParent = b.data.parent !== undefined;
+
+        if (!aHasParent && bHasParent) return -1; // a is parent, b is child
+        if (aHasParent && !bHasParent) return 1;  // a is child, b is parent
+        return 0; // both are same type
+    });
+
+    console.log('Cytoscape elements:', sortedNodes.map(n => ({ id: n.data.id, type: n.data.type, parent: n.data.parent })));
+
+    return [...sortedNodes, ...cytoscapeEdges];
 }
 
 // Helper function to get node color by type

@@ -8,6 +8,7 @@ import type {
     TaskData,
     ResourceData,
     IdeaData,
+    CourseData,
     GameEvent,
     GameEventType
 } from '../types';
@@ -143,6 +144,14 @@ export class GameEngine extends EventEmitter {
                     return this.updateFinancesAction(action.payload);
                 case 'CONSUME_ACTION_POINTS':
                     return this.consumeActionPoints(action.payload.personnelId, action.payload.amount || 1);
+                case 'ENROLL_PERSONNEL_IN_COURSE':
+                    return this.enrollPersonnelInCourse(action.payload.personnelId, action.payload.courseId);
+                case 'REMOVE_PERSONNEL_FROM_COURSE':
+                    return this.removePersonnelFromCourse(action.payload.personnelId, action.payload.courseId);
+                case 'START_COURSE':
+                    return this.startCourse(action.payload.courseId);
+                case 'COMPLETE_COURSE':
+                    return this.completeCourse(action.payload.courseId);
                 default:
                     return { success: false, message: `Unknown action type: ${action.type}` };
             }
@@ -474,6 +483,9 @@ export class GameEngine extends EventEmitter {
         // Process ongoing tasks
         this.processTasks();
 
+        // Process ongoing courses
+        this.processCourses();
+
         // Update finances
         this.updateFinances();
 
@@ -514,6 +526,207 @@ export class GameEngine extends EventEmitter {
         };
     }
 
+    // Course management methods
+    enrollPersonnelInCourse(personnelId: string, courseId: string): ActionResult {
+        const personnel = this.gameState.nodes.find(node =>
+            node.id === personnelId && node.type === 'Personnel'
+        ) as PersonnelData;
+
+        const course = this.gameState.nodes.find(node =>
+            node.id === courseId && node.type === 'Course'
+        ) as CourseData;
+
+        if (!personnel) {
+            return { success: false, message: `Personnel with id ${personnelId} not found` };
+        }
+
+        if (!course) {
+            return { success: false, message: `Course with id ${courseId} not found` };
+        }
+
+        if (course.isCompleted) {
+            return { success: false, message: 'Course has already been completed' };
+        }
+
+        if (course.enrolledPersonnelIds.includes(personnelId)) {
+            return { success: false, message: 'Personnel is already enrolled in this course' };
+        }
+
+        if (course.enrolledPersonnelIds.length >= course.maxParticipants) {
+            return { success: false, message: 'Course is at maximum capacity' };
+        }
+
+        // Enroll personnel
+        course.enrolledPersonnelIds.push(personnelId);
+
+        // Set the personnel's enrolled course for compound node functionality
+        (personnel as any).enrolledInCourse = courseId;
+
+        // Position personnel inside the course node
+        const coursePosition = course.position || { x: 200, y: 200 };
+        const enrolledCount = course.enrolledPersonnelIds.length;
+        const angle = (enrolledCount - 1) * (Math.PI * 2 / Math.max(course.maxParticipants, 4));
+        const radius = 30; // Distance from course center
+
+        personnel.position = {
+            x: coursePosition.x + Math.cos(angle) * radius,
+            y: coursePosition.y + Math.sin(angle) * radius
+        };
+
+        console.log(`Enrolled ${personnelId} in course ${courseId}. Personnel enrolledInCourse:`, (personnel as any).enrolledInCourse);
+        console.log(`Positioned personnel at:`, personnel.position);
+
+        // Start course if this is the first enrollment
+        if (course.enrolledPersonnelIds.length === 1 && !course.isActive) {
+            course.isActive = true;
+            course.startTick = this.gameState.currentTick;
+        }
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `${personnel.label} enrolled in ${course.label}`,
+            data: { personnelId, courseId }
+        };
+    }
+
+    removePersonnelFromCourse(personnelId: string, courseId: string): ActionResult {
+        const personnel = this.gameState.nodes.find(node =>
+            node.id === personnelId && node.type === 'Personnel'
+        ) as PersonnelData;
+
+        const course = this.gameState.nodes.find(node =>
+            node.id === courseId && node.type === 'Course'
+        ) as CourseData;
+
+        if (!personnel) {
+            return { success: false, message: `Personnel with id ${personnelId} not found` };
+        }
+
+        if (!course) {
+            return { success: false, message: `Course with id ${courseId} not found` };
+        }
+
+        const enrollmentIndex = course.enrolledPersonnelIds.indexOf(personnelId);
+        if (enrollmentIndex === -1) {
+            return { success: false, message: 'Personnel is not enrolled in this course' };
+        }
+
+        // Remove personnel from course
+        course.enrolledPersonnelIds.splice(enrollmentIndex, 1);
+
+        // Clear the personnel's enrolled course for compound node functionality
+        delete (personnel as any).enrolledInCourse;
+
+        // Move personnel outside the course
+        const coursePosition = course.position || { x: 200, y: 200 };
+        personnel.position = {
+            x: coursePosition.x + 100 + Math.random() * 100,
+            y: coursePosition.y + 100 + Math.random() * 100
+        };
+
+        // Stop course if no one is enrolled
+        if (course.enrolledPersonnelIds.length === 0 && course.isActive && !course.isCompleted) {
+            course.isActive = false;
+            course.startTick = undefined;
+        }
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `${personnel.label} removed from ${course.label}`,
+            data: { personnelId, courseId }
+        };
+    }
+
+    startCourse(courseId: string): ActionResult {
+        const course = this.gameState.nodes.find(node =>
+            node.id === courseId && node.type === 'Course'
+        ) as CourseData;
+
+        if (!course) {
+            return { success: false, message: `Course with id ${courseId} not found` };
+        }
+
+        if (course.isCompleted) {
+            return { success: false, message: 'Course has already been completed' };
+        }
+
+        if (course.isActive) {
+            return { success: false, message: 'Course is already active' };
+        }
+
+        if (course.enrolledPersonnelIds.length === 0) {
+            return { success: false, message: 'Cannot start course with no enrolled personnel' };
+        }
+
+        course.isActive = true;
+        course.startTick = this.gameState.currentTick;
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `${course.label} course started`,
+            data: { courseId }
+        };
+    }
+
+    completeCourse(courseId: string): ActionResult {
+        const course = this.gameState.nodes.find(node =>
+            node.id === courseId && node.type === 'Course'
+        ) as CourseData;
+
+        if (!course) {
+            return { success: false, message: `Course with id ${courseId} not found` };
+        }
+
+        if (course.isCompleted) {
+            return { success: false, message: 'Course has already been completed' };
+        }
+
+        // Apply skill improvements and efficiency boosts to enrolled personnel
+        const improvedPersonnel: string[] = [];
+        course.enrolledPersonnelIds.forEach(personnelId => {
+            const personnel = this.gameState.nodes.find(node =>
+                node.id === personnelId && node.type === 'Personnel'
+            ) as PersonnelData;
+
+            if (personnel) {
+                // Add new skills
+                course.skillsImproved.forEach(skill => {
+                    if (!personnel.skills.includes(skill)) {
+                        personnel.skills.push(skill);
+                    }
+                });
+
+                // Boost efficiency (cap at 1.0)
+                personnel.efficiency = Math.min(1.0, personnel.efficiency + course.efficiencyBoost);
+                improvedPersonnel.push(personnel.label);
+
+                // Clear the personnel's enrolled course since course is completed
+                delete (personnel as any).enrolledInCourse;
+
+                // Move personnel outside the course
+                const coursePosition = course.position || { x: 200, y: 200 };
+                personnel.position = {
+                    x: coursePosition.x + 100 + Math.random() * 100,
+                    y: coursePosition.y + 100 + Math.random() * 100
+                };
+            }
+        });
+
+        // Mark course as completed
+        course.isCompleted = true;
+        course.isActive = false;
+
+        this.emitStateChange('STATE_CHANGED', this.gameState);
+        return {
+            success: true,
+            message: `${course.label} completed! Improved: ${improvedPersonnel.join(', ')}`,
+            data: { courseId, improvedPersonnel }
+        };
+    }
+
     private processTasks() {
         const tasks = this.gameState.nodes.filter(node => node.type === 'Task') as TaskData[];
         
@@ -535,6 +748,21 @@ export class GameEngine extends EventEmitter {
                 // Check if task is completed
                 if (task.progress >= 1) {
                     this.completeTask(task);
+                }
+            }
+        });
+    }
+
+    private processCourses() {
+        const courses = this.gameState.nodes.filter(node => node.type === 'Course') as CourseData[];
+
+        courses.forEach(course => {
+            if (course.isActive && !course.isCompleted && course.startTick !== undefined) {
+                const ticksElapsed = this.gameState.currentTick - course.startTick;
+
+                // Check if course duration has been reached
+                if (ticksElapsed >= course.duration) {
+                    this.completeCourse(course.id);
                 }
             }
         });

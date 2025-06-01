@@ -2,11 +2,17 @@
     import { dispatchGameAction } from '../store/gameStore';
     import { companyFinances } from '../store/gameStore';
     import { showSuccessNotification, showErrorNotification } from '../store/uiStore';
+
+    interface Props {
+        onOpenCourseModal?: () => void;
+    }
+
+    let { onOpenCourseModal = () => {} }: Props = $props();
     
     interface ShopItem {
         id: string;
         label: string;
-        type: 'Personnel' | 'Resource' | 'Idea';
+        type: 'Personnel' | 'Resource' | 'Idea' | 'Course';
         cost: number;
         description: string;
         icon?: string;
@@ -76,15 +82,30 @@
             description: 'Comprehensive market analysis for new opportunities',
             icon: '🔍',
             requirements: []
+        },
+        {
+            id: 'course',
+            label: 'Training Course',
+            type: 'Course',
+            cost: 0, // Cost will be determined by selected course
+            description: 'Create a training course to improve personnel skills',
+            icon: '🎓',
+            requirements: []
         }
     ];
     
     function purchaseItem(item: ShopItem) {
+        // Special handling for Course type - open modal instead of direct purchase
+        if (item.type === 'Course') {
+            onOpenCourseModal();
+            return;
+        }
+
         // Check if player has enough money
         let currentFinances: any;
         const unsubscribe = companyFinances.subscribe(finances => currentFinances = finances);
         unsubscribe();
-        
+
         if (currentFinances.capital < item.cost) {
             showErrorNotification(`Not enough capital! Need $${item.cost}, have $${currentFinances.capital}`);
             return;
@@ -191,7 +212,8 @@
         const colors: Record<string, string> = {
             'Personnel': 'bg-blue-600',
             'Resource': 'bg-purple-600',
-            'Idea': 'bg-cyan-600'
+            'Idea': 'bg-cyan-600',
+            'Course': 'bg-green-600'
         };
         return colors[type] || 'bg-gray-600';
     }
@@ -203,11 +225,11 @@
     <div class="flex gap-1 justify-start">
         {#each shopItems as item}
             <button
-                class="relative w-16 h-16 p-1 rounded border-2 transition-all duration-200 {canAfford(item.cost)
+                class="relative w-16 h-16 p-1 rounded border-2 transition-all duration-200 {(item.type === 'Course' || canAfford(item.cost))
                     ? `${getTypeColor(item.type)} border-gray-600 hover:border-gray-400 hover:scale-105 cursor-pointer`
                     : 'bg-gray-700 border-gray-600 opacity-50 cursor-not-allowed'}"
-                onclick={() => canAfford(item.cost) && purchaseItem(item)}
-                disabled={!canAfford(item.cost)}
+                onclick={() => (item.type === 'Course' || canAfford(item.cost)) && purchaseItem(item)}
+                disabled={item.type !== 'Course' && !canAfford(item.cost)}
             >
                 <!-- Icon -->
                 <div class="text-sm mb-0.5 text-center">
@@ -221,7 +243,7 @@
 
                 <!-- Cost -->
                 <div class="text-yellow-400 font-bold text-xs text-center leading-none">
-                    {item.cost >= 1000 ? `${item.cost/1000}k` : item.cost}
+                    {item.type === 'Course' ? 'Varies' : (item.cost >= 1000 ? `${item.cost/1000}k` : item.cost)}
                 </div>
 
                 <!-- Description (tooltip on hover) -->
