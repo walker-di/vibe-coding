@@ -249,7 +249,66 @@
 
 ---
 
-## Sprint 9 (2 weeks) - Polish & User Experience
+## Sprint 9 (2 weeks) - Testing & Storybook Implementation
+
+| **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
+|----------------|----------|--------------|-----------------|--------------|------------|------------------------|
+| **As a developer, I want comprehensive component testing** | Set up Storybook 8 with Svelte 5 support | High | 3 | Frontend Dev | Not Started | Storybook runs with Svelte 5 components |
+| | Configure Storybook with TypeScript and Tailwind | High | 2 | Frontend Dev | Not Started | Full TypeScript support and Tailwind styling |
+| | Create stories for core UI components | High | 5 | Frontend Dev | Not Started | HUD, InfoPanel, ContextMenu, Shop components have stories |
+| | Add interactive controls and documentation | Medium | 3 | Frontend Dev | Not Started | All stories have controls for props and comprehensive docs |
+| **As a developer, I want game engine testing** | Create stories for game state visualization | High | 4 | Frontend Dev | Not Started | Stories show different game states and scenarios |
+| | Add Cytoscape graph component stories | High | 3 | Frontend Dev | Not Started | Graph stories with different node configurations |
+| | Implement mock data generators | Medium | 3 | Backend Dev | Not Started | Realistic test data for all game entities |
+| | Create edge case testing scenarios | Medium | 2 | Backend Dev | Not Started | Stories test boundary conditions and error states |
+| **As a developer, I want visual regression testing** | Set up Chromatic for visual testing | Medium | 2 | Frontend Dev | Not Started | Automated visual regression testing |
+| | Create baseline screenshots for all stories | Medium | 3 | Frontend Dev | Not Started | All components have visual baselines |
+| | Add responsive design testing | Medium | 2 | Frontend Dev | Not Started | Stories test different screen sizes |
+| | Implement accessibility testing | Low | 2 | Frontend Dev | Not Started | Stories include accessibility checks |
+| **As a developer, I want interaction testing** | Add play functions for user interactions | High | 4 | Frontend Dev | Not Started | Stories test user interactions and workflows |
+| | Create workflow testing scenarios | Medium | 3 | Frontend Dev | Not Started | Complete user journeys tested in Storybook |
+| | Add performance testing stories | Low | 2 | Frontend Dev | Not Started | Stories measure component performance |
+| **As a developer, I want documentation** | Create comprehensive component documentation | Medium | 3 | Frontend Dev | Not Started | All components have usage examples and API docs |
+| | Add design system documentation | Medium | 2 | Frontend Dev | Not Started | Color schemes, typography, spacing documented |
+| | Create testing guidelines and best practices | Low | 2 | Frontend Dev | Not Started | Team guidelines for writing and maintaining stories |
+
+**Storybook Test Plan Details:**
+
+### Core Component Stories
+- **HUD Component**: Test financial display, game controls, speed settings, HR section
+- **InfoPanel Component**: Test node selection, task progress, personnel details, course enrollment
+- **ContextMenu Component**: Test different node types, available actions, disabled states
+- **Shop Component**: Test item availability, affordability, purchase interactions
+- **CytoscapeGraph Component**: Test node rendering, interactions, drag-and-drop, zoom/pan
+
+### Game State Stories
+- **Initial Game State**: Fresh game with starter nodes
+- **Mid-Game State**: Multiple personnel, ongoing tasks, active courses
+- **Advanced State**: Complex node networks, marketing campaigns, customer base
+- **Edge Cases**: No money, no personnel, completed courses, failed tasks
+
+### Interactive Testing Scenarios
+- **Personnel Hiring Workflow**: Complete hiring process from HR modal
+- **Course Enrollment**: Drag personnel to courses, track progress
+- **Task Creation**: Create tasks, assign personnel, monitor completion
+- **Marketing Campaign**: Create content, track leads and conversions
+- **Node Interactions**: Drag-and-drop combinations, context menus
+
+### Visual Regression Testing
+- **Component Variations**: All prop combinations and states
+- **Responsive Layouts**: Mobile, tablet, desktop breakpoints
+- **Theme Variations**: Light/dark themes if implemented
+- **Animation States**: Loading, progress, completion animations
+
+### Performance Testing
+- **Large Node Networks**: 100+ nodes performance testing
+- **Real-time Updates**: High-frequency state changes
+- **Memory Usage**: Long-running scenarios
+- **Interaction Responsiveness**: Click, drag, scroll performance
+
+---
+
+## Sprint 10 (2 weeks) - Polish & User Experience
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -265,7 +324,7 @@
 
 ---
 
-## Sprint 10 (2 weeks) - Testing, Optimization & Release Prep
+## Sprint 11 (2 weeks) - Testing, Optimization & Release Prep
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -314,7 +373,8 @@
 - **Sprints 1-6**: ✅ Completed (Foundation, Graph Canvas, Shop Interface, Action Points, Timer System, Course Training, Marketing & CRM, HR System, Real-Time Task Progress)
 - **Sprint 7**: ✅ Completed (UI/UX Improvements & Node Shape Consistency)
 - **Sprint 8**: 🚀 Current Priority (Revenue Generation & Product Sales)
-- **Sprints 9-10**: ⏳ Planned (Advanced Features, Polish, Testing)
+- **Sprint 9**: ⏳ Planned (Testing & Storybook Implementation)
+- **Sprints 10-11**: ⏳ Planned (Polish, Advanced Features, Testing & Optimization)
 
 ### Recent Major Achievements (Latest Sprint Extension)
 - ✅ **Action Points System**: Complete implementation with 3 points per personnel per week
