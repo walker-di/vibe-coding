@@ -1,50 +1,105 @@
 # Sprint Backlog: ProductGraphTycoon
 
-## Sprint 1 (2 weeks) - Foundation & Core Infrastructure
+## ✅ Sprint 1 (2 weeks) - Foundation & Core Infrastructure (COMPLETED)
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
-| **As a developer, I want to set up the project foundation** | Initialize Svelte 5 project with TypeScript | High | 2 | Dev Lead | Not Started | Project builds successfully, TypeScript configured |
-| | Configure Tailwind CSS 4 | High | 1 | Frontend Dev | Not Started | Tailwind classes work in components |
-| | Install and configure Cytoscape.js | High | 2 | Frontend Dev | Not Started | Basic Cytoscape instance renders |
-| | Set up project structure and folders | High | 1 | Dev Lead | Not Started | All folders created per architecture |
-| **As a developer, I want basic type definitions** | Create core TypeScript interfaces | High | 3 | Backend Dev | Not Started | All node types and game state interfaces defined |
-| | Define EdgeData and ActionResult types | Medium | 2 | Backend Dev | Not Started | Edge and action types complete with validation |
-| **As a developer, I want a basic game engine** | Implement GameEngine class structure | High | 5 | Backend Dev | Not Started | Engine initializes, manages state, processes basic actions |
-| | Create basic node management (add/remove) | High | 3 | Backend Dev | Not Started | Can add/remove nodes from game state |
-| | Implement simple tick system | Medium | 3 | Backend Dev | Not Started | Game advances time, processes basic updates |
+| **As a developer, I want to set up the project foundation** | Initialize Svelte 5 project with TypeScript | High | 2 | Dev Lead | ✅ Completed | Project builds successfully, TypeScript configured |
+| | Configure Tailwind CSS 4 | High | 1 | Frontend Dev | ✅ Completed | Tailwind classes work in components |
+| | Install and configure Cytoscape.js | High | 2 | Frontend Dev | ✅ Completed | Basic Cytoscape instance renders |
+| | Set up project structure and folders | High | 1 | Dev Lead | ✅ Completed | All folders created per architecture |
+| **As a developer, I want basic type definitions** | Create core TypeScript interfaces | High | 3 | Backend Dev | ✅ Completed | All node types and game state interfaces defined |
+| | Define EdgeData and ActionResult types | Medium | 2 | Backend Dev | ✅ Completed | Edge and action types complete with validation |
+| **As a developer, I want a basic game engine** | Implement GameEngine class structure | High | 5 | Backend Dev | ✅ Completed | Engine initializes, manages state, processes basic actions |
+| | Create basic node management (add/remove) | High | 3 | Backend Dev | ✅ Completed | Can add/remove nodes from game state |
+| | Implement simple tick system | Medium | 3 | Backend Dev | ✅ Completed | Game advances time, processes basic updates |
+
+**Additional Tasks Completed:**
+| **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
+|----------------|----------|--------------|-----------------|--------------|------------|------------------------|
+| **As a player, I want to see the game world** | Create CytoscapeGraph.svelte component | High | 5 | Frontend Dev | ✅ Completed | Graph renders nodes and edges with full interaction |
+| | Implement comprehensive Cytoscape styling | High | 3 | Frontend Dev | ✅ Completed | All node types have distinct visual styles |
+| | Add reactive updates with Svelte stores | High | 4 | Frontend Dev | ✅ Completed | Graph updates when game state changes |
+| **As a player, I want to interact with nodes** | Implement node click selection | High | 2 | Frontend Dev | ✅ Completed | Clicking node triggers selection and info panel |
+| | Add basic drag and drop | Medium | 4 | Frontend Dev | ✅ Completed | Can drag nodes, detect drop targets |
+| | Create context menu component | Medium | 3 | Frontend Dev | ✅ Completed | Right-click shows context menu with actions |
+| **As a developer, I want state management** | Create gameStore with Svelte stores | High | 4 | Frontend Dev | ✅ Completed | Store manages reactive game state |
+| | Create uiStore for UI state | Medium | 2 | Frontend Dev | ✅ Completed | UI state (selection, menus) managed reactively |
+| | Bridge engine events to stores | High | 3 | Backend Dev | ✅ Completed | Engine state changes update Svelte stores |
+| **As a player, I want game information** | Create InfoPanel component | Medium | 3 | Frontend Dev | ✅ Completed | Shows detailed info for selected nodes |
+| | Create HUD component | Medium | 2 | Frontend Dev | ✅ Completed | Shows money, time, key metrics |
+| **As a player, I want game controls** | Implement game controls (pause/resume/speed) | Medium | 2 | Frontend Dev | ✅ Completed | Can control game flow and speed |
+
+**Sprint 1 Achievements:**
+- Complete project foundation with modern tech stack (Svelte 5, TypeScript, Tailwind CSS 4)
+- Comprehensive game engine with state management, node/edge operations, and tick system
+- Interactive graph visualization with Cytoscape.js integration
+- Full UI framework with HUD, InfoPanel, ContextMenu, and game controls
+- Reactive state management bridging game engine and UI
+- Initial game state with Founder, Idea, and Capital nodes
 
 ---
 
-## Sprint 2 (2 weeks) - Core Game Components & Basic Interaction
+## 🚀 Sprint 2 (2 weeks) - Game Mechanics & Node Interactions (IN PROGRESS)
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
-| **As a player, I want to see the game world** | Create CytoscapeGraph.svelte component | High | 5 | Frontend Dev | Not Started | Graph renders nodes and edges from props |
-| | Implement basic Cytoscape styling | High | 3 | Frontend Dev | Not Started | Different node types have distinct visual styles |
-| | Add reactive updates with $effect | High | 4 | Frontend Dev | Not Started | Graph updates when game state changes |
-| **As a player, I want to interact with nodes** | Implement node click selection | High | 2 | Frontend Dev | Not Started | Clicking node triggers selection event |
-| | Add basic drag and drop | Medium | 4 | Frontend Dev | Not Started | Can drag nodes, detect drop targets |
-| | Create context menu component | Medium | 3 | Frontend Dev | Not Started | Right-click shows context menu with actions |
-| **As a developer, I want state management** | Create gameStore with Svelte 5 runes | High | 4 | Frontend Dev | Not Started | Store manages reactive game state |
-| | Create uiStore for UI state | Medium | 2 | Frontend Dev | Not Started | UI state (selection, menus) managed reactively |
-| | Bridge engine events to stores | High | 3 | Backend Dev | Not Started | Engine state changes update Svelte stores |
+| **As a player, I want to hire and manage personnel** | Implement personnel hiring system | High | 4 | Backend Dev | ✅ Completed | Can hire personnel with different skills and salaries |
+| | Create personnel templates and categories | High | 2 | Backend Dev | ✅ Completed | 12 personnel types across 4 categories available |
+| | Build hiring modal interface | High | 3 | Frontend Dev | ✅ Completed | Full-featured hiring interface with filtering |
+| | Add personnel firing functionality | Medium | 2 | Backend Dev | ✅ Completed | Can fire personnel with proper cleanup |
+| | Add personnel skill matching for tasks | High | 3 | Backend Dev | Not Started | Personnel efficiency affects task completion |
+| | Implement personnel morale system | Medium | 3 | Backend Dev | Not Started | Morale affects efficiency, can be improved |
+| **As a player, I want to create and manage tasks** | Create task creation workflow | High | 4 | Backend Dev | 🔄 In Progress | Can create tasks with requirements and outputs |
+| | Implement task assignment logic | High | 5 | Backend Dev | Not Started | Assign personnel to tasks, track progress |
+| | Add task completion rewards | Medium | 3 | Backend Dev | Not Started | Completed tasks generate products/resources |
+| | Add task progress tracking | Medium | 3 | Backend Dev | Not Started | Tasks show progress based on assigned personnel |
+| **As a player, I want to develop products** | Implement idea-to-product workflow | High | 5 | Backend Dev | Not Started | Convert ideas into development tasks |
+| | Add product quality system | Medium | 4 | Backend Dev | Not Started | Product quality affects market value |
+| | Create product feature system | Medium | 3 | Backend Dev | Not Started | Products have features that affect appeal |
+| **As a player, I want meaningful node combinations** | Implement drag-and-drop node combination | High | 5 | Frontend Dev | Not Started | Dragging compatible nodes creates relationships |
+| | Add combination validation and feedback | High | 3 | Frontend Dev | Not Started | Invalid combinations show helpful feedback |
+| | Create visual feedback for valid combinations | Medium | 2 | Frontend Dev | Not Started | Highlight valid drop targets during drag |
+| **As a player, I want financial management** | Implement basic market system | High | 4 | Backend Dev | Not Started | Products can be sold for revenue |
+| | Add expense tracking (salaries, resources) | High | 3 | Backend Dev | ✅ Completed | Track and display ongoing expenses |
+| | Create financial alerts and warnings | Medium | 2 | Frontend Dev | Not Started | Warn when running low on capital |
+
+**Sprint 2 Progress Summary:**
+- ✅ **Personnel Hiring System**: Complete with 12 personnel templates, hiring modal, and financial integration
+- 🔄 **Task Creation**: Basic framework implemented, assignment logic in progress
+- ⏳ **Product Development**: Awaiting task system completion
+- ⏳ **Node Combinations**: Planned for later in sprint
+- ⏳ **Market System**: Planned for later in sprint
+
+**Completed Features:**
+- Personnel hiring with cost validation and capital deduction
+- Personnel firing with proper assignment cleanup
+- 12 diverse personnel templates across 4 categories
+- Full-featured hiring modal with category filtering
+- Context menu integration for hiring/firing actions
+- Real-time financial tracking and expense calculation
 
 ---
 
-## Sprint 3 (2 weeks) - Game Mechanics & Node Types
+## Sprint 3 (2 weeks) - Advanced Features & Polish
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
-| **As a player, I want different types of game entities** | Implement PersonnelNode class | High | 3 | Backend Dev | Not Started | Personnel nodes with skills, efficiency, salary |
-| | Implement ProductNode class | High | 3 | Backend Dev | Not Started | Product nodes with quality, features, progress |
-| | Implement TaskNode class | High | 4 | Backend Dev | Not Started | Task nodes with requirements, progress tracking |
-| | Implement ResourceNode class | Medium | 2 | Backend Dev | Not Started | Resource nodes with quantities, costs |
-| **As a player, I want to assign personnel to tasks** | Create assignment action logic | High | 5 | Backend Dev | Not Started | Can assign personnel to compatible tasks |
-| | Implement task progress system | High | 4 | Backend Dev | Not Started | Tasks progress based on assigned personnel |
-| | Add visual feedback for assignments | Medium | 3 | Frontend Dev | Not Started | Edges show assignments, visual states update |
-| **As a player, I want to see game information** | Create InfoPanel component | Medium | 3 | Frontend Dev | Not Started | Shows detailed info for selected nodes |
-| | Create HUD component | Medium | 2 | Frontend Dev | Not Started | Shows money, time, key metrics |
+| **As a player, I want advanced market dynamics** | Implement market demand fluctuation | High | 4 | Backend Dev | Not Started | Market demand changes over time |
+| | Add competition and market saturation | Medium | 3 | Backend Dev | Not Started | Multiple products compete in markets |
+| | Create market research mechanics | Medium | 3 | Backend Dev | Not Started | Can research market trends and opportunities |
+| **As a player, I want resource management** | Implement resource consumption system | High | 4 | Backend Dev | Not Started | Tasks consume resources, track inventory |
+| | Add resource purchasing and suppliers | Medium | 3 | Backend Dev | Not Started | Can buy resources from suppliers |
+| | Create resource optimization challenges | Medium | 2 | Backend Dev | Not Started | Efficient resource use affects profitability |
+| **As a player, I want advanced personnel features** | Implement personnel training system | Medium | 4 | Backend Dev | Not Started | Can train personnel to improve skills |
+| | Add personnel specialization paths | Medium | 3 | Backend Dev | Not Started | Personnel can specialize in specific areas |
+| | Create team dynamics and synergies | Low | 3 | Backend Dev | Not Started | Personnel work better in compatible teams |
+| **As a player, I want visual improvements** | Add animations for node interactions | Medium | 3 | Frontend Dev | Not Started | Smooth animations for drag/drop, selections |
+| | Implement graph layout improvements | Medium | 2 | Frontend Dev | Not Started | Better automatic layout and manual positioning |
+| | Create visual themes and customization | Low | 2 | Frontend Dev | Not Started | Different visual themes for the game |
+| **As a player, I want game progression** | Implement achievement system | Medium | 3 | Backend Dev | Not Started | Unlock achievements for milestones |
+| | Add difficulty scaling | Medium | 2 | Backend Dev | Not Started | Game becomes more challenging over time |
+| | Create scenario-based challenges | Low | 4 | Backend Dev | Not Started | Specific business scenarios to solve |
 
 ---
 

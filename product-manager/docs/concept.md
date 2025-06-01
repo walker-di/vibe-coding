@@ -1,41 +1,113 @@
-Stacklands is a popular indie game that blends village building, resource management, and card game mechanics. Here's a breakdown of its key characteristics:
+# ProductGraphTycoon - Game Concept
 
-**Core Gameplay:**
+ProductGraphTycoon is a business simulation game where players build and manage a product development company using an interactive node-based graph interface. The game combines strategic business management with visual graph manipulation mechanics.
 
-*   **Card-Based Interactions:** Everything in Stacklands is represented by cards – villagers, resources (like wood, stone, food), buildings, and enemies. The primary mechanic involves stacking cards on top of each other to trigger actions. For example, dragging a Villager card onto a Berry Bush card will make the villager harvest berries.
-*   **Village Building and Management:** Players start with a few basic cards and gradually build up a village by collecting resources, constructing buildings, and expanding their population.
-*   **Resource Management:** A crucial aspect is managing resources like food, wood, stone, and more advanced materials. Players need to ensure a steady supply of food to feed their villagers at the end of each "Moon" (a set time interval), or the villagers will starve.
-*   **Crafting/Recipes ("Ideas"):** New cards and structures are often created by discovering "Idea" cards, which act as recipes, showing the specific combination of cards needed. For instance, stacking wood, stone, and a villager might create a house. Players can also discover new combinations through experimentation.
-*   **Card Packs:** Players can sell cards to get coins, which are then used to buy card packs. These packs contain multiple new cards, often focused on themes like farming, cooking, or building, allowing players to expand and diversify their village.
+## Core Gameplay
 
-**Progression and Goals:**
+### Node-Based Business Management
+- **Interactive Graph Interface**: All business entities are represented as nodes in a visual graph (Personnel, Products, Tasks, Resources, Markets, Ideas)
+- **Drag-and-Drop Interactions**: Players combine nodes by dragging them together to create relationships and trigger business actions
+- **Real-Time Simulation**: The business operates in real-time with a tick-based system, allowing players to pause and adjust strategy
 
-*   **Quests:** The game features quests that act as milestones and guide the player, often unlocking new card packs or features upon completion.
-*   **Exploration:** Some card packs or actions allow players to explore new areas, which can yield new resources or encounters.
-*   **Ending:** There's a de facto ultimate goal, which typically involves defeating a powerful final boss. The game ends in defeat if all villagers die.
+### Business Entity Types
+- **Personnel Nodes**: Employees with skills, efficiency ratings, and salaries
+- **Product Nodes**: Items being developed with quality metrics and feature sets
+- **Task Nodes**: Work assignments that require specific skills and resources
+- **Resource Nodes**: Capital, materials, and tools needed for operations
+- **Market Nodes**: Customer segments with demand patterns and competition levels
+- **Idea Nodes**: Concepts that can be developed into products or improvements
 
-**Combat:**
+## Game Mechanics
 
-*   **Automatic Battles:** When a Villager card comes into contact with an enemy card (like Goblins, Bears, or Rats), an automatic battle ensues.
-*   **Improving Combat Abilities:** Players can equip villagers with weapons and armor to improve their combat stats. Villagers can also team up to fight enemies.
-*   **Enemy Spawning:** Enemies can appear through various means, such as portals that open periodically or hidden within card packs.
-*   **Combat Mechanics:** Combat involves stats like hit chance, attack speed, damage, and defense. There's a rock-paper-scissors element where ranged is effective against melee, melee against magic, and magic against ranged.
-*   **Peaceful Mode:** For players who prefer to focus on building, there's an option to disable enemy incursions.
+### Personnel Management
+- **Hiring**: Recruit employees with different skill sets and salary requirements
+- **Skill Matching**: Assign personnel to tasks that match their expertise for optimal efficiency
+- **Morale System**: Employee satisfaction affects productivity and retention
+- **Training**: Improve employee skills over time through development programs
 
-**Other Characteristics:**
+### Product Development Workflow
+- **Idea Generation**: Start with concept nodes that represent potential products
+- **Task Creation**: Break down development into specific work assignments
+- **Resource Allocation**: Assign personnel and materials to development tasks
+- **Quality Control**: Product quality depends on personnel skills and time invested
+- **Market Launch**: Release products to target markets for revenue generation
 
-*   **Real-Time with Pause:** The game progresses in real-time, with a timer for events like the end of a Moon. However, players can pause the game to plan their moves and stack cards.
-*   **Roguelike Elements:** The game incorporates some roguelike elements, such as the randomness of card pack contents and the need to adapt to survive.
-*   **Simple Aesthetics:** Stacklands features a charming, minimalist visual style, often described as having crayon-like drawings.
-*   **Deckbuilding (Light):** While not a traditional deckbuilder, the act of acquiring cards through packs and managing your available cards has a deckbuilding-esque feel.
-*   **Automation:** As the game progresses, players can build structures that automate resource production (e.g., farms, lumberyards, quarries), freeing up villagers for other tasks.
-*   **Playtime:** A typical playthrough is estimated to be around 5-7 hours.
-*   **Updates and DLC:** The game has received updates and DLC content, adding more cards, features, and challenges.
+### Financial Management
+- **Capital Management**: Track company funds, revenue, and expenses
+- **Salary Payments**: Personnel require regular compensation
+- **Resource Costs**: Materials and tools have acquisition costs
+- **Revenue Streams**: Products generate income based on market demand and quality
+- **Investment Decisions**: Choose where to allocate limited resources for maximum return
 
-**Key Challenges:**
+## Game Features
 
-*   **Balancing Needs:** Players must constantly balance food production, resource gathering, construction, and defense.
-*   **Managing Space:** The play area is a tabletop, and managing the physical arrangement of cards can become a factor, especially as the village grows.
-*   **Increasing Difficulty:** Enemies and challenges tend to become more difficult as the game progresses.
+### Visual Design
+- **Node-Based Graph**: Clean, modern interface using Cytoscape.js for graph visualization
+- **Color-Coded Entities**: Different node types have distinct visual styles and colors
+- **Interactive Animations**: Smooth transitions and feedback for user interactions
+- **Responsive Layout**: Automatic graph layout with manual positioning options
 
-Stacklands is praised for its unique blend of mechanics, its addictive "just one more turn" quality, and how it simplifies complex simulation concepts into an accessible and engaging card-based format.
+### User Experience
+- **Real-Time with Pause**: Game progresses in real-time but can be paused for strategic planning
+- **Drag-and-Drop Interface**: Intuitive node manipulation for creating business relationships
+- **Context Menus**: Right-click actions for quick access to common operations
+- **Information Panels**: Detailed views of selected nodes with relevant metrics
+
+### Progression System
+- **Skill Development**: Personnel improve over time through experience and training
+- **Market Evolution**: Markets change demand patterns and introduce new opportunities
+- **Technology Advancement**: Unlock new product categories and development techniques
+- **Company Growth**: Scale from startup to enterprise with increasing complexity
+
+## Key Challenges
+
+### Strategic Decision Making
+- **Resource Allocation**: Balance between hiring, development, and market expansion
+- **Timing**: Decide when to launch products, hire personnel, or enter new markets
+- **Risk Management**: Handle market volatility and personnel turnover
+
+### Operational Efficiency
+- **Workflow Optimization**: Design efficient development pipelines
+- **Personnel Management**: Keep employees motivated and productive
+- **Quality vs. Speed**: Balance product quality with time-to-market pressures
+
+## Current Implementation Status
+
+✅ **Sprint 1 Completed** - Foundation & Core Infrastructure
+- Complete project setup with Svelte 5, TypeScript, Tailwind CSS 4, and Cytoscape.js
+- Full-featured game engine with state management and tick system
+- Interactive graph visualization with node selection and context menus
+- Comprehensive UI framework with HUD, InfoPanel, and game controls
+- Initial game state with Founder, Mobile App Idea, and Initial Capital
+
+🚀 **Sprint 2 In Progress** - Game Mechanics & Node Interactions
+
+### ✅ Personnel Hiring System (Completed)
+- **Hiring Modal**: Full-featured interface with 12 personnel templates across 4 categories
+- **Personnel Templates**: Developers, Designers, Managers, and Specialists with unique skills and costs
+- **Financial Integration**: Hiring costs (5x salary) deducted from company capital
+- **Context Menu Integration**: Right-click hiring and firing functionality
+- **Validation System**: Prevents hiring without sufficient capital
+- **Real-time Updates**: Immediate UI updates and financial tracking
+
+### 🎯 Next Sprint 2 Features
+- Task creation and assignment workflows
+- Personnel skill matching for optimal efficiency
+- Product development from ideas to market
+- Basic market system for product sales
+- Advanced node combination mechanics
+
+### Available Personnel Types
+- **Developers**: Junior ($800), Senior ($1500), Full-Stack ($1200), Mobile ($1100)
+- **Designers**: UI/UX ($1000), Graphic ($900)
+- **Managers**: Project ($1300), Product ($1400)
+- **Specialists**: QA ($900), DevOps ($1300), Data Analyst ($1100), Marketing ($1000)
+
+### Current Gameplay Features
+- **Interactive Graph**: Click nodes for details, right-click for actions
+- **Personnel Management**: Hire from 12 templates, fire existing personnel
+- **Financial System**: Track capital, revenue, expenses with real-time updates
+- **Game Controls**: Pause/resume, speed adjustment (0.5x to 3x)
+- **Visual Feedback**: Color-coded nodes, smooth animations, responsive layout
+
+ProductGraphTycoon aims to provide an engaging business simulation experience that combines strategic depth with intuitive visual interaction, making complex business concepts accessible through innovative graph-based gameplay.

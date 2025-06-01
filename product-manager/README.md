@@ -1,122 +1,105 @@
-Let's brainstorm how to translate Stacklands' core characteristics into a Business/Product Building and Management game, especially keeping the Cytoscape UI in mind.
+# ProductGraphTycoon
 
-**Core Concept:** You're building a company from the ground up. Instead of villagers and natural resources, your "cards" are employees, product features, market trends, capital, tasks, etc. You "stack" or combine these to develop products, run marketing campaigns, generate revenue, and grow your business.
+A business simulation game where players build and manage a product development company using an interactive node-based graph interface.
 
-Here’s a breakdown of how Stacklands' mechanics could be reimagined:
+## 🎮 Current Features
 
-**1. Card-Based Interactions -> Business Operations:**
+### ✅ Core Infrastructure (Sprint 1 - Completed)
+- **Interactive Graph Visualization**: Built with Cytoscape.js for smooth node manipulation
+- **Real-time Game Engine**: Tick-based system with pause/resume and speed controls (0.5x to 3x)
+- **Comprehensive UI Framework**: HUD, InfoPanel, ContextMenu with reactive state management
+- **Financial System**: Track company capital, revenue, and expenses in real-time
+- **Initial Game State**: Start with Founder, Mobile App Idea, and $50,000 capital
 
-*   **Entity Cards:**
-    *   **Personnel Cards:** `Founder`, `Software Developer` (levels: Junior, Senior, Lead), `Marketer` (Specialist, Manager), `Salesperson`, `UX Designer`, `QA Tester`, `Business Analyst`, `HR Manager`, `CEO`. Each has attributes like skills, salary cost, efficiency, morale.
-    *   **Product Cards:** `Product Idea`, `Prototype`, `MVP (Minimum Viable Product)`, `Product V1.0`, `Feature X`, `Bug Report Card`, `User Feedback Card`. Attributes: quality, complexity, market fit, development status.
-    *   **Resource Cards:** `Seed Capital`, `Revenue`, `Investment Tranche`, `Raw Data`, `Market Research Report`, `Office Space Unit`, `Server Capacity Unit`, `Time Units` (or a global timer).
-    *   **Task/Process Cards:** `Develop Feature Task`, `Marketing Campaign Task`, `Sales Pitch Task`, `User Research Task`, `Hiring Process Card`, `Fundraising Round Card`.
-    *   **Market/External Factor Cards:** `Market Trend` (e.g., "AI Integration Demand"), `Competitor Action Card` (e.g., "Competitor X Lowers Price"), `Economic Climate Card` (e.g., "Recession Warning"), `Investor Interest Card`.
-    *   **Infrastructure/Tool Cards:** `Development Software`, `Marketing Platform`, `CRM System`, `Factory Module` (if physical products).
+### ✅ Personnel Management (Sprint 2 - Completed)
+- **Hiring System**: Choose from 12 diverse personnel templates across 4 categories
+- **Personnel Categories**:
+  - **Developers**: Junior ($800), Senior ($1500), Full-Stack ($1200), Mobile ($1100)
+  - **Designers**: UI/UX ($1000), Graphic ($900)
+  - **Managers**: Project ($1300), Product ($1400)
+  - **Specialists**: QA ($900), DevOps ($1300), Data Analyst ($1100), Marketing ($1000)
+- **Hiring Modal**: Full-featured interface with category filtering and detailed personnel info
+- **Financial Integration**: Hiring costs (5x salary) with capital validation
+- **Personnel Management**: Fire personnel with proper cleanup of assignments
 
-*   **Stacking/Combining for Actions:**
-    *   `Developer Card` + `Product Idea Card` + `Time Units` -> `Prototype Card`.
-    *   `Marketer Card` + `MVP Card` + `Budget Card` (subset of Revenue/Capital) -> `Marketing Campaign Results Card` (e.g., `New Leads Card`, `Brand Awareness Points`).
-    *   `Salesperson Card` + `New Leads Card` + `Time Units` -> `Revenue Card`.
-    *   `UX Designer Card` + `User Feedback Card` + `Time Units` -> `Improved Feature Spec Card`.
-    *   `Founder Card` + `Business Plan Card` (crafted from other cards) + `Investor Interest Card` -> `Pitch Meeting Card` (which could succeed or fail, leading to `Investment Tranche Card` or `Rejection Card`).
-    *   Stacking multiple `Developer Cards` on a `Develop Feature Task` could speed it up or improve quality, but might also require a `Team Lead Card` for coordination.
+### 🔄 Task Management (Sprint 2 - In Progress)
+- **Task Creation**: Basic framework for creating tasks with skill requirements
+- **Task Assignment**: Foundation for assigning personnel to tasks (in development)
 
-**2. Village Building -> Company Growth & Structure:**
+## 🚀 How to Play
 
-*   Start with: `Founder Card`, a small `Seed Capital Card`, maybe a `Basic Product Idea Card`.
-*   Build by:
-    *   "Hiring": Spending `Capital Card` on `Hiring Process Card` -> yields a choice of `Personnel Cards`.
-    *   "Developing Departments": Grouping `Personnel Cards` (e.g., several `Developer Cards` + `Team Lead Card` form a "Dev Team").
-    *   "Expanding Operations": Acquiring `Office Space Unit Cards`, `Server Capacity Cards`.
+### Getting Started
+1. **Start the Game**: The game begins with your founder, an initial idea, and $50,000 capital
+2. **Hire Personnel**: Right-click on empty space and select "Hire Personnel" to open the hiring modal
+3. **Browse Personnel**: Filter by category (Developers, Designers, Managers, Specialists) and view detailed stats
+4. **Manage Finances**: Watch your capital decrease as you hire personnel and pay salaries each tick
+5. **Fire Personnel**: Right-click on personnel nodes to fire them if needed
 
-**3. Resource Management -> Financial & Human Capital Management:**
+### Game Controls
+- **Left-click nodes**: View detailed information in the InfoPanel
+- **Right-click**: Open context menu for actions (hire, fire, create tasks)
+- **Drag nodes**: Reposition elements on the graph
+- **Game Controls**: Use bottom-left buttons to pause/resume and adjust game speed
+- **Graph Controls**: Fit graph, re-layout, or center view using bottom-right buttons
 
-*   **Money (Capital/Revenue):** The lifeblood. Needed for salaries (periodic cost, e.g., at the end of a "Quarter" or "Month" – like Stacklands' Moon), marketing budgets, tool subscriptions, R&D. Running out means game over.
-*   **Time:** A critical resource. Tasks consume time. Maybe a global timer that ticks down, or specific "Time Unit" cards that are spent.
-*   **Personnel:** Hiring the right people, keeping them paid and possibly "upskilling" them (e.g., `Junior Developer Card` + `Training Course Card` (bought) + `Time Units` -> `Developer Card`).
-*   **Product Quality/Market Fit:** Abstract resources that are built up through successful development and research.
+### Financial Management
+- **Starting Capital**: $50,000
+- **Hiring Costs**: 5x the personnel's salary (one-time cost)
+- **Ongoing Expenses**: Personnel salaries deducted each game tick
+- **Revenue**: Currently $0 (market system coming in future sprints)
 
-**4. Crafting/Recipes ("Ideas") -> Business Strategies & Product Blueprints:**
+## 🛠 Technical Stack
 
-*   Discovering "Business Model Canvas" components or "Product Roadmaps."
-*   `Market Research Report Card` + `User Feedback Card` + `Brainstorm Session Card` (an action the Founder or a team can take) -> `New Product Idea Card` or `New Feature Spec Card`.
-*   Combining different "Skill" cards or "Technology" cards could unlock innovative product features.
+- **Frontend**: Svelte 5 with TypeScript
+- **Styling**: Tailwind CSS 4
+- **Graph Visualization**: Cytoscape.js
+- **State Management**: Svelte stores with reactive updates
+- **Build Tool**: Vite
+- **Package Manager**: npm
 
-**5. Card Packs -> Opportunities & Market Intel:**
+## 🚀 Getting Started (Development)
 
-*   Instead of generic packs, these could be:
-    *   **"Market Research Report" Pack:** Contains `Market Trend Cards`, `Competitor Info Cards`, `Customer Segment Cards`. Bought with `Capital`.
-    *   **"Talent Pool" Pack:** Contains a selection of potential `Personnel Cards`. Generated by an `HR Manager Card` or "Headhunting" action.
-    *   **"Investment Opportunities" Pack:** Appears when milestones are met, containing `Investor Interest Cards`.
-    *   **"Technology Update" Pack:** New `Software Tool Cards` or `Platform Cards`.
+1. **Clone the repository**
+2. **Install dependencies**: `npm install`
+3. **Start development server**: `npm run dev`
+4. **Open browser**: Navigate to `http://localhost:5173` (or the port shown in terminal)
 
-**6. Quests -> Business Milestones & Objectives:**
+## 🎯 Development Roadmap
 
-*   "Launch your MVP."
-*   "Achieve 1,000 active users."
-*   "Secure Series A funding."
-*   "Reach profitability."
-*   "Release Product V2.0."
-*   Completing these unlocks new card types, bigger challenges, or abilities.
+### Sprint 2 (Current) - Game Mechanics & Node Interactions
+- ✅ Personnel hiring and management systems
+- 🔄 Task creation and assignment workflows
+- ⏳ Product development from ideas to market
+- ⏳ Basic market system for product sales
+- ⏳ Advanced node combination mechanics
 
-**7. Exploration -> Market Research & Expansion:**
+### Sprint 3 - Advanced Features & Polish
+- Market demand fluctuation and competition
+- Resource management and consumption
+- Personnel training and specialization
+- Visual improvements and animations
+- Achievement system and difficulty scaling
 
-*   An action like "Explore New Market Segment" (costing `Capital` and `Time Units`) could reveal new `Customer Segment Cards` or `Market Need Cards`.
-*   "Analyze Competitor Products" reveals their strengths/weaknesses (new `Competitor Info Cards`).
+## 📚 Documentation
 
-**8. Combat -> Market Competition & Challenges:**
+- **[Game Concept](docs/concept.md)**: Detailed game design and mechanics
+- **[Sprint Backlog](docs/backlog.md)**: Development progress and roadmap
+- **[Architecture](docs/archtecture.md)**: Technical architecture and design patterns
 
-*   No direct fighting. Instead:
-    *   `Competitor Launch Card` appears: May steal market share (reduce your `Revenue Card` inflow or `User Base Card` count).
-    *   Counter by: Launching a `Counter-Marketing Campaign`, `Developing a Differentiating Feature`, `Improving Product Quality`, or even an `Acquisition Offer Card` if you're big enough.
-    *   `Negative PR Event Card` appears: Must be countered with a `PR Campaign Card` (e.g., `Marketer Card` + `CEO Statement Card` + `Budget Card`).
-    *   `Economic Downturn Card`: Reduces overall market spending. Survive by having a lean operation or a strong value proposition.
-*   "Battles" are more like strategic responses to market events. Success depends on the strength of your product, marketing, team efficiency, and financial health.
+## 🎯 Current Sprint 2 Status
 
-**9. Real-Time with Pause -> Business Cycles & Strategic Planning:**
+**Completed:**
+- ✅ Personnel hiring system with 12 templates
+- ✅ Hiring modal with category filtering
+- ✅ Personnel firing with proper cleanup
+- ✅ Financial integration and validation
+- ✅ Context menu integration
 
-*   The game progresses (e.g., daily, weekly, or monthly ticks representing "Moons").
-*   Salaries are paid periodically. Marketing campaigns take time to yield results. Product development takes time.
-*   Pause is crucial for planning card combinations, allocating resources, and making strategic decisions.
+**In Progress:**
+- 🔄 Task creation and assignment system
+- 🔄 Personnel skill matching for tasks
 
-**10. Automation -> Systemizing & Scaling Operations:**
-
-*   Early on, the `Founder Card` does everything.
-*   Later, `HR Manager Card` automates aspects of hiring and employee well-being.
-*   `Marketing Manager Card` can run ongoing campaigns with less direct intervention.
-*   `DevOps Tool Chain Card` (built/bought) could speed up development cycles.
-*   "Standard Operating Procedure" cards might make certain combined actions more efficient.
-
-**UI with Cytoscape:**
-
-This is where it gets really interesting and innovative!
-
-*   **Nodes as Cards:** Each card (Personnel, Product, Task, Resource, etc.) is a node in the graph.
-    *   Node shape, color, and icons can represent card type.
-    *   Node labels display key info (e.g., Employee Name, Product Version, Budget Amount).
-*   **Edges as Relationships & Processes:**
-    *   **Temporary Stacks/Actions:** When you want to "stack" `Developer Card` on `Product Idea Card`, you might drag one node near the other. This could trigger a context menu: "Assign to Develop Prototype?". Selecting this creates a temporary "working on" edge and initiates the process.
-    *   **Organizational Structure:** Permanent edges could show `Employee Card` -> `Team Card` -> `Department Card`.
-    *   **Product Breakdown:** `Product V1.0 Card` -> connected to its constituent `Feature Cards`.
-    *   **Workflow Visualization:** `Task Card` could be connected to the `Personnel Card(s)` assigned to it, and to the `Input Resource Cards` it's consuming, and the `Output Product/Result Card` it's producing.
-*   **Graph Layout for Organization:**
-    *   Cytoscape's layout algorithms can help organize the "board," perhaps clustering nodes by department, project, or status (e.g., "Ideas Pool," "In Development," "Launched Products," "Marketing Campaigns").
-    *   You could have different "views" or filtered graphs for focusing on specific aspects (e.g., just the R&D pipeline, or the financial overview).
-*   **Interactivity:**
-    *   Clicking a node reveals detailed attributes and available actions.
-    *   Dragging a node onto another (or onto a specific "action zone" node like "Development Slot") initiates a process. This needs careful UX design to feel intuitive.
-    *   The graph dynamically updates: new nodes appear (new hires, new products), edges form and break (tasks starting/ending), node properties change (budget decreasing, product quality increasing).
-*   **Challenges & Opportunities with Cytoscape:**
-    *   **Not a Direct "Stack":** It won't be a literal pile of cards. The "stacking" is more metaphorical, represented by forming connections or assigning nodes to process other nodes. This can be very powerful for visualizing complex relationships that a simple 2D stack can't.
-    *   **Game Logic Backend:** Cytoscape is the view. All the game rules ("Developer + Idea = Prototype," resource consumption, timers, event triggers) need to be handled by a separate game engine. Cytoscape then renders the state provided by the engine.
-    *   **User Experience:** The main challenge is making complex graph interactions feel as intuitive and satisfying as Stacklands' simple drag-and-drop. You might need clear "drop zones" on nodes or dedicated "verb" nodes (e.g., a "Develop" node you connect inputs to).
-
-**Example Flow with Cytoscape in Mind:**
-
-1.  **Start:** Graph shows a `Founder Node`, a `Seed Capital Node`.
-2.  **Hire:** Player drags `Founder Node` to `Seed Capital Node`. A menu appears: "Spend Capital on Hiring?". Confirming creates a `Hiring Process Node` connected to `Founder` (time/effort) and `Seed Capital` (cost). After a delay, this node is replaced by a choice of `Developer Node(s)`.
-3.  **Develop:** Player drags a `Developer Node` to a `Product Idea Node`. Menu: "Start Prototype Development?". Confirming creates an edge. `Time Units` (maybe a global timer or consumable nodes) are linked. The `Product Idea Node` might visually change state (e.g., progress bar). On completion, it becomes a `Prototype Node`.
-4.  **Market & Sell:** Drag `Marketer Node` to `Prototype Node` and `Budget Node`. This creates a `Marketing Campaign Node`. It generates `Lead Nodes`. Drag `Salesperson Node` to `Lead Nodes` to generate `Revenue Nodes`.
-
-This approach offers a unique way to visualize the interconnectedness of a business. The Cytoscape UI could provide an almost "god-view" of your company's machinery, showing bottlenecks, resource flows, and strategic opportunities in a way a traditional UI couldn't.
+**Next Up:**
+- ⏳ Product development workflow
+- ⏳ Basic market system
+- ⏳ Node combination mechanics
