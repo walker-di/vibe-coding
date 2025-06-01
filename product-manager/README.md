@@ -39,9 +39,22 @@ A business simulation game where players build and manage a product development 
 - **Progress Reset**: Personnel who leave courses early lose all progress
 - **Pause/Resume Compatibility**: Course progress properly handles game state changes
 
-### 🔄 Task Management (Sprint 2 - In Progress)
-- **Task Creation**: Basic framework for creating tasks with skill requirements
-- **Task Assignment**: Foundation for assigning personnel to tasks (in development)
+### ✅ Task Management System (Sprint 3-8 - Completed)
+- **Task Creation**: Complete framework for creating tasks with skill requirements
+- **Task Assignment**: Full personnel assignment system with skill validation
+- **Real-Time Progress**: Live task progress tracking with game speed synchronization
+- **Multi-Personnel Tasks**: Support for complex tasks requiring multiple team members
+- **Assignment Validation**: Prevents invalid assignments and double-booking conflicts
+
+### ✅ Comprehensive Testing System (Sprint 9 - Completed)
+- **Storybook Integration**: Production-ready testing environment at http://localhost:6006
+- **80+ Test Scenarios**: Comprehensive coverage across all game mechanics
+- **Interactive Testing**: Real-time component interaction and validation
+- **Advanced Game Mechanics Testing**: Specialized tests for task assignment, course training, and investor systems
+- **Visual Regression Testing**: Automated visual testing with Chromatic integration
+- **Accessibility Testing**: Built-in a11y validation with axe-playwright
+- **Performance Testing**: Large dataset and complex interaction testing
+- **Mock Data System**: 100+ realistic test data objects for comprehensive scenarios
 
 ## 🚀 How to Play
 
@@ -86,22 +99,44 @@ A business simulation game where players build and manage a product development 
 3. **Start development server**: `npm run dev`
 4. **Open browser**: Navigate to `http://localhost:5173` (or the port shown in terminal)
 
+### 🧪 Testing & Storybook
+
+**Run Storybook for component testing:**
+```bash
+npm run storybook
+```
+- **Access Storybook**: http://localhost:6006
+- **80+ Test Scenarios**: Comprehensive coverage of all game mechanics
+- **Interactive Testing**: Real-time component interaction and validation
+- **Visual Regression**: Automated visual testing with Chromatic
+- **Accessibility Testing**: Built-in a11y validation
+
+**Test Categories:**
+- **Component Stories**: HUD, InfoPanel, ContextMenu, Shop, CytoscapeGraph
+- **Game Mechanics**: Task assignment, course training, investor systems
+- **Workflow Testing**: Complete user journeys and integration scenarios
+- **Error Handling**: Edge cases, validation, and error recovery
+
 ## 🎯 Development Roadmap
 
-### Sprint 2 (Current) - Game Mechanics & Node Interactions
-- ✅ Personnel hiring and management systems
-- ✅ Course system with compound drag-and-drop functionality
-- 🔄 Task creation and assignment workflows
-- ⏳ Product development from ideas to market
-- ⏳ Basic market system for product sales
-- ⏳ Advanced node combination mechanics
+### ✅ Sprints 1-9 (Completed)
+- **Sprint 1-2**: Core infrastructure, personnel management, course system
+- **Sprint 3-8**: Task management, marketing & CRM, HR system, real-time progress, UI/UX improvements, revenue generation
+- **Sprint 9**: Comprehensive testing system with Storybook integration
 
-### Sprint 3 - Advanced Features & Polish
-- Market demand fluctuation and competition
-- Resource management and consumption
-- Personnel training and specialization
-- Visual improvements and animations
-- Achievement system and difficulty scaling
+### 🚀 Sprint 10 (Current) - Polish & User Experience
+- **Visual Design**: Improved animations and polished UI
+- **Game Tutorial**: Onboarding system for new players
+- **Save/Load System**: Game state persistence between sessions
+- **Achievement System**: Unlock achievements for milestones
+- **Team Dynamics**: Personnel synergies and collaboration mechanics
+
+### ⏳ Sprint 11 - Testing, Optimization & Release Prep
+- **Unit Testing**: Core game logic test coverage >80%
+- **Component Testing**: Svelte component integration tests
+- **End-to-End Testing**: Critical user flow validation
+- **Performance Optimization**: Smooth performance with 100+ nodes
+- **Deployment Pipeline**: Automated builds and production deployment
 
 ## 📚 Documentation
 
@@ -110,26 +145,28 @@ A business simulation game where players build and manage a product development 
 - **[Architecture](docs/archtecture.md)**: Technical architecture and design patterns
 - **[Current Implementation](docs/current-implementation.md)**: Detailed status of implemented features
 - **[Training Course System](docs/training-course-system.md)**: Comprehensive guide to the enhanced course system
+- **[Testing System](docs/testing-system.md)**: Complete testing documentation with Storybook integration
 
-## 🎯 Current Sprint 2 Status
+## 🎯 Current Project Status
 
-**Completed:**
-- ✅ Personnel hiring system with 12 templates
-- ✅ Hiring modal with category filtering
-- ✅ Personnel firing with proper cleanup
-- ✅ Financial integration and validation
-- ✅ Context menu integration
-- ✅ Course system with 15+ predefined courses
-- ✅ Course modal with category filtering
-- ✅ Compound drag-and-drop for personnel enrollment
-- ✅ Automatic course progression and completion
-- ✅ Skill enhancement and efficiency boosts
+**✅ Completed (Sprints 1-9):**
+- **Core Infrastructure**: Interactive graph, game engine, UI framework, financial system
+- **Personnel Management**: Hiring system with 12 templates, firing, financial integration
+- **Course Training System**: 15+ courses, real-time progress, skill enhancement
+- **Task Management**: Complete assignment system with skill validation and real-time progress
+- **Marketing & CRM**: Customer segments, content creation, lead generation, conversion tracking
+- **HR System**: Professional hiring interface with category filtering
+- **Real-Time Progress**: Synchronized task and course progress with game speed
+- **UI/UX Improvements**: Enhanced InfoPanel, visual consistency, node shape standardization
+- **Revenue Generation**: Product sales system with market dynamics
+- **Comprehensive Testing**: 80+ test scenarios, Storybook integration, accessibility testing
 
-**In Progress:**
-- 🔄 Task creation and assignment system
-- 🔄 Personnel skill matching for tasks
+**🚀 Current Focus (Sprint 10):**
+- **Polish & User Experience**: Visual improvements, animations, game tutorial
+- **Save/Load System**: Game state persistence
+- **Achievement System**: Milestone tracking and rewards
+- **Team Dynamics**: Personnel synergies and collaboration
 
-**Next Up:**
-- ⏳ Product development workflow
-- ⏳ Basic market system
-- ⏳ Node combination mechanics
+**⏳ Next Up (Sprint 11):**
+- **Testing & Optimization**: Unit tests, performance optimization
+- **Release Preparation**: Deployment pipeline, production configuration
