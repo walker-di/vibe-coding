@@ -99,6 +99,36 @@ export const cytoscapeStylesheet: Stylesheet[] = [
         }
     },
 
+    // Angel Founder nodes (gold)
+    {
+        selector: 'node[type="AngelFounder"]',
+        style: {
+            'background-color': '#F59E0B', // amber-500
+            'shape': 'round-rectangle',
+            'border-color': '#D97706' // amber-600
+        }
+    },
+
+    // Pitch nodes (orange)
+    {
+        selector: 'node[type="Pitch"]',
+        style: {
+            'background-color': '#EA580C', // orange-600
+            'shape': 'round-rectangle',
+            'border-color': '#C2410C' // orange-700
+        }
+    },
+
+    // Create Investor Pitch task nodes (special case for pitch tasks)
+    {
+        selector: 'node[type="Task"][label="Create Investor Pitch"]',
+        style: {
+            'background-color': '#EA580C', // orange-600
+            'shape': 'round-rectangle',
+            'border-color': '#C2410C' // orange-700
+        }
+    },
+
     // Course nodes (green, compound parent nodes)
     {
         selector: 'node[type="Course"]',
@@ -399,9 +429,11 @@ export function getNodeColorByType(nodeType: string): string {
         'Task': '#F59E0B',      // amber-500
         'Resource': '#8B5CF6',  // violet-500
         'Market': '#EC4899',    // pink-500
-        'Idea': '#06B6D4'       // cyan-500
+        'Idea': '#06B6D4',      // cyan-500
+        'AngelFounder': '#F59E0B', // amber-500
+        'Pitch': '#EA580C'      // orange-600
     };
-    
+
     return colors[nodeType] || '#6B7280'; // gray-500 as default
 }
 
@@ -413,8 +445,10 @@ export function getNodeShapeByType(nodeType: string): string {
         'Task': 'diamond',
         'Resource': 'rectangle',
         'Market': 'hexagon',
-        'Idea': 'star'
+        'Idea': 'star',
+        'AngelFounder': 'round-rectangle',
+        'Pitch': 'round-rectangle'
     };
-    
+
     return shapes[nodeType] || 'ellipse';
 }

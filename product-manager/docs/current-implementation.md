@@ -14,10 +14,13 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
   - Personnel nodes: Blue circles (ellipse shape) with **action points display (⚡ 3/3)**
   - Resource nodes: Purple rectangles
   - Idea nodes: Cyan stars
+  - **NEW**: AngelFounder nodes: Amber round-rectangles (consistent with Programming Fundamentals)
+  - **NEW**: Pitch nodes: Orange round-rectangles (consistent with Programming Fundamentals)
+  - **NEW**: Create Investor Pitch tasks: Orange round-rectangles (override default Task diamond shape)
   - Responsive zoom controls (wheelSensitivity: 1.0 for 5x faster zooming)
   - Automatic layout using 'cose' algorithm
   - Node positioning and drag-and-drop support
-  - **NEW**: Real-time action points visualization on personnel nodes
+  - Real-time action points visualization on personnel nodes
 
 ### 2. Shop Interface (Stacklands-style)
 - **Status**: ✅ Fully Implemented and Working
@@ -148,6 +151,17 @@ ProductGraphTycoon is a business simulation game built with Svelte 5, featuring 
   - **Content Node**: Marketing content with platform-specific performance metrics
   - **Campaign Node**: Marketing campaigns with budget tracking and ROI calculation
 - **Integration**: Seamlessly integrated with existing personnel action points and financial systems
+
+### 12. Node Shape Consistency System
+- **Status**: ✅ Newly Implemented and Working
+- **Features**:
+  - **Consistent Assignable Node Shapes**: Angel Investor, Create Investor Pitch, and Programming Fundamentals all use round-rectangle shape
+  - **AngelFounder Node Styling**: Amber background (#F59E0B) with round-rectangle shape for visual consistency
+  - **Pitch Node Styling**: Orange background (#EA580C) with round-rectangle shape for visual distinction
+  - **Task Override System**: Create Investor Pitch tasks override default Task diamond shape to use round-rectangle
+  - **Cytoscape Selector Specificity**: Implemented specific CSS selectors for pitch tasks to override general Task styling
+  - **Helper Function Updates**: Updated getNodeShapeByType and getNodeColorByType to include new node types
+  - **Color Coordination**: Maintains visual distinction while ensuring shape consistency across assignable nodes
 
 ## 🔧 Technical Implementation Details
 
@@ -299,7 +313,7 @@ src/
 - ✅ **Financial Integration**: Marketing costs integrated with existing financial system
 - ✅ **Brand Awareness System**: Dynamic awareness affecting content reach and performance
 
-### Real-Time Task Progress System Implementation (Latest Update)
+### Real-Time Task Progress System Implementation
 - ✅ **Global Clock Synchronization**: Perfect synchronization between task progress and world clock
 - ✅ **Smooth Real-Time Updates**: Task progress updates every 100ms with conservative interpolation
 - ✅ **Game Engine Integration**: Uses game engine's progress as authoritative baseline to prevent drift
@@ -310,6 +324,15 @@ src/
 - ✅ **Modern Svelte 5 Implementation**: Refactored to use $state and $derived runes for optimal performance
 - ✅ **Hybrid Progress Calculation**: Combines game engine accuracy with smooth UI updates
 - ✅ **Task Timing Management**: Proper startTime and remainingTime tracking for all task types
+
+### Node Shape Consistency System Implementation (Latest Update)
+- ✅ **Visual Design Standardization**: Angel Investor, Create Investor Pitch, and Programming Fundamentals now use consistent round-rectangle shape
+- ✅ **Enhanced User Experience**: Improved visual consistency across assignable node types for better recognition
+- ✅ **Cytoscape Styling Architecture**: Added specific styling rules for AngelFounder and Pitch node types with appropriate color schemes
+- ✅ **Task Override System**: Create Investor Pitch tasks override default Task diamond shape using CSS selector specificity
+- ✅ **Helper Function Integration**: Updated getNodeShapeByType and getNodeColorByType to include new node types
+- ✅ **Color Coordination System**: AngelFounder nodes use amber (#F59E0B), Pitch nodes use orange (#EA580C) for visual distinction
+- ✅ **CSS Selector Specificity**: Implemented targeted selectors for pitch tasks to override general Task styling rules
 
 ### Technical Improvements
 - ✅ **Game Engine Updates**: Week-based tick system with real-time tracking
@@ -398,5 +421,5 @@ src/
 
 ---
 
-**Last Updated**: Current implementation as of latest development session (Real-Time Task Progress System Added)
-**Status**: ✅ Production Ready for Core Features + Marketing & Customer Relationship Management + Professional HR System + Real-Time Task Progress
+**Last Updated**: Current implementation as of latest development session (Node Shape Consistency System Added)
+**Status**: ✅ Production Ready for Core Features + Marketing & Customer Relationship Management + Professional HR System + Real-Time Task Progress + Visual Design Consistency

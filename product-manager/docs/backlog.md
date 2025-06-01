@@ -200,7 +200,25 @@
 
 ---
 
-## 🚀 Sprint 7 (2 weeks) - Revenue Generation & Product Sales (CURRENT PRIORITY)
+## ✅ Sprint 7 (2 weeks) - UI/UX Improvements & Node Shape Consistency (COMPLETED)
+
+| **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
+|----------------|----------|--------------|-----------------|--------------|------------|------------------------|
+| **As a player, I want consistent visual design** | Standardize node shapes for assignable nodes | High | 2 | Frontend Dev | ✅ Completed | Angel Investor, Create Investor Pitch, and Programming Fundamentals use same shape |
+| | Update cytoscape styling for new node types | High | 2 | Frontend Dev | ✅ Completed | AngelFounder and Pitch nodes have proper styling rules |
+| | Add specific styling for pitch task nodes | Medium | 1 | Frontend Dev | ✅ Completed | Create Investor Pitch tasks override default Task styling |
+| | Update helper functions for shape consistency | Medium | 1 | Frontend Dev | ✅ Completed | getNodeShapeByType includes new node types |
+
+**Sprint 7 Achievements:**
+- ✅ **Node Shape Consistency**: Angel Investor, Create Investor Pitch, and Programming Fundamentals now all use round-rectangle shape
+- ✅ **Enhanced Visual Design**: Improved visual consistency across assignable node types
+- ✅ **Cytoscape Styling Updates**: Added specific styling rules for AngelFounder and Pitch node types
+- ✅ **Task Node Override**: Create Investor Pitch tasks use round-rectangle instead of diamond shape
+- ✅ **Helper Function Updates**: Updated getNodeShapeByType and getNodeColorByType for new node types
+
+---
+
+## 🚀 Sprint 8 (2 weeks) - Revenue Generation & Product Sales (CURRENT PRIORITY)
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -231,7 +249,7 @@
 
 ---
 
-## Sprint 8 (2 weeks) - Polish & User Experience
+## Sprint 9 (2 weeks) - Polish & User Experience
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -247,7 +265,7 @@
 
 ---
 
-## Sprint 9 (2 weeks) - Testing, Optimization & Release Prep
+## Sprint 10 (2 weeks) - Testing, Optimization & Release Prep
 
 | **User Story** | **Task** | **Priority** | **Effort (SP)** | **Assignee** | **Status** | **Definition of Done** |
 |----------------|----------|--------------|-----------------|--------------|------------|------------------------|
@@ -293,10 +311,10 @@
 - **Performance Concerns**: Dedicated optimization sprint (Sprint 6)
 
 ### Current Status Summary
-- **Sprints 1-5**: ✅ Completed (Foundation, Graph Canvas, Shop Interface, Action Points, Timer System, Course Training, Marketing & CRM, HR System)
-- **Sprint 6**: ✅ Completed (Real-Time Task Progress & UI Improvements)
-- **Sprint 7**: 🚀 Current Priority (Revenue Generation & Product Sales)
-- **Sprints 8-9**: ⏳ Planned (Advanced Features, Polish, Testing)
+- **Sprints 1-6**: ✅ Completed (Foundation, Graph Canvas, Shop Interface, Action Points, Timer System, Course Training, Marketing & CRM, HR System, Real-Time Task Progress)
+- **Sprint 7**: ✅ Completed (UI/UX Improvements & Node Shape Consistency)
+- **Sprint 8**: 🚀 Current Priority (Revenue Generation & Product Sales)
+- **Sprints 9-10**: ⏳ Planned (Advanced Features, Polish, Testing)
 
 ### Recent Major Achievements (Latest Sprint Extension)
 - ✅ **Action Points System**: Complete implementation with 3 points per personnel per week
@@ -361,4 +379,13 @@
 - ✅ **Task Timing Management**: Proper startTime and remainingTime tracking for all task types
 - ✅ **Visual Progress Feedback**: Enhanced progress bars and countdown timers with real-time updates
 
-This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across multiple two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, the action points system provides strategic resource management, the course training system enables personnel development, the marketing system creates a complete customer acquisition and relationship management experience, the HR system provides professional personnel management capabilities, and the real-time task progress system ensures smooth and accurate progress tracking across all game activities.
+### Latest Major Update: Node Shape Consistency & Visual Design (Sprint 7)
+- ✅ **Node Shape Standardization**: Angel Investor, Create Investor Pitch, and Programming Fundamentals now use consistent round-rectangle shape
+- ✅ **Enhanced Visual Consistency**: Improved visual design across assignable node types for better user experience
+- ✅ **Cytoscape Styling Updates**: Added specific styling rules for AngelFounder and Pitch node types with appropriate colors
+- ✅ **Task Node Override System**: Create Investor Pitch tasks override default Task diamond shape to use round-rectangle
+- ✅ **Helper Function Updates**: Updated getNodeShapeByType and getNodeColorByType to include new node types
+- ✅ **Color Coordination**: AngelFounder nodes use amber color, Pitch nodes use orange color for visual distinction
+- ✅ **Selector Specificity**: Implemented specific CSS selectors for pitch tasks to override general Task styling
+
+This backlog provides a structured approach to building ProductGraphTycoon, with clear deliverables and dependencies mapped out across multiple two-week sprints. The foundation is solid, the core purchase/expansion mechanics are working, the action points system provides strategic resource management, the course training system enables personnel development, the marketing system creates a complete customer acquisition and relationship management experience, the HR system provides professional personnel management capabilities, the real-time task progress system ensures smooth and accurate progress tracking across all game activities, and the visual design system now provides consistent node shapes for better user experience and visual clarity.
