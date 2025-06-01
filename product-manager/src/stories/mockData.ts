@@ -306,6 +306,150 @@ export function generateRandomPersonnel(count: number = 1): PersonnelData[] {
   }));
 }
 
+// Mock Investor Pitch Data
+export const mockInvestorPitchData: any[] = [
+  {
+    id: 'pitch-1',
+    type: 'InvestorPitch',
+    label: 'Series A Pitch Deck',
+    description: 'Professional pitch deck with strong financials and growth metrics',
+    cost: 0,
+    quality: 0.85,
+    createdBy: 'personnel-1',
+    creationTime: Date.now() - 300000, // Created 5 minutes ago
+    presentedTo: [],
+    isUsed: false
+  },
+  {
+    id: 'pitch-2',
+    type: 'InvestorPitch',
+    label: 'Seed Funding Pitch',
+    description: 'Basic pitch deck for early-stage funding',
+    cost: 0,
+    quality: 0.65,
+    createdBy: 'personnel-2',
+    creationTime: Date.now() - 600000, // Created 10 minutes ago
+    presentedTo: ['angel-1'],
+    isUsed: false
+  }
+];
+
+// Mock Angel Investor Data
+export const mockAngelInvestorData: any[] = [
+  {
+    id: 'angel-1',
+    type: 'AngelFounder',
+    label: 'Michael Tech Angel',
+    description: 'Tech-focused angel investor with startup experience',
+    cost: 0,
+    investmentAmount: 500000,
+    equityRequirement: 15,
+    requirements: ['proven-revenue', 'tech-product', 'scalable-model'],
+    isAvailable: true,
+    pitchId: null
+  },
+  {
+    id: 'angel-2',
+    type: 'AngelFounder',
+    label: 'Lisa Venture Capital',
+    description: 'Venture capitalist interested in growth-stage companies',
+    cost: 0,
+    investmentAmount: 1000000,
+    equityRequirement: 25,
+    requirements: ['growth-metrics', 'market-validation', 'experienced-team'],
+    isAvailable: true,
+    pitchId: null
+  }
+];
+
+// Mock Assignment Task Data
+export const mockAssignmentTaskData: any[] = [
+  {
+    id: 'task-assignment-1',
+    type: 'Task',
+    label: 'Frontend Development',
+    description: 'Build responsive user interface components',
+    cost: 0,
+    requiredSkills: ['frontend-development', 'react'],
+    assignedPersonnelIds: [],
+    progress: 0,
+    isCompleted: false,
+    estimatedDuration: 240, // 4 hours
+    startTime: null,
+    remainingTime: null,
+    outputs: ['ui-components'],
+    parentProductId: 'product-1'
+  },
+  {
+    id: 'task-assignment-2',
+    type: 'Task',
+    label: 'API Development',
+    description: 'Create RESTful API endpoints with authentication',
+    cost: 0,
+    requiredSkills: ['backend-development', 'api-design'],
+    assignedPersonnelIds: ['personnel-2'],
+    progress: 45,
+    isCompleted: false,
+    estimatedDuration: 360, // 6 hours
+    startTime: Date.now() - 162000, // Started 2.7 hours ago
+    remainingTime: 198000, // 3.3 hours remaining
+    outputs: ['api-endpoints'],
+    parentProductId: 'product-1'
+  }
+];
+
+// Enhanced Course Data with Individual Progress
+export const mockEnhancedCourseData: any[] = [
+  {
+    id: 'course-enhanced-1',
+    type: 'Course',
+    label: 'Advanced React Development',
+    description: 'Master advanced React patterns, hooks, and performance optimization',
+    courseTemplateId: 'react-advanced',
+    skillsImproved: ['react', 'frontend-development', 'performance-optimization'],
+    efficiencyBoost: 0.2,
+    duration: 300, // 5 minutes for demo
+    cost: 2500,
+    category: 'technical',
+    maxParticipants: 5,
+    enrolledPersonnelIds: ['personnel-3'],
+    personnelProgress: {
+      'personnel-3': {
+        startTime: Date.now() - 195000, // Started 3.25 minutes ago
+        remainingTime: 105000 // 1.75 minutes remaining
+      }
+    },
+    isActive: true,
+    isCompleted: false
+  },
+  {
+    id: 'course-enhanced-2',
+    type: 'Course',
+    label: 'Leadership & Management',
+    description: 'Develop leadership skills and team management capabilities',
+    courseTemplateId: 'leadership-basics',
+    skillsImproved: ['leadership', 'team-management', 'communication'],
+    efficiencyBoost: 0.25,
+    duration: 360, // 6 minutes for demo
+    cost: 3000,
+    category: 'management',
+    maxParticipants: 3,
+    enrolledPersonnelIds: ['personnel-1', 'personnel-2'],
+    personnelProgress: {
+      'personnel-1': {
+        startTime: Date.now() - 120000, // Started 2 minutes ago
+        remainingTime: 240000 // 4 minutes remaining
+      },
+      'personnel-2': {
+        startTime: Date.now() - 180000, // Started 3 minutes ago
+        remainingTime: 180000 // 3 minutes remaining
+      }
+    },
+    isActive: true,
+    isCompleted: false
+  }
+];
+
 // Game state mock data
 export const mockGameState = {
   nodes: [
@@ -314,7 +458,11 @@ export const mockGameState = {
     ...mockTaskData,
     ...mockResourceData,
     ...mockIdeaData,
-    ...mockCourseData
+    ...mockCourseData,
+    ...mockInvestorPitchData,
+    ...mockAngelInvestorData,
+    ...mockAssignmentTaskData,
+    ...mockEnhancedCourseData
   ],
   edges: mockEdgeData,
   finances: {
@@ -326,4 +474,32 @@ export const mockGameState = {
   currentTick: 42,
   gameSpeed: 1.0,
   isPaused: false
+};
+
+// Enhanced game state for testing scenarios
+export const mockEnhancedGameState = {
+  ...mockGameState,
+  nodes: [
+    ...mockGameState.nodes,
+    // Additional test scenarios
+    {
+      id: 'personnel-ceo-test',
+      type: 'Personnel',
+      label: 'CEO Test User',
+      description: 'CEO with all business skills for testing',
+      cost: 15000,
+      salary: 15000,
+      skills: ['leadership', 'business-development', 'pitch-creation', 'strategy', 'negotiation'],
+      efficiency: 1.5,
+      actionPoints: 3,
+      maxActionPoints: 3,
+      category: 'Manager',
+      experience: 'Senior',
+      isAvailable: true,
+      assignedToTaskId: null,
+      currentCourseId: null,
+      courseProgress: null,
+      courseStartTime: null
+    }
+  ]
 };

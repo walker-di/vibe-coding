@@ -14,7 +14,7 @@
 
     let { x = 0, y = 0, nodeId = null, onClose = () => {}, onOpenHiringModal = () => {} }: Props = $props();
 
-    let menuElement: HTMLDivElement;
+    let menuElement: HTMLDivElement = $state() as HTMLDivElement;
     let nodeData: BaseNodeData | undefined = $state(undefined);
 
     // Get node data when nodeId changes
